@@ -1,0 +1,5 @@
+icinga2 (2.0-1) unstable; urgency=low
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 25 Sep 2012 22:09:24 +0200

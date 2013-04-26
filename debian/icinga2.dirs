@@ -1,0 +1,2 @@
+var/log/icinga2
+var/lib/icinga2
