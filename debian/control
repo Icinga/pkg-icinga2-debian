@@ -4,6 +4,7 @@ Priority: extra
 Maintainer: Alexander Wirt <formorer@debian.org>
 Build-Depends: asciidoc,
                automake,
+               autoconf,
                autotools-dev,
                bison,
                debhelper (>= 9),
