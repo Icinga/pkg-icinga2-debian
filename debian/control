@@ -1,17 +1,16 @@
 Source: icinga2
 Section: admin
 Priority: extra
-Maintainer: Alexander Wirt <formorer@debian.org>
-Build-Depends: asciidoc,
-               automake,
+Maintainer: Debian Nagios Maintainer Group <pkg-nagios-devel@lists.alioth.debian.org>
+Uploaders: Alexander Wirt <formorer@debian.org>, Markus Frosch <markus@lazyfrosch.de>
+Build-Depends: automake,
                autoconf,
                autotools-dev,
                bison,
                debhelper (>= 9),
                doxygen,
                flex,
-               g++,
-               help2man,
+               g++ (>= 1.96),
                libboost-dev,
                libboost-program-options-dev,
                libboost-signals-dev,
@@ -22,24 +21,39 @@ Build-Depends: asciidoc,
                libssl-dev,
                libtool,
                python-dev
-Standards-Version: 3.9.3
-Homepage: <insert the upstream URL, if relevant>
+Standards-Version: 3.9.4
+Homepage: http://www.icinga.org
 
 Package: icinga2
 Architecture: any
-Depends: ${misc:Depends}, ${shlibs:Depends}
+Depends: icinga2-core (= ${binary:Version}),
+         icinga2-common (= ${source:Version}),
+         ${misc:Depends}
 Description: host and network monitoring system
- Icinga is a modular monitoring framework for hosts, services, and
- networks, based on the Nagios project. It is designed to be easy to
- understand and modify to fit any need.
+ Icinga 2 is still in development and not ready for production use!
  .
- Features include:
-  * monitoring of network services via ping, SMTP, POP3, HTTP, NNTP, or
-    TCP port;
-  * plugin interface to allow for user-developed service checks
-  * contact notifications when problems occur and get resolved (via
-    email, pager, or user-defined method)
-  * support for proactive problem resolution (handlers can be defined to
-    be run during service or host events)
-  * web output: current status, notifications, problem history, log
-    file, etc.
+ Better description to come.
+ .
+ This is the metapackage to install all Icinga 2 features.
+
+Package: icinga2-common
+Architecture: all
+Depends: ${misc:Depends}
+Description: host and network monitoring system - common files
+ Icinga 2 is still in development and not ready for production use!
+ .
+ Better description to come.
+ .
+ This package provides configuration and some basic helper scripts.
+
+Package: icinga2-core
+Architecture: any
+Depends: icinga2-common (= ${source:Version}),
+         ${misc:Depends}, ${shlibs:Depends}
+Description: host and network monitoring system - daemon
+ Icinga 2 is still in development and not ready for production use!
+ .
+ Better description to come.
+ .
+ This package provides the Icinga 2 daemon.
+

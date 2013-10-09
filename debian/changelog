@@ -1,5 +1,6 @@
-icinga2 (2.0) unstable; urgency=low
+icinga2 (0.0.3~dev+0-1) UNRELEASED; urgency=low
 
   * Experimental Build
+  * Initial Debian packaging for the Icinga 2 alphas and betas
 
- -- Alexander Wirt <formorer@debian.org>  Tue, 25 Sep 2012 22:09:24 +0200
+ -- Markus Frosch <markus@lazyfrosch.de>  Thu, 03 Oct 2013 11:30:14 +0200

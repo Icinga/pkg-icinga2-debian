@@ -1,0 +1,4 @@
+debian/tmp/etc/icinga2
+usr/sbin/i2*feature
+usr/share/doc/icinga2
+usr/share/icinga2

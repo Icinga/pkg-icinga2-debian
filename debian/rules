@@ -1,17 +1,39 @@
 #!/usr/bin/make -f
-# -*- makefile -*-
-# Sample debian/rules that uses debhelper.
-# This file was originally written by Joey Hess and Craig Small.
-# As a special exception, when this file is copied by dh-make into a
-# dh-make output file, you may use that output file without restriction.
-# This special exception was added by Craig Small in version 0.37 of dh-make.
 
-# Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
+
+# this disables configure to be run by autogen.sh
+export NOCONFIGURE=1
 
 %:
 	dh $@  --with autotools-dev
 
+override_dh_auto_clean:
+	dh_auto_clean
+	# delete all Makefiles
+	find -type f -name Makefile.in -delete
+	# ltdl externals
+	rm -rf third-party/ltdl/config/
+	rm -rf third-party/ltdl/libltdl/
+	rm -rf third-party/ltdl/loaders/
+	rm -rf third-party/ltdl/m4/
+	find third-party/ltdl -type f ! -name README.icinga -delete
+	# cleanup config_parser
+	rm -f lib/config/config_lexer.cc
+	rm -f lib/config/config_parser.cc lib/config/config_parser.hh \
+		lib/config/config_parser.h
+	# m4 data
+	find m4/ -type l -delete
+	rm -f m4/libtool.m4 m4/argz.m4 m4/lt*.m4 m4/lt*.sh
+	# other files in root
+	rm -f config.log config.h.in aclocal.m4 configure
+
 override_dh_auto_configure:
 	sh autogen.sh
-	dh_auto_configure -- --enable-python
+	dh_auto_configure -- --enable-python \
+        --with-icinga-user=root \
+        --with-icinga-group=bin \
+        --with-icingacmd-user=root \
+        --with-icingacmd-group=bin
+
+# vi: noexpandtab :

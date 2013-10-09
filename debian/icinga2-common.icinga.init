@@ -15,7 +15,7 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="icinga2 monitoring daemon"
 NAME=icinga2
-DAEMON=/usr/sbin/icinga2
+DAEMON=/usr/bin/icinga2
 DAEMON_ARGS="-c /etc/icinga2/icinga2.conf -d"
 PIDFILE=/var/run/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
