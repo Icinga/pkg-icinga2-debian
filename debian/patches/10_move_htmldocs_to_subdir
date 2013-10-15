@@ -1,0 +1,37 @@
+Description: install html documentation into subdirectory
+Author: Markus Frosch <markus@lazyfrosch.de>
+Origin: maintainer
+Bug: https://dev.icinga.org/issues/4876
+Last-Update: 2013-10-15
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/doc/Makefile.am
++++ b/doc/Makefile.am
+@@ -52,7 +52,7 @@
+ CLEANFILES = \
+ 	index.html
+ 
+-icinga2docdir = ${docdir}
++icinga2docdir = ${docdir}/htdocs
+ icinga2doc_DATA = \
+ 	index.html \
+ 	$(DOCVIEWER_FILES)
+--- a/doc/strapdownjs/Makefile.am
++++ b/doc/strapdownjs/Makefile.am
+@@ -1,7 +1,7 @@
+ SUBDIRS = \
+ 	themes
+ 
+-icinga2docdir = ${docdir}/strapdownjs
++icinga2docdir = ${docdir}/htdocs/strapdownjs
+ icinga2doc_DATA = \
+ 	strapdown.js \
+ 	strapdown.css
+--- a/doc/strapdownjs/themes/Makefile.am
++++ b/doc/strapdownjs/themes/Makefile.am
+@@ -1,4 +1,4 @@
+-icinga2docdir = ${docdir}/strapdownjs/themes
++icinga2docdir = ${docdir}/htdocs/strapdownjs/themes
+ icinga2doc_DATA = \
+ 	bootstrap.min.css \
+ 	bootstrap-responsive.min.css \

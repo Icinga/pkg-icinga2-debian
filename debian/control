@@ -29,6 +29,7 @@ Architecture: any
 Depends: icinga2-core (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
+Recommends: icinga2-doc
 Description: host and network monitoring system
  Icinga 2 is still in development and not ready for production use!
  .
@@ -56,4 +57,15 @@ Description: host and network monitoring system - daemon
  Better description to come.
  .
  This package provides the Icinga 2 daemon.
+
+Package: icinga2-doc
+Architecture: all
+Section: doc
+Depends: ${misc:Depends}
+Description: host and network monitoring system - documentation
+ Icinga 2 is still in development and not ready for production use!
+ .
+ Better description to come.
+ .
+ This package provides the Icinga 2 documentation.
 
