@@ -70,3 +70,14 @@ Description: host and network monitoring system - documentation
  .
  This package provides the Icinga 2 documentation.
 
+Package: icinga2-classicui
+Architecture: all
+Depends: icinga-cgi (>= 1.9.0~), ${misc:Depends}
+Recommends: apache2 | httpd
+Description: host and network monitoring system - classic ui integration
+ Icinga 2 is still in development and not ready for production use!
+ .
+ Better description to come.
+ .
+ This package provides the integration into Icinga Classic UI.
+
