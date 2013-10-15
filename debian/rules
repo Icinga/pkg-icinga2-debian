@@ -36,4 +36,9 @@ override_dh_auto_configure:
         --with-icingacmd-user=root \
         --with-icingacmd-group=bin
 
+override_dh_auto_install:
+	dh_auto_install
+	# cleanup dependencies in .la files
+	sed -i "/dependency_libs/ s/'.*'/''/" `find debian/tmp/ -name '*.la'`
+
 # vi: noexpandtab :
