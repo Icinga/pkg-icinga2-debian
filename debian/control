@@ -49,6 +49,7 @@ Description: host and network monitoring system - common files
 
 Package: icinga2-core
 Architecture: any
+Pre-Depends: ${misc:Pre-Depends}
 Depends: icinga2-common (= ${source:Version}),
          ${misc:Depends}, ${shlibs:Depends}
 Description: host and network monitoring system - daemon
