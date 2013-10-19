@@ -1,3 +1,4 @@
 debian/tmp/etc/icinga2
-usr/sbin/i2*feature
+usr/bin/icinga2-migrate-config
+usr/sbin/icinga2-*-feature
 usr/share/icinga2

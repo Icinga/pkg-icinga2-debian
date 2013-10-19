@@ -1,3 +1,4 @@
-usr/share/man/man8/icinga2.8
 usr/bin/icinga2 usr/sbin
+usr/bin/icinga2-build* usr/sbin
 usr/lib/*/icinga2
+usr/share/man/man8/icinga2.8

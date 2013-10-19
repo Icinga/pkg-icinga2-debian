@@ -39,7 +39,7 @@ Description: host and network monitoring system
 
 Package: icinga2-common
 Architecture: all
-Depends: adduser, ${misc:Depends}
+Depends: adduser, ${misc:Depends}, ${perl:Depends}
 Description: host and network monitoring system - common files
  Icinga 2 is still in development and not ready for production use!
  .
@@ -51,7 +51,7 @@ Package: icinga2-core
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: icinga2-common (= ${source:Version}),
-         ${misc:Depends}, ${shlibs:Depends}
+         ${misc:Depends}, ${shlibs:Depends}, ${perl:Depends}
 Description: host and network monitoring system - daemon
  Icinga 2 is still in development and not ready for production use!
  .
