@@ -18,6 +18,7 @@ Build-Depends: automake,
                libboost-test-dev,
                libboost-thread-dev,
                libltdl-dev,
+               libmysqlclient-dev,
                libssl-dev,
                libtool,
                python-dev
@@ -51,7 +52,7 @@ Package: icinga2-core
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: icinga2-common (= ${source:Version}),
-         ${misc:Depends}, ${shlibs:Depends}, ${perl:Depends}
+         ${misc:Depends}, ${shlibs:Depends}
 Description: host and network monitoring system - daemon
  Icinga 2 is still in development and not ready for production use!
  .
@@ -80,4 +81,20 @@ Description: host and network monitoring system - classic ui integration
  Better description to come.
  .
  This package provides the integration into Icinga Classic UI.
+
+Package: icinga2-ido-mysql
+Architecture: any
+Pre-Depends: ${misc:Pre-Depends}
+Depends: icinga2-common (= ${source:Version}),
+         icinga2-core (= ${binary:Version}),
+         libmysqlclient,
+         ${shlibs:Depends}, ${misc:Depends}
+Recommends: mysql-client
+Suggests: mysql-server
+Description: host and network monitoring system - IDO for MySQL
+ Icinga 2 is still in development and not ready for production use!
+ .
+ Better description to come.
+ .
+ This package provides the IDO module for the MySQL database.
 
