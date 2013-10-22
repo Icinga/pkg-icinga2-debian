@@ -8,6 +8,7 @@ Build-Depends: automake,
                autotools-dev,
                bison,
                debhelper (>= 9),
+               dh-autoreconf,
                doxygen,
                flex,
                g++ (>= 1.96),
@@ -21,8 +22,8 @@ Build-Depends: automake,
                libmysqlclient-dev,
                libssl-dev,
                libtool,
-               python-dev,
-               po-debconf
+               po-debconf,
+               python-dev
 Standards-Version: 3.9.4
 Homepage: http://www.icinga.org
 
