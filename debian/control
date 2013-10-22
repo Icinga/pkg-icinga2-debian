@@ -90,7 +90,6 @@ Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: icinga2-common (= ${source:Version}),
          icinga2-bin (= ${binary:Version}),
-         libmysqlclient,
          ${shlibs:Depends}, ${misc:Depends}
 Recommends: mysql-client
 Suggests: mysql-server
