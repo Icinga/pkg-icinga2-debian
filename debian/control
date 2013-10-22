@@ -21,7 +21,8 @@ Build-Depends: automake,
                libmysqlclient-dev,
                libssl-dev,
                libtool,
-               python-dev
+               python-dev,
+               po-debconf
 Standards-Version: 3.9.4
 Homepage: http://www.icinga.org
 
@@ -73,7 +74,9 @@ Description: host and network monitoring system - documentation
 
 Package: icinga2-classicui
 Architecture: all
-Depends: icinga-cgi (>= 1.9.0~), ${misc:Depends}
+Depends: icinga2-common (= ${source:Version}),
+         icinga-cgi (>= 1.9.0~),
+         ${misc:Depends}
 Recommends: apache2 | httpd
 Description: host and network monitoring system - classic ui integration
  Icinga 2 is still in development and not ready for production use!
