@@ -27,7 +27,7 @@ Homepage: http://www.icinga.org
 
 Package: icinga2
 Architecture: any
-Depends: icinga2-core (= ${binary:Version}),
+Depends: icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
 Recommends: icinga2-doc
@@ -48,7 +48,7 @@ Description: host and network monitoring system - common files
  .
  This package provides configuration and some basic helper scripts.
 
-Package: icinga2-core
+Package: icinga2-bin
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: icinga2-common (= ${source:Version}),
@@ -86,7 +86,7 @@ Package: icinga2-ido-mysql
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: icinga2-common (= ${source:Version}),
-         icinga2-core (= ${binary:Version}),
+         icinga2-bin (= ${binary:Version}),
          libmysqlclient,
          ${shlibs:Depends}, ${misc:Depends}
 Recommends: mysql-client

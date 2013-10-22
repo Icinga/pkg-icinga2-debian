@@ -21,7 +21,7 @@ override_dh_install:
 	dh_install
 	# remove ido files from other packages
 	rm debian/icinga2-common/etc/icinga2/features-available/ido-mysql*
-	rm debian/icinga2-core/usr/lib/*/icinga2/libdb_ido_mysql*
+	rm debian/icinga2-bin/usr/lib/*/icinga2/libdb_ido_mysql*
 
 override_dh_installinit:
 	dh_installinit --name=icinga2
