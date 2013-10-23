@@ -1,0 +1,113 @@
+Installing Icinga 2
+===================
+
+Please note that the current version of Icinga 2 isn't much more than a tech
+demo. Expect some rough edges when installing and running Icinga 2.
+
+For the "finished" version we're planning to release packages for the most
+common Linux distributions as well as for Windows - or at least co-operate
+with the package maintainers.
+
+Please check the documentation in the doc/ directory for a current list
+of available packages.
+
+Build Requirements
+------------------
+
+The following requirements need to be fulfilled in order to build the
+application using a dist tarball (package names for RHEL and Debian in
+parentheses):
+
+* GNU make (make)
+* C++ compiler (gcc-c++ on RHEL, build-essential on Debian)
+* OpenSSL library and header files (openssl-devel on RHEL, libssl-dev
+                                    on Debian)
+* Boost library and header files (boost-devel on RHEL, libboost-all-dev
+                                  on Debian)
+* optional: Doxygen (doxygen)
+* optional: MySQL (mysql-devel on RHEL, libmysqlclient-dev on Debian)
+* optional: Python (python-devel on RHEL, python-dev on Debian)
+
+Packaging Requirements
+----------------------
+
+In order to build a dist tarball for the application the following external
+software components need to be installed in addition to the build requirements
+mentioned above:
+
+* GNU Automake (automake)
+* GNU Autoconf (autoconf)
+* GNU Libtool (libtool and libtool-ltdl-devel on RHEL, libtool and
+               libltdl-dev on Debian)
+* GNU bison (bison)
+* GNU flex (flex)
+
+In order to build the dist tarball (using "make dist") you need sufficiently
+recent versions of the packages listed above.
+
+User Requirements
+-----------------
+
+By default Icinga will run as user 'icinga' and group 'icinga'. Additionally the
+external command pipe and livestatus features require a dedicated command group
+'icingacmd'. You can choose your own user/group names and pass them to the
+configure script using the --with-icinga-user, --with-icinga-group,
+--with-icingacmd-user and --with-icingacmd-group options.
+
+# groupadd icinga
+# groupadd icingacmd
+# useradd -c "icinga" -s /sbin/nologin -G icingacmd -g icinga
+
+Add the web server user to the icingacmd group in order to grant it write
+permissions to the external command pipe and livestatus socket:
+
+# usermod -a -G icingacmd www-data
+
+Make sure to replace "www-data" with the name of the user your web server
+is running as.
+
+Building Icinga 2
+-----------------
+
+Once you have installed all the necessary build requirements you can build
+Icinga 2 using the following commands:
+
+$ ./configure
+$ make
+$ make install
+
+The configure script supports all the usual parameters one comes to expect
+from autoconf. In particular you may want to use --prefix to specify an
+alternative installation prefix.
+
+Note: The Git repository does not contain any auto-generated Autotools files,
+i.e. there is no 'configure' script. In this case you will need to regenerate
+the 'configure' script by running 'autogen.sh'. However, as an end-user you
+should reconsider whether you really want to use the code from the Git
+repository. In general it is advisable to use one of the dist tarballs instead.
+
+Running Icinga 2
+----------------
+
+Icinga 2 comes with a single binary that takes care of loading all the relevant
+components (e.g. for check execution, notifications, etc.):
+
+# /usr/bin/icinga2
+[2013-10-22 13:06:22 +0200] <Main Thread> information/icinga-app: Icinga application loader (version: 0.0.3, git branch master, commit 07d9a59f + changes)
+[2013-10-22 13:06:22 +0200] <Main Thread> information/base: Adding library search dir: /usr/lib/icinga2
+[2013-10-22 13:06:22 +0200] <Main Thread> information/base: Loading library 'libicinga.la'
+[2013-10-22 13:06:22 +0200] <Main Thread> information/config: Adding include search dir: /usr/share/icinga2
+[2013-10-22 13:06:22 +0200] <Main Thread> critical/icinga-app: You need to specify at least one config file (using the --config option).
+
+Icinga 2 can be started as daemon using the provided init script:
+
+# /etc/init.d/icinga2
+Usage: /etc/init.d/icinga2 {start|stop|restart|reload|checkconfig|status}
+
+Icinga 2 reads a single configuration file which is used to specify all
+configuration settings (global settings, hosts, services, etc.). The
+configuration format is explained in detail in the doc/ directory.
+
+By default "make install" installs example configuration files in
+/usr/local/etc/icinga2 unless you have specified a different prefix or
+sysconfdir.
