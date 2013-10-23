@@ -1,0 +1,9 @@
+icinga2 source TODOs
+====================
+
+* Replace embedded tools
+  - doc/ strapdownjs and jquery
+
+* Document embedded sources in tarball
+  - third-party/
+
