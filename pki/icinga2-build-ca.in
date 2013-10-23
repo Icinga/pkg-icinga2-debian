@@ -1,0 +1,20 @@
+#!/bin/bash
+prefix=@prefix@
+datarootdir=@datarootdir@
+datadir=@datadir@
+
+ICINGA2PKIDIR=$datadir/icinga2/pki
+
+source $ICINGA2PKIDIR/pkifuncs
+
+check_pki_dir
+
+if [ $(ls -1 -- $ICINGA_CA | wc -l) != 0 ]; then
+	echo "The Icinga CA directory must be empty." >&2
+	exit 1
+fi
+
+echo '01' > $ICINGA_CA/serial
+touch $ICINGA_CA/index.txt
+
+CN_DEFAULT="Icinga CA" KEY_DIR=$ICINGA_CA openssl req -config $ICINGA2PKIDIR/openssl.cnf -new -newkey rsa:4096 -x509 -nodes -days 3650 -keyform PEM -keyout $ICINGA_CA/ca.key -outform PEM -out $ICINGA_CA/ca.crt
