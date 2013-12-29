@@ -116,7 +116,6 @@ Description: host and network monitoring system - IDO for PostgreSQL
 Package: icinga2-dbg
 Architecture: any
 Section: debug
-Priority: extra
 Depends: icinga2-bin (= ${binary:Version}),
          ${misc:Depends}
 Description: host and network monitoring system - debug symbols
