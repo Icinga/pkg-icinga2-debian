@@ -21,7 +21,7 @@ Build-Depends: cmake (>= 2.8.7),
                libssl-dev,
                po-debconf,
                python-dev
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
 Homepage: http://www.icinga.org
 
 Package: icinga2
@@ -31,19 +31,47 @@ Depends: icinga2-bin (= ${binary:Version}),
          ${misc:Depends}
 Recommends: icinga2-doc
 Description: host and network monitoring system
- Icinga 2 is still in development and not ready for production use!
+ Icinga 2 is a network monitoring system and parallel development branch to
+ Icinga 1.x. Completely redesigned from scratch it seeks to build on the
+ success of Icinga 1.x and deal with shortcomings inherited from Nagios as a
+ fork.
  .
- Better description to come.
+ The focus is set on delivering all features of a modern monitoring system,
+ performance, scalability and interoperability.
  .
- This is the metapackage to install all Icinga 2 features.
+ Features include:
+  * monitoring local and remote services, via ICMP, TCP or custom plugins
+  * plugin interface for usage of any existing Icinga / Nagios plugin
+  * notification system via mail or any other custom method
+  * intelligent handling of service states with downtimes and acknowledgements
+  * multiple interfaces to web interfaces, like status.dat, IDO or LiveStatus
+  * logging of every event and state change, compatibility to Icinga 1.x format
+ .
+ Please note: Icinga 2 is still in development and not ready for production!
+ .
+ This is a metapackage to install a basic Icinga 2 system.
 
 Package: icinga2-common
 Architecture: all
 Depends: adduser, ${misc:Depends}, ${perl:Depends}
 Description: host and network monitoring system - common files
- Icinga 2 is still in development and not ready for production use!
+ Icinga 2 is a network monitoring system and parallel development branch to
+ Icinga 1.x. Completely redesigned from scratch it seeks to build on the
+ success of Icinga 1.x and deal with shortcomings inherited from Nagios as a
+ fork.
  .
- Better description to come.
+ The focus is set on delivering all features of a modern monitoring system,
+ performance, scalability and interoperability.
+ .
+ Features include:
+  * monitoring local and remote services, via ICMP, TCP or custom plugins
+  * plugin interface for usage of any existing Icinga / Nagios plugin
+  * notification system via mail or any other custom method
+  * intelligent handling of service states with downtimes and acknowledgements
+  * multiple interfaces to web interfaces, like status.dat, IDO or LiveStatus
+  * logging of every event and state change, compatibility to Icinga 1.x format
+ .
+ Please note: Icinga 2 is still in development and not ready for production!
  .
  This package provides configuration and some basic helper scripts.
 
@@ -53,9 +81,23 @@ Pre-Depends: ${misc:Pre-Depends}
 Depends: icinga2-common (= ${source:Version}),
          ${misc:Depends}, ${shlibs:Depends}
 Description: host and network monitoring system - daemon
- Icinga 2 is still in development and not ready for production use!
+ Icinga 2 is a network monitoring system and parallel development branch to
+ Icinga 1.x. Completely redesigned from scratch it seeks to build on the
+ success of Icinga 1.x and deal with shortcomings inherited from Nagios as a
+ fork.
  .
- Better description to come.
+ The focus is set on delivering all features of a modern monitoring system,
+ performance, scalability and interoperability.
+ .
+ Features include:
+  * monitoring local and remote services, via ICMP, TCP or custom plugins
+  * plugin interface for usage of any existing Icinga / Nagios plugin
+  * notification system via mail or any other custom method
+  * intelligent handling of service states with downtimes and acknowledgements
+  * multiple interfaces to web interfaces, like status.dat, IDO or LiveStatus
+  * logging of every event and state change, compatibility to Icinga 1.x format
+ .
+ Please note: Icinga 2 is still in development and not ready for production!
  .
  This package provides the Icinga 2 daemon.
 
@@ -64,9 +106,23 @@ Architecture: all
 Section: doc
 Depends: ${misc:Depends}
 Description: host and network monitoring system - documentation
- Icinga 2 is still in development and not ready for production use!
+ Icinga 2 is a network monitoring system and parallel development branch to
+ Icinga 1.x. Completely redesigned from scratch it seeks to build on the
+ success of Icinga 1.x and deal with shortcomings inherited from Nagios as a
+ fork.
  .
- Better description to come.
+ The focus is set on delivering all features of a modern monitoring system,
+ performance, scalability and interoperability.
+ .
+ Features include:
+  * monitoring local and remote services, via ICMP, TCP or custom plugins
+  * plugin interface for usage of any existing Icinga / Nagios plugin
+  * notification system via mail or any other custom method
+  * intelligent handling of service states with downtimes and acknowledgements
+  * multiple interfaces to web interfaces, like status.dat, IDO or LiveStatus
+  * logging of every event and state change, compatibility to Icinga 1.x format
+ .
+ Please note: Icinga 2 is still in development and not ready for production!
  .
  This package provides the Icinga 2 documentation.
 
@@ -77,9 +133,23 @@ Depends: icinga2-common (= ${source:Version}),
          ${misc:Depends}
 Recommends: apache2 | httpd
 Description: host and network monitoring system - classic ui integration
- Icinga 2 is still in development and not ready for production use!
+ Icinga 2 is a network monitoring system and parallel development branch to
+ Icinga 1.x. Completely redesigned from scratch it seeks to build on the
+ success of Icinga 1.x and deal with shortcomings inherited from Nagios as a
+ fork.
  .
- Better description to come.
+ The focus is set on delivering all features of a modern monitoring system,
+ performance, scalability and interoperability.
+ .
+ Features include:
+  * monitoring local and remote services, via ICMP, TCP or custom plugins
+  * plugin interface for usage of any existing Icinga / Nagios plugin
+  * notification system via mail or any other custom method
+  * intelligent handling of service states with downtimes and acknowledgements
+  * multiple interfaces to web interfaces, like status.dat, IDO or LiveStatus
+  * logging of every event and state change, compatibility to Icinga 1.x format
+ .
+ Please note: Icinga 2 is still in development and not ready for production!
  .
  This package provides the integration into Icinga Classic UI.
 
@@ -92,9 +162,23 @@ Depends: icinga2-common (= ${source:Version}),
 Recommends: mysql-client
 Suggests: mysql-server
 Description: host and network monitoring system - IDO for MySQL
- Icinga 2 is still in development and not ready for production use!
+ Icinga 2 is a network monitoring system and parallel development branch to
+ Icinga 1.x. Completely redesigned from scratch it seeks to build on the
+ success of Icinga 1.x and deal with shortcomings inherited from Nagios as a
+ fork.
  .
- Better description to come.
+ The focus is set on delivering all features of a modern monitoring system,
+ performance, scalability and interoperability.
+ .
+ Features include:
+  * monitoring local and remote services, via ICMP, TCP or custom plugins
+  * plugin interface for usage of any existing Icinga / Nagios plugin
+  * notification system via mail or any other custom method
+  * intelligent handling of service states with downtimes and acknowledgements
+  * multiple interfaces to web interfaces, like status.dat, IDO or LiveStatus
+  * logging of every event and state change, compatibility to Icinga 1.x format
+ .
+ Please note: Icinga 2 is still in development and not ready for production!
  .
  This package provides the IDO module for the MySQL database.
 
@@ -107,9 +191,23 @@ Depends: icinga2-common (= ${source:Version}),
 Recommends: postgresql-client
 Suggests: postgresql
 Description: host and network monitoring system - IDO for PostgreSQL
- Icinga 2 is still in development and not ready for production use!
+ Icinga 2 is a network monitoring system and parallel development branch to
+ Icinga 1.x. Completely redesigned from scratch it seeks to build on the
+ success of Icinga 1.x and deal with shortcomings inherited from Nagios as a
+ fork.
  .
- Better description to come.
+ The focus is set on delivering all features of a modern monitoring system,
+ performance, scalability and interoperability.
+ .
+ Features include:
+  * monitoring local and remote services, via ICMP, TCP or custom plugins
+  * plugin interface for usage of any existing Icinga / Nagios plugin
+  * notification system via mail or any other custom method
+  * intelligent handling of service states with downtimes and acknowledgements
+  * multiple interfaces to web interfaces, like status.dat, IDO or LiveStatus
+  * logging of every event and state change, compatibility to Icinga 1.x format
+ .
+ Please note: Icinga 2 is still in development and not ready for production!
  .
  This package provides the IDO module for the PostgreSQL database.
 
@@ -119,9 +217,23 @@ Section: debug
 Depends: icinga2-bin (= ${binary:Version}),
          ${misc:Depends}
 Description: host and network monitoring system - debug symbols
- Icinga 2 is still in development and not ready for production use!
+ Icinga 2 is a network monitoring system and parallel development branch to
+ Icinga 1.x. Completely redesigned from scratch it seeks to build on the
+ success of Icinga 1.x and deal with shortcomings inherited from Nagios as a
+ fork.
  .
- Better description to come.
+ The focus is set on delivering all features of a modern monitoring system,
+ performance, scalability and interoperability.
+ .
+ Features include:
+  * monitoring local and remote services, via ICMP, TCP or custom plugins
+  * plugin interface for usage of any existing Icinga / Nagios plugin
+  * notification system via mail or any other custom method
+  * intelligent handling of service states with downtimes and acknowledgements
+  * multiple interfaces to web interfaces, like status.dat, IDO or LiveStatus
+  * logging of every event and state change, compatibility to Icinga 1.x format
+ .
+ Please note: Icinga 2 is still in development and not ready for production!
  .
  This package provides debug symbols for Icinga 2.
 
