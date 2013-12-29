@@ -20,6 +20,7 @@
 #include "icinga/service.h"
 #include "icinga/eventcommand.h"
 #include "icinga/icingaapplication.h"
+#include "base/context.h"
 
 using namespace icinga;
 
@@ -27,26 +28,38 @@ boost::signals2::signal<void (const Service::Ptr&)> Service::OnEventCommandExecu
 
 bool Service::GetEnableEventHandler(void) const
 {
-	if (!m_OverrideEnableEventHandler.IsEmpty())
-		return m_EnableEventHandler;
-	else if (!m_EnableEventHandler.IsEmpty())
-		return m_EnableEventHandler;
+	if (!GetOverrideEnableEventHandler().IsEmpty())
+		return GetOverrideEnableEventHandler();
 	else
-		return true;
+		return GetEnableEventHandlerRaw();
 }
 
 void Service::SetEnableEventHandler(bool enabled)
 {
-	m_OverrideEnableEventHandler = enabled;
+	SetOverrideEnableEventHandler(enabled);
 }
 
 EventCommand::Ptr Service::GetEventCommand(void) const
 {
-	return EventCommand::GetByName(m_EventCommand);
+	String command;
+
+	if (!GetOverrideEventCommand().IsEmpty())
+		command = GetOverrideEventCommand();
+	else
+		command = GetEventCommandRaw();
+
+	return EventCommand::GetByName(command);
+}
+
+void Service::SetEventCommand(const EventCommand::Ptr& command)
+{
+	SetOverrideEventCommand(command->GetName());
 }
 
 void Service::ExecuteEventHandler(void)
 {
+	CONTEXT("Executing event handler for service '" + GetShortName() + "' on host '" + GetHost()->GetName() + "'");
+
 	if (!IcingaApplication::GetInstance()->GetEnableEventHandlers() || !GetEnableEventHandler())
 		return;
 

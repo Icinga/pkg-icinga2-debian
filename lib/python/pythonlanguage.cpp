@@ -26,7 +26,6 @@
 #include "base/array.h"
 #include <boost/foreach.hpp>
 #include <boost/tuple/tuple.hpp>
-#include <boost/exception/diagnostic_information.hpp>
 
 using namespace icinga;
 
@@ -90,7 +89,7 @@ ScriptInterpreter::Ptr PythonLanguage::CreateInterpreter(const Script::Ptr& scri
 {
 	InitializeOnce();
 
-	return boost::make_shared<PythonInterpreter>(GetSelf(), script);
+	return make_shared<PythonInterpreter>(GetSelf(), script);
 }
 
 PyThreadState *PythonLanguage::GetMainThreadState(void) const
@@ -196,7 +195,7 @@ Value PythonLanguage::MarshalFromPython(PyObject *value)
 	if (value == Py_None) {
 		return Empty;
 	} else if (PyDict_Check(value)) {
-		Dictionary::Ptr dict = boost::make_shared<Dictionary>();
+		Dictionary::Ptr dict = make_shared<Dictionary>();
 
 		PyObject *dk, *dv;
 		Py_ssize_t pos = 0;
@@ -210,7 +209,7 @@ Value PythonLanguage::MarshalFromPython(PyObject *value)
 
 		return dict;
 	} else if (PyList_Check(value)) {
-		Array::Ptr arr = boost::make_shared<Array>();
+		Array::Ptr arr = make_shared<Array>();
 
 		for (Py_ssize_t pos = 0; pos < PyList_Size(value); pos++) {
 			PyObject *dv = PyList_GetItem(value, pos);
@@ -330,7 +329,7 @@ PyObject *PythonLanguage::PyCallNativeFunction(PyObject *self, PyObject *args)
 	} catch (const std::exception& ex) {
 		PyEval_RestoreThread(tstate);
 
-		String message = boost::diagnostic_information(ex);
+		String message = DiagnosticInformation(ex);
 		PyErr_SetString(PyExc_RuntimeError, message.CStr());
 
 		return NULL;

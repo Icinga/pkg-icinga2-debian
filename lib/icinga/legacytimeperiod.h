@@ -47,6 +47,7 @@ public:
 	static void ProcessTimeRangeRaw(const String& timerange, tm *reference, tm *begin, tm *end);
 	static Dictionary::Ptr ProcessTimeRange(const String& timerange, tm *reference);
 	static void ProcessTimeRanges(const String& timeranges, tm *reference, const Array::Ptr& result);
+	static Dictionary::Ptr FindNextSegment(const String& daydef, const String& timeranges, tm *reference);
 
 private:
 	LegacyTimePeriod(void);

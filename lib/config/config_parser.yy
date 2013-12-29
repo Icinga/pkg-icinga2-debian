@@ -1,4 +1,4 @@
-%code requires {
+%{
 /******************************************************************************
  * Icinga 2                                                                   *
  * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
@@ -31,17 +31,16 @@
 #include "base/utility.h"
 #include "base/array.h"
 #include "base/scriptvariable.h"
+#include "base/exception.h"
 #include <sstream>
 #include <stack>
-#include <boost/smart_ptr/make_shared.hpp>
-#include <boost/exception/diagnostic_information.hpp>
 #include <boost/foreach.hpp>
-
-using namespace icinga;
 
 #define YYLTYPE icinga::DebugInfo
 
-}
+using namespace icinga;
+
+%}
 
 %pure-parser
 
@@ -75,7 +74,8 @@ using namespace icinga;
 %token <op> T_MINUS_EQUAL "-= (T_MINUS_EQUAL)"
 %token <op> T_MULTIPLY_EQUAL "*= (T_MULTIPLY_EQUAL)"
 %token <op> T_DIVIDE_EQUAL "/= (T_DIVIDE_EQUAL)"
-%token T_SET "set (T_SET)"
+%token T_VAR "var (T_VAR)"
+%token T_CONST "const (T_CONST)"
 %token T_SHIFT_LEFT "<< (T_SHIFT_LEFT)"
 %token T_SHIFT_RIGHT ">> (T_SHIFT_RIGHT)"
 %token <type> T_TYPE_DICTIONARY "dictionary (T_TYPE_DICTIONARY)"
@@ -92,6 +92,7 @@ using namespace icinga;
 %token T_OBJECT "object (T_OBJECT)"
 %token T_TEMPLATE "template (T_TEMPLATE)"
 %token T_INCLUDE "include (T_INCLUDE)"
+%token T_INCLUDE_RECURSIVE "include_recursive (T_INCLUDE_RECURSIVE)"
 %token T_LIBRARY "library (T_LIBRARY)"
 %token T_INHERITS "inherits (T_INHERITS)"
 %token T_PARTIAL "partial (T_PARTIAL)"
@@ -113,6 +114,7 @@ using namespace icinga;
 %type <slist> object_inherits_specifier
 %type <aexpr> aterm
 %type <aexpr> aexpression
+%type <num> variable_decl
 %left '+' '-'
 %left '*' '/'
 %left '&'
@@ -141,7 +143,7 @@ void ConfigCompiler::Compile(void)
 	try {
 		yyparse(this);
 	} catch (const std::exception& ex) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, boost::diagnostic_information(ex));
+		ConfigCompilerContext::GetInstance()->AddMessage(true, DiagnosticInformation(ex));
 	}
 }
 
@@ -154,7 +156,7 @@ statements: /* empty */
 	| statements statement
 	;
 
-statement: object | type | include | library | variable
+statement: object | type | include | include_recursive | library | variable
 	;
 
 include: T_INCLUDE value
@@ -167,28 +169,58 @@ include: T_INCLUDE value
 		context->HandleInclude($2, true, yylloc);
 		free($2);
 	}
+	;
+
+include_recursive: T_INCLUDE_RECURSIVE value
+	{
+		context->HandleIncludeRecursive(*$2, "*.conf", yylloc);
+		delete $2;
+	}
+	| T_INCLUDE_RECURSIVE value value
+	{
+		context->HandleIncludeRecursive(*$2, *$3, yylloc);
+		delete $2;
+		delete $3;
+	}
+	;
 
 library: T_LIBRARY T_STRING
 	{
 		context->HandleLibrary($2);
 		free($2);
 	}
+	;
 
-variable: T_SET identifier T_EQUAL value
+variable: variable_decl identifier T_EQUAL value
 	{
 		Value *value = $4;
 		if (value->IsObjectType<ExpressionList>()) {
-			Dictionary::Ptr dict = boost::make_shared<Dictionary>();
+			Dictionary::Ptr dict = make_shared<Dictionary>();
 			ExpressionList::Ptr exprl = *value;
 			exprl->Execute(dict);
 			delete value;
 			value = new Value(dict);
 		}
 
-		ScriptVariable::Set($2, *value);
+		ScriptVariable::Ptr sv = ScriptVariable::Set($2, *value);
+
+		if (!$1)
+			sv->SetConstant(true);
+
 		free($2);
 		delete value;
 	}
+	;
+
+variable_decl: T_VAR
+	{
+		$$ = true;
+	}
+	| T_CONST
+	{
+		$$ = false;
+	}
+	;
 
 identifier: T_IDENTIFIER
 	| T_STRING
@@ -208,7 +240,7 @@ type: partial_specifier T_TYPE identifier
 			if ($1)
 				BOOST_THROW_EXCEPTION(std::invalid_argument("Partial type definition for unknown type '" + name + "'"));
 
-			m_Type = boost::make_shared<ConfigType>(name, yylloc);
+			m_Type = make_shared<ConfigType>(name, yylloc);
 			m_Type->Register();
 		}
 	}
@@ -238,7 +270,7 @@ partial_specifier: /* Empty */
 
 typerulelist: '{'
 	{
-		m_RuleLists.push(boost::make_shared<TypeRuleList>());
+		m_RuleLists.push(make_shared<TypeRuleList>());
 	}
 	typerules
 	'}'
@@ -316,13 +348,13 @@ object:
 	}
 object_declaration identifier T_STRING object_inherits_specifier expressionlist
 	{
-		ConfigItemBuilder::Ptr item = boost::make_shared<ConfigItemBuilder>(yylloc);
+		ConfigItemBuilder::Ptr item = make_shared<ConfigItemBuilder>(yylloc);
 
 		item->SetType($3);
 
-		if (strchr($4, ':') != NULL) {
+		if (strchr($4, '!') != NULL) {
 			std::ostringstream msgbuf;
-			msgbuf << "Name for object '" << $4 << "' of type '" << $3 << "' is invalid: Object names may not contain ':'";
+			msgbuf << "Name for object '" << $4 << "' of type '" << $3 << "' is invalid: Object names may not contain '!'";
 			free($3);
 			BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
 		}
@@ -442,7 +474,7 @@ expression: identifier operator value
 		free($3);
 		delete $6;
 
-		ExpressionList::Ptr subexprl = boost::make_shared<ExpressionList>();
+		ExpressionList::Ptr subexprl = make_shared<ExpressionList>();
 		subexprl->AddExpression(subexpr);
 
 		$$ = new Expression($1, OperatorPlus, subexprl, yylloc);
@@ -485,7 +517,7 @@ array_items_inner: /* empty */
 
 		if ($1->IsObjectType<ExpressionList>()) {
 			ExpressionList::Ptr exprl = *$1;
-			Dictionary::Ptr dict = boost::make_shared<Dictionary>();
+			Dictionary::Ptr dict = make_shared<Dictionary>();
 			exprl->Execute(dict);
 			delete $1;
 			$1 = new Value(dict);
@@ -503,7 +535,7 @@ array_items_inner: /* empty */
 
 		if ($3->IsObjectType<ExpressionList>()) {
 			ExpressionList::Ptr exprl = *$3;
-			Dictionary::Ptr dict = boost::make_shared<Dictionary>();
+			Dictionary::Ptr dict = make_shared<Dictionary>();
 			exprl->Execute(dict);
 			delete $3;
 			$3 = new Value(dict);
@@ -544,63 +576,68 @@ aterm: '(' aexpression ')'
 
 aexpression: T_STRING
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEReturn, AValue(ATSimple, $1)));
+		$$ = new Value(make_shared<AExpression>(AEReturn, AValue(ATSimple, $1)));
 		free($1);
 	}
 	| T_NUMBER
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEReturn, AValue(ATSimple, $1)));
+		$$ = new Value(make_shared<AExpression>(AEReturn, AValue(ATSimple, $1)));
 	}
 	| T_IDENTIFIER
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEReturn, AValue(ATVariable, $1)));
+		$$ = new Value(make_shared<AExpression>(AEReturn, AValue(ATVariable, $1)));
 		free($1);
+	}
+	| '~' aexpression
+	{
+		$$ = new Value(make_shared<AExpression>(AENegate, static_cast<AExpression::Ptr>(*$2)));
+		delete $2;
 	}
 	| aexpression '+' aexpression
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEAdd, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
+		$$ = new Value(make_shared<AExpression>(AEAdd, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
 		delete $1;
 		delete $3;
 	}
 	| aexpression '-' aexpression
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AESubtract, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
+		$$ = new Value(make_shared<AExpression>(AESubtract, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
 		delete $1;
 		delete $3;
 	}
 	| aexpression '*' aexpression
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEMultiply, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
+		$$ = new Value(make_shared<AExpression>(AEMultiply, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
 		delete $1;
 		delete $3;
 	}
 	| aexpression '/' aexpression
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEDivide, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
+		$$ = new Value(make_shared<AExpression>(AEDivide, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
 		delete $1;
 		delete $3;
 	}
 	| aexpression '&' aexpression
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEBinaryAnd, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
+		$$ = new Value(make_shared<AExpression>(AEBinaryAnd, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
 		delete $1;
 		delete $3;
 	}
 	| aexpression '|' aexpression
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEBinaryOr, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
+		$$ = new Value(make_shared<AExpression>(AEBinaryOr, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
 		delete $1;
 		delete $3;
 	}
 	| aexpression T_SHIFT_LEFT aexpression
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEShiftLeft, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
+		$$ = new Value(make_shared<AExpression>(AEShiftLeft, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
 		delete $1;
 		delete $3;
 	}
 	| aexpression T_SHIFT_RIGHT aexpression
 	{
-		$$ = new Value(boost::make_shared<AExpression>(AEShiftRight, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
+		$$ = new Value(make_shared<AExpression>(AEShiftRight, static_cast<AExpression::Ptr>(*$1), static_cast<AExpression::Ptr>(*$3)));
 		delete $1;
 		delete $3;
 	}

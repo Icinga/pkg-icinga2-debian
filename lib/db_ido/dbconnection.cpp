@@ -31,9 +31,11 @@
 
 using namespace icinga;
 
+REGISTER_TYPE(DbConnection);
+
 Timer::Ptr DbConnection::m_ProgramStatusTimer;
 
-INITIALIZE_ONCE(DbConnection, &DbConnection::StaticInitialize);
+INITIALIZE_ONCE(&DbConnection::StaticInitialize);
 
 void DbConnection::Start(void)
 {
@@ -41,7 +43,7 @@ void DbConnection::Start(void)
 
 	DbObject::OnQuery.connect(boost::bind(&DbConnection::ExecuteQuery, this, _1));
 
-	m_CleanUpTimer = boost::make_shared<Timer>();
+	m_CleanUpTimer = make_shared<Timer>();
 	m_CleanUpTimer->SetInterval(60);
 	m_CleanUpTimer->OnTimerExpired.connect(boost::bind(&DbConnection::CleanUpHandler, this));
 	m_CleanUpTimer->Start();
@@ -49,18 +51,10 @@ void DbConnection::Start(void)
 
 void DbConnection::StaticInitialize(void)
 {
-	m_ProgramStatusTimer = boost::make_shared<Timer>();
+	m_ProgramStatusTimer = make_shared<Timer>();
 	m_ProgramStatusTimer->SetInterval(10);
 	m_ProgramStatusTimer->OnTimerExpired.connect(boost::bind(&DbConnection::ProgramStatusHandler));
 	m_ProgramStatusTimer->Start();
-}
-
-String DbConnection::GetTablePrefix(void) const
-{
-	if (m_TablePrefix.IsEmpty())
-		return "icinga_";
-	else
-		return m_TablePrefix;
 }
 
 void DbConnection::InsertRuntimeVariable(const String& key, const Value& value)
@@ -68,7 +62,8 @@ void DbConnection::InsertRuntimeVariable(const String& key, const Value& value)
 	DbQuery query;
 	query.Table = "runtimevariables";
 	query.Type = DbQueryInsert;
-	query.Fields = boost::make_shared<Dictionary>();
+	query.Category = DbCatProgramStatus;
+	query.Fields = make_shared<Dictionary>();
 	query.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	query.Fields->Set("varname", key);
 	query.Fields->Set("varvalue", value);
@@ -80,18 +75,21 @@ void DbConnection::ProgramStatusHandler(void)
 	DbQuery query1;
 	query1.Table = "programstatus";
 	query1.Type = DbQueryDelete;
-	query1.WhereCriteria = boost::make_shared<Dictionary>();
+	query1.Category = DbCatProgramStatus;
+	query1.WhereCriteria = make_shared<Dictionary>();
 	query1.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
 	DbObject::OnQuery(query1);
 
 	DbQuery query2;
 	query2.Table = "programstatus";
+	query2.IdColumn = "programstatus_id";
 	query2.Type = DbQueryInsert;
+	query2.Category = DbCatProgramStatus;
 
-	query2.Fields = boost::make_shared<Dictionary>();
+	query2.Fields = make_shared<Dictionary>();
 	query2.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	query2.Fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
-	query2.Fields->Set("program_start_time", DbValue::FromTimestamp(IcingaApplication::GetInstance()->GetStartTime()));
+	query2.Fields->Set("program_start_time", DbValue::FromTimestamp(Application::GetStartTime()));
 	query2.Fields->Set("is_currently_running", 1);
 	query2.Fields->Set("process_id", Utility::GetPid());
 	query2.Fields->Set("daemon_mode", 1);
@@ -108,7 +106,8 @@ void DbConnection::ProgramStatusHandler(void)
 	DbQuery query3;
 	query3.Table = "runtimevariables";
 	query3.Type = DbQueryDelete;
-	query3.WhereCriteria = boost::make_shared<Dictionary>();
+	query3.Category = DbCatProgramStatus;
+	query3.WhereCriteria = make_shared<Dictionary>();
 	query3.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
 	DbObject::OnQuery(query3);
 
@@ -122,259 +121,44 @@ void DbConnection::CleanUpHandler(void)
 {
 	long now = static_cast<long>(Utility::GetTime());
 
-	if (GetCleanUpAcknowledgementsAge() > 0) {
-		CleanUpExecuteQuery("acknowledgements", "entry_time", now - GetCleanUpAcknowledgementsAge());
-		Log(LogDebug, "db_ido", "GetCleanUpAcknowledgementsAge: " + Convert::ToString(GetCleanUpAcknowledgementsAge()) +
+	struct {
+		String name;
+		String time_column;
+	} tables[] = {
+		{ "acknowledgements", "entry_time" },
+		{ "commenthistory", "entry_time" },
+		{ "contactnotifications", "start_time" },
+		{ "contactnotificationmethods", "start_time" },
+		{ "downtimehistory", "entry_time" },
+		{ "eventhandlers", "start_time" },
+		{ "externalcommands", "entry_time" },
+		{ "flappinghistory" "event_time" },
+		{ "hostchecks", "start_time" },
+		{ "logentries", "logentry_time" },
+		{ "notifications", "start_time" },
+		{ "processevents", "event_time" },
+		{ "statehistory", "state_time" },
+		{ "servicechecks", "start_time" },
+		{ "systemcommands", "start_time" }
+	};
+
+	for (int i = 0; i < sizeof(tables) / sizeof(tables[0]); i++) {
+		double max_age = GetCleanup()->Get(tables[i].name + "_age");
+
+		if (max_age == 0)
+			continue;
+
+		CleanUpExecuteQuery(tables[i].name, tables[i].time_column, now - max_age);
+		Log(LogDebug, "db_ido", "Cleanup (" + tables[i].name + "): " + Convert::ToString(max_age) +
 		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpAcknowledgementsAge()));
+		    " old: " + Convert::ToString(now - max_age));
 	}
-	if (GetCleanUpCommentHistoryAge() > 0) {
-		CleanUpExecuteQuery("commenthistory", "entry_time", now - GetCleanUpCommentHistoryAge());
-		Log(LogDebug, "db_ido", "GetCleanUpCommentHistoryAge: " + Convert::ToString(GetCleanUpCommentHistoryAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpCommentHistoryAge()));
-	}
-	if (GetCleanUpContactNotificationsAge() > 0) {
-		CleanUpExecuteQuery("contactnotifications", "start_time", now - GetCleanUpContactNotificationsAge());
-		Log(LogDebug, "db_ido", "GetCleanUpContactNotificationsAge: " + Convert::ToString(GetCleanUpContactNotificationsAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpContactNotificationsAge()));
-	}
-	if (GetCleanUpContactNotificationMethodsAge() > 0) {
-		CleanUpExecuteQuery("contactnotificationmethods", "start_time", now - GetCleanUpContactNotificationMethodsAge());
-		Log(LogDebug, "db_ido", "GetCleanUpContactNotificationMethodsAge: " + Convert::ToString(GetCleanUpContactNotificationMethodsAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpContactNotificationMethodsAge()));
-	}
-	if (GetCleanUpDowntimeHistoryAge() > 0) {
-		CleanUpExecuteQuery("downtimehistory", "entry_time", now - GetCleanUpDowntimeHistoryAge());
-		Log(LogDebug, "db_ido", "CleanUpDowntimeHistoryAge: " + Convert::ToString(GetCleanUpDowntimeHistoryAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpDowntimeHistoryAge()));
-	}
-	if (GetCleanUpEventHandlersAge() > 0) {
-		CleanUpExecuteQuery("eventhandlers", "start_time", now - GetCleanUpEventHandlersAge());
-		Log(LogDebug, "db_ido", "GetCleanUpEventHandlersAge: " + Convert::ToString(GetCleanUpEventHandlersAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpEventHandlersAge()));
-	}
-	if (GetCleanUpExternalCommandsAge() > 0) {
-		CleanUpExecuteQuery("externalcommands", "entry_time", now - GetCleanUpExternalCommandsAge());
-		Log(LogDebug, "db_ido", "GetCleanUpExternalCommandsAge: " + Convert::ToString(GetCleanUpExternalCommandsAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpExternalCommandsAge()));
-	}
-	if (GetCleanUpFlappingHistoryAge() > 0) {
-		CleanUpExecuteQuery("flappinghistory", "event_time", now - GetCleanUpFlappingHistoryAge());
-		Log(LogDebug, "db_ido", "GetCleanUpFlappingHistoryAge: " + Convert::ToString(GetCleanUpFlappingHistoryAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpFlappingHistoryAge()));
-	}
-	if (GetCleanUpHostChecksAge() > 0) {
-		CleanUpExecuteQuery("hostchecks", "start_time", now - GetCleanUpHostChecksAge());
-		Log(LogDebug, "db_ido", "GetCleanUpHostChecksAge: " + Convert::ToString(GetCleanUpHostChecksAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpHostChecksAge()));
-	}
-	if (GetCleanUpLogEntriesAge() > 0) {
-		CleanUpExecuteQuery("logentries", "logentry_time", now - GetCleanUpLogEntriesAge());
-		Log(LogDebug, "db_ido", "GetCleanUpLogEntriesAge: " + Convert::ToString(GetCleanUpLogEntriesAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpLogEntriesAge()));
-	}
-	if (GetCleanUpNotificationsAge() > 0) {
-		CleanUpExecuteQuery("notifications", "start_time", now - GetCleanUpNotificationsAge());
-		Log(LogDebug, "db_ido", "GetCleanUpNotificationsAge: " + Convert::ToString(GetCleanUpNotificationsAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpNotificationsAge()));
-	}
-	if (GetCleanUpProcessEventsAge() > 0) {
-		CleanUpExecuteQuery("processevents", "event_time", now - GetCleanUpProcessEventsAge());
-		Log(LogDebug, "db_ido", "GetCleanUpProcessEventsAge: " + Convert::ToString(GetCleanUpProcessEventsAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpProcessEventsAge()));
-	}
-	if (GetCleanUpStateHistoryAge() > 0) {
-		CleanUpExecuteQuery("statehistory", "state_time", now - GetCleanUpStateHistoryAge());
-		Log(LogDebug, "db_ido", "GetCleanUpStateHistoryAge: " + Convert::ToString(GetCleanUpStateHistoryAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpStateHistoryAge()));
-	}
-	if (GetCleanUpServiceChecksAge() > 0) {
-		CleanUpExecuteQuery("servicechecks", "start_time", now - GetCleanUpServiceChecksAge());
-		Log(LogDebug, "db_ido", "GetCleanUpServiceChecksAge: " + Convert::ToString(GetCleanUpServiceChecksAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpServiceChecksAge()));
-	}
-	if (GetCleanUpSystemCommandsAge() > 0) {
-		CleanUpExecuteQuery("systemcommands", "start_time", now - GetCleanUpSystemCommandsAge());
-		Log(LogDebug, "db_ido", "GetCleanUpSystemCommandsAge: " + Convert::ToString(GetCleanUpSystemCommandsAge()) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - GetCleanUpSystemCommandsAge()));
-	}
+
 }
 
-void DbConnection::CleanUpExecuteQuery(const String& table, const String& time_key, double time_value)
+void DbConnection::CleanUpExecuteQuery(const String& table, const String& time_column, double max_age)
 {
 	/* Default handler does nothing. */
-}
-
-Dictionary::Ptr DbConnection::GetCleanUp(void) const
-{
-	if (!m_CleanUp)
-		return Empty;
-	else
-		return m_CleanUp;
-}
-
-Value DbConnection::GetCleanUpAcknowledgementsAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("acknowledgement_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("acknowledgement_age");
-}
-
-Value DbConnection::GetCleanUpCommentHistoryAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("commenthistory_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("commenthistory_age");
-}
-
-Value DbConnection::GetCleanUpContactNotificationsAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("contactnotifications_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("contactnotifications_age");
-}
-
-Value DbConnection::GetCleanUpContactNotificationMethodsAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("contactnotificationmethods_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("contactnotificationmethods_age");
-}
-
-Value DbConnection::GetCleanUpDowntimeHistoryAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("downtimehistory_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("downtimehistory_age");
-}
-
-Value DbConnection::GetCleanUpEventHandlersAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("eventhandlers_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("eventhandlers_age");
-}
-
-Value DbConnection::GetCleanUpExternalCommandsAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("externalcommands_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("externalcommands_age");
-}
-
-Value DbConnection::GetCleanUpFlappingHistoryAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("flappinghistory_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("flappinghistory_age");
-}
-
-Value DbConnection::GetCleanUpHostChecksAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("hostchecks_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("hostchecks_age");
-}
-
-Value DbConnection::GetCleanUpLogEntriesAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("logentries_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("logentries_age");
-}
-
-Value DbConnection::GetCleanUpNotificationsAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("notifications_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("notifications_age");
-}
-
-Value DbConnection::GetCleanUpProcessEventsAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("processevents_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("processevents_age");
-}
-
-Value DbConnection::GetCleanUpStateHistoryAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("statehistory_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("statehistory_age");
-}
-
-Value DbConnection::GetCleanUpServiceChecksAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("servicechecks_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("servicechecks_age");
-}
-
-Value DbConnection::GetCleanUpSystemCommandsAge(void) const
-{
-	Dictionary::Ptr cleanup = GetCleanUp();
-
-	if (!cleanup || cleanup->Get("systemcommands_age").IsEmpty())
-		return CleanUpAgeNone;
-	else
-		return cleanup->Get("systemcommands_age");
 }
 
 void DbConnection::SetObjectID(const DbObject::Ptr& dbobj, const DbReference& dbref)
@@ -417,6 +201,28 @@ DbReference DbConnection::GetInsertID(const DbObject::Ptr& dbobj) const
 	return it->second;
 }
 
+void DbConnection::SetObjectActive(const DbObject::Ptr& dbobj, bool active)
+{
+	if (active)
+		m_ActiveObjects.insert(dbobj);
+	else
+		m_ActiveObjects.erase(dbobj);
+}
+
+bool DbConnection::GetObjectActive(const DbObject::Ptr& dbobj) const
+{
+	return (m_ActiveObjects.find(dbobj) != m_ActiveObjects.end());
+}
+
+void DbConnection::ClearIDCache(void)
+{
+	m_ObjectIDs.clear();
+	m_InsertIDs.clear();
+	m_ActiveObjects.clear();
+	m_ConfigUpdates.clear();
+	m_StatusUpdates.clear();
+}
+
 void DbConnection::SetConfigUpdate(const DbObject::Ptr& dbobj, bool hasupdate)
 {
 	if (hasupdate)
@@ -456,30 +262,12 @@ void DbConnection::UpdateAllObjects(void)
 			DbObject::Ptr dbobj = DbObject::GetOrCreateByObject(object);
 
 			if (dbobj) {
-				ActivateObject(dbobj);
+				if (!GetObjectActive(dbobj))
+					ActivateObject(dbobj);
+
 				dbobj->SendConfigUpdate();
 				dbobj->SendStatusUpdate();
 			}
 		}
-	}
-}
-
-void DbConnection::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
-{
-	DynamicObject::InternalSerialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		bag->Set("table_prefix", m_TablePrefix);
-		bag->Set("cleanup", m_CleanUp);
-	}
-}
-
-void DbConnection::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
-{
-	DynamicObject::InternalDeserialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		m_TablePrefix = bag->Get("table_prefix");
-		m_CleanUp = bag->Get("cleanup");
 	}
 }

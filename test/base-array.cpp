@@ -19,8 +19,8 @@
 
 #include "base/array.h"
 #include "base/objectlock.h"
+#include "base/serializer.h"
 #include <boost/test/unit_test.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -29,14 +29,14 @@ BOOST_AUTO_TEST_SUITE(base_array)
 
 BOOST_AUTO_TEST_CASE(construct)
 {
-	Array::Ptr array = boost::make_shared<Array>();
+	Array::Ptr array = make_shared<Array>();
 	BOOST_CHECK(array);
 	BOOST_CHECK(array->GetLength() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(getset)
 {
-	Array::Ptr array = boost::make_shared<Array>();
+	Array::Ptr array = make_shared<Array>();
 	array->Add(7);
 	array->Add(2);
 	array->Add(5);
@@ -53,9 +53,30 @@ BOOST_AUTO_TEST_CASE(getset)
 	BOOST_CHECK(array->Get(1) == 5);
 }
 
+BOOST_AUTO_TEST_CASE(insert)
+{
+	Array::Ptr array = make_shared<Array>();
+
+	array->Insert(0, 11);
+	array->Insert(1, 22);
+	BOOST_CHECK(array->GetLength() == 2);
+	BOOST_CHECK(array->Get(1) == 22);
+
+	array->Insert(0, 33);
+	BOOST_CHECK(array->GetLength() == 3);
+	BOOST_CHECK(array->Get(0) == 33);
+	BOOST_CHECK(array->Get(1) == 11);
+
+	array->Insert(1, 44);
+	BOOST_CHECK(array->GetLength() == 4);
+	BOOST_CHECK(array->Get(0) == 33);
+	BOOST_CHECK(array->Get(1) == 44);
+	BOOST_CHECK(array->Get(2) == 11);
+}
+
 BOOST_AUTO_TEST_CASE(remove)
 {
-	Array::Ptr array = boost::make_shared<Array>();
+	Array::Ptr array = make_shared<Array>();
 	array->Add(7);
 	array->Add(2);
 	array->Add(5);
@@ -72,7 +93,7 @@ BOOST_AUTO_TEST_CASE(remove)
 
 BOOST_AUTO_TEST_CASE(foreach)
 {
-	Array::Ptr array = boost::make_shared<Array>();
+	Array::Ptr array = make_shared<Array>();
 	array->Add(7);
 	array->Add(2);
 	array->Add(5);
@@ -92,7 +113,7 @@ BOOST_AUTO_TEST_CASE(foreach)
 
 BOOST_AUTO_TEST_CASE(clone)
 {
-	Array::Ptr array = boost::make_shared<Array>();
+	Array::Ptr array = make_shared<Array>();
 	array->Add(7);
 	array->Add(2);
 	array->Add(5);
@@ -105,17 +126,17 @@ BOOST_AUTO_TEST_CASE(clone)
 	BOOST_CHECK(clone->Get(2) == 5);
 }
 
-BOOST_AUTO_TEST_CASE(serialize)
+BOOST_AUTO_TEST_CASE(json)
 {
-	Array::Ptr array = boost::make_shared<Array>();
+	Array::Ptr array = make_shared<Array>();
 	array->Add(7);
 	array->Add(2);
 	array->Add(5);
 
-	String json = Value(array).Serialize();
+	String json = JsonSerialize(array);
 	BOOST_CHECK(json.GetLength() > 0);
 
-	Array::Ptr deserialized = Value::Deserialize(json);
+	Array::Ptr deserialized = JsonDeserialize(json);
 	BOOST_CHECK(deserialized);
 	BOOST_CHECK(deserialized->GetLength() == 3);
 	BOOST_CHECK(deserialized->Get(0) == 7);

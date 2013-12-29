@@ -1,0 +1,25 @@
+namespace icinga
+{
+
+safe class Downtime
+{
+	[state] String id;
+	[state] double entry_time;
+	[state] String author;
+	[state] String comment;
+	[state] double start_time;
+	[state] double end_time;
+	[state] double trigger_time;
+	[state] bool fixed;
+	[state] double duration;
+	[state] int triggered_by_legacy_id;
+	[state] String triggered_by;
+	[state] String scheduled_by;
+	[state] Dictionary::Ptr triggers {
+		default {{{ return make_shared<Dictionary>(); }}}
+	};
+	[state] int legacy_id;
+	[state] bool was_cancelled;
+};
+
+}

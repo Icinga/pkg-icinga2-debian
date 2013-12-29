@@ -21,6 +21,7 @@
 #include "config/configitem.h"
 #include "base/logger_fwd.h"
 #include "base/utility.h"
+#include "base/context.h"
 #include <sstream>
 #include <fstream>
 #include <boost/foreach.hpp>
@@ -37,11 +38,9 @@ std::vector<String> ConfigCompiler::m_IncludeSearchDirs;
  * @param path The path of the configuration file (or another name that
  *	       identifies the source of the configuration text).
  * @param input Input stream for the configuration file.
- * @param includeHandler Handler function for #include directives.
  */
-ConfigCompiler::ConfigCompiler(const String& path, std::istream *input,
-    HandleIncludeFunc includeHandler)
-	: m_Path(path), m_Input(input), m_HandleInclude(includeHandler)
+ConfigCompiler::ConfigCompiler(const String& path, std::istream *input)
+	: m_Path(path), m_Input(input)
 {
 	InitializeScanner();
 }
@@ -88,8 +87,7 @@ String ConfigCompiler::GetPath(void) const
 }
 
 /**
- * Handles an include directive by calling the include handler callback
- * function.
+ * Handles an include directive.
  *
  * @param include The path from the include directive.
  * @param search Whether to search global include dirs.
@@ -104,7 +102,51 @@ void ConfigCompiler::HandleInclude(const String& include, bool search, const Deb
 	else
 		path = Utility::DirName(GetPath()) + "/" + include;
 
-	m_HandleInclude(path, search, debuginfo);
+	String includePath = path;
+
+	if (search) {
+		BOOST_FOREACH(const String& dir, m_IncludeSearchDirs) {
+			String spath = dir + "/" + include;
+
+#ifndef _WIN32
+			struct stat statbuf;
+			if (lstat(spath.CStr(), &statbuf) >= 0) {
+#else /* _WIN32 */
+			struct _stat statbuf;
+			if (_stat(spath.CStr(), &statbuf) >= 0) {
+#endif /* _WIN32 */
+				includePath = spath;
+				break;
+			}
+		}
+	}
+
+	std::vector<ConfigItem::Ptr> items;
+
+	if (!Utility::Glob(includePath, boost::bind(&ConfigCompiler::CompileFile, _1), GlobFile) && includePath.FindFirstOf("*?") == String::NPos) {
+		std::ostringstream msgbuf;
+		msgbuf << "Include file '" + include + "' does not exist: " << debuginfo;
+		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
+	}
+}
+
+/**
+ * Handles recursive includes.
+ *
+ * @param include The directory path.
+ * @param pattern The file pattern.
+ * @param debuginfo Debug information.
+ */
+void ConfigCompiler::HandleIncludeRecursive(const String& include, const String& pattern, const DebugInfo& debuginfo)
+{
+	String path;
+
+	if (include.GetLength() > 0 && include[0] == '/')
+		path = include;
+	else
+		path = Utility::DirName(GetPath()) + "/" + include;
+
+	Utility::GlobRecursive(path, pattern, boost::bind(&ConfigCompiler::CompileFile, _1), GlobFile);
 }
 
 /**
@@ -126,6 +168,8 @@ void ConfigCompiler::HandleLibrary(const String& library)
  */
 void ConfigCompiler::CompileStream(const String& path, std::istream *stream)
 {
+	CONTEXT("Compiling configuration stream with name '" + path + "'");
+
 	stream->exceptions(std::istream::badbit);
 
 	ConfigCompiler ctx(path, stream);
@@ -140,6 +184,8 @@ void ConfigCompiler::CompileStream(const String& path, std::istream *stream)
  */
 void ConfigCompiler::CompileFile(const String& path)
 {
+	CONTEXT("Compiling configuration file '" + path + "'");
+
 	std::ifstream stream;
 	stream.open(path.CStr(), std::ifstream::in);
 
@@ -162,47 +208,6 @@ void ConfigCompiler::CompileText(const String& path, const String& text)
 {
 	std::stringstream stream(text);
 	return CompileStream(path, &stream);
-}
-
-/**
- * Default include handler. Includes the file and returns a list of
- * configuration items.
- *
- * @param include The path from the include directive.
- * @param search Whether to search include dirs.
- * @param debuginfo Debug information.
- */
-void ConfigCompiler::HandleFileInclude(const String& include, bool search,
-    const DebugInfo& debuginfo)
-{
-	String includePath = include;
-
-	if (search) {
-		String path;
-
-		BOOST_FOREACH(const String& dir, m_IncludeSearchDirs) {
-			String path = dir + "/" + include;
-
-#ifndef _WIN32
-			struct stat statbuf;
-			if (lstat(path.CStr(), &statbuf) >= 0) {
-#else /* _WIN32 */
-			struct _stat statbuf;
-			if (_stat(path.CStr(), &statbuf) >= 0) {
-#endif /* _WIN32 */
-				includePath = path;
-				break;
-			}
-		}
-	}
-
-	std::vector<ConfigItem::Ptr> items;
-
-	if (!Utility::Glob(includePath, boost::bind(&ConfigCompiler::CompileFile, _1)) && includePath.FindFirstOf("*?") == String::NPos) {
-		std::ostringstream msgbuf;
-		msgbuf << "Include file '" + include + "' does not exist: " << debuginfo;
-		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
-	}
 }
 
 /**

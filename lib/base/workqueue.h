@@ -21,14 +21,24 @@
 #define WORKQUEUE_H
 
 #include "base/i2-base.h"
+#include "base/timer.h"
 #include <deque>
 #include <boost/function.hpp>
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
+#include <boost/exception_ptr.hpp>
 
 namespace icinga
 {
+
+typedef boost::function<void (void)> WorkCallback;
+
+struct WorkItem
+{
+	WorkCallback Callback;
+	bool AllowInterleaved;
+};
 
 /**
  * A workqueue.
@@ -38,27 +48,53 @@ namespace icinga
 class I2_BASE_API WorkQueue
 {
 public:
-	typedef boost::function<void (void)> WorkCallback;
+	typedef boost::function<void (boost::exception_ptr)> ExceptionCallback;
 
 	WorkQueue(size_t maxItems = 25000);
 	~WorkQueue(void);
 
-	void Enqueue(const WorkCallback& item);
-	void Join(void);
+	void Enqueue(const WorkCallback& callback, bool allowInterleaved = false);
+	void Join(bool stop = false);
+
+	boost::thread::id GetThreadId(void) const;
+
+	void SetExceptionCallback(const ExceptionCallback& callback);
 
 private:
 	int m_ID;
 	static int m_NextID;
 
 	boost::mutex m_Mutex;
-	boost::condition_variable m_CV;
+	boost::condition_variable m_CVEmpty;
+	boost::condition_variable m_CVFull;
+	boost::condition_variable m_CVStarved;
 	boost::thread m_Thread;
 	size_t m_MaxItems;
-	bool m_Joined;
 	bool m_Stopped;
-	std::deque<WorkCallback> m_Items;
+	bool m_Processing;
+	std::deque<WorkItem> m_Items;
+	ExceptionCallback m_ExceptionCallback;
+	Timer::Ptr m_StatusTimer;
 
 	void WorkerThreadProc(void);
+	void StatusTimerHandler(void);
+
+	static void DefaultExceptionCallback(boost::exception_ptr exp);
+};
+
+class I2_BASE_API ParallelWorkQueue
+{
+public:
+	ParallelWorkQueue(void);
+	~ParallelWorkQueue(void);
+
+	void Enqueue(const boost::function<void(void)>& callback);
+	void Join(void);
+
+private:
+	unsigned int m_QueueCount;
+	WorkQueue *m_Queues;
+	unsigned int m_Index;
 };
 
 }

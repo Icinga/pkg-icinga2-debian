@@ -23,14 +23,19 @@
 #include "base/dynamictype.h"
 #include "base/utility.h"
 #include "base/objectlock.h"
+#include "base/context.h"
+#include "base/convert.h"
 #include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 #include <iostream>
 
 using namespace icinga;
 
+REGISTER_TYPE(Logger);
+
 std::set<Logger::Ptr> Logger::m_Loggers;
 boost::mutex Logger::m_Mutex;
+bool Logger::m_ConsoleLogEnabled = true;
 
 /**
  * Constructor for the Logger class.
@@ -39,19 +44,19 @@ void Logger::Start(void)
 {
 	DynamicObject::Start();
 
-	boost::mutex::scoped_lock(m_Mutex);
+	boost::mutex::scoped_lock lock(m_Mutex);
 	m_Loggers.insert(GetSelf());
 }
 
 void Logger::Stop(void)
 {
-	boost::mutex::scoped_lock(m_Mutex);
+	boost::mutex::scoped_lock lock(m_Mutex);
 	m_Loggers.erase(GetSelf());
 }
 
 std::set<Logger::Ptr> Logger::GetLoggers(void)
 {
-	boost::mutex::scoped_lock(m_Mutex);
+	boost::mutex::scoped_lock lock(m_Mutex);
 	return m_Loggers;
 }
 
@@ -71,17 +76,24 @@ void icinga::Log(LogSeverity severity, const String& facility,
 	entry.Facility = facility;
 	entry.Message = message;
 
-	bool processed = false;
+	if (severity >= LogWarning) {
+		ContextTrace context;
+
+		if (context.GetLength() > 0) {
+			std::ostringstream trace;
+			trace << context;
+			entry.Message += "\nContext:" + trace.str();
+		}
+	}
 
 	BOOST_FOREACH(const Logger::Ptr& logger, Logger::GetLoggers()) {
-		{
-			ObjectLock llock(logger);
+		ObjectLock llock(logger);
 
-			if (entry.Severity >= logger->GetMinSeverity())
-				logger->ProcessLogEntry(entry);
-		}
+		if (!logger->IsActive())
+			continue;
 
-		processed = true;
+		if (entry.Severity >= logger->GetMinSeverity())
+			logger->ProcessLogEntry(entry);
 	}
 
 	LogSeverity defaultLogLevel;
@@ -91,7 +103,7 @@ void icinga::Log(LogSeverity severity, const String& facility,
 	else
 		defaultLogLevel = LogInformation;
 
-	if (!processed && entry.Severity >= defaultLogLevel) {
+	if (Logger::IsConsoleLogEnabled() && entry.Severity >= defaultLogLevel) {
 		static bool tty = StreamLogger::IsTty(std::cout);
 
 		StreamLogger::ProcessLogEntry(std::cout, tty, entry);
@@ -105,7 +117,7 @@ void icinga::Log(LogSeverity severity, const String& facility,
  */
 LogSeverity Logger::GetMinSeverity(void) const
 {
-	String severity = m_Severity;
+	String severity = GetSeverity();
 	if (severity.IsEmpty())
 		return LogInformation;
 	else
@@ -152,18 +164,13 @@ LogSeverity Logger::StringToSeverity(const String& severity)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid severity: " + severity));
 }
 
-void Logger::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
+void Logger::DisableConsoleLog(void)
 {
-	DynamicObject::InternalSerialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config)
-		bag->Set("severity", m_Severity);
+	m_ConsoleLogEnabled = false;
 }
 
-void Logger::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
+bool Logger::IsConsoleLogEnabled(void)
 {
-	DynamicObject::InternalDeserialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config)
-		m_Severity = bag->Get("severity");
+	return m_ConsoleLogEnabled;
 }
+

@@ -21,7 +21,6 @@
 #include "base/objectlock.h"
 #include "base/debug.h"
 #include <cJSON.h>
-#include <boost/tuple/tuple.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 
@@ -209,12 +208,10 @@ Dictionary::Ptr Dictionary::ShallowClone(void) const
 	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
-	Dictionary::Ptr clone = boost::make_shared<Dictionary>();
+	Dictionary::Ptr clone = make_shared<Dictionary>();
 
-	String key;
-	Value value;
-	BOOST_FOREACH(boost::tie(key, value), m_Data) {
-		clone->Set(key, value);
+	BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
+		clone->Set(kv.first, kv.second);
 	}
 
 	return clone;
@@ -228,7 +225,7 @@ Dictionary::Ptr Dictionary::ShallowClone(void) const
  */
 Dictionary::Ptr Dictionary::FromJson(cJSON *json)
 {
-	Dictionary::Ptr dictionary = boost::make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = make_shared<Dictionary>();
 
 	ASSERT(json->type == cJSON_Object);
 
@@ -252,10 +249,8 @@ cJSON *Dictionary::ToJson(void) const
 	try {
 		ObjectLock olock(this);
 
-		String key;
-		Value value;
-		BOOST_FOREACH(boost::tie(key, value), m_Data) {
-			cJSON_AddItemToObject(json, key.CStr(), value.ToJson());
+		BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
+			cJSON_AddItemToObject(json, kv.first.CStr(), kv.second.ToJson());
 		}
 	} catch (...) {
 		cJSON_Delete(json);

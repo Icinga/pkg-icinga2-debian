@@ -21,7 +21,7 @@
 #include "base/netstring.h"
 #include "base/objectlock.h"
 #include "base/logger_fwd.h"
-#include <boost/exception/diagnostic_information.hpp>
+#include "base/serializer.h"
 #include <iostream>
 
 using namespace icinga;
@@ -33,7 +33,7 @@ using namespace icinga;
  */
 void JsonRpc::SendMessage(const Stream::Ptr& stream, const Dictionary::Ptr& message)
 {
-	String json = Value(message).Serialize();
+	String json = JsonSerialize(message);
 //	std::cerr << ">> " << json << std::endl;
 	NetString::WriteStringToStream(stream, json);
 }
@@ -45,7 +45,7 @@ Dictionary::Ptr JsonRpc::ReadMessage(const Stream::Ptr& stream)
 		BOOST_THROW_EXCEPTION(std::runtime_error("ReadStringFromStream signalled EOF."));
 
 //	std::cerr << "<< " << jsonString << std::endl;
-	Value value = Value::Deserialize(jsonString);
+	Value value = JsonDeserialize(jsonString);
 
 	if (!value.IsObjectType<Dictionary>()) {
 		BOOST_THROW_EXCEPTION(std::invalid_argument("JSON-RPC"

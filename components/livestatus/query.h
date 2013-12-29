@@ -29,7 +29,7 @@
 
 using namespace icinga;
 
-namespace livestatus
+namespace icinga
 {
 
 enum LivestatusError
@@ -47,7 +47,7 @@ class Query : public Object
 public:
 	DECLARE_PTR_TYPEDEFS(Query);
 
-	Query(const std::vector<String>& lines);
+	Query(const std::vector<String>& lines, const String& compat_log_path);
 
 	bool Execute(const Stream::Ptr& stream);
 
@@ -78,8 +78,12 @@ private:
 	/* Parameters for invalid queries. */
 	int m_ErrorCode;
 	String m_ErrorMessage;
+	
+	unsigned long m_LogTimeFrom;
+	unsigned long m_LogTimeUntil;
+	String m_CompatLogPath;
 
-	void PrintResultSet(std::ostream& fp, const std::vector<String>& columns, const Array::Ptr& rs);
+	void PrintResultSet(std::ostream& fp, const Array::Ptr& rs);
 	void PrintCsvArray(std::ostream& fp, const Array::Ptr& array, int level);
 
 	void ExecuteGetHelper(const Stream::Ptr& stream);
@@ -89,7 +93,7 @@ private:
 	void SendResponse(const Stream::Ptr& stream, int code, const String& data);
 	void PrintFixed16(const Stream::Ptr& stream, int code, const String& data);
 	
-	static Filter::Ptr ParseFilter(const String& params);
+	static Filter::Ptr ParseFilter(const String& params, unsigned long& from, unsigned long& until);
 };
 
 }

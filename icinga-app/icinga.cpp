@@ -21,18 +21,19 @@
 #include "config/configcompiler.h"
 #include "config/configitembuilder.h"
 #include "base/application.h"
-#include "base/logger_fwd.h"
+#include "base/logger.h"
 #include "base/timer.h"
 #include "base/utility.h"
 #include "base/exception.h"
 #include "base/convert.h"
+#include "base/scriptvariable.h"
+#include "base/context.h"
+#include "config.h"
 #include <boost/program_options.hpp>
 #include <boost/tuple/tuple.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 #ifndef _WIN32
-#	include <ltdl.h>
 #	include <sys/types.h>
 #	include <pwd.h>
 #	include <grp.h>
@@ -43,12 +44,34 @@ namespace po = boost::program_options;
 
 static po::variables_map g_AppParams;
 
-static bool LoadConfigFiles(bool validateOnly)
+static String LoadAppType(const String& typeSpec)
 {
+	int index;
+
+	Log(LogInformation, "icinga-app", "Loading application type: " + typeSpec);
+
+	index = typeSpec.FindFirstOf('/');
+
+	if (index == String::NPos)
+		return typeSpec;
+
+	String library = typeSpec.SubStr(0, index);
+
+	(void) Utility::LoadExtensionLibrary(library);
+
+	return typeSpec.SubStr(index + 1);
+}
+
+static bool LoadConfigFiles(const String& appType, bool validateOnly)
+{
+	CONTEXT("Loading configuration files");
+
 	ConfigCompilerContext::GetInstance()->Reset();
 
-	BOOST_FOREACH(const String& configPath, g_AppParams["config"].as<std::vector<String> >()) {
-		ConfigCompiler::CompileFile(configPath);
+	if (g_AppParams.count("config") > 0) {
+		BOOST_FOREACH(const String& configPath, g_AppParams["config"].as<std::vector<String> >()) {
+			ConfigCompiler::CompileFile(configPath);
+		}
 	}
 
 	String name, fragment;
@@ -56,8 +79,8 @@ static bool LoadConfigFiles(bool validateOnly)
 		ConfigCompiler::CompileText(name, fragment);
 	}
 
-	ConfigItemBuilder::Ptr builder = boost::make_shared<ConfigItemBuilder>();
-	builder->SetType(Application::GetApplicationType());
+	ConfigItemBuilder::Ptr builder = make_shared<ConfigItemBuilder>();
+	builder->SetType(appType);
 	builder->SetName("application");
 	ConfigItem::Ptr item = builder->Compile();
 	item->Register();
@@ -96,10 +119,12 @@ static bool LoadConfigFiles(bool validateOnly)
 	return true;
 }
 
+#ifndef _WIN32
 static void SigHupHandler(int)
 {
 	Application::RequestRestart();
 }
+#endif /* _WIN32 */
 
 static bool Daemonize(const String& stderrFile)
 {
@@ -160,13 +185,9 @@ static bool Daemonize(const String& stderrFile)
  */
 int main(int argc, char **argv)
 {
-#ifndef _WIN32
-	LTDL_SET_PRELOADED_SYMBOLS();
-#endif /* _WIN32 */
+	Application::SetStartTime(Utility::GetTime());
 
-#ifndef _WIN32
-	lt_dlinit();
-#endif /* _WIN32 */
+	Application::SetResourceLimits();
 
 	/* Set thread title. */
 	Utility::SetThreadName("Main Thread", false);
@@ -178,34 +199,12 @@ int main(int argc, char **argv)
 	/* Install exception handlers to make debugging easier. */
 	Application::InstallExceptionHandlers();
 
-#ifdef ICINGA_PREFIX
-	Application::SetPrefixDir(ICINGA_PREFIX);
-#else /* ICINGA_PREFIX */
-	Application::SetPrefixDir(".");
-#endif /* ICINGA_PREFIX */
+	Application::DeclarePrefixDir(ICINGA_PREFIX);
+	Application::DeclareSysconfDir(ICINGA_SYSCONFDIR);
+	Application::DeclareLocalStateDir(ICINGA_LOCALSTATEDIR);
+	Application::DeclarePkgDataDir(ICINGA_PKGDATADIR);
 
-#ifdef ICINGA_LOCALSTATEDIR
-	Application::SetLocalStateDir(ICINGA_LOCALSTATEDIR);
-#else /* ICINGA_LOCALSTATEDIR */
-	Application::SetLocalStateDir("./var");
-#endif /* ICINGA_LOCALSTATEDIR */
-
-#ifdef ICINGA_PKGLIBDIR
-	Application::SetPkgLibDir(ICINGA_PKGLIBDIR);
-#else /* ICINGA_PKGLIBDIR */
-	Application::SetPkgLibDir(".");
-#endif /* ICINGA_PKGLIBDIR */
-
-#ifdef ICINGA_PKGDATADIR
-	Application::SetPkgDataDir(ICINGA_PKGDATADIR);
-#else /* ICINGA_PKGDATADIR */
-	Application::SetPkgDataDir(".");
-#endif /* ICINGA_PKGDATADIR */
-
-	Application::SetStatePath(Application::GetLocalStateDir() + "/lib/icinga2/icinga2.state");
-	Application::SetPidPath(Application::GetLocalStateDir() + "/run/icinga2/icinga2.pid");
-
-	Application::SetApplicationType("IcingaApplication");
+	Application::DeclareApplicationType("icinga/IcingaApplication");
 
 	po::options_description desc("Supported options");
 	desc.add_options()
@@ -213,7 +212,9 @@ int main(int argc, char **argv)
 		("version,V", "show version information")
 		("library,l", po::value<std::vector<String> >(), "load a library")
 		("include,I", po::value<std::vector<String> >(), "add include search directory")
+		("define,D", po::value<std::vector<String> >(), "define a variable")
 		("config,c", po::value<std::vector<String> >(), "parse a configuration file")
+		("no-config,z", "start without a configuration file")
 		("validate,C", "exit after validating the configuration")
 		("debug,x", "enable debugging")
 		("daemonize,d", "detach from the controlling terminal")
@@ -317,18 +318,30 @@ int main(int argc, char **argv)
 		return EXIT_SUCCESS;
 	}
 
+	if (g_AppParams.count("define")) {
+		BOOST_FOREACH(const String& define, g_AppParams["define"].as<std::vector<String> >()) {
+			String key, value;
+			size_t pos = define.FindFirstOf('=');
+			if (pos != String::NPos) {
+				key = define.SubStr(0, pos);
+				value = define.SubStr(pos + 1);
+			}
+			else {
+				key = define;
+				value = "1";
+			}
+			ScriptVariable::Set(key, value);
+		}
+	}
+
+	Application::DeclareStatePath(Application::GetLocalStateDir() + "/lib/icinga2/icinga2.state");
+	Application::DeclarePidPath(Application::GetLocalStateDir() + "/run/icinga2/icinga2.pid");
+
+	Application::MakeVariablesConstant();
+
 	Log(LogInformation, "icinga-app", "Icinga application loader (version: " + Application::GetVersion() + ")");
 
-	String searchDir = Application::GetPkgLibDir();
-	Log(LogInformation, "base", "Adding library search dir: " + searchDir);
-
-#ifdef _WIN32
-	SetDllDirectory(searchDir.CStr());
-#else /* _WIN32 */
-	lt_dladdsearchdir(searchDir.CStr());
-#endif /* _WIN32 */
-
-	(void) Utility::LoadExtensionLibrary("icinga");
+	String appType = LoadAppType(Application::GetApplicationType());
 
 	if (g_AppParams.count("library")) {
 		BOOST_FOREACH(const String& libraryName, g_AppParams["library"].as<std::vector<String> >()) {
@@ -344,7 +357,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (g_AppParams.count("config") == 0) {
+	if (g_AppParams.count("no-config") == 0 && g_AppParams.count("config") == 0) {
 		Log(LogCritical, "icinga-app", "You need to specify at least one config file (using the --config option).");
 
 		return EXIT_FAILURE;
@@ -357,11 +370,12 @@ int main(int argc, char **argv)
 			errorLog = g_AppParams["errorlog"].as<String>();
 
 		Daemonize(errorLog);
+		Logger::DisableConsoleLog();
 	}
 
 	bool validateOnly = g_AppParams.count("validate");
 
-	if (!LoadConfigFiles(validateOnly))
+	if (!LoadConfigFiles(appType, validateOnly))
 		return EXIT_FAILURE;
 
 	if (validateOnly) {

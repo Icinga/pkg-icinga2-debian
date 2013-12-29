@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <netdb.h>
 #include <sys/ioctl.h>
@@ -34,8 +35,12 @@
 #include <sys/file.h>
 #include <sys/wait.h>
 #include <glob.h>
-#include <ltdl.h>
 #include <dlfcn.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 typedef int SOCKET;
 #define INVALID_SOCKET (-1)
@@ -46,7 +51,4 @@ typedef int SOCKET;
 #ifndef MAXPATHLEN
 #	define MAXPATHLEN PATH_MAX
 #endif /* MAXPATHLEN */
-
-#define I2_EXPORT
-#define I2_IMPORT
 #endif /* UNIX_H */

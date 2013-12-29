@@ -20,28 +20,21 @@
 #ifndef DBCONNECTION_H
 #define DBCONNECTION_H
 
-#include "base/dynamicobject.h"
-#include "base/timer.h"
+#include "db_ido/i2-db_ido.h"
+#include "db_ido/dbconnection.th"
 #include "db_ido/dbobject.h"
 #include "db_ido/dbquery.h"
+#include "base/timer.h"
 
 namespace icinga
 {
-
-enum CleanUpAge
-{
-    CleanUpAgeNone = 0,
-    CleanUpAgeOneMonth = 44640,
-    CleanUpAgeOneMeek = 10080,
-    CleanUpAgeOneDay = 1440,
-};
 
 /**
  * A database connection.
  *
  * @ingroup db_ido
  */
-class DbConnection : public DynamicObject
+class I2_DB_IDO_API DbConnection : public ObjectImpl<DbConnection>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(DbConnection);
@@ -54,61 +47,48 @@ public:
 	void SetInsertID(const DbObject::Ptr& dbobj, const DbReference& dbref);
 	DbReference GetInsertID(const DbObject::Ptr& dbobj) const;
 
+	void SetObjectActive(const DbObject::Ptr& dbobj, bool active);
+	bool GetObjectActive(const DbObject::Ptr& dbobj) const;
+
+	void ClearIDCache(void);
+
 	void SetConfigUpdate(const DbObject::Ptr& dbobj, bool hasupdate);
 	bool GetConfigUpdate(const DbObject::Ptr& dbobj) const;
 
 	void SetStatusUpdate(const DbObject::Ptr& dbobj, bool hasupdate);
 	bool GetStatusUpdate(const DbObject::Ptr& dbobj) const;
 
-	String GetTablePrefix(void) const;
-        Dictionary::Ptr GetCleanUp(void) const;
-        Value GetCleanUpAcknowledgementsAge(void) const;
-        Value GetCleanUpCommentHistoryAge(void) const;
-        Value GetCleanUpContactNotificationsAge(void) const;
-        Value GetCleanUpContactNotificationMethodsAge(void) const;
-        Value GetCleanUpDowntimeHistoryAge(void) const;
-        Value GetCleanUpEventHandlersAge(void) const;
-        Value GetCleanUpExternalCommandsAge(void) const;
-        Value GetCleanUpFlappingHistoryAge(void) const;
-        Value GetCleanUpHostChecksAge(void) const;
-        Value GetCleanUpLogEntriesAge(void) const;
-        Value GetCleanUpNotificationsAge(void) const;
-        Value GetCleanUpProcessEventsAge(void) const;
-        Value GetCleanUpStateHistoryAge(void) const;
-        Value GetCleanUpServiceChecksAge(void) const;
-        Value GetCleanUpSystemCommandsAge(void) const;
-
 protected:
 	virtual void Start(void);
-
-	virtual void InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const;
-	virtual void InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes);
 
 	virtual void ExecuteQuery(const DbQuery& query) = 0;
 	virtual void ActivateObject(const DbObject::Ptr& dbobj) = 0;
 	virtual void DeactivateObject(const DbObject::Ptr& dbobj) = 0;
 
-        virtual void CleanUpExecuteQuery(const String& table, const String& time_key, double time_value) = 0;
+	virtual void CleanUpExecuteQuery(const String& table, const String& time_column, double max_age);
 
 	void UpdateAllObjects(void);
 
 private:
-	String m_TablePrefix;
-        Dictionary::Ptr m_CleanUp;
-
 	std::map<DbObject::Ptr, DbReference> m_ObjectIDs;
 	std::map<DbObject::Ptr, DbReference> m_InsertIDs;
+	std::set<DbObject::Ptr> m_ActiveObjects;
 	std::set<DbObject::Ptr> m_ConfigUpdates;
 	std::set<DbObject::Ptr> m_StatusUpdates;
-        Timer::Ptr m_CleanUpTimer;
+	Timer::Ptr m_CleanUpTimer;
 
-        void CleanUpHandler(void);
+	void CleanUpHandler(void);
 
 	static Timer::Ptr m_ProgramStatusTimer;
 
 	static void InsertRuntimeVariable(const String& key, const Value& value);
 	static void ProgramStatusHandler(void);
 };
+
+struct database_error : virtual std::exception, virtual boost::exception { };
+
+struct errinfo_database_query_;
+typedef boost::error_info<struct errinfo_database_query_, std::string> errinfo_database_query;
 
 }
 

@@ -25,8 +25,6 @@
 #include "base/timer.h"
 #include "base/utility.h"
 #include "base/convert.h"
-#include <boost/tuple/tuple.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -35,35 +33,26 @@ using namespace icinga;
 
 double Service::GetFlappingCurrent(void) const
 {
-	if (m_FlappingPositive + m_FlappingNegative <= 0)
+	if (GetFlappingPositive() + GetFlappingNegative() <= 0)
 		return 0;
 
-	return 100 * m_FlappingPositive / (m_FlappingPositive + m_FlappingNegative);
-}
-
-double Service::GetFlappingThreshold(void) const
-{
-	if (m_FlappingThreshold.IsEmpty())
-		return 30;
-	else
-		return m_FlappingThreshold;
+	return 100 * GetFlappingPositive() / (GetFlappingPositive() + GetFlappingNegative());
 }
 
 bool Service::GetEnableFlapping(void) const
 {
-	if (m_EnableFlapping.IsEmpty())
-		return true;
+	if (!GetOverrideEnableFlapping().IsEmpty())
+		return GetOverrideEnableFlapping();
 	else
-		return m_EnableFlapping;
-
+		return GetEnableFlappingRaw();
 }
 
 void Service::SetEnableFlapping(bool enabled, const String& authority)
 {
-	m_EnableFlapping = enabled;
+	SetOverrideEnableFlapping(enabled);
 
 	OnFlappingChanged(GetSelf(), enabled ? FlappingEnabled : FlappingDisabled);
-	Utility::QueueAsyncCallback(boost::bind(boost::ref(OnEnableFlappingChanged), GetSelf(), enabled, authority));
+	OnEnableFlappingChanged(GetSelf(), enabled, authority);
 }
 
 void Service::UpdateFlappingStatus(bool stateChange)
@@ -73,15 +62,9 @@ void Service::UpdateFlappingStatus(bool stateChange)
 
 	now = Utility::GetTime();
 
-	if (m_FlappingLastChange.IsEmpty()) {
-		ts = now;
-		positive = 0;
-		negative = 0;
-	} else {
-		ts = m_FlappingLastChange;
-		positive = m_FlappingPositive;
-		negative = m_FlappingNegative;
-	}
+	ts = GetFlappingLastChange();
+	positive = GetFlappingPositive();
+	negative = GetFlappingNegative();
 
 	double diff = now - ts;
 
@@ -104,9 +87,9 @@ void Service::UpdateFlappingStatus(bool stateChange)
 
 //	Log(LogDebug, "icinga", "Flapping counter for '" + GetName() + "' is positive=" + Convert::ToString(positive) + ", negative=" + Convert::ToString(negative));
 
-	m_FlappingPositive = positive;
-	m_FlappingNegative = negative;
-	m_FlappingLastChange = now;
+	SetFlappingLastChange(now);
+	SetFlappingPositive(positive);
+	SetFlappingNegative(negative);
 }
 
 bool Service::IsFlapping(void) const

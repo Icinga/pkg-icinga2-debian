@@ -9,11 +9,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # please see the online documentation at vagrantup.com.
 
   # Every Vagrant virtual environment requires a box to build off of.
-  config.vm.box = "centos-6.4-x64-vbox"
+  config.vm.box = "centos-6.4-i386-vbox"
 
   # The url from where the 'config.vm.box' box will be fetched if it
   # doesn't already exist on the user's system.
-  config.vm.box_url = "http://vagrant-boxes.icinga.org/centos-64-x64-vbox4212.box"
+  config.vm.box_url = "http://boxes.icinga.org/centos-64-i386-vbox4212.box"
 
   # The hostname the machine should have. Defaults to nil. If nil, Vagrant
   # won't manage the hostname. If set to a string, the hostname will be set on boot.
@@ -29,6 +29,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     # Vagrant will output information about any collisions detections and auto corrections made,
     # so you can take notice and act accordingly.
     auto_correct: true
+
+  # forward port for nsca-ng. See note above regarding auto_correct
+  config.vm.network :forwarded_port, guest: 5668, host: 5668, auto_correct: true
 
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.

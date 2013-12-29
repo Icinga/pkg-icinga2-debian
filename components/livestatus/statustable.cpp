@@ -26,10 +26,8 @@
 #include "base/dynamictype.h"
 #include "base/utility.h"
 #include "base/application.h"
-#include <boost/smart_ptr/make_shared.hpp>
 
 using namespace icinga;
-using namespace livestatus;
 
 StatusTable::StatusTable(void)
 {
@@ -48,8 +46,8 @@ void StatusTable::AddColumns(Table *table, const String& prefix,
 	table->AddColumn(prefix + "connections", Column(&StatusTable::ConnectionsAccessor, objectAccessor));
 	table->AddColumn(prefix + "connections_rate", Column(&StatusTable::ConnectionsRateAccessor, objectAccessor));
 
-	table->AddColumn(prefix + "service_checks", Column(&Table::ZeroAccessor, objectAccessor));
-	table->AddColumn(prefix + "service_checks_rate", Column(&Table::ZeroAccessor, objectAccessor));
+	table->AddColumn(prefix + "service_checks", Column(&StatusTable::ServiceChecksAccessor, objectAccessor));
+	table->AddColumn(prefix + "service_checks_rate", Column(&StatusTable::ServiceChecksRateAccessor, objectAccessor));
 
 	table->AddColumn(prefix + "host_checks", Column(&Table::ZeroAccessor, objectAccessor));
 	table->AddColumn(prefix + "host_checks_rate", Column(&Table::ZeroAccessor, objectAccessor));
@@ -107,7 +105,7 @@ String StatusTable::GetName(void) const
 
 void StatusTable::FetchRows(const AddRowFunction& addRowFn)
 {
-	Object::Ptr obj = boost::make_shared<Object>();
+	Object::Ptr obj = make_shared<Object>();
 
 	/* Return a fake row. */
 	addRowFn(obj);
@@ -120,7 +118,19 @@ Value StatusTable::ConnectionsAccessor(const Value& row)
 
 Value StatusTable::ConnectionsRateAccessor(const Value& row)
 {
-	return (LivestatusListener::GetConnections() / (Utility::GetTime() - IcingaApplication::GetInstance()->GetStartTime()));
+	return (LivestatusListener::GetConnections() / (Utility::GetTime() - Application::GetStartTime()));
+}
+
+Value StatusTable::ServiceChecksAccessor(const Value& row)
+{
+	long timespan = static_cast<long>(Utility::GetTime() - Application::GetStartTime());
+	return CIB::GetActiveChecksStatistics(timespan);
+}
+
+Value StatusTable::ServiceChecksRateAccessor(const Value& row)
+{
+	long timespan = static_cast<long>(Utility::GetTime() - Application::GetStartTime());
+	return (CIB::GetActiveChecksStatistics(timespan) / (Utility::GetTime() - Application::GetStartTime()));
 }
 
 Value StatusTable::ExternalCommandsAccessor(const Value& row)
@@ -130,7 +140,7 @@ Value StatusTable::ExternalCommandsAccessor(const Value& row)
 
 Value StatusTable::ExternalCommandsRateAccessor(const Value& row)
 {
-	return (Query::GetExternalCommands() / (Utility::GetTime() - IcingaApplication::GetInstance()->GetStartTime()));
+	return (Query::GetExternalCommands() / (Utility::GetTime() - Application::GetStartTime()));
 }
 
 Value StatusTable::NagiosPidAccessor(const Value& row)
@@ -140,7 +150,7 @@ Value StatusTable::NagiosPidAccessor(const Value& row)
 
 Value StatusTable::ProgramStartAccessor(const Value& row)
 {
-	return static_cast<int>(IcingaApplication::GetInstance()->GetStartTime());
+	return static_cast<long>(Application::GetStartTime());
 }
 
 Value StatusTable::NumHostsAccessor(const Value& row)

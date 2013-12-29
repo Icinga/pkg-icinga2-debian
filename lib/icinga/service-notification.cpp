@@ -24,21 +24,15 @@
 #include "base/logger_fwd.h"
 #include "base/timer.h"
 #include "base/utility.h"
+#include "base/exception.h"
+#include "base/context.h"
 #include "config/configitembuilder.h"
-#include <boost/tuple/tuple.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
-#include <boost/exception/diagnostic_information.hpp>
 
 using namespace icinga;
 
-boost::signals2::signal<void (const Service::Ptr&, const std::set<User::Ptr>&, const NotificationType&, const Dictionary::Ptr&, const String&, const String&)> Service::OnNotificationSentToAllUsers;
-boost::signals2::signal<void (const Service::Ptr&, const User::Ptr&, const NotificationType&, const Dictionary::Ptr&, const String&, const String&)> Service::OnNotificationSentToUser;
-
-Dictionary::Ptr Service::GetNotificationDescriptions(void) const
-{
-	return m_NotificationDescriptions;
-}
+boost::signals2::signal<void (const Service::Ptr&, const std::set<User::Ptr>&, const NotificationType&, const CheckResult::Ptr&, const String&, const String&)> Service::OnNotificationSentToAllUsers;
+boost::signals2::signal<void (const Service::Ptr&, const User::Ptr&, const NotificationType&, const CheckResult::Ptr&, const String&, const String&, const String&)> Service::OnNotificationSentToUser;
 
 void Service::ResetNotificationNumbers(void)
 {
@@ -48,8 +42,10 @@ void Service::ResetNotificationNumbers(void)
 	}
 }
 
-void Service::SendNotifications(NotificationType type, const Dictionary::Ptr& cr, const String& author, const String& text)
+void Service::SendNotifications(NotificationType type, const CheckResult::Ptr& cr, const String& author, const String& text)
 {
+	CONTEXT("Sending notifications for service '" + GetShortName() + "' on host '" + GetHost()->GetName() + "'");
+
 	bool force = GetForceNextNotification();
 
 	if (!IcingaApplication::GetInstance()->GetEnableNotifications() || !GetEnableNotifications()) {
@@ -74,7 +70,7 @@ void Service::SendNotifications(NotificationType type, const Dictionary::Ptr& cr
 		} catch (const std::exception& ex) {
 			std::ostringstream msgbuf;
 			msgbuf << "Exception occured during notification for service '"
-			       << GetName() << "': " << boost::diagnostic_information(ex);
+			       << GetName() << "': " << DiagnosticInformation(ex);
 			String message = msgbuf.str();
 
 			Log(LogWarning, "icinga", message);
@@ -99,47 +95,46 @@ void Service::RemoveNotification(const Notification::Ptr& notification)
 
 void Service::UpdateSlaveNotifications(void)
 {
-	ConfigItem::Ptr item = ConfigItem::GetObject("Service", GetName());
-
-	/* Don't create slave notifications unless we own this object */
-	if (!item)
-		return;
-
 	/* Service notification descs */
 	Dictionary::Ptr descs = GetNotificationDescriptions();
 
-	if (!descs)
+	if (!descs || descs->GetLength() == 0)
 		return;
+
+	ConfigItem::Ptr item = ConfigItem::GetObject("Service", GetName());
 
 	ObjectLock olock(descs);
 
-	String nfcname;
-	Value nfcdesc;
-	BOOST_FOREACH(boost::tie(nfcname, nfcdesc), descs) {
+	BOOST_FOREACH(const Dictionary::Pair& kv, descs) {
 		std::ostringstream namebuf;
-		namebuf << GetName() << ":" << nfcname;
+		namebuf << GetName() << "!" << kv.first;
 		String name = namebuf.str();
 
 		std::vector<String> path;
 		path.push_back("notifications");
-		path.push_back(nfcname);
+		path.push_back(kv.first);
+
+		ExpressionList::Ptr exprl;
+
+		{
+			ObjectLock ilock(item);
+
+			exprl = item->GetLinkedExpressionList();
+		}
 
 		DebugInfo di;
-		item->GetLinkedExpressionList()->FindDebugInfoPath(path, di);
+		exprl->FindDebugInfoPath(path, di);
 
 		if (di.Path.IsEmpty())
 			di = item->GetDebugInfo();
 
-		ConfigItemBuilder::Ptr builder = boost::make_shared<ConfigItemBuilder>(di);
+		ConfigItemBuilder::Ptr builder = make_shared<ConfigItemBuilder>(di);
 		builder->SetType("Notification");
 		builder->SetName(name);
 		builder->AddExpression("host", OperatorSet, GetHost()->GetName());
 		builder->AddExpression("service", OperatorSet, GetShortName());
 
-		if (!nfcdesc.IsObjectType<Dictionary>())
-			BOOST_THROW_EXCEPTION(std::invalid_argument("Notification description must be a dictionary."));
-
-		Dictionary::Ptr notification = nfcdesc;
+		Dictionary::Ptr notification = kv.second;
 
 		Array::Ptr templates = notification->Get("templates");
 
@@ -152,12 +147,8 @@ void Service::UpdateSlaveNotifications(void)
 		}
 
 		/* Clone attributes from the notification expression list. */
-		ExpressionList::Ptr nfc_exprl = boost::make_shared<ExpressionList>();
-		item->GetLinkedExpressionList()->ExtractPath(path, nfc_exprl);
-
-		std::vector<String> dpath;
-		dpath.push_back("templates");
-		nfc_exprl->ErasePath(dpath);
+		ExpressionList::Ptr nfc_exprl = make_shared<ExpressionList>();
+		exprl->ExtractPath(path, nfc_exprl);
 
 		builder->AddExpressionList(nfc_exprl);
 
@@ -170,30 +161,27 @@ void Service::UpdateSlaveNotifications(void)
 
 bool Service::GetEnableNotifications(void) const
 {
-	if (m_EnableNotifications.IsEmpty())
-		return true;
+	if (!GetOverrideEnableNotifications().IsEmpty())
+		return GetOverrideEnableNotifications();
 	else
-		return m_EnableNotifications;
+		return GetEnableNotificationsRaw();
 }
 
 void Service::SetEnableNotifications(bool enabled, const String& authority)
 {
-	m_EnableNotifications = enabled;
+	SetOverrideEnableActiveChecks(enabled);
 
-	Utility::QueueAsyncCallback(boost::bind(boost::ref(OnEnableNotificationsChanged), GetSelf(), enabled, authority));
+	OnEnableNotificationsChanged(GetSelf(), enabled, authority);
 }
 
 bool Service::GetForceNextNotification(void) const
 {
-	if (m_ForceNextNotification.IsEmpty())
-		return false;
-
-	return static_cast<bool>(m_ForceNextNotification);
+	return GetForceNextNotificationRaw();
 }
 
 void Service::SetForceNextNotification(bool forced, const String& authority)
 {
-	m_ForceNextNotification = forced ? 1 : 0;
+	SetForceNextNotificationRaw(forced);
 
-	Utility::QueueAsyncCallback(boost::bind(boost::ref(OnForceNextNotificationChanged), GetSelf(), forced, authority));
+	OnForceNextNotificationChanged(GetSelf(), forced, authority);
 }

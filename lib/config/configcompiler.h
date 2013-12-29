@@ -23,6 +23,8 @@
 #include "config/i2-config.h"
 #include "config/debuginfo.h"
 #include "base/registry.h"
+#include "base/initialize.h"
+#include "base/singleton.h"
 #include <iostream>
 #include <boost/function.hpp>
 
@@ -38,10 +40,7 @@ namespace icinga
 class I2_CONFIG_API ConfigCompiler
 {
 public:
-	typedef boost::function<void (const String&, bool, const DebugInfo&)> HandleIncludeFunc;
-
-	explicit ConfigCompiler(const String& path, std::istream *input,
-	    HandleIncludeFunc includeHandler = &ConfigCompiler::HandleFileInclude);
+	explicit ConfigCompiler(const String& path, std::istream *input);
 	virtual ~ConfigCompiler(void);
 
 	void Compile(void);
@@ -54,11 +53,9 @@ public:
 
 	String GetPath(void) const;
 
-	static void HandleFileInclude(const String& include, bool search,
-	    const DebugInfo& debuginfo);
-
 	/* internally used methods */
 	void HandleInclude(const String& include, bool search, const DebugInfo& debuginfo);
+	void HandleIncludeRecursive(const String& include, const String& pattern, const DebugInfo& debuginfo);
 	void HandleLibrary(const String& library);
 
 	size_t ReadInput(char *buffer, size_t max_bytes);
@@ -67,8 +64,6 @@ public:
 private:
 	String m_Path;
 	std::istream *m_Input;
-
-	HandleIncludeFunc m_HandleInclude;
 
 	void *m_Scanner;
 
@@ -79,24 +74,23 @@ private:
 };
 
 class I2_CONFIG_API ConfigFragmentRegistry : public Registry<ConfigFragmentRegistry, String>
-{ };
-
-/**
- * Helper class for registering config fragments.
- *
- * @ingroup base
- */
-class RegisterConfigFragmentHelper
 {
 public:
-	RegisterConfigFragmentHelper(const String& name, const String& fragment)
+	static inline ConfigFragmentRegistry *GetInstance(void)
 	{
-		ConfigFragmentRegistry::GetInstance()->Register(name, fragment);
+		return Singleton<ConfigFragmentRegistry>::GetInstance();
 	}
 };
 
 #define REGISTER_CONFIG_FRAGMENT(id, name, fragment) \
-	I2_EXPORT icinga::RegisterConfigFragmentHelper g_RegisterCF_ ## id(name, fragment)
+	namespace { \
+		void RegisterConfigFragment(void) \
+		{ \
+			icinga::ConfigFragmentRegistry::GetInstance()->Register(name, fragment); \
+		} \
+		\
+		INITIALIZE_ONCE(RegisterConfigFragment); \
+	}
 
 }
 

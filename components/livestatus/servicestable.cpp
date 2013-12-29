@@ -35,7 +35,6 @@
 #include <boost/algorithm/string/replace.hpp>
 
 using namespace icinga;
-using namespace livestatus;
 
 ServicesTable::ServicesTable(void)
 {
@@ -151,22 +150,42 @@ Object::Ptr ServicesTable::HostAccessor(const Value& row, const Column::ObjectAc
 	else
 		service = row;
 
-	return static_cast<Service::Ptr>(service)->GetHost();
+	Service::Ptr svc = static_cast<Service::Ptr>(service);
+
+	if (!svc)
+		return Object::Ptr();
+
+	return svc->GetHost();
 }
 
 Value ServicesTable::ShortNameAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetShortName();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->GetShortName();
 }
 
 Value ServicesTable::DisplayNameAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetDisplayName();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->GetDisplayName();
 }
 
 Value ServicesTable::CheckCommandAccessor(const Value& row)
 {
-	CheckCommand::Ptr checkcommand = static_cast<Service::Ptr>(row)->GetCheckCommand();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	CheckCommand::Ptr checkcommand = service->GetCheckCommand();
 
 	if (checkcommand)
 		return checkcommand->GetName(); /* this is the name without '!' args */
@@ -178,47 +197,25 @@ Value ServicesTable::CheckCommandExpandedAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-        CheckCommand::Ptr commandObj = service->GetCheckCommand();
-
-	if (!commandObj)
+	if (!service)
 		return Empty;
 
-	Value raw_command = commandObj->GetCommandLine();
+	CheckCommand::Ptr checkcommand = service->GetCheckCommand();
 
-        std::vector<MacroResolver::Ptr> resolvers;
-        resolvers.push_back(service);
-        resolvers.push_back(service->GetHost());
-        resolvers.push_back(commandObj);
-        resolvers.push_back(IcingaApplication::GetInstance());
+	if (checkcommand)
+		return checkcommand->GetName(); /* this is the name without '!' args */
 
-        Value commandLine = MacroProcessor::ResolveMacros(raw_command, resolvers, Dictionary::Ptr(), Utility::EscapeShellCmd);
-
-        String buf;
-        if (commandLine.IsObjectType<Array>()) {
-                Array::Ptr args = commandLine;
-
-                ObjectLock olock(args);
-                String arg;
-                BOOST_FOREACH(arg, args) {
-                        // This is obviously incorrect for non-trivial cases.
-                        String argitem = " \"" + arg + "\"";
-                        boost::algorithm::replace_all(argitem, "\n", "\\n");
-                        buf += argitem;
-                }
-        } else if (!commandLine.IsEmpty()) {
-                String args = Convert::ToString(commandLine);
-                boost::algorithm::replace_all(args, "\n", "\\n");
-                buf += args;
-        } else {
-                buf += "<internal>";
-        }
-
-	return buf;
+	return Empty;
 }
 
 Value ServicesTable::EventHandlerAccessor(const Value& row)
 {
-	EventCommand::Ptr eventcommand = static_cast<Service::Ptr>(row)->GetEventCommand();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	EventCommand::Ptr eventcommand = service->GetEventCommand();
 
 	if (eventcommand)
 		return eventcommand->GetName();
@@ -228,60 +225,87 @@ Value ServicesTable::EventHandlerAccessor(const Value& row)
 
 Value ServicesTable::PluginOutputAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetLastCheckOutput();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	String output;
+	CheckResult::Ptr cr = service->GetLastCheckResult();
+
+	if (cr)
+		output = CompatUtility::GetCheckResultOutput(cr);
+
+	return output;
 }
 
 Value ServicesTable::LongPluginOutputAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetLastCheckLongOutput();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	String long_output;
+	CheckResult::Ptr cr = service->GetLastCheckResult();
+
+	if (cr)
+		long_output = CompatUtility::GetCheckResultLongOutput(cr);
+
+	return long_output;
 }
 
 Value ServicesTable::PerfDataAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetLastCheckPerfData();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	String perfdata;
+	CheckResult::Ptr cr = service->GetLastCheckResult();
+
+	if (cr)
+		perfdata = CompatUtility::GetCheckResultPerfdata(cr);
+
+	return perfdata;
 }
 
 Value ServicesTable::NotificationPeriodAccessor(const Value& row)
 {
-	BOOST_FOREACH(const Notification::Ptr& notification, static_cast<Service::Ptr>(row)->GetNotifications()) {
-		ObjectLock olock(notification);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-		TimePeriod::Ptr timeperiod = notification->GetNotificationPeriod();
+	if (!service)
+		return Empty;
 
-		/* XXX first notification wins */
-		if (timeperiod)
-			return timeperiod->GetName();
-	}
-
-	return Empty;
+	return CompatUtility::GetServiceNotificationNotificationPeriod(service);
 }
 
 Value ServicesTable::CheckPeriodAccessor(const Value& row)
 {
-	TimePeriod::Ptr timeperiod = static_cast<Service::Ptr>(row)->GetCheckPeriod();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!timeperiod)
+	if (!service)
 		return Empty;
 
-	return timeperiod->GetName();
+	return CompatUtility::GetServiceCheckPeriod(service);
 }
 
 Value ServicesTable::NotesAccessor(const Value& row)
 {
-	Dictionary::Ptr custom = static_cast<Service::Ptr>(row)->GetCustom();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
-	return custom->Get("notes");
+	return CompatUtility::GetCustomAttributeConfig(service, "notes");
 }
 
 Value ServicesTable::NotesExpandedAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
-	Dictionary::Ptr custom = service->GetCustom();
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
 	std::vector<MacroResolver::Ptr> resolvers;
@@ -289,30 +313,26 @@ Value ServicesTable::NotesExpandedAccessor(const Value& row)
 	resolvers.push_back(service->GetHost());
 	resolvers.push_back(IcingaApplication::GetInstance());
 
-	Value value = custom->Get("notes");
+	Value value = CompatUtility::GetCustomAttributeConfig(service, "notes");
 
-	Dictionary::Ptr cr;
-	Value value_expanded = MacroProcessor::ResolveMacros(value, resolvers, cr, Utility::EscapeShellCmd);
-
-	return value_expanded;
+	return MacroProcessor::ResolveMacros(value, resolvers, CheckResult::Ptr(), Utility::EscapeShellCmd);
 }
 
 Value ServicesTable::NotesUrlAccessor(const Value& row)
 {
-	Dictionary::Ptr custom = static_cast<Service::Ptr>(row)->GetCustom();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
-	return custom->Get("notes_url");
+	return CompatUtility::GetCustomAttributeConfig(service, "notes_url");
 }
 
 Value ServicesTable::NotesUrlExpandedAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
-	Dictionary::Ptr custom = service->GetCustom();
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
 	std::vector<MacroResolver::Ptr> resolvers;
@@ -320,30 +340,26 @@ Value ServicesTable::NotesUrlExpandedAccessor(const Value& row)
 	resolvers.push_back(service->GetHost());
 	resolvers.push_back(IcingaApplication::GetInstance());
 
-	Value value = custom->Get("notes_url");
+	Value value = CompatUtility::GetCustomAttributeConfig(service, "notes_url");
 
-	Dictionary::Ptr cr;
-	Value value_expanded = MacroProcessor::ResolveMacros(value, resolvers, cr, Utility::EscapeShellCmd);
-
-	return value_expanded;
+	return MacroProcessor::ResolveMacros(value, resolvers, CheckResult::Ptr(), Utility::EscapeShellCmd);
 }
 
 Value ServicesTable::ActionUrlAccessor(const Value& row)
 {
-	Dictionary::Ptr custom = static_cast<Service::Ptr>(row)->GetCustom();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
-	return custom->Get("action_url");
+	return CompatUtility::GetCustomAttributeConfig(service, "action_url");
 }
 
 Value ServicesTable::ActionUrlExpandedAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
-	Dictionary::Ptr custom = service->GetCustom();
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
 	std::vector<MacroResolver::Ptr> resolvers;
@@ -351,30 +367,26 @@ Value ServicesTable::ActionUrlExpandedAccessor(const Value& row)
 	resolvers.push_back(service->GetHost());
 	resolvers.push_back(IcingaApplication::GetInstance());
 
-	Value value = custom->Get("action_url");
+	Value value = CompatUtility::GetCustomAttributeConfig(service, "action_url");
 
-	Dictionary::Ptr cr;
-	Value value_expanded = MacroProcessor::ResolveMacros(value, resolvers, cr, Utility::EscapeShellCmd);
-
-	return value_expanded;
+	return MacroProcessor::ResolveMacros(value, resolvers, CheckResult::Ptr(), Utility::EscapeShellCmd);
 }
 
 Value ServicesTable::IconImageAccessor(const Value& row)
 {
-	Dictionary::Ptr custom = static_cast<Service::Ptr>(row)->GetCustom();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
-	return custom->Get("icon_image");
+	return CompatUtility::GetCustomAttributeConfig(service, "icon_image");
 }
 
 Value ServicesTable::IconImageExpandedAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
-	Dictionary::Ptr custom = service->GetCustom();
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
 	std::vector<MacroResolver::Ptr> resolvers;
@@ -382,77 +394,118 @@ Value ServicesTable::IconImageExpandedAccessor(const Value& row)
 	resolvers.push_back(service->GetHost());
 	resolvers.push_back(IcingaApplication::GetInstance());
 
-	Value value = custom->Get("icon_image");
+	Value value = CompatUtility::GetCustomAttributeConfig(service, "icon_image");
 
-	Dictionary::Ptr cr;
-	Value value_expanded = MacroProcessor::ResolveMacros(value, resolvers, cr, Utility::EscapeShellCmd);
-
-	return value_expanded;
+	return MacroProcessor::ResolveMacros(value, resolvers, CheckResult::Ptr(), Utility::EscapeShellCmd);
 }
 
 Value ServicesTable::IconImageAltAccessor(const Value& row)
 {
-	Dictionary::Ptr custom = static_cast<Service::Ptr>(row)->GetCustom();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
-	return custom->Get("icon_image_alt");
+	return CompatUtility::GetCustomAttributeConfig(service, "icon_image_alt");
 }
 
 Value ServicesTable::MaxCheckAttemptsAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetMaxCheckAttempts();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->GetMaxCheckAttempts();
 }
 
 Value ServicesTable::CurrentAttemptAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetCurrentCheckAttempt();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->GetCheckAttempt();
 }
 
 Value ServicesTable::StateAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetState();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceCurrentState(service);
 }
 
 Value ServicesTable::HasBeenCheckedAccessor(const Value& row)
 {
-	return (static_cast<Service::Ptr>(row)->HasBeenChecked() ? 1 : 0);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceHasBeenChecked(service);
 }
 
 Value ServicesTable::LastStateAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetLastState();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->GetLastState();
 }
 
 Value ServicesTable::LastHardStateAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetLastHardState();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->GetLastHardState();
 }
 
 Value ServicesTable::StateTypeAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetStateType();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->GetStateType();
 }
 
 Value ServicesTable::CheckTypeAccessor(const Value& row)
 {
-	return (static_cast<Service::Ptr>(row)->GetEnableActiveChecks() ? 0 : 1);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceCheckType(service);
 }
 
 Value ServicesTable::AcknowledgedAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	/* important: lock acknowledgements */
-	ObjectLock olock(service);
+	if (!service)
+		return Empty;
 
-	return (service->IsAcknowledged() ? 1 : 0);
+
+	return CompatUtility::GetServiceIsAcknowledged(service);
 }
 
 Value ServicesTable::AcknowledgementTypeAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
 
 	/* important: lock acknowledgements */
 	ObjectLock olock(service);
@@ -464,139 +517,190 @@ Value ServicesTable::NoMoreNotificationsAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	/* XXX take the smallest notification_interval */
-        double notification_interval = -1;
-        BOOST_FOREACH(const Notification::Ptr& notification, service->GetNotifications()) {
-                if (notification_interval == -1 || notification->GetNotificationInterval() < notification_interval)
-                        notification_interval = notification->GetNotificationInterval();
-        }
+	if (!service)
+		return Empty;
 
-        if (notification_interval == 0 && !service->IsVolatile())
-                return 1;
-
-	return 0;
+        return CompatUtility::GetServiceNoMoreNotifications(service);
 }
 
 Value ServicesTable::LastTimeOkAccessor(const Value& row)
 {
-	return static_cast<int>(static_cast<Service::Ptr>(row)->GetLastStateOK());
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return static_cast<int>(service->GetLastStateOK());
 }
 
 Value ServicesTable::LastTimeWarningAccessor(const Value& row)
 {
-	return static_cast<int>(static_cast<Service::Ptr>(row)->GetLastStateWarning());
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return static_cast<int>(service->GetLastStateWarning());
 }
 
 Value ServicesTable::LastTimeCriticalAccessor(const Value& row)
 {
-	return static_cast<int>(static_cast<Service::Ptr>(row)->GetLastStateCritical());
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return static_cast<int>(service->GetLastStateCritical());
 }
 
 Value ServicesTable::LastTimeUnknownAccessor(const Value& row)
 {
-	return static_cast<int>(static_cast<Service::Ptr>(row)->GetLastStateUnknown());
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return static_cast<int>(service->GetLastStateUnknown());
 }
 
 Value ServicesTable::LastCheckAccessor(const Value& row)
 {
-	return static_cast<int>(static_cast<Service::Ptr>(row)->GetLastCheck());
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return static_cast<int>(service->GetLastCheck());
 }
 
 Value ServicesTable::NextCheckAccessor(const Value& row)
 {
-	return static_cast<int>(static_cast<Service::Ptr>(row)->GetNextCheck());
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return static_cast<int>(service->GetNextCheck());
 }
 
 Value ServicesTable::LastNotificationAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	/* XXX Service -> Notifications, latest wins */
-	double last_notification = 0;
-	BOOST_FOREACH(const Notification::Ptr& notification, service->GetNotifications()) {
-		if (notification->GetLastNotification() > last_notification)
-			last_notification = notification->GetLastNotification();
-	}
+	if (!service)
+		return Empty;
 
-	return static_cast<int>(last_notification);
+	return CompatUtility::GetServiceNotificationLastNotification(service);
 }
 
 Value ServicesTable::NextNotificationAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	/* XXX Service -> Notifications, latest wins */
-	double next_notification = 0;
-	BOOST_FOREACH(const Notification::Ptr& notification, service->GetNotifications()) {
-		if (notification->GetNextNotification() < next_notification)
-			next_notification = notification->GetNextNotification();
-	}
+	if (!service)
+		return Empty;
 
-	return static_cast<int>(next_notification);
+	return CompatUtility::GetServiceNotificationNextNotification(service);
 }
 
 Value ServicesTable::CurrentNotificationNumberAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	/* XXX Service -> Notifications, biggest wins */
-	int notification_number = 0;
-	BOOST_FOREACH(const Notification::Ptr& notification, service->GetNotifications()) {
-		if (notification->GetNotificationNumber() > notification_number)
-			notification_number = notification->GetNotificationNumber();
-	}
+	if (!service)
+		return Empty;
 
-	return notification_number;
+	return CompatUtility::GetServiceNotificationNotificationNumber(service);
 }
 
 Value ServicesTable::LastStateChangeAccessor(const Value& row)
 {
-	return static_cast<int>(static_cast<Service::Ptr>(row)->GetLastStateChange());
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return static_cast<int>(service->GetLastStateChange());
 }
 
 Value ServicesTable::LastHardStateChangeAccessor(const Value& row)
 {
-	return static_cast<int>(static_cast<Service::Ptr>(row)->GetLastHardStateChange());
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return static_cast<int>(service->GetLastHardStateChange());
 }
 
 Value ServicesTable::ScheduledDowntimeDepthAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetDowntimeDepth();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->GetDowntimeDepth();
 }
 
 Value ServicesTable::IsFlappingAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->IsFlapping();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->IsFlapping();
 }
 
 Value ServicesTable::ChecksEnabledAccessor(const Value& row)
 {
-	return (static_cast<Service::Ptr>(row)->GetEnableActiveChecks() ? 1 : 0);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceActiveChecksEnabled(service);
 }
 
 Value ServicesTable::AcceptPassiveChecksAccessor(const Value& row)
 {
-	return (static_cast<Service::Ptr>(row)->GetEnablePassiveChecks() ? 1 : 0);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServicePassiveChecksEnabled(service);
 }
 
 Value ServicesTable::EventHandlerEnabledAccessor(const Value& row)
 {
-	EventCommand::Ptr eventcommand = static_cast<Service::Ptr>(row)->GetEventCommand();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (eventcommand)
-		return 1;
+	if (!service)
+		return Empty;
 
-	return 0;
+	return CompatUtility::GetServiceEventHandlerEnabled(service);
 }
 
 Value ServicesTable::NotificationsEnabledAccessor(const Value& row)
 {
-	return (static_cast<Service::Ptr>(row)->GetEnableNotifications() ? 1 : 0);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceNotificationsEnabled(service);
 }
 
 Value ServicesTable::ActiveChecksEnabledAccessor(const Value& row)
 {
-	return (static_cast<Service::Ptr>(row)->GetEnableActiveChecks() ? 1 : 0);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceActiveChecksEnabled(service);
 }
 
 Value ServicesTable::CheckOptionsAccessor(const Value& row)
@@ -607,18 +711,32 @@ Value ServicesTable::CheckOptionsAccessor(const Value& row)
 
 Value ServicesTable::FlapDetectionEnabledAccessor(const Value& row)
 {
-	return (static_cast<Service::Ptr>(row)->GetEnableFlapping() ? 1 : 0);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceFlapDetectionEnabled(service);
 }
 
 Value ServicesTable::CheckFreshnessAccessor(const Value& row)
 {
-	/* always enabled */
-	return 1;
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceFreshnessChecksEnabled(service);
 }
 
 Value ServicesTable::ModifiedAttributesAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetModifiedAttributes();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return service->GetModifiedAttributes();
 }
 
 Value ServicesTable::ModifiedAttributesListAccessor(const Value& row)
@@ -631,96 +749,122 @@ Value ServicesTable::StalenessAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (service->HasBeenChecked() && service->GetLastCheck() > 0)
-		return (Utility::GetTime() - service->GetLastCheck()) / (service->GetCheckInterval() * 3600);
+	if (!service)
+		return Empty;
 
-	return Empty;
+	return CompatUtility::GetServiceStaleness(service);
 }
 
 Value ServicesTable::CheckIntervalAccessor(const Value& row)
 {
-	return (static_cast<Service::Ptr>(row)->GetCheckInterval() / 60.0);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceCheckInterval(service);
 }
 
 Value ServicesTable::RetryIntervalAccessor(const Value& row)
 {
-	return (static_cast<Service::Ptr>(row)->GetRetryInterval() / 60.0);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceRetryInterval(service);
 }
 
 Value ServicesTable::NotificationIntervalAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	/* XXX take the smallest notification_interval */
-        double notification_interval = -1;
-        BOOST_FOREACH(const Notification::Ptr& notification, service->GetNotifications()) {
-                if (notification_interval == -1 || notification->GetNotificationInterval() < notification_interval)
-                        notification_interval = notification->GetNotificationInterval();
-        }
+	if (!service)
+		return Empty;
 
-        if (notification_interval == -1)
-                notification_interval = 60;
-
-	return (notification_interval / 60.0);
+	return CompatUtility::GetServiceNotificationNotificationInterval(service);
 }
 
 Value ServicesTable::LowFlapThresholdAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetFlappingThreshold();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceLowFlapThreshold(service);
 }
 
 Value ServicesTable::HighFlapThresholdAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetFlappingThreshold();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServiceHighFlapThreshold(service);
 }
 
 Value ServicesTable::LatencyAccessor(const Value& row)
 {
-	return (Service::CalculateLatency(static_cast<Service::Ptr>(row)->GetLastCheckResult()));
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return (Service::CalculateLatency(service->GetLastCheckResult()));
 }
 
 Value ServicesTable::ExecutionTimeAccessor(const Value& row)
 {
-	return (Service::CalculateExecutionTime(static_cast<Service::Ptr>(row)->GetLastCheckResult()));
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return (Service::CalculateExecutionTime(service->GetLastCheckResult()));
 }
 
 Value ServicesTable::PercentStateChangeAccessor(const Value& row)
 {
-	return static_cast<Service::Ptr>(row)->GetFlappingCurrent();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return CompatUtility::GetServicePercentStateChange(service);
 }
 
 Value ServicesTable::InCheckPeriodAccessor(const Value& row)
 {
-	TimePeriod::Ptr timeperiod = static_cast<Service::Ptr>(row)->GetCheckPeriod();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	/* none set means always checked */
-	if (!timeperiod)
-		return 1;
+	if (!service)
+		return Empty;
 
-	return (timeperiod->IsInside(Utility::GetTime()) ? 1 : 0);
+	return CompatUtility::GetServiceInCheckPeriod(service);
 }
 
 Value ServicesTable::InNotificationPeriodAccessor(const Value& row)
 {
-	BOOST_FOREACH(const Notification::Ptr& notification, static_cast<Service::Ptr>(row)->GetNotifications()) {
-		ObjectLock olock(notification);
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-		TimePeriod::Ptr timeperiod = notification->GetNotificationPeriod();
+	if (!service)
+		return Empty;
 
-		/* XXX first notification wins */
-		if (timeperiod)
-			return (timeperiod->IsInside(Utility::GetTime()) ? 1 : 0);
-	}
-
-	/* none set means always notified */
-	return 1;
+	return CompatUtility::GetServiceInNotificationPeriod(service);
 }
 
 Value ServicesTable::ContactsAccessor(const Value& row)
 {
-	Array::Ptr contact_names = boost::make_shared<Array>();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	BOOST_FOREACH(const User::Ptr& user, CompatUtility::GetServiceNotificationUsers(static_cast<Service::Ptr>(row))) {
+	if (!service)
+		return Empty;
+
+	Array::Ptr contact_names = make_shared<Array>();
+
+	BOOST_FOREACH(const User::Ptr& user, CompatUtility::GetServiceNotificationUsers(service)) {
 		contact_names->Add(user->GetName());
 	}
 
@@ -729,26 +873,28 @@ Value ServicesTable::ContactsAccessor(const Value& row)
 
 Value ServicesTable::DowntimesAccessor(const Value& row)
 {
-	Dictionary::Ptr downtimes = static_cast<Service::Ptr>(row)->GetDowntimes();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!downtimes)
+	if (!service)
 		return Empty;
 
-	Array::Ptr ids = boost::make_shared<Array>();
+	Dictionary::Ptr downtimes = service->GetDowntimes();
+
+	Array::Ptr ids = make_shared<Array>();
 
 	ObjectLock olock(downtimes);
 
 	String id;
-	Dictionary::Ptr downtime;
+	Downtime::Ptr downtime;
 	BOOST_FOREACH(boost::tie(id, downtime), downtimes) {
 
 		if (!downtime)
 			continue;
 
-		if (Service::IsDowntimeExpired(downtime))
+		if (downtime->IsExpired())
 			continue;
 
-		ids->Add(downtime->Get("legacy_id"));
+		ids->Add(downtime->GetLegacyId());
 	}
 
 	return ids;
@@ -756,29 +902,31 @@ Value ServicesTable::DowntimesAccessor(const Value& row)
 
 Value ServicesTable::DowntimesWithInfoAccessor(const Value& row)
 {
-	Dictionary::Ptr downtimes = static_cast<Service::Ptr>(row)->GetDowntimes();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!downtimes)
+	if (!service)
 		return Empty;
 
-	Array::Ptr ids = boost::make_shared<Array>();
+	Dictionary::Ptr downtimes = service->GetDowntimes();
+
+	Array::Ptr ids = make_shared<Array>();
 
 	ObjectLock olock(downtimes);
 
 	String id;
-	Dictionary::Ptr downtime;
+	Downtime::Ptr downtime;
 	BOOST_FOREACH(boost::tie(id, downtime), downtimes) {
 
 		if (!downtime)
 			continue;
 
-		if (Service::IsDowntimeExpired(downtime))
+		if (downtime->IsExpired())
 			continue;
 
-		Array::Ptr downtime_info = boost::make_shared<Array>();
-		downtime_info->Add(downtime->Get("legacy_id"));
-		downtime_info->Add(downtime->Get("author"));
-		downtime_info->Add(downtime->Get("comment"));
+		Array::Ptr downtime_info = make_shared<Array>();
+		downtime_info->Add(downtime->GetLegacyId());
+		downtime_info->Add(downtime->GetAuthor());
+		downtime_info->Add(downtime->GetComment());
 		ids->Add(downtime_info);
 	}
 
@@ -787,26 +935,28 @@ Value ServicesTable::DowntimesWithInfoAccessor(const Value& row)
 
 Value ServicesTable::CommentsAccessor(const Value& row)
 {
-	Dictionary::Ptr comments = static_cast<Service::Ptr>(row)->GetComments();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!comments)
+	if (!service)
 		return Empty;
 
-	Array::Ptr ids = boost::make_shared<Array>();
+	Dictionary::Ptr comments = service->GetComments();
+
+	Array::Ptr ids = make_shared<Array>();
 
 	ObjectLock olock(comments);
 
 	String id;
-	Dictionary::Ptr comment;
+	Comment::Ptr comment;
 	BOOST_FOREACH(boost::tie(id, comment), comments) {
 
 		if (!comment)
 			continue;
 
-		if (Service::IsCommentExpired(comment))
+		if (comment->IsExpired())
 			continue;
 
-		ids->Add(comment->Get("legacy_id"));
+		ids->Add(comment->GetLegacyId());
 	}
 
 	return ids;
@@ -814,29 +964,31 @@ Value ServicesTable::CommentsAccessor(const Value& row)
 
 Value ServicesTable::CommentsWithInfoAccessor(const Value& row)
 {
-	Dictionary::Ptr comments = static_cast<Service::Ptr>(row)->GetComments();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!comments)
+	if (!service)
 		return Empty;
 
-	Array::Ptr ids = boost::make_shared<Array>();
+	Dictionary::Ptr comments = service->GetComments();
+
+	Array::Ptr ids = make_shared<Array>();
 
 	ObjectLock olock(comments);
 
 	String id;
-	Dictionary::Ptr comment;
+	Comment::Ptr comment;
 	BOOST_FOREACH(boost::tie(id, comment), comments) {
 
 		if (!comment)
 			continue;
 
-		if (Service::IsCommentExpired(comment))
+		if (comment->IsExpired())
 			continue;
 
-		Array::Ptr comment_info = boost::make_shared<Array>();
-		comment_info->Add(comment->Get("legacy_id"));
-		comment_info->Add(comment->Get("author"));
-		comment_info->Add(comment->Get("text"));
+		Array::Ptr comment_info = make_shared<Array>();
+		comment_info->Add(comment->GetLegacyId());
+		comment_info->Add(comment->GetAuthor());
+		comment_info->Add(comment->GetText());
 		ids->Add(comment_info);
 	}
 
@@ -845,31 +997,33 @@ Value ServicesTable::CommentsWithInfoAccessor(const Value& row)
 
 Value ServicesTable::CommentsWithExtraInfoAccessor(const Value& row)
 {
-	Dictionary::Ptr comments = static_cast<Service::Ptr>(row)->GetComments();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!comments)
+	if (!service)
 		return Empty;
 
-	Array::Ptr ids = boost::make_shared<Array>();
+	Dictionary::Ptr comments = service->GetComments();
+
+	Array::Ptr ids = make_shared<Array>();
 
 	ObjectLock olock(comments);
 
 	String id;
-	Dictionary::Ptr comment;
+	Comment::Ptr comment;
 	BOOST_FOREACH(boost::tie(id, comment), comments) {
 
 		if (!comment)
 			continue;
 
-		if (Service::IsCommentExpired(comment))
+		if (comment->IsExpired())
 			continue;
 
-		Array::Ptr comment_info = boost::make_shared<Array>();
-		comment_info->Add(comment->Get("legacy_id"));
-		comment_info->Add(comment->Get("author"));
-		comment_info->Add(comment->Get("text"));
-		comment_info->Add(comment->Get("entry_type"));
-		comment_info->Add(static_cast<int>(comment->Get("entry_time")));
+		Array::Ptr comment_info = make_shared<Array>();
+		comment_info->Add(comment->GetLegacyId());
+		comment_info->Add(comment->GetAuthor());
+		comment_info->Add(comment->GetText());
+		comment_info->Add(comment->GetEntryType());
+		comment_info->Add(static_cast<int>(comment->GetEntryTime()));
 		ids->Add(comment_info);
 	}
 
@@ -878,26 +1032,26 @@ Value ServicesTable::CommentsWithExtraInfoAccessor(const Value& row)
 
 Value ServicesTable::CustomVariableNamesAccessor(const Value& row)
 {
-	Dictionary::Ptr custom = static_cast<Service::Ptr>(row)->GetCustom();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
-	Array::Ptr cv = boost::make_shared<Array>();
+	Dictionary::Ptr customvars;
 
-	ObjectLock olock(custom);
+	{
+		ObjectLock olock(service);
+		customvars = CompatUtility::GetCustomVariableConfig(service);
+	}
+
+	if (!customvars)
+		return Empty;
+
+	Array::Ptr cv = make_shared<Array>();
+
 	String key;
 	Value value;
-	BOOST_FOREACH(boost::tie(key, value), custom) {
-		if (key == "notes" ||
-		    key == "action_url" ||
-		    key == "notes_url" ||
-		    key == "icon_image" ||
-		    key == "icon_image_alt" ||
-		    key == "statusmap_image" ||
-		    key == "2d_coords")
-			continue;
-
+	BOOST_FOREACH(boost::tie(key, value), customvars) {
 		cv->Add(key);
 	}
 
@@ -906,26 +1060,26 @@ Value ServicesTable::CustomVariableNamesAccessor(const Value& row)
 
 Value ServicesTable::CustomVariableValuesAccessor(const Value& row)
 {
-	Dictionary::Ptr custom = static_cast<Service::Ptr>(row)->GetCustom();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
-	Array::Ptr cv = boost::make_shared<Array>();
+	Dictionary::Ptr customvars;
 
-	ObjectLock olock(custom);
+	{
+		ObjectLock olock(service);
+		customvars = CompatUtility::GetCustomVariableConfig(service);
+	}
+
+	if (!customvars)
+		return Empty;
+
+	Array::Ptr cv = make_shared<Array>();
+
 	String key;
 	Value value;
-	BOOST_FOREACH(boost::tie(key, value), custom) {
-		if (key == "notes" ||
-		    key == "action_url" ||
-		    key == "notes_url" ||
-		    key == "icon_image" ||
-		    key == "icon_image_alt" ||
-		    key == "statusmap_image" ||
-		    key == "2d_coords")
-			continue;
-
+	BOOST_FOREACH(boost::tie(key, value), customvars) {
 		cv->Add(value);
 	}
 
@@ -934,27 +1088,27 @@ Value ServicesTable::CustomVariableValuesAccessor(const Value& row)
 
 Value ServicesTable::CustomVariablesAccessor(const Value& row)
 {
-	Dictionary::Ptr custom = static_cast<Service::Ptr>(row)->GetCustom();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	if (!custom)
+	if (!service)
 		return Empty;
 
-	Array::Ptr cv = boost::make_shared<Array>();
+	Dictionary::Ptr customvars;
 
-	ObjectLock olock(custom);
+	{
+		ObjectLock olock(service);
+		customvars = CompatUtility::GetCustomVariableConfig(service);
+	}
+
+	if (!customvars)
+		return Empty;
+
+	Array::Ptr cv = make_shared<Array>();
+
 	String key;
 	Value value;
-	BOOST_FOREACH(boost::tie(key, value), custom) {
-		if (key == "notes" ||
-		    key == "action_url" ||
-		    key == "notes_url" ||
-		    key == "icon_image" ||
-		    key == "icon_image_alt" ||
-		    key == "statusmap_image" ||
-		    key == "2d_coords")
-			continue;
-
-		Array::Ptr key_val = boost::make_shared<Array>();
+	BOOST_FOREACH(boost::tie(key, value), customvars) {
+		Array::Ptr key_val = make_shared<Array>();
 		key_val->Add(key);
 		key_val->Add(value);
 		cv->Add(key_val);
@@ -965,7 +1119,12 @@ Value ServicesTable::CustomVariablesAccessor(const Value& row)
 
 Value ServicesTable::GroupsAccessor(const Value& row)
 {
-	Array::Ptr groups = static_cast<Service::Ptr>(row)->GetGroups();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	Array::Ptr groups = service->GetGroups();
 
 	if (!groups)
 		return Empty;
@@ -975,9 +1134,14 @@ Value ServicesTable::GroupsAccessor(const Value& row)
 
 Value ServicesTable::ContactGroupsAccessor(const Value& row)
 {
-	Array::Ptr contactgroup_names = boost::make_shared<Array>();
+	Service::Ptr service = static_cast<Service::Ptr>(row);
 
-	BOOST_FOREACH(const UserGroup::Ptr& usergroup, CompatUtility::GetServiceNotificationUserGroups(static_cast<Service::Ptr>(row))) {
+	if (!service)
+		return Empty;
+
+	Array::Ptr contactgroup_names = make_shared<Array>();
+
+	BOOST_FOREACH(const UserGroup::Ptr& usergroup, CompatUtility::GetServiceNotificationUserGroups(service)) {
 		contactgroup_names->Add(usergroup->GetName());
 	}
 

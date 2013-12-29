@@ -19,39 +19,39 @@
 
 #include "checker/checkercomponent.h"
 #include "icinga/icingaapplication.h"
+#include "icinga/cib.h"
 #include "base/dynamictype.h"
 #include "base/objectlock.h"
 #include "base/utility.h"
 #include "base/logger_fwd.h"
-#include <boost/exception/diagnostic_information.hpp>
+#include "base/exception.h"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(CheckerComponent);
 
-void CheckerComponent::Start(void)
+void CheckerComponent::OnConfigLoaded(void)
 {
-	DynamicObject::Start();
-
 	DynamicObject::OnStarted.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
 	DynamicObject::OnStopped.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
 	DynamicObject::OnAuthorityChanged.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
 
 	Service::OnNextCheckChanged.connect(bind(&CheckerComponent::NextCheckChangedHandler, this, _1));
+}
+
+void CheckerComponent::Start(void)
+{
+	DynamicObject::Start();
 
 	m_Stopped = false;
 
 	m_Thread = boost::thread(boost::bind(&CheckerComponent::CheckThreadProc, this));
 
-	m_ResultTimer = boost::make_shared<Timer>();
+	m_ResultTimer = make_shared<Timer>();
 	m_ResultTimer->SetInterval(5);
 	m_ResultTimer->OnTimerExpired.connect(boost::bind(&CheckerComponent::ResultTimerHandler, this));
 	m_ResultTimer->Start();
-
-	BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjects<Service>()) {
-		ObjectHandler(service);
-	}
 }
 
 void CheckerComponent::Stop(void)
@@ -120,9 +120,12 @@ void CheckerComponent::CheckThreadProc(void)
 
 		/* reschedule the service if checks are disabled */
 		if (!check) {
+			m_IdleServices.insert(service);
+			lock.unlock();
+
 			service->UpdateNextCheck();
 
-			m_IdleServices.insert(service);
+			lock.lock();
 
 			continue;
 		}
@@ -139,7 +142,7 @@ void CheckerComponent::CheckThreadProc(void)
 		Log(LogDebug, "checker", "Executing service check for '" + service->GetName() + "'");
 
 		CheckerComponent::Ptr self = GetSelf();
-		Utility::QueueAsyncCallback(boost::bind(&CheckerComponent::ExecuteCheckHelper, self, service));
+		m_Pool.Post(boost::bind(&CheckerComponent::ExecuteCheckHelper, self, service));
 
 		lock.lock();
 	}
@@ -150,7 +153,7 @@ void CheckerComponent::ExecuteCheckHelper(const Service::Ptr& service)
 	try {
 		service->ExecuteCheck();
 	} catch (const std::exception& ex) {
-		Log(LogCritical, "checker", "Exception occured while checking service '" + service->GetName() + "': " + boost::diagnostic_information(ex));
+		Log(LogCritical, "checker", "Exception occured while checking service '" + service->GetName() + "': " + DiagnosticInformation(ex));
 	}
 
 	{
@@ -183,7 +186,7 @@ void CheckerComponent::ResultTimerHandler(void)
 	{
 		boost::mutex::scoped_lock lock(m_Mutex);
 
-		msgbuf << "Pending services: " << m_PendingServices.size() << "; Idle services: " << m_IdleServices.size();
+		msgbuf << "Pending services: " << m_PendingServices.size() << "; Idle services: " << m_IdleServices.size() << "; Checks/s: " << CIB::GetActiveChecksStatistics(5) / 5.0;
 	}
 
 	Log(LogInformation, "checker", msgbuf.str());

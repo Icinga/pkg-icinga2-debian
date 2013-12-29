@@ -18,6 +18,51 @@ LICENSE file included in the package.
 Support for Icinga 2 is available in a number of ways. Please have a look at
 the support overview page at [https://support.icinga.org].
 
+
+## What's New in Version 0.0.6
+
+* Scheduled Downtimes as configuration object (also known as "Recurring Downtimes").
+* Log command arguments
+* Performance improvements for the config compiler
+* Config validation provides stats at the end
+* icinga2-enable-feature lists already enabled features
+* Add support for latency statistics to IcingaCheckTask
+* Implement support for using custom attributes as macros
+* StatusDataWriter update interval as config attribute
+* Improve performance with fetching data for status.dat/objects.cache, DB IDO and Livestatus
+* Livestatus History Table performance improvements
+
+### Changes
+* Generated object names (host with services array) use an exclamation mark instead of a colon
+as seperator. State file objects with downtimes, comments, etc are invalid (unknown) for that
+reason.
+* Script variables are set using 'var' and 'const' instead of the previous 'set' identifier
+* ITL constants are now embedded in libicinga
+* Removed the ConsoleLogger object and keep the default console log enabled until we daemonize
+
+## What's New in Version 0.0.5
+
+* Cluster: Implement support for CRLs
+* Implement modified attributes
+* Log messages providing more context
+* Default log is a file (rather than syslog)
+* Improve latency after start-up
+* NSCA-ng support for the Vagrant demo VM
+* Configuration: Recursively include configuration files matching a certain pattern
+* IDO: Improve performance
+* Migration: Add fallback for objects.cache instead of cfg_{dir,file}
+* Lots of bugfixes and performance improvements
+* Package fixes (Note: GPG key of packages.icinga.org has been updated)
+
+## What's New in Version 0.0.4
+
+* IDO: PostgreSQL support
+* IDO: implemented options to filter which kind of events are written to the database
+* Livestatus: implemented support for the log and statehist tables
+* Livestatus: implemented regex filters (~ and ~~)
+* Replaced autotools-based build system with cmake
+* Lots of bug fixes and performance improvements
+
 ## What's New in Version 0.0.3
 
 * `StatusDataWriter` and `ExternalCommandListener` (former `Compat`) and `CompatLogger`

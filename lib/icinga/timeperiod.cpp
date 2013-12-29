@@ -20,50 +20,36 @@
 #include "icinga/timeperiod.h"
 #include "config/configitem.h"
 #include "base/dynamictype.h"
-#include "base/scriptfunction.h"
 #include "base/objectlock.h"
 #include "base/logger_fwd.h"
 #include "base/timer.h"
 #include "base/utility.h"
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(TimePeriod);
-REGISTER_SCRIPTFUNCTION(EmptyTimePeriod, &TimePeriod::EmptyTimePeriodUpdate);
-REGISTER_SCRIPTFUNCTION(EvenMinutesTimePeriod, &TimePeriod::EvenMinutesTimePeriodUpdate);
 
 static Timer::Ptr l_UpdateTimer;
+
+INITIALIZE_ONCE(&TimePeriod::StaticInitialize);
+
+void TimePeriod::StaticInitialize(void)
+{
+	l_UpdateTimer = make_shared<Timer>();
+	l_UpdateTimer->SetInterval(300);
+	l_UpdateTimer->OnTimerExpired.connect(boost::bind(&TimePeriod::UpdateTimerHandler));
+	l_UpdateTimer->Start();
+}
 
 void TimePeriod::Start(void)
 {
 	DynamicObject::Start();
 
-	if (!l_UpdateTimer) {
-		l_UpdateTimer = boost::make_shared<Timer>();
-		l_UpdateTimer->SetInterval(300);
-		l_UpdateTimer->OnTimerExpired.connect(boost::bind(&TimePeriod::UpdateTimerHandler));
-		l_UpdateTimer->Start();
-	}
-
 	/* Pre-fill the time period for the next 24 hours. */
 	double now = Utility::GetTime();
 	UpdateRegion(now, now + 24 * 3600, true);
 	Dump();
-}
-
-String TimePeriod::GetDisplayName(void) const
-{
-        if (!m_DisplayName.IsEmpty())
-                return m_DisplayName;
-        else
-                return GetName();
-}
-
-Dictionary::Ptr TimePeriod::GetRanges(void) const
-{
-	return m_Ranges;
 }
 
 void TimePeriod::AddSegment(double begin, double end)
@@ -72,13 +58,13 @@ void TimePeriod::AddSegment(double begin, double end)
 
 	Log(LogDebug, "icinga", "Adding segment '" + Utility::FormatDateTime("%c", begin) + "' <-> '" + Utility::FormatDateTime("%c", end) + "' to TimePeriod '" + GetName() + "'");
 
-	if (m_ValidBegin.IsEmpty() || begin < m_ValidBegin)
-		m_ValidBegin = begin;
+	if (GetValidBegin().IsEmpty() || begin < GetValidBegin())
+		SetValidBegin(begin);
 
-	if (m_ValidEnd.IsEmpty() || end > m_ValidEnd)
-		m_ValidEnd = end;
+	if (GetValidEnd().IsEmpty() || end > GetValidEnd())
+		SetValidEnd(end);
 
-	Array::Ptr segments = m_Segments;
+	Array::Ptr segments = GetSegments();
 
 	if (segments) {
 		/* Try to merge the new segment into an existing segment. */
@@ -87,12 +73,12 @@ void TimePeriod::AddSegment(double begin, double end)
 			if (segment->Get("begin") <= begin && segment->Get("end") >= end)
 				return; /* New segment is fully contained in this segment. */
 
-			if (segment->Get("begin") < begin && segment->Get("end") > begin) {
+			if (segment->Get("begin") <= begin && segment->Get("end") >= begin) {
 				segment->Set("end", end); /* Extend an existing segment. */
 				return;
 			}
 
-			if (segment->Get("begin") > begin && segment->Get("begin") < end) {
+			if (segment->Get("begin") >= begin && segment->Get("begin") <= end) {
 				segment->Set("begin", begin); /* Extend an existing segment. */
 				return;
 			}
@@ -100,13 +86,13 @@ void TimePeriod::AddSegment(double begin, double end)
 	}
 
 	/* Create new segment if we weren't able to merge this into an existing segment. */
-	Dictionary::Ptr segment = boost::make_shared<Dictionary>();
+	Dictionary::Ptr segment = make_shared<Dictionary>();
 	segment->Set("begin", begin);
 	segment->Set("end", end);
 
 	if (!segments) {
-		segments = boost::make_shared<Array>();
-		m_Segments = segments;
+		segments = make_shared<Array>();
+		SetSegments(segments);
 	}
 
 	segments->Add(segment);
@@ -123,18 +109,18 @@ void TimePeriod::RemoveSegment(double begin, double end)
 
 	Log(LogDebug, "icinga", "Removing segment '" + Utility::FormatDateTime("%c", begin) + "' <-> '" + Utility::FormatDateTime("%c", end) + "' from TimePeriod '" + GetName() + "'");
 
-	if (m_ValidBegin.IsEmpty() || begin < m_ValidBegin)
-		m_ValidBegin = begin;
+	if (GetValidBegin().IsEmpty() || begin < GetValidBegin())
+		SetValidBegin(begin);
 
-	if (m_ValidEnd.IsEmpty() || end > m_ValidEnd)
-		m_ValidEnd = end;
+	if (GetValidEnd().IsEmpty() || end > GetValidEnd())
+		SetValidEnd(end);
 
-	Array::Ptr segments = m_Segments;
+	Array::Ptr segments = GetSegments();
 
 	if (!segments)
 		return;
 
-	Array::Ptr newSegments = boost::make_shared<Array>();
+	Array::Ptr newSegments = make_shared<Array>();
 
 	/* Try to split or adjust an existing segment. */
 	ObjectLock dlock(segments);
@@ -160,7 +146,7 @@ void TimePeriod::RemoveSegment(double begin, double end)
 		newSegments->Add(segment);
 	}
 
-	m_Segments = newSegments;
+	SetSegments(newSegments);
 
 	Dump();
 }
@@ -171,17 +157,17 @@ void TimePeriod::PurgeSegments(double end)
 
 	Log(LogDebug, "icinga", "Purging segments older than '" + Utility::FormatDateTime("%c", end) + "' from TimePeriod '" + GetName() + "'");
 
-	if (m_ValidBegin.IsEmpty() || end < m_ValidBegin)
+	if (GetValidBegin().IsEmpty() || end < GetValidBegin())
 		return;
 
-	m_ValidBegin = end;
+	SetValidBegin(end);
 
-	Array::Ptr segments = m_Segments;
+	Array::Ptr segments = GetSegments();
 
 	if (!segments)
 		return;
 
-	Array::Ptr newSegments = boost::make_shared<Array>();
+	Array::Ptr newSegments = make_shared<Array>();
 
 	/* Remove old segments. */
 	ObjectLock dlock(segments);
@@ -190,16 +176,16 @@ void TimePeriod::PurgeSegments(double end)
 			newSegments->Add(segment);
 	}
 
-	m_Segments = newSegments;
+	SetSegments(newSegments);
 }
 
 void TimePeriod::UpdateRegion(double begin, double end, bool clearExisting)
 {
 	if (!clearExisting) {
-		if (begin < m_ValidEnd)
-			begin = m_ValidEnd;
+		if (begin < GetValidEnd())
+			begin = GetValidEnd();
 
-		if (end < m_ValidEnd)
+		if (end < GetValidEnd())
 			return;
 	}
 
@@ -229,10 +215,10 @@ bool TimePeriod::IsInside(double ts) const
 {
 	ObjectLock olock(this);
 
-	if (m_ValidBegin.IsEmpty() || ts < m_ValidBegin || m_ValidEnd.IsEmpty() || ts > m_ValidEnd)
+	if (GetValidBegin().IsEmpty() || ts < GetValidBegin() || GetValidEnd().IsEmpty() || ts > GetValidEnd())
 		return true; /* Assume that all invalid regions are "inside". */
 
-	Array::Ptr segments = m_Segments;
+	Array::Ptr segments = GetSegments();
 
 	if (segments) {
 		ObjectLock dlock(segments);
@@ -249,7 +235,7 @@ double TimePeriod::FindNextTransition(double begin)
 {
 	ObjectLock olock(this);
 
-	Array::Ptr segments = m_Segments;
+	Array::Ptr segments = GetSegments();
 
 	double closestTransition = -1;
 
@@ -278,7 +264,7 @@ void TimePeriod::UpdateTimerHandler(void)
 			ObjectLock olock(tp);
 			tp->PurgeSegments(now - 3600);
 
-			valid_end = tp->m_ValidEnd;
+			valid_end = tp->GetValidEnd();
 		}
 
 		tp->UpdateRegion(valid_end, now + 24 * 3600, false);
@@ -286,35 +272,12 @@ void TimePeriod::UpdateTimerHandler(void)
 	}
 }
 
-Array::Ptr TimePeriod::EmptyTimePeriodUpdate(const TimePeriod::Ptr&, double, double)
-{
-	Array::Ptr segments = boost::make_shared<Array>();
-	return segments;
-}
-
-Array::Ptr TimePeriod::EvenMinutesTimePeriodUpdate(const TimePeriod::Ptr&, double begin, double end)
-{
-	Array::Ptr segments = boost::make_shared<Array>();
-
-	for (long t = begin / 60 - 1; t * 60 < end; t++) {
-		if ((t % 2) == 0) {
-			Dictionary::Ptr segment = boost::make_shared<Dictionary>();
-			segment->Set("begin", t * 60);
-			segment->Set("end", (t + 1) * 60);
-
-			segments->Add(segment);
-		}
-	}
-
-	return segments;
-}
-
 void TimePeriod::Dump(void)
 {
-	Array::Ptr segments = m_Segments;
+	Array::Ptr segments = GetSegments();
 
 	Log(LogDebug, "icinga", "Dumping TimePeriod '" + GetName() + "'");
-	Log(LogDebug, "icinga", "Valid from '" + Utility::FormatDateTime("%c", m_ValidBegin) + "' until '" + Utility::FormatDateTime("%c", m_ValidEnd));
+	Log(LogDebug, "icinga", "Valid from '" + Utility::FormatDateTime("%c", GetValidBegin()) + "' until '" + Utility::FormatDateTime("%c", GetValidEnd()));
 
 	if (segments) {
 		ObjectLock dlock(segments);
@@ -326,36 +289,4 @@ void TimePeriod::Dump(void)
 	}
 
 	Log(LogDebug, "icinga", "---");
-}
-
-void TimePeriod::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
-{
-	DynamicObject::InternalSerialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		bag->Set("display_name", m_DisplayName);
-		bag->Set("ranges", m_Ranges);
-	}
-
-	if (attributeTypes & Attribute_State) {
-		bag->Set("valid_begin", m_ValidBegin);
-		bag->Set("valid_end", m_ValidEnd);
-		bag->Set("segments", m_Segments);
-	}
-}
-
-void TimePeriod::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
-{
-	DynamicObject::InternalDeserialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		m_DisplayName = bag->Get("display_name");
-		m_Ranges = bag->Get("ranges");
-	}
-
-	if (attributeTypes & Attribute_State) {
-		m_ValidBegin = bag->Get("valid_begin");
-		m_ValidEnd = bag->Get("valid_end");
-		m_Segments = bag->Get("segments");
-	}
 }

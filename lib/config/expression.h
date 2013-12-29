@@ -62,7 +62,7 @@ public:
 	void Execute(const Dictionary::Ptr& dictionary) const;
 
 	void ExtractPath(const std::vector<String>& path, const shared_ptr<ExpressionList>& result) const;
-	void ExtractFiltered(const std::set<String, string_iless>& keys, const shared_ptr<ExpressionList>& result) const;
+	void ExtractFiltered(const std::set<String>& keys, const shared_ptr<ExpressionList>& result) const;
 
 	void ErasePath(const std::vector<String>& path);
 
@@ -73,6 +73,8 @@ private:
 	ExpressionOperator m_Operator;
 	Value m_Value;
 	DebugInfo m_DebugInfo;
+
+	static Value DeepClone(const Value& value);
 };
 
 }

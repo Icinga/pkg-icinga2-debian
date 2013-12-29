@@ -23,9 +23,7 @@
 #include "base/logger_fwd.h"
 #include "base/timer.h"
 #include "base/utility.h"
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
-#include <boost/tuple/tuple.hpp>
 
 using namespace icinga;
 
@@ -35,19 +33,14 @@ static std::map<int, String> l_LegacyCommentsCache;
 static std::map<String, Service::WeakPtr> l_CommentsCache;
 static Timer::Ptr l_CommentsExpireTimer;
 
-boost::signals2::signal<void (const Service::Ptr&, const Dictionary::Ptr&, const String&)> Service::OnCommentAdded;
-boost::signals2::signal<void (const Service::Ptr&, const Dictionary::Ptr&, const String&)> Service::OnCommentRemoved;
+boost::signals2::signal<void (const Service::Ptr&, const Comment::Ptr&, const String&)> Service::OnCommentAdded;
+boost::signals2::signal<void (const Service::Ptr&, const Comment::Ptr&, const String&)> Service::OnCommentRemoved;
 
 int Service::GetNextCommentID(void)
 {
 	boost::mutex::scoped_lock lock(l_CommentMutex);
 
 	return l_NextCommentID;
-}
-
-Dictionary::Ptr Service::GetComments(void) const
-{
-	return m_Comments;
 }
 
 String Service::AddComment(CommentType entryType, const String& author,
@@ -60,13 +53,13 @@ String Service::AddComment(CommentType entryType, const String& author,
 	else
 		uid = id;
 
-	Dictionary::Ptr comment = boost::make_shared<Dictionary>();
-	comment->Set("id", uid);
-	comment->Set("entry_time", Utility::GetTime());
-	comment->Set("entry_type", entryType);
-	comment->Set("author", author);
-	comment->Set("text", text);
-	comment->Set("expire_time", expireTime);
+	Comment::Ptr comment = make_shared<Comment>();
+	comment->SetId(uid);;
+	comment->SetEntryTime(Utility::GetTime());
+	comment->SetEntryType(entryType);
+	comment->SetAuthor(author);
+	comment->SetText(text);
+	comment->SetExpireTime(expireTime);
 
 	int legacy_id;
 
@@ -75,26 +68,9 @@ String Service::AddComment(CommentType entryType, const String& author,
 		legacy_id = l_NextCommentID++;
 	}
 
-	comment->Set("legacy_id", legacy_id);
+	comment->SetLegacyId(legacy_id);
 
-	Dictionary::Ptr comments;
-
-	{
-		ObjectLock olock(this);
-
-		comments = GetComments();
-
-		if (!comments)
-			comments = boost::make_shared<Dictionary>();
-
-		m_Comments = comments;
-	}
-
-	{
-		ObjectLock olock(this);
-
-		comments->Set(uid, comment);
-	}
+	GetComments()->Set(uid, comment);
 
 	{
 		boost::mutex::scoped_lock lock(l_CommentMutex);
@@ -102,7 +78,7 @@ String Service::AddComment(CommentType entryType, const String& author,
 		l_CommentsCache[uid] = GetSelf();
 	}
 
-	Utility::QueueAsyncCallback(boost::bind(boost::ref(OnCommentAdded), GetSelf(), comment, authority));
+	OnCommentAdded(GetSelf(), comment, authority);
 
 	return uid;
 }
@@ -110,18 +86,14 @@ String Service::AddComment(CommentType entryType, const String& author,
 void Service::RemoveAllComments(void)
 {
 	std::vector<String> ids;
-	Dictionary::Ptr comments = m_Comments;
-
-	if (!comments)
-		return;
+	Dictionary::Ptr comments = GetComments();
 
 	ObjectLock olock(comments);
-	String id;
-	BOOST_FOREACH(boost::tie(id, boost::tuples::ignore), comments) {
-		ids.push_back(id);
+	BOOST_FOREACH(const Dictionary::Pair& kv, comments) {
+		ids.push_back(kv.first);
 	}
 
-	BOOST_FOREACH(id, ids) {
+	BOOST_FOREACH(const String& id, ids) {
 		RemoveComment(id);
 	}
 }
@@ -135,17 +107,14 @@ void Service::RemoveComment(const String& id, const String& authority)
 
 	Dictionary::Ptr comments = owner->GetComments();
 
-	if (!comments)
-		return;
-
 	ObjectLock olock(owner);
 
-	Dictionary::Ptr comment = comments->Get(id);
+	Comment::Ptr comment = comments->Get(id);
 
 	if (!comment)
 		return;
 
-	int legacy_id = comment->Get("legacy_id");
+	int legacy_id = comment->GetLegacyId();
 
 	comments->Remove(id);
 
@@ -155,7 +124,7 @@ void Service::RemoveComment(const String& id, const String& authority)
 		l_CommentsCache.erase(id);
 	}
 
-	Utility::QueueAsyncCallback(boost::bind(boost::ref(OnCommentRemoved), owner, comment, authority));
+	OnCommentRemoved(owner, comment, authority);
 }
 
 String Service::GetCommentIDFromLegacyID(int id)
@@ -177,51 +146,43 @@ Service::Ptr Service::GetOwnerByCommentID(const String& id)
 	return l_CommentsCache[id].lock();
 }
 
-Dictionary::Ptr Service::GetCommentByID(const String& id)
+Comment::Ptr Service::GetCommentByID(const String& id)
 {
 	Service::Ptr owner = GetOwnerByCommentID(id);
 
 	if (!owner)
-		return Dictionary::Ptr();
+		return Comment::Ptr();
 
 	Dictionary::Ptr comments = owner->GetComments();
 
 	if (comments)
 		return comments->Get(id);
 
-	return Dictionary::Ptr();
-}
-
-bool Service::IsCommentExpired(const Dictionary::Ptr& comment)
-{
-	double expire_time = comment->Get("expire_time");
-
-	return (expire_time != 0 && expire_time < Utility::GetTime());
+	return Comment::Ptr();
 }
 
 void Service::AddCommentsToCache(void)
 {
+#ifdef _DEBUG
 	Log(LogDebug, "icinga", "Updating Service comments cache.");
+#endif /* _DEBUG */
 
 	Dictionary::Ptr comments = GetComments();
-
-	if (!comments)
-		return;
 
 	ObjectLock olock(comments);
 
 	boost::mutex::scoped_lock lock(l_CommentMutex);
 
-	String id;
-	Dictionary::Ptr comment;
-	BOOST_FOREACH(tie(id, comment), comments) {
-		int legacy_id = comment->Get("legacy_id");
+	BOOST_FOREACH(const Dictionary::Pair& kv, comments) {
+		Comment::Ptr comment = kv.second;
+
+		int legacy_id = comment->GetLegacyId();
 
 		if (legacy_id >= l_NextCommentID)
 			l_NextCommentID = legacy_id + 1;
 
-		l_LegacyCommentsCache[legacy_id] = id;
-		l_CommentsCache[id] = GetSelf();
+		l_LegacyCommentsCache[legacy_id] = kv.first;
+		l_CommentsCache[kv.first] = GetSelf();
 	}
 }
 
@@ -229,19 +190,16 @@ void Service::RemoveCommentsByType(int type)
 {
 	Dictionary::Ptr comments = GetComments();
 
-	if (!comments)
-		return;
-
 	std::vector<String> removedComments;
 
 	{
 		ObjectLock olock(comments);
 
-		String id;
-		Dictionary::Ptr comment;
-		BOOST_FOREACH(tie(id, comment), comments) {
-			if (comment->Get("entry_type") == type)
-				removedComments.push_back(id);
+		BOOST_FOREACH(const Dictionary::Pair& kv, comments) {
+			Comment::Ptr comment = kv.second;
+
+			if (comment->GetEntryType() == type)
+				removedComments.push_back(kv.first);
 		}
 	}
 
@@ -254,19 +212,16 @@ void Service::RemoveExpiredComments(void)
 {
 	Dictionary::Ptr comments = GetComments();
 
-	if (!comments)
-		return;
-
 	std::vector<String> expiredComments;
 
 	{
 		ObjectLock olock(comments);
 
-		String id;
-		Dictionary::Ptr comment;
-		BOOST_FOREACH(tie(id, comment), comments) {
-			if (IsCommentExpired(comment))
-				expiredComments.push_back(id);
+		BOOST_FOREACH(const Dictionary::Pair& kv, comments) {
+			Comment::Ptr comment = kv.second;
+
+			if (comment->IsExpired())
+				expiredComments.push_back(kv.first);
 		}
 	}
 

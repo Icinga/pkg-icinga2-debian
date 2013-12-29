@@ -21,88 +21,171 @@
 #include "base/utility.h"
 #include "base/debug.h"
 #include "base/logger_fwd.h"
+#include "base/convert.h"
 #include <boost/bind.hpp>
-#include <boost/exception/diagnostic_information.hpp>
+#include <boost/foreach.hpp>
 
 using namespace icinga;
 
 int WorkQueue::m_NextID = 1;
 
 WorkQueue::WorkQueue(size_t maxItems)
-	: m_ID(m_NextID++), m_MaxItems(maxItems), m_Joined(false), m_Stopped(false)
+	: m_ID(m_NextID++), m_MaxItems(maxItems), m_Stopped(false),
+	  m_Processing(false), m_ExceptionCallback(WorkQueue::DefaultExceptionCallback)
 {
 	m_Thread = boost::thread(boost::bind(&WorkQueue::WorkerThreadProc, this));
+
+	m_StatusTimer = make_shared<Timer>();
+	m_StatusTimer->SetInterval(10);
+	m_StatusTimer->OnTimerExpired.connect(boost::bind(&WorkQueue::StatusTimerHandler, this));
+	m_StatusTimer->Start();
 }
 
 WorkQueue::~WorkQueue(void)
 {
-	Join();
-
-	ASSERT(m_Stopped);
+	Join(true);
 }
 
 /**
  * Enqueues a work item. Work items are guaranteed to be executed in the order
- * they were enqueued in.
+ * they were enqueued in except when allowInterleaved is true in which case
+ * the new work item might be run immediately if it's being enqueued from
+ * within the WorkQueue thread.
  */
-void WorkQueue::Enqueue(const WorkCallback& item)
+void WorkQueue::Enqueue(const WorkCallback& callback, bool allowInterleaved)
 {
+	bool wq_thread = (boost::this_thread::get_id() == GetThreadId());
+
+	if (wq_thread && allowInterleaved) {
+		callback();
+
+		return;
+	}
+
+	WorkItem item;
+	item.Callback = callback;
+	item.AllowInterleaved = allowInterleaved;
+
 	boost::mutex::scoped_lock lock(m_Mutex);
 
-	ASSERT(m_Stopped);
-
-	while (m_Items.size() >= m_MaxItems)
-		m_CV.wait(lock);
+	if (!wq_thread) {
+		while (m_Items.size() >= m_MaxItems)
+			m_CVFull.wait(lock);
+	}
 
 	m_Items.push_back(item);
-	m_CV.notify_all();
+
+	if (m_Items.size() == 1)
+		m_CVEmpty.notify_all();
 }
 
-void WorkQueue::Join(void)
+void WorkQueue::Join(bool stop)
 {
 	boost::mutex::scoped_lock lock(m_Mutex);
-	m_Joined = true;
-	m_CV.notify_all();
 
-	while (!m_Stopped)
-		m_CV.wait(lock);
+	while (m_Processing || !m_Items.empty())
+		m_CVStarved.wait(lock);
+
+	if (stop) {
+		m_Stopped = true;
+		m_CVEmpty.notify_all();
+		lock.unlock();
+
+		m_Thread.join();
+	}
+}
+
+boost::thread::id WorkQueue::GetThreadId(void) const
+{
+	return m_Thread.get_id();
+}
+
+void WorkQueue::SetExceptionCallback(const ExceptionCallback& callback)
+{
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	m_ExceptionCallback = callback;
+}
+
+void WorkQueue::DefaultExceptionCallback(boost::exception_ptr exp)
+{
+	throw;
+}
+
+void WorkQueue::StatusTimerHandler(void)
+{
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	Log(LogInformation, "base", "WQ #" + Convert::ToString(m_ID) + " items: " + Convert::ToString(m_Items.size()));
 }
 
 void WorkQueue::WorkerThreadProc(void)
 {
-	boost::mutex::scoped_lock lock(m_Mutex);
-
 	std::ostringstream idbuf;
 	idbuf << "WQ #" << m_ID;
 	Utility::SetThreadName(idbuf.str());
 
-	for (;;) {
-		while (m_Items.empty() && !m_Joined)
-			m_CV.wait(lock);
+	boost::mutex::scoped_lock lock(m_Mutex);
 
-		if (m_Joined)
+	for (;;) {
+		while (m_Items.empty() && !m_Stopped)
+			m_CVEmpty.wait(lock);
+
+		if (m_Stopped)
 			break;
 
-		try {
-			WorkCallback wi = m_Items.front();
-			m_Items.pop_front();
-			m_CV.notify_all();
+		std::deque<WorkItem> items;
+		m_Items.swap(items);
 
-			lock.unlock();
-			wi();
-		} catch (const std::exception& ex) {
-			std::ostringstream msgbuf;
-			msgbuf << "Exception thrown in workqueue handler: " << std::endl
-			       << boost::diagnostic_information(ex);
+		if (items.size() >= m_MaxItems)
+			m_CVFull.notify_all();
 
-			Log(LogCritical, "base", msgbuf.str());
-		} catch (...) {
-			Log(LogCritical, "base", "Exception of unknown type thrown in workqueue handler.");
+		m_Processing = true;
+
+		lock.unlock();
+
+		BOOST_FOREACH(WorkItem& wi, items) {
+			try {
+				wi.Callback();
+			}
+			catch (const std::exception&) {
+				lock.lock();
+
+				ExceptionCallback callback = m_ExceptionCallback;
+
+				lock.unlock();
+
+				callback(boost::current_exception());
+			}
 		}
 
 		lock.lock();
-	}
 
-	m_Stopped = true;
-	m_CV.notify_all();
+		m_Processing = false;
+
+		m_CVStarved.notify_all();
+	}
+}
+
+ParallelWorkQueue::ParallelWorkQueue(void)
+	: m_QueueCount(boost::thread::hardware_concurrency()),
+	  m_Queues(new WorkQueue[m_QueueCount]),
+	  m_Index(0)
+{ }
+
+ParallelWorkQueue::~ParallelWorkQueue(void)
+{
+	delete[] m_Queues;
+}
+
+void ParallelWorkQueue::Enqueue(const boost::function<void(void)>& callback)
+{
+	m_Index++;
+	m_Queues[m_Index % m_QueueCount].Enqueue(callback);
+}
+
+void ParallelWorkQueue::Join(void)
+{
+	for (unsigned int i = 0; i < m_QueueCount; i++)
+		m_Queues[i].Join();
 }

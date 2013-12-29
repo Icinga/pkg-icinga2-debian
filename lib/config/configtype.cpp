@@ -22,14 +22,12 @@
 #include "base/objectlock.h"
 #include "base/convert.h"
 #include "base/scriptfunction.h"
-#include <boost/tuple/tuple.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 ConfigType::ConfigType(const String& name, const DebugInfo& debuginfo)
-	: m_Name(name), m_RuleList(boost::make_shared<TypeRuleList>()), m_DebugInfo(debuginfo)
+	: m_Name(name), m_RuleList(make_shared<TypeRuleList>()), m_DebugInfo(debuginfo)
 { }
 
 String ConfigType::GetName(void) const
@@ -81,12 +79,21 @@ void ConfigType::ValidateItem(const ConfigItem::Ptr& item)
 	if (item->IsAbstract())
 		return;
 
-	Dictionary::Ptr attrs = boost::make_shared<Dictionary>();
-	item->GetLinkedExpressionList()->Execute(attrs);
+	Dictionary::Ptr attrs;
+	DebugInfo debugInfo;
+	String type, name;
+
+	{
+		ObjectLock olock(item);
+
+		attrs = item->GetProperties();
+		debugInfo = item->GetDebugInfo();
+		type = item->GetType();
+		name = item->GetName();
+	}
 
 	std::vector<String> locations;
-	DebugInfo debugInfo  = item->GetDebugInfo();
-	locations.push_back("Object '" + item->GetName() + "' (Type: '" + item->GetType() + "') at " + debugInfo.Path + ":" + Convert::ToString(debugInfo.FirstLine));
+	locations.push_back("Object '" + name + "' (Type: '" + type + "') at " + debugInfo.Path + ":" + Convert::ToString(debugInfo.FirstLine));
 
 	std::vector<TypeRuleList::Ptr> ruleLists;
 	AddParentRules(ruleLists, GetSelf());
@@ -146,18 +153,16 @@ void ConfigType::ValidateDictionary(const Dictionary::Ptr& dictionary,
 
 	ObjectLock olock(dictionary);
 
-	String key;
-	Value value;
-	BOOST_FOREACH(boost::tie(key, value), dictionary) {
+	BOOST_FOREACH(const Dictionary::Pair& kv, dictionary) {
 		TypeValidationResult overallResult = ValidationUnknownField;
 		std::vector<TypeRuleList::Ptr> subRuleLists;
 		String hint;
 
-		locations.push_back("Attribute '" + key + "'");
+		locations.push_back("Attribute '" + kv.first + "'");
 
 		BOOST_FOREACH(const TypeRuleList::Ptr& ruleList, ruleLists) {
 			TypeRuleList::Ptr subRuleList;
-			TypeValidationResult result = ruleList->ValidateAttribute(key, value, &subRuleList, &hint);
+			TypeValidationResult result = ruleList->ValidateAttribute(kv.first, kv.second, &subRuleList, &hint);
 
 			if (subRuleList)
 				subRuleLists.push_back(subRuleList);
@@ -185,10 +190,10 @@ void ConfigType::ValidateDictionary(const Dictionary::Ptr& dictionary,
 			ConfigCompilerContext::GetInstance()->AddMessage(true, message);
 		}
 
-		if (!subRuleLists.empty() && value.IsObjectType<Dictionary>())
-			ValidateDictionary(value, subRuleLists, locations);
-		else if (!subRuleLists.empty() && value.IsObjectType<Array>())
-			ValidateArray(value, subRuleLists, locations);
+		if (!subRuleLists.empty() && kv.second.IsObjectType<Dictionary>())
+			ValidateDictionary(kv.second, subRuleLists, locations);
+		else if (!subRuleLists.empty() && kv.second.IsObjectType<Array>())
+			ValidateArray(kv.second, subRuleLists, locations);
 
 		locations.pop_back();
 	}
@@ -282,20 +287,26 @@ void ConfigType::ValidateArray(const Array::Ptr& array,
 
 void ConfigType::Register(void)
 {
-	Registry<ConfigType, ConfigType::Ptr>::GetInstance()->Register(GetName(), GetSelf());
+	ConfigTypeRegistry::GetInstance()->Register(GetName(), GetSelf());
 }
 
 ConfigType::Ptr ConfigType::GetByName(const String& name)
 {
-	return Registry<ConfigType, ConfigType::Ptr>::GetInstance()->GetItem(name);
+	return ConfigTypeRegistry::GetInstance()->GetItem(name);
 }
 
-Registry<ConfigType, ConfigType::Ptr>::ItemMap ConfigType::GetTypes(void)
+ConfigTypeRegistry::ItemMap ConfigType::GetTypes(void)
 {
-	return Registry<ConfigType, ConfigType::Ptr>::GetInstance()->GetItems();
+	return ConfigTypeRegistry::GetInstance()->GetItems();
 }
 
 void ConfigType::DiscardTypes(void)
 {
-	Registry<ConfigType, ConfigType::Ptr>::GetInstance()->Clear();
+	ConfigTypeRegistry::GetInstance()->Clear();
 }
+
+ConfigTypeRegistry *ConfigTypeRegistry::GetInstance(void)
+{
+	return Singleton<ConfigTypeRegistry>::GetInstance();
+}
+

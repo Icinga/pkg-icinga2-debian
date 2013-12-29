@@ -25,25 +25,24 @@
 #include "base/objectlock.h"
 #include "base/utility.h"
 #include "base/debug.h"
+#include "base/type.h"
 #include "base/scriptvariable.h"
+#include "icinga-version.h"
 #include <sstream>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/thread/thread.hpp>
 #include <boost/bind.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
-#include <boost/exception/diagnostic_information.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/errinfo_errno.hpp>
 #include <boost/exception/errinfo_file_name.hpp>
 #include <iostream>
 
-#ifndef _WIN32
-#	include "icinga-version.h"
-#endif /* _WIN32 */
-
 using namespace icinga;
+
+REGISTER_TYPE(Application);
 
 Application *Application::m_Instance = NULL;
 bool Application::m_ShuttingDown = false;
@@ -51,6 +50,7 @@ bool Application::m_Restarting = false;
 bool Application::m_Debugging = false;
 int Application::m_ArgC;
 char **Application::m_ArgV;
+double Application::m_StartTime;
 
 /**
  * Constructor for the Application class.
@@ -112,6 +112,32 @@ Application::Ptr Application::GetInstance(void)
 	return m_Instance->GetSelf();
 }
 
+void Application::SetResourceLimits(void)
+{
+#ifndef _WIN32
+#	ifdef RLIMIT_NOFILE
+	rlimit rl;
+	rl.rlim_cur = 16 * 1024;
+	rl.rlim_max = rl.rlim_cur;
+
+	if (setrlimit(RLIMIT_NOFILE, &rl) < 0)
+		Log(LogDebug, "base", "Could not adjust resource limit for open file handles (RLIMIT_NOFILE)");
+#	else /* RLIMIT_NOFILE */
+	Log(LogDebug, "base", "System does not support adjusting the resource limit for open file handles (RLIMIT_NOFILE)");
+#	endif /* RLIMIT_NOFILE */
+
+#	ifdef RLIMIT_NPROC
+	rl.rlim_cur = 16 * 1024;
+	rl.rlim_max = rl.rlim_cur;
+
+	if (setrlimit(RLIMIT_NPROC, &rl) < 0)
+		Log(LogDebug, "base", "Could not adjust resource limit for number of processes (RLIMIT_NPROC)");
+#	else /* RLIMIT_NPROC */
+	Log(LogDebug, "base", "System does not support adjusting the resource limit for number of processes (RLIMIT_NPROC)");
+#	endif /* RLIMIT_NPROC */
+#endif /* _WIN32 */
+}
+
 int Application::GetArgC(void)
 {
 	return m_ArgC;
@@ -155,10 +181,15 @@ void Application::RunEventLoop(void) const
 	GetTP().Stop();
 	m_ShuttingDown = false;
 
-	GetTP().Join();
+	GetTP().Join(true);
 
 	Timer::Uninitialize();
 #endif /* _DEBUG */
+}
+
+void Application::OnShutdown(void)
+{
+	/* Nothing to do here. */
 }
 
 /**
@@ -307,31 +338,47 @@ bool Application::IsDebugging(void)
 }
 
 /**
+ * Display version information.
+ */
+void Application::DisplayVersionMessage(void)
+{
+	std::cerr << "***" << std::endl
+		  << "* Application version: " << GetVersion() << std::endl
+		  << "* Installation root: " << GetPrefixDir() << std::endl
+		  << "* Sysconf directory: " << GetSysconfDir() << std::endl
+		  << "* Local state directory: " << GetLocalStateDir() << std::endl
+		  << "* Package data directory: " << GetPkgDataDir() << std::endl
+		  << "* State path: " << GetStatePath() << std::endl
+		  << "* PID path: " << GetPidPath() << std::endl
+		  << "* Application type: " << GetApplicationType() << std::endl
+		  << "***" << std::endl;
+}
+
+/**
  * Displays a message that tells users what to do when they encounter a bug.
  */
 void Application::DisplayBugMessage(void)
 {
 	std::cerr << "***" << std::endl
-		  << "*** This would indicate a runtime problem or configuration error. If you believe this is a bug in Icinga 2" << std::endl
-		  << "*** please submit a bug report at https://dev.icinga.org/ and include this stack trace as well as any other" << std::endl
-		  << "*** information that might be useful in order to reproduce this problem." << std::endl
-		  << "***" << std::endl
-		  << std::endl;
+		  << "* This would indicate a runtime problem or configuration error. If you believe this is a bug in Icinga 2" << std::endl
+		  << "* please submit a bug report at https://dev.icinga.org/ and include this stack trace as well as any other" << std::endl
+		  << "* information that might be useful in order to reproduce this problem." << std::endl
+		  << "***" << std::endl;
 }
 
 #ifndef _WIN32
 /**
- * Signal handler for SIGINT. Prepares the application for cleanly
+ * Signal handler for SIGINT and SIGTERM. Prepares the application for cleanly
  * shutting down during the next execution of the event loop.
  *
  * @param - The signal number.
  */
-void Application::SigIntHandler(int)
+void Application::SigIntTermHandler(int signum)
 {
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = SIG_DFL;
-	sigaction(SIGINT, &sa, NULL);
+	sigaction(signum, &sa, NULL);
 
 	Application::Ptr instance = Application::GetInstance();
 
@@ -355,9 +402,14 @@ void Application::SigAbrtHandler(int)
 	sigaction(SIGABRT, &sa, NULL);
 #endif /* _WIN32 */
 
-	std::cerr << "Caught SIGABRT." << std::endl;
+	std::cerr << "Caught SIGABRT." << std::endl
+		  << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << std::endl
+		  << std::endl;
+
+	DisplayVersionMessage();
 
 	StackTrace trace;
+	std::cerr << "Stacktrace:" << std::endl;
 	trace.Print(std::cerr, 1);
 
 	DisplayBugMessage();
@@ -393,23 +445,18 @@ void Application::ExceptionHandler(void)
 	sigaction(SIGABRT, &sa, NULL);
 #endif /* _WIN32 */
 
-	bool has_trace = false;
+	std::cerr << "Caught unhandled exception." << std::endl
+		  << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << std::endl
+		  << std::endl;
+
+	DisplayVersionMessage();
 
 	try {
 		throw;
 	} catch (const std::exception& ex) {
 		std::cerr << std::endl
-			  << boost::diagnostic_information(ex)
+			  << DiagnosticInformation(ex)
 			  << std::endl;
-
-		has_trace = (boost::get_error_info<StackTraceErrorInfo>(ex) != NULL);
-	} catch (...) {
-		std::cerr << "Exception of unknown type." << std::endl;
-	}
-
-	if (!has_trace) {
-		StackTrace trace;
-		trace.Print(std::cerr, 1);
 	}
 
 	DisplayBugMessage();
@@ -420,9 +467,14 @@ void Application::ExceptionHandler(void)
 #ifdef _WIN32
 LONG CALLBACK Application::SEHUnhandledExceptionFilter(PEXCEPTION_POINTERS exi)
 {
-	std::cerr << "Unhandled SEH exception." << std::endl;
+	DisplayVersionMessage();
+
+	std::cerr << "Caught unhandled SEH exception." << std::endl
+		  << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << std::endl
+		  << std::endl;
 
 	StackTrace trace(exi);
+	std::cerr << "Stacktrace:" << std::endl;
 	trace.Print(std::cerr, 1);
 
 	DisplayBugMessage();
@@ -460,8 +512,9 @@ int Application::Run(void)
 #ifndef _WIN32
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
-	sa.sa_handler = &Application::SigIntHandler;
+	sa.sa_handler = &Application::SigIntTermHandler;
 	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGTERM, &sa, NULL);
 
 	sa.sa_handler = SIG_IGN;
 	sigaction(SIGPIPE, &sa, NULL);
@@ -528,7 +581,14 @@ void Application::UpdatePidFile(const String& filename)
 
 	Utility::SetCloExec(fd);
 
-	if (flock(fd, LOCK_EX | LOCK_NB) < 0) {
+	struct flock lock;
+
+	lock.l_start = 0;
+	lock.l_len = 0;
+	lock.l_type = F_WRLCK;
+	lock.l_whence = SEEK_SET;
+
+	if (fcntl(fd, F_SETLK, &lock) < 0) {
 		Log(LogCritical, "base", "Could not lock PID file. Make sure that only one instance of the application is running.");
 
 		_exit(EXIT_FAILURE);
@@ -574,9 +634,29 @@ String Application::GetPrefixDir(void)
  *
  * @param path The new path.
  */
-void Application::SetPrefixDir(const String& path)
+void Application::DeclarePrefixDir(const String& path)
 {
-	ScriptVariable::Set("IcingaPrefixDir", path);
+	ScriptVariable::Set("IcingaPrefixDir", path, false);
+}
+
+/**
+ * Retrives the path of the sysconf dir.
+ *
+ * @returns The path.
+ */
+String Application::GetSysconfDir(void)
+{
+	return ScriptVariable::Get("IcingaSysconfDir");
+}
+
+/**
+ * Sets the path of the sysconf dir.
+ *
+ * @param path The new path.
+ */
+void Application::DeclareSysconfDir(const String& path)
+{
+	ScriptVariable::Set("IcingaSysconfDir", path, false);
 }
 
 /**
@@ -594,29 +674,9 @@ String Application::GetLocalStateDir(void)
  *
  * @param path The new path.
  */
-void Application::SetLocalStateDir(const String& path)
+void Application::DeclareLocalStateDir(const String& path)
 {
-	ScriptVariable::Set("IcingaLocalStateDir", path);
-}
-
-/**
- * Retrieves the path for the package lib dir.
- *
- * @returns The path.
- */
-String Application::GetPkgLibDir(void)
-{
-	return ScriptVariable::Get("IcingaPkgLibDir");
-}
-
-/**
- * Sets the path for the package lib dir.
- *
- * @param path The new path.
- */
-void Application::SetPkgLibDir(const String& path)
-{
-	ScriptVariable::Set("IcingaPkgLibDir", path);
+	ScriptVariable::Set("IcingaLocalStateDir", path, false);
 }
 
 /**
@@ -634,9 +694,9 @@ String Application::GetPkgDataDir(void)
  *
  * @param path The new path.
  */
-void Application::SetPkgDataDir(const String& path)
+void Application::DeclarePkgDataDir(const String& path)
 {
-	ScriptVariable::Set("IcingaPkgDataDir", path);
+	ScriptVariable::Set("IcingaPkgDataDir", path, false);
 }
 
 /**
@@ -654,9 +714,9 @@ String Application::GetStatePath(void)
  *
  * @param path The new path.
  */
-void Application::SetStatePath(const String& path)
+void Application::DeclareStatePath(const String& path)
 {
-	ScriptVariable::Set("IcingaStatePath", path);
+	ScriptVariable::Set("IcingaStatePath", path, false);
 }
 
 /**
@@ -674,9 +734,9 @@ String Application::GetPidPath(void)
  *
  * @param path The new path.
  */
-void Application::SetPidPath(const String& path)
+void Application::DeclarePidPath(const String& path)
 {
-	ScriptVariable::Set("IcingaPidPath", path);
+	ScriptVariable::Set("IcingaPidPath", path, false);
 }
 
 /**
@@ -694,9 +754,20 @@ String Application::GetApplicationType(void)
  *
  * @param path The new type name.
  */
-void Application::SetApplicationType(const String& type)
+void Application::DeclareApplicationType(const String& type)
 {
-	ScriptVariable::Set("ApplicationType", type);
+	ScriptVariable::Set("ApplicationType", type, false);
+}
+
+void Application::MakeVariablesConstant(void)
+{
+	ScriptVariable::GetByName("IcingaPrefixDir")->SetConstant(true);
+	ScriptVariable::GetByName("IcingaSysconfDir")->SetConstant(true);
+	ScriptVariable::GetByName("IcingaLocalStateDir")->SetConstant(true);
+	ScriptVariable::GetByName("IcingaPkgDataDir")->SetConstant(true);
+	ScriptVariable::GetByName("IcingaStatePath")->SetConstant(true);
+	ScriptVariable::GetByName("IcingaPidPath")->SetConstant(true);
+	ScriptVariable::GetByName("ApplicationType")->SetConstant(true);
 }
 
 /**
@@ -712,9 +783,15 @@ ThreadPool& Application::GetTP(void)
 
 String Application::GetVersion(void)
 {
-#ifndef _WIN32
-	return VERSION ", " GIT_MESSAGE;
-#else /* _WIN32 */
-	return "unspecified version";
-#endif /* _WIN32 */
+	return VERSION;
+}
+
+double Application::GetStartTime(void)
+{
+	return m_StartTime;
+}
+
+void Application::SetStartTime(double ts)
+{
+	m_StartTime = ts;
 }

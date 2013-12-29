@@ -22,18 +22,69 @@
 
 using namespace icinga;
 
-Registry<ScriptVariable, Value> ScriptVariable::m_Registry;
+ScriptVariable::ScriptVariable(const Value& data)
+	: m_Data(data), m_Constant(false)
+{ }
+
+ScriptVariable::Ptr ScriptVariable::GetByName(const String& name)
+{
+	return ScriptVariableRegistry::GetInstance()->GetItem(name);
+}
+
+void ScriptVariable::SetConstant(bool constant)
+{
+	m_Constant = constant;
+}
+
+bool ScriptVariable::IsConstant(void) const
+{
+	return m_Constant;
+}
+
+void ScriptVariable::SetData(const Value& data)
+{
+	m_Data = data;
+}
+
+Value ScriptVariable::GetData(void) const
+{
+	return m_Data;
+}
 
 Value ScriptVariable::Get(const String& name)
 {
-	Value value = m_Registry.GetItem(name);
-	if (value.IsEmpty())
-		Log(LogWarning, "icinga", "Tried to access empty variable: " + name);
+	ScriptVariable::Ptr sv = GetByName(name);
 
-	return value;
+	if (!sv) {
+		Log(LogWarning, "icinga", "Tried to access undefined variable: " + name);
+		return Empty;
+	}
+
+	return sv->GetData();
 }
 
-void ScriptVariable::Set(const String& name, const Value& value)
+ScriptVariable::Ptr ScriptVariable::Set(const String& name, const Value& value, bool overwrite, bool make_const)
 {
-	m_Registry.Register(name, value);
+	ScriptVariable::Ptr sv = GetByName(name);
+
+	if (!sv) {
+		sv = make_shared<ScriptVariable>(value);
+		ScriptVariableRegistry::GetInstance()->Register(name, sv);
+	} else if (overwrite) {
+		if (sv->IsConstant())
+			BOOST_THROW_EXCEPTION(std::invalid_argument("Tried to modify read-only script variable '" + name + "'"));
+
+		sv->SetData(value);
+	}
+
+	if (make_const)
+		sv->SetConstant(true);
+
+	return sv;
 }
+
+ScriptVariableRegistry *ScriptVariableRegistry::GetInstance(void)
+{
+	return Singleton<ScriptVariableRegistry>::GetInstance();
+}
+

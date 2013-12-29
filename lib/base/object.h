@@ -33,11 +33,14 @@
 #include <boost/smart_ptr/shared_ptr.hpp>
 #include <boost/smart_ptr/weak_ptr.hpp>
 #include <boost/smart_ptr/enable_shared_from_this.hpp>
+#include <boost/smart_ptr/make_shared.hpp>
 
 using boost::shared_ptr;
 using boost::weak_ptr;
+using boost::enable_shared_from_this;
 using boost::dynamic_pointer_cast;
 using boost::static_pointer_cast;
+using boost::make_shared;
 
 namespace icinga
 {
@@ -48,19 +51,25 @@ class Value;
 	typedef shared_ptr<klass> Ptr; \
 	typedef weak_ptr<klass> WeakPtr
 
+class Type;
+
 /**
  * Base class for all heap-allocated objects. At least one of its methods
  * has to be virtual for RTTI to work.
  *
  * @ingroup base
  */
-class I2_BASE_API Object : public boost::enable_shared_from_this<Object>
+class I2_BASE_API Object : public enable_shared_from_this<Object>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(Object);
 
 	Object(void);
 	virtual ~Object(void);
+
+	virtual const Type *GetReflectionType(void) const;
+	virtual void SetField(int id, const Value& value);
+	virtual Value GetField(int id) const;
 
 	/**
 	 * Holds a shared pointer and provides support for implicit upcasts.
@@ -173,6 +182,11 @@ public:
 	{
 		return (wref.lock().get() == static_cast<const T *>(m_Ref));
 	}
+};
+
+template<typename T>
+class ObjectImpl
+{
 };
 
 }

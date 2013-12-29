@@ -23,7 +23,6 @@
 #include <boost/foreach.hpp>
 
 using namespace icinga;
-using namespace livestatus;
 
 ContactGroupsTable::ContactGroupsTable(void)
 {
@@ -52,19 +51,34 @@ void ContactGroupsTable::FetchRows(const AddRowFunction& addRowFn)
 
 Value ContactGroupsTable::NameAccessor(const Value& row)
 {
-	return static_cast<UserGroup::Ptr>(row)->GetName();
+	UserGroup::Ptr user_group = static_cast<UserGroup::Ptr>(row);
+
+	if(!user_group)
+		return Empty;
+
+	return user_group->GetName();
 }
 
 Value ContactGroupsTable::AliasAccessor(const Value& row)
 {
-	return static_cast<UserGroup::Ptr>(row)->GetName();
+	UserGroup::Ptr user_group = static_cast<UserGroup::Ptr>(row);
+
+	if(!user_group)
+		return Empty;
+
+	return user_group->GetName();
 }
 
 Value ContactGroupsTable::MembersAccessor(const Value& row)
 {
-	Array::Ptr members = boost::make_shared<Array>();
+	UserGroup::Ptr user_group = static_cast<UserGroup::Ptr>(row);
 
-	BOOST_FOREACH(const User::Ptr& user, static_cast<UserGroup::Ptr>(row)->GetMembers()) {
+	if(!user_group)
+		return Empty;
+
+	Array::Ptr members = make_shared<Array>();
+
+	BOOST_FOREACH(const User::Ptr& user, user_group->GetMembers()) {
 		members->Add(user->GetName());
 	}
 

@@ -19,14 +19,15 @@
 
 #include "compat/checkresultreader.h"
 #include "icinga/service.h"
-#include "icinga/pluginchecktask.h"
+#include "icinga/pluginutility.h"
 #include "base/dynamictype.h"
 #include "base/objectlock.h"
 #include "base/logger_fwd.h"
 #include "base/convert.h"
 #include "base/application.h"
 #include "base/utility.h"
-#include <boost/smart_ptr/make_shared.hpp>
+#include "base/exception.h"
+#include "base/context.h"
 #include <fstream>
 
 using namespace icinga;
@@ -38,7 +39,7 @@ REGISTER_TYPE(CheckResultReader);
  */
 void CheckResultReader::Start(void)
 {
-	m_ReadTimer = boost::make_shared<Timer>();
+	m_ReadTimer = make_shared<Timer>();
 	m_ReadTimer->OnTimerExpired.connect(boost::bind(&CheckResultReader::ReadTimerHandler, this));
 	m_ReadTimer->SetInterval(5);
 	m_ReadTimer->Start();
@@ -47,24 +48,17 @@ void CheckResultReader::Start(void)
 /**
  * @threadsafety Always.
  */
-String CheckResultReader::GetSpoolDir(void) const
-{
-	if (!m_SpoolDir.IsEmpty())
-		return m_SpoolDir;
-	else
-		return Application::GetLocalStateDir() + "/lib/icinga2/spool/checkresults/";
-}
-
-/**
- * @threadsafety Always.
- */
 void CheckResultReader::ReadTimerHandler(void) const
 {
+	CONTEXT("Processing check result files in '" + GetSpoolDir() + "'");
+
 	Utility::Glob(GetSpoolDir() + "/c??????.ok", boost::bind(&CheckResultReader::ProcessCheckResultFile, this, _1));
 }
 
 void CheckResultReader::ProcessCheckResultFile(const String& path) const
 {
+	CONTEXT("Processing check result file '" + path + "'");
+
 	String crfile = String(path.Begin(), path.End() - 3); /* Remove the ".ok" extension. */
 
 	std::ifstream fp;
@@ -92,8 +86,17 @@ void CheckResultReader::ProcessCheckResultFile(const String& path) const
 	}
 
 	/* Remove the checkresult files. */
-	(void)unlink(path.CStr());
-	(void)unlink(crfile.CStr());
+	if (unlink(path.CStr()) < 0)
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("unlink")
+		    << boost::errinfo_errno(errno)
+		    << boost::errinfo_file_name(path));
+
+	if (unlink(crfile.CStr()) < 0)
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("unlink")
+		    << boost::errinfo_errno(errno)
+		    << boost::errinfo_file_name(crfile));
 
 	Host::Ptr host = Host::GetByName(attrs["host_name"]);
 
@@ -113,11 +116,10 @@ void CheckResultReader::ProcessCheckResultFile(const String& path) const
 		return;
 	}
 
-	Dictionary::Ptr result = PluginCheckTask::ParseCheckOutput(attrs["output"]);
-	result->Set("state", PluginCheckTask::ExitStatusToState(Convert::ToLong(attrs["return_code"])));
-	result->Set("execution_start", Convert::ToDouble(attrs["start_time"]));
-	result->Set("execution_end", Convert::ToDouble(attrs["finish_time"]));
-	result->Set("active", 1);
+	CheckResult::Ptr result = PluginUtility::ParseCheckOutput(attrs["output"]);
+	result->SetState(PluginUtility::ExitStatusToState(Convert::ToLong(attrs["return_code"])));
+	result->SetExecutionStart(Convert::ToDouble(attrs["start_time"]));
+	result->SetExecutionEnd(Convert::ToDouble(attrs["finish_time"]));
 
 	service->ProcessCheckResult(result);
 
@@ -132,20 +134,4 @@ void CheckResultReader::ProcessCheckResultFile(const String& path) const
 		 * active checks. */
 		service->SetNextCheck(Utility::GetTime() + service->GetCheckInterval());
 	}
-}
-
-void CheckResultReader::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
-{
-	DynamicObject::InternalSerialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config)
-		bag->Set("spool_dir", m_SpoolDir);
-}
-
-void CheckResultReader::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
-{
-	DynamicObject::InternalDeserialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config)
-		m_SpoolDir = bag->Get("spool_dir");
 }

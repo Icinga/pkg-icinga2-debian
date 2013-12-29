@@ -21,9 +21,10 @@
 #define HOST_H
 
 #include "icinga/i2-icinga.h"
+#include "icinga/host.th"
 #include "icinga/macroresolver.h"
+#include "icinga/checkresult.h"
 #include "base/array.h"
-#include "base/dynamicobject.h"
 #include "base/dictionary.h"
 
 namespace icinga
@@ -44,49 +45,15 @@ enum HostState
 };
 
 /**
- * The state of a service.
- *
- * @ingroup icinga
- */
-enum ServiceState
-{
-	StateOK = 0,
-	StateWarning = 1,
-	StateCritical = 2,
-	StateUnknown = 3
-};
-
-/**
- * The state type of a host or service.
- *
- * @ingroup icinga
- */
-enum StateType
-{
-	StateTypeSoft = 0,
-	StateTypeHard = 1
-};
-
-/**
  * An Icinga host.
  *
  * @ingroup icinga
  */
-class I2_ICINGA_API Host : public DynamicObject, public MacroResolver
+class I2_ICINGA_API Host : public ObjectImpl<Host>, public MacroResolver
 {
 public:
 	DECLARE_PTR_TYPEDEFS(Host);
 	DECLARE_TYPENAME(Host);
-
-	String GetDisplayName(void) const;
-	Array::Ptr GetGroups(void) const;
-
-	Dictionary::Ptr GetMacros(void) const;
-	Array::Ptr GetHostDependencies(void) const;
-	Array::Ptr GetServiceDependencies(void) const;
-	String GetCheck(void) const;
-	//Dictionary::Ptr GetServiceDescriptions(void) const;
-	Dictionary::Ptr GetNotificationDescriptions(void) const;
 
 	shared_ptr<Service> GetCheckService(void) const;
 	std::set<Host::Ptr> GetParentHosts(void) const;
@@ -116,9 +83,13 @@ public:
 	double GetLastStateDown(void) const;
 	double GetLastStateUnreachable(void) const;
 
+	static HostState StateFromString(const String& state);
 	static String StateToString(HostState state);
 
-	virtual bool ResolveMacro(const String& macro, const Dictionary::Ptr& cr, String *result) const;
+	static StateType StateTypeFromString(const String& state);
+	static String StateTypeToString(StateType state);
+
+	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, String *result) const;
 
 protected:
 	virtual void Start(void);
@@ -126,19 +97,7 @@ protected:
 
 	virtual void OnConfigLoaded(void);
 
-	virtual void InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const;
-	virtual void InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes);
-
 private:
-	String m_DisplayName;
-	Array::Ptr m_Groups;
-	Dictionary::Ptr m_Macros;
-	Array::Ptr m_HostDependencies;
-	Array::Ptr m_ServiceDependencies;
-	String m_Check;
-	Dictionary::Ptr m_ServiceDescriptions;
-	Dictionary::Ptr m_NotificationDescriptions;
-
 	mutable boost::mutex m_ServicesMutex;
 	std::map<String, shared_ptr<Service> > m_Services;
 

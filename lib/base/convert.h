@@ -22,6 +22,7 @@
 
 #include "base/i2-base.h"
 #include "base/value.h"
+#include <boost/lexical_cast.hpp>
 
 namespace icinga
 {
@@ -34,9 +35,39 @@ namespace icinga
 class I2_BASE_API Convert
 {
 public:
-	static long ToLong(const String& val);
-	static double ToDouble(const String& val);
+	template<typename T>
+	static long ToLong(const T& val)
+	{
+		try {
+			return boost::lexical_cast<long>(val);
+		} catch (std::exception&) {
+			std::ostringstream msgbuf;
+			msgbuf << "Can't convert '" << val << "' to an integer.";
+			BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
+		}
+	}
+
+	template<typename T>
+	static double ToDouble(const T& val)
+	{
+		try {
+			return boost::lexical_cast<double>(val);
+		} catch (std::exception&) {
+			std::ostringstream msgbuf;
+			msgbuf << "Can't convert '" << val << "' to a floating point number.";
+			BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
+		}
+	}
+
 	static bool ToBool(const String& val);
+
+	template<typename T>
+	static String ToString(const T& val)
+	{
+		return boost::lexical_cast<String>(val);
+	}
+
+	static String ToString(const String& val);
 	static String ToString(const Value& val);
 
 private:

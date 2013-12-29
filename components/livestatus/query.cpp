@@ -36,19 +36,20 @@
 #include "base/objectlock.h"
 #include "base/logger_fwd.h"
 #include "base/exception.h"
+#include "base/utility.h"
+#include "base/serializer.h"
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 
 using namespace icinga;
-using namespace livestatus;
 
 static int l_ExternalCommands = 0;
 static boost::mutex l_QueryMutex;
 
-Query::Query(const std::vector<String>& lines)
-	: m_KeepAlive(false), m_OutputFormat("csv"), m_ColumnHeaders(true), m_Limit(-1)
+Query::Query(const std::vector<String>& lines, const String& compat_log_path)
+	: m_KeepAlive(false), m_OutputFormat("csv"), m_ColumnHeaders(true), m_Limit(-1),
+	  m_LogTimeFrom(0), m_LogTimeUntil(static_cast<long>(Utility::GetTime()))
 {
 	if (lines.size() == 0) {
 		m_Verb = "ERROR";
@@ -56,6 +57,14 @@ Query::Query(const std::vector<String>& lines)
 		m_ErrorMessage = "Empty Query. Aborting.";
 		return;
 	}
+
+	String msg;
+	BOOST_FOREACH(const String& line, lines) {
+		msg += line + "\n";
+	}
+	Log(LogDebug, "livestatus", msg);
+
+	m_CompatLogPath = compat_log_path;
 
 	/* default separators */
 	m_Separators.push_back("\n");
@@ -76,6 +85,7 @@ Query::Query(const std::vector<String>& lines)
 	m_Verb = verb;
 
 	if (m_Verb == "COMMAND") {
+		m_KeepAlive = true;
 		m_Command = target;
 	} else if (m_Verb == "GET") {
 		m_Table = target;
@@ -95,7 +105,6 @@ Query::Query(const std::vector<String>& lines)
 		size_t col_index = line.FindFirstOf(":");
 		String header = line.SubStr(0, col_index);
 		String params;
-		std::vector<String> separators;
 
 		if (line.GetLength() > col_index + 2)
 			params = line.SubStr(col_index + 2);
@@ -104,9 +113,14 @@ Query::Query(const std::vector<String>& lines)
 			m_ResponseHeader = params;
 		else if (header == "OutputFormat")
 			m_OutputFormat = params;
-		else if (header == "Columns")
+		else if (header == "KeepAlive")
+			m_KeepAlive = (params == "on");
+		else if (header == "Columns") {
+			m_ColumnHeaders = false; // Might be explicitly re-enabled later on
 			boost::algorithm::split(m_Columns, params, boost::is_any_of(" "));
-		else if (header == "Separators")
+		} else if (header == "Separators") {
+			std::vector<String> separators;
+
 			boost::algorithm::split(separators, params, boost::is_any_of(" "));
 			/* ugly ascii long to char conversion, but works */
 			if (separators.size() > 0)
@@ -117,10 +131,10 @@ Query::Query(const std::vector<String>& lines)
 				m_Separators[2] = String(1, static_cast<char>(Convert::ToLong(separators[2])));
 			if (separators.size() > 3)
 				m_Separators[3] = String(1, static_cast<char>(Convert::ToLong(separators[3])));
-		else if (header == "ColumnHeaders")
+		} else if (header == "ColumnHeaders")
 			m_ColumnHeaders = (params == "on");
 		else if (header == "Filter") {
-			Filter::Ptr filter = ParseFilter(params);
+			Filter::Ptr filter = ParseFilter(params, m_LogTimeFrom, m_LogTimeUntil);
 
 			if (!filter) {
 				m_Verb = "ERROR";
@@ -148,21 +162,21 @@ Query::Query(const std::vector<String>& lines)
 			Filter::Ptr filter;
 
 			if (aggregate_arg == "sum") {
-				aggregator = boost::make_shared<SumAggregator>(aggregate_attr);
+				aggregator = make_shared<SumAggregator>(aggregate_attr);
 			} else if (aggregate_arg == "min") {
-				aggregator = boost::make_shared<MinAggregator>(aggregate_attr);
+				aggregator = make_shared<MinAggregator>(aggregate_attr);
 			} else if (aggregate_arg == "max") {
-				aggregator = boost::make_shared<MaxAggregator>(aggregate_attr);
+				aggregator = make_shared<MaxAggregator>(aggregate_attr);
 			} else if (aggregate_arg == "avg") {
-				aggregator = boost::make_shared<AvgAggregator>(aggregate_attr);
+				aggregator = make_shared<AvgAggregator>(aggregate_attr);
 			} else if (aggregate_arg == "std") {
-				aggregator = boost::make_shared<StdAggregator>(aggregate_attr);
+				aggregator = make_shared<StdAggregator>(aggregate_attr);
 			} else if (aggregate_arg == "suminv") {
-				aggregator = boost::make_shared<InvSumAggregator>(aggregate_attr);
+				aggregator = make_shared<InvSumAggregator>(aggregate_attr);
 			} else if (aggregate_arg == "avginv") {
-				aggregator = boost::make_shared<InvAvgAggregator>(aggregate_attr);
+				aggregator = make_shared<InvAvgAggregator>(aggregate_attr);
 			} else {
-				filter = ParseFilter(params);
+				filter = ParseFilter(params, m_LogTimeFrom, m_LogTimeUntil);
 
 				if (!filter) {
 					m_Verb = "ERROR";
@@ -171,7 +185,7 @@ Query::Query(const std::vector<String>& lines)
 					return;
 				}
 
-				aggregator = boost::make_shared<CountAggregator>();
+				aggregator = make_shared<CountAggregator>();
 			}
 
 			aggregator->SetFilter(filter);
@@ -184,10 +198,13 @@ Query::Query(const std::vector<String>& lines)
 			unsigned int num = Convert::ToLong(params);
 			CombinerFilter::Ptr filter;
 
-			if (header == "Or" || header == "StatsOr")
-				filter = boost::make_shared<OrFilter>();
-			else
-				filter = boost::make_shared<AndFilter>();
+			if (header == "Or" || header == "StatsOr") {
+				filter = make_shared<OrFilter>();
+				Log(LogDebug, "livestatus", "Add OR filter for " + params + " column(s). " + Convert::ToString(deq.size()) + " filters available.");
+			} else {
+				filter = make_shared<AndFilter>();
+				Log(LogDebug, "livestatus", "Add AND filter for " + params + " column(s). " + Convert::ToString(deq.size()) + " filters available.");
+			}
 
 			if (num > deq.size()) {
 				m_Verb = "ERROR";
@@ -196,8 +213,9 @@ Query::Query(const std::vector<String>& lines)
 				return;
 			}
 
-			while (num-- && num > 0) {
+			while (num > 0 && num--) {
 				filter->AddSubFilter(deq.back());
+				Log(LogDebug, "livestatus", "Add " +  Convert::ToString(num) + " filter.");
 				deq.pop_back();
 			}
 
@@ -222,7 +240,7 @@ Query::Query(const std::vector<String>& lines)
 				return;
 			}
 
-			deq.push_back(boost::make_shared<NegateFilter>(filter));
+			deq.push_back(make_shared<NegateFilter>(filter));
 
 			if (deq == stats) {
 				Aggregator::Ptr aggregator = aggregators.back();
@@ -232,7 +250,7 @@ Query::Query(const std::vector<String>& lines)
 	}
 
 	/* Combine all top-level filters into a single filter. */
-	AndFilter::Ptr top_filter = boost::make_shared<AndFilter>();
+	AndFilter::Ptr top_filter = make_shared<AndFilter>();
 
 	BOOST_FOREACH(const Filter::Ptr& filter, filters) {
 		top_filter->AddSubFilter(filter);
@@ -249,10 +267,30 @@ int Query::GetExternalCommands(void)
 	return l_ExternalCommands;
 }
 
-Filter::Ptr Query::ParseFilter(const String& params)
+Filter::Ptr Query::ParseFilter(const String& params, unsigned long& from, unsigned long& until)
 {
+	/*
+	 * time >= 1382696656
+	 * type = SERVICE FLAPPING ALERT
+	 */
 	std::vector<String> tokens;
-	boost::algorithm::split(tokens, params, boost::is_any_of(" "));
+	size_t sp_index;
+	String temp_buffer = params;
+
+	/* extract attr and op */
+	for (int i = 0; i < 2; i++) {
+		sp_index = temp_buffer.FindFirstOf(" ");
+
+		/* 'attr op' or 'attr op val' is valid */
+		if (i < 1 && sp_index == String::NPos)
+			BOOST_THROW_EXCEPTION(std::runtime_error("Livestatus filter '" + params + "' does not contain all required fields."));
+
+		tokens.push_back(temp_buffer.SubStr(0, sp_index));
+		temp_buffer = temp_buffer.SubStr(sp_index + 1);
+	}
+
+	/* add the rest as value */
+	tokens.push_back(temp_buffer);
 
 	if (tokens.size() == 2)
 		tokens.push_back("");
@@ -260,8 +298,10 @@ Filter::Ptr Query::ParseFilter(const String& params)
 	if (tokens.size() < 3)
 		return Filter::Ptr();
 
-	String op = tokens[1];
 	bool negate = false;
+	String attr = tokens[0];
+	String op = tokens[1];
+	String val = tokens[2];
 
 	if (op == "!=") {
 		op = "=";
@@ -277,31 +317,27 @@ Filter::Ptr Query::ParseFilter(const String& params)
 		negate = true;
 	}
 
-	Filter::Ptr filter = boost::make_shared<AttributeFilter>(tokens[0], op, tokens[2]);
+	Filter::Ptr filter = make_shared<AttributeFilter>(attr, op, val);
 
 	if (negate)
-		filter = boost::make_shared<NegateFilter>(filter);
+		filter = make_shared<NegateFilter>(filter);
+
+	/* pre-filter log time duration */
+	if (attr == "time") {
+		if (op == "<" || op == "<=") {
+			until = Convert::ToLong(val);
+		} else if (op == ">" || op == ">=") {
+			from = Convert::ToLong(val);
+		}
+	}
+
+	Log(LogDebug, "livestatus", "Parsed filter with attr: '" + attr + "' op: '" + op + "' val: '" + val + "'.");
 
 	return filter;
 }
 
-void Query::PrintResultSet(std::ostream& fp, const std::vector<String>& columns, const Array::Ptr& rs)
+void Query::PrintResultSet(std::ostream& fp, const Array::Ptr& rs)
 {
-	if (m_OutputFormat == "csv" && m_Columns.size() == 0 && m_ColumnHeaders) {
-		bool first = true;
-
-		BOOST_FOREACH(const String& column, columns) {
-			if (first)
-				first = false;
-			else
-				fp << m_Separators[1];
-
-			fp << column;
-		}
-
-		fp << m_Separators[0];
-	}
-
 	if (m_OutputFormat == "csv") {
 		ObjectLock olock(rs);
 
@@ -324,7 +360,7 @@ void Query::PrintResultSet(std::ostream& fp, const std::vector<String>& columns,
 			fp << m_Separators[0];
 		}
 	} else if (m_OutputFormat == "json") {
-		fp << Value(rs).Serialize();
+		fp << JsonSerialize(rs);
 	}
 }
 
@@ -350,7 +386,7 @@ void Query::ExecuteGetHelper(const Stream::Ptr& stream)
 {
 	Log(LogInformation, "livestatus", "Table: " + m_Table);
 
-	Table::Ptr table = Table::GetByName(m_Table);
+	Table::Ptr table = Table::GetByName(m_Table, m_CompatLogPath, m_LogTimeFrom, m_LogTimeUntil);
 
 	if (!table) {
 		SendResponse(stream, LivestatusErrorNotFound, "Table '" + m_Table + "' does not exist.");
@@ -360,50 +396,87 @@ void Query::ExecuteGetHelper(const Stream::Ptr& stream)
 
 	std::vector<Value> objects = table->FilterRows(m_Filter);
 	std::vector<String> columns;
-	
+
 	if (m_Columns.size() > 0)
 		columns = m_Columns;
 	else
 		columns = table->GetColumnNames();
 
-	Array::Ptr rs = boost::make_shared<Array>();
+	Array::Ptr rs = make_shared<Array>();
 
 	if (m_Aggregators.empty()) {
+		Array::Ptr header = make_shared<Array>();
+
 		BOOST_FOREACH(const Value& object, objects) {
-			Array::Ptr row = boost::make_shared<Array>();
+			Array::Ptr row = make_shared<Array>();
 
 			BOOST_FOREACH(const String& columnName, columns) {
 				Column column = table->GetColumn(columnName);
 
+				if (m_ColumnHeaders)
+					header->Add(columnName);
+
 				row->Add(column.ExtractValue(object));
+			}
+
+			if (m_ColumnHeaders) {
+				rs->Add(header);
+				m_ColumnHeaders = false;
 			}
 
 			rs->Add(row);
 		}
 	} else {
 		std::vector<double> stats(m_Aggregators.size(), 0);
-
 		int index = 0;
+
+		/* add aggregated stats */
 		BOOST_FOREACH(const Aggregator::Ptr aggregator, m_Aggregators) {
 			BOOST_FOREACH(const Value& object, objects) {
 				aggregator->Apply(table, object);
 			}
-			
+
 			stats[index] = aggregator->GetResult();
 			index++;
 		}
 
-		Array::Ptr row = boost::make_shared<Array>();
+		/* add column headers both for raw and aggregated data */
+		if (m_ColumnHeaders) {
+			Array::Ptr header = make_shared<Array>();
+
+			BOOST_FOREACH(const String& columnName, m_Columns) {
+				header->Add(columnName);
+			}
+
+			for (size_t i = 1; i < m_Aggregators.size(); i++) {
+				header->Add("stats_" + Convert::ToString(i));
+			}
+
+			rs->Add(header);
+		}
+
+		Array::Ptr row = make_shared<Array>();
+
+		/*
+		 * add selected columns next to stats
+		 * may not be accurate for grouping!
+		 */
+		if (objects.size() > 0 && m_Columns.size() > 0) {
+			BOOST_FOREACH(const String& columnName, m_Columns) {
+				Column column = table->GetColumn(columnName);
+
+				row->Add(column.ExtractValue(objects[0])); // first object wins
+			}
+		}
+
 		for (size_t i = 0; i < m_Aggregators.size(); i++)
 			row->Add(stats[i]);
 
 		rs->Add(row);
-
-		m_ColumnHeaders = false;
 	}
 
 	std::ostringstream result;
-	PrintResultSet(result, columns, rs);
+	PrintResultSet(result, rs);
 
 	SendResponse(stream, LivestatusErrorOK, result.str());
 }
@@ -423,6 +496,7 @@ void Query::ExecuteCommandHelper(const Stream::Ptr& stream)
 
 void Query::ExecuteErrorHelper(const Stream::Ptr& stream)
 {
+	Log(LogDebug, "livestatus", "ERROR: Code: '" + Convert::ToString(m_ErrorCode) + "' Message: '" + m_ErrorMessage + "'.");
 	SendResponse(stream, m_ErrorCode, m_ErrorMessage);
 }
 
@@ -431,8 +505,16 @@ void Query::SendResponse(const Stream::Ptr& stream, int code, const String& data
 	if (m_ResponseHeader == "fixed16")
 		PrintFixed16(stream, code, data);
 
-	if (m_ResponseHeader == "fixed16" || code == LivestatusErrorOK)
-		stream->Write(data.CStr(), data.GetLength());
+	if (m_ResponseHeader == "fixed16" || code == LivestatusErrorOK) {
+		try {
+			stream->Write(data.CStr(), data.GetLength());
+		} catch (const std::exception& ex) {
+			std::ostringstream info;
+			info << "Exception thrown while writing to the livestatus socket: " << std::endl
+			     << DiagnosticInformation(ex);
+			Log(LogCritical, "livestatus", info.str());
+		}
+	}
 }
 
 void Query::PrintFixed16(const Stream::Ptr& stream, int code, const String& data)
@@ -443,7 +525,15 @@ void Query::PrintFixed16(const Stream::Ptr& stream, int code, const String& data
 	String sLength = Convert::ToString(static_cast<long>(data.GetLength()));
 
 	String header = sCode + String(16 - 3 - sLength.GetLength() - 1, ' ') + sLength + m_Separators[0];
-	stream->Write(header.CStr(), header.GetLength());
+
+	try {
+		stream->Write(header.CStr(), header.GetLength());
+	} catch (const std::exception& ex) {
+		std::ostringstream info;
+		info << "Exception thrown while writing to the livestatus socket: " << std::endl
+		     << DiagnosticInformation(ex);
+		Log(LogCritical, "livestatus", info.str());
+	}
 }
 
 bool Query::Execute(const Stream::Ptr& stream)
@@ -460,11 +550,7 @@ bool Query::Execute(const Stream::Ptr& stream)
 		else
 			BOOST_THROW_EXCEPTION(std::runtime_error("Invalid livestatus query verb."));
 	} catch (const std::exception& ex) {
-		StackTrace *st = Exception::GetLastStackTrace();
-		std::ostringstream info;
-		st->Print(info);
-		Log(LogDebug, "livestatus", info.str());
-		SendResponse(stream, LivestatusErrorQuery, boost::diagnostic_information(ex));
+		SendResponse(stream, LivestatusErrorQuery, DiagnosticInformation(ex));
 	}
 
 	if (!m_KeepAlive) {

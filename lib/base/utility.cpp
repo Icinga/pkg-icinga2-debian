@@ -33,13 +33,14 @@
 #	include <pthread_np.h>
 #endif /* __FreeBSD__ */
 
-#if HAVE_GCC_ABI_DEMANGLE
+#ifndef _MSC_VER
 #	include <cxxabi.h>
-#endif /* HAVE_GCC_ABI_DEMANGLE */
+#endif /* _MSC_VER */
 
 using namespace icinga;
 
 boost::thread_specific_ptr<String> Utility::m_ThreadName;
+boost::thread_specific_ptr<unsigned int> Utility::m_RandSeed;
 
 /**
  * Demangles a symbol name.
@@ -51,7 +52,7 @@ String Utility::DemangleSymbolName(const String& sym)
 {
 	String result = sym;
 
-#if HAVE_GCC_ABI_DEMANGLE
+#ifndef _MSC_VER
 	int status;
 	char *realname = abi::__cxa_demangle(sym.CStr(), 0, 0, &status);
 
@@ -59,7 +60,12 @@ String Utility::DemangleSymbolName(const String& sym)
 		result = String(realname);
 		free(realname);
 	}
-#endif /* HAVE_GCC_ABI_DEMANGLE */
+#else /* _MSC_VER */
+	CHAR output[256];
+
+	if (UnDecorateSymbolName(sym.CStr(), output, sizeof(output), UNDNAME_COMPLETE) > 0)
+		result = output;
+#endif /* _MSC_VER */
 
 	return result;
 }
@@ -246,15 +252,17 @@ void Utility::Sleep(double timeout)
 #ifdef _WIN32
 HMODULE
 #else /* _WIN32 */
-lt_dlhandle
+void *
 #endif /* _WIN32 */
 Utility::LoadExtensionLibrary(const String& library)
 {
 	String path;
-#ifdef _WIN32
+#if defined(_WIN32)
 	path = library + ".dll";
-#else /* _WIN32 */
-	path = "lib" + library + ".la";
+#elif defined(__APPLE__)
+	path = "lib" + library + ".dylib";
+#else /* __APPLE__ */
+	path = "lib" + library + ".so";
 #endif /* _WIN32 */
 
 	Log(LogInformation, "base", "Loading library '" + path + "'");
@@ -269,10 +277,10 @@ Utility::LoadExtensionLibrary(const String& library)
 		    << boost::errinfo_file_name(path));
 	}
 #else /* _WIN32 */
-	lt_dlhandle hModule = lt_dlopen(path.CStr());
+	void *hModule = dlopen(path.CStr(), RTLD_NOW);
 
 	if (hModule == NULL) {
-		BOOST_THROW_EXCEPTION(std::runtime_error("Could not load library '" + path + "': " +  lt_dlerror()));
+		BOOST_THROW_EXCEPTION(std::runtime_error("Could not load library '" + path + "': " + dlerror()));
 	}
 #endif /* _WIN32 */
 
@@ -313,8 +321,10 @@ String Utility::NewUniqueID(void)
  * Calls the specified callback for each file matching the path specification.
  *
  * @param pathSpec The path specification.
+ * @param callback The callback which is invoked for each matching file.
+ * @param type The file type (a combination of GlobFile and GlobDirectory)
  */
-bool Utility::Glob(const String& pathSpec, const boost::function<void (const String&)>& callback)
+bool Utility::Glob(const String& pathSpec, const boost::function<void (const String&)>& callback, int type)
 {
 #ifdef _WIN32
 	HANDLE handle;
@@ -335,6 +345,12 @@ bool Utility::Glob(const String& pathSpec, const boost::function<void (const Str
 	}
 
 	do {
+		if ((wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(type & GlobDirectory))
+			continue;
+
+		if (!(wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(type & GlobFile))
+			continue;
+
 		callback(DirName(pathSpec) + "/" + wfd.cFileName);
 	} while (FindNextFile(handle, &wfd));
 
@@ -368,6 +384,22 @@ bool Utility::Glob(const String& pathSpec, const boost::function<void (const Str
 	size_t left;
 	char **gp;
 	for (gp = gr.gl_pathv, left = gr.gl_pathc; left > 0; gp++, left--) {
+		struct stat statbuf;
+
+		if (stat(*gp, &statbuf) < 0)
+			BOOST_THROW_EXCEPTION(posix_error()
+			    << boost::errinfo_api_function("stat")
+			    << boost::errinfo_errno(errno));
+
+		if (!S_ISDIR(statbuf.st_mode) && !S_ISREG(statbuf.st_mode))
+			continue;
+
+		if (S_ISDIR(statbuf.st_mode) && !(type & GlobDirectory))
+			continue;
+
+		if (!S_ISDIR(statbuf.st_mode) && !(type & GlobFile))
+			continue;
+
 		callback(*gp);
 	}
 
@@ -375,6 +407,121 @@ bool Utility::Glob(const String& pathSpec, const boost::function<void (const Str
 
 	return true;
 #endif /* _WIN32 */
+}
+
+/**
+ * Calls the specified callback for each file in the specified directory
+ * or any of its child directories if the file name matches the specified
+ * pattern.
+ *
+ * @param path The path.
+ * @param pattern The pattern.
+ * @param callback The callback which is invoked for each matching file.
+ * @param type The file type (a combination of GlobFile and GlobDirectory)
+ */
+bool Utility::GlobRecursive(const String& path, const String& pattern, const boost::function<void (const String&)>& callback, int type)
+{
+#ifdef _WIN32
+	HANDLE handle;
+	WIN32_FIND_DATA wfd;
+
+	String pathSpec = path + "/*";
+
+	handle = FindFirstFile(pathSpec.CStr(), &wfd);
+
+	if (handle == INVALID_HANDLE_VALUE) {
+		DWORD errorCode = GetLastError();
+
+		if (errorCode == ERROR_FILE_NOT_FOUND)
+			return false;
+
+		BOOST_THROW_EXCEPTION(win32_error()
+		    << boost::errinfo_api_function("FindFirstFile")
+			<< errinfo_win32_error(errorCode)
+		    << boost::errinfo_file_name(pathSpec));
+	}
+
+	do {
+		String cpath = path + "/" + wfd.cFileName;
+
+		if (wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			GlobRecursive(cpath, pattern, callback, type);
+
+		if ((wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(type & GlobDirectory))
+			continue;
+
+		if (!(wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(type & GlobFile))
+			continue;
+
+		if (!Utility::Match(pattern, wfd.cFileName))
+			continue;
+
+		callback(cpath);
+	} while (FindNextFile(handle, &wfd));
+
+	if (!FindClose(handle)) {
+		BOOST_THROW_EXCEPTION(win32_error()
+		    << boost::errinfo_api_function("FindClose")
+		    << errinfo_win32_error(GetLastError()));
+	}
+#else /* _WIN32 */
+	DIR *dirp;
+
+	dirp = opendir(path.CStr());
+
+	if (dirp == NULL)
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("opendir")
+		    << boost::errinfo_errno(errno));
+
+	while (dirp) {
+		dirent ent, *pent;
+
+		if (readdir_r(dirp, &ent, &pent) < 0)
+			BOOST_THROW_EXCEPTION(posix_error()
+			    << boost::errinfo_api_function("readdir_r")
+			    << boost::errinfo_errno(errno));
+
+		if (!pent)
+			break;
+
+		if (strcmp(ent.d_name, ".") == 0 || strcmp(ent.d_name, "..") == 0)
+			continue;
+
+		String cpath = path + "/" + ent.d_name;
+
+		struct stat statbuf;
+
+		if (lstat(cpath.CStr(), &statbuf) < 0)
+			BOOST_THROW_EXCEPTION(posix_error()
+			    << boost::errinfo_api_function("lstat")
+			    << boost::errinfo_errno(errno));
+
+		if (S_ISDIR(statbuf.st_mode))
+			GlobRecursive(cpath, pattern, callback, type);
+
+		if (stat(cpath.CStr(), &statbuf) < 0)
+			BOOST_THROW_EXCEPTION(posix_error()
+			    << boost::errinfo_api_function("stat")
+			    << boost::errinfo_errno(errno));
+
+		if (!S_ISDIR(statbuf.st_mode) && !S_ISREG(statbuf.st_mode))
+			continue;
+
+		if (S_ISDIR(statbuf.st_mode) && !(type & GlobDirectory))
+			continue;
+
+		if (!S_ISDIR(statbuf.st_mode) && !(type & GlobFile))
+			continue;
+
+		if (!Utility::Match(pattern, ent.d_name))
+			continue;
+
+		callback(cpath);
+	}
+#endif /* _WIN32 */
+
+	return true;
 }
 
 #ifndef _WIN32
@@ -492,7 +639,7 @@ String Utility::EscapeShellCmd(const String& s)
 
 		if (escape)
 #ifdef _WIN32
-			result += '%';
+			result += '^';
 #else /* _WIN32 */
 			result += '\\';
 #endif /* _WIN32 */
@@ -558,12 +705,18 @@ String Utility::GetThreadName(void)
 	return *name;
 }
 
-unsigned long Utility::SDBM(const String& str)
+unsigned long Utility::SDBM(const String& str, size_t len)
 {
 	unsigned long hash = 0;
+	size_t current = 0;
 
 	BOOST_FOREACH(char c, str) {
+		if (current >= len)
+			break;
+
 		hash = c + (hash << 6) + (hash << 16) - hash;
+
+		current++;
 	}
 
 	return hash;
@@ -593,8 +746,41 @@ int Utility::CompareVersion(const String& v1, const String& v2)
 
 int Utility::Random(void)
 {
-	static boost::mutex mtx;
-	boost::mutex::scoped_lock lock(mtx);
-
+#ifdef _WIN32
 	return rand();
+#else /* _WIN32 */
+	unsigned int *seed = m_RandSeed.get();
+
+	if (!seed) {
+		seed = new unsigned int(Utility::GetTime());
+		m_RandSeed.reset(seed);
+	}
+
+	return rand_r(seed);
+#endif /* _WIN32 */
+}
+
+tm Utility::LocalTime(time_t ts)
+{
+#ifdef _MSC_VER
+	tm *result = localtime(&ts);
+
+	if (result == NULL) {
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("localtime")
+		    << boost::errinfo_errno(errno));
+	}
+
+	return *result;
+#else /* _MSC_VER */
+	tm result;
+
+	if (localtime_r(&ts, &result) == NULL) {
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("localtime_r")
+		    << boost::errinfo_errno(errno));
+	}
+
+	return result;
+#endif /* _MSC_VER */
 }

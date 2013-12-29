@@ -21,11 +21,12 @@
 #include "base/utility.h"
 #include "base/objectlock.h"
 #include <boost/thread/thread.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <fstream>
 #include <iostream>
 
 using namespace icinga;
+
+REGISTER_TYPE(StreamLogger);
 
 boost::mutex StreamLogger::m_Mutex;
 
@@ -63,7 +64,7 @@ void StreamLogger::BindStream(std::ostream *stream, bool ownsStream)
 	m_OwnsStream = ownsStream;
 	m_Tty = IsTty(*stream);
 	
-	m_FlushLogTimer = boost::make_shared<Timer>();
+	m_FlushLogTimer = make_shared<Timer>();
 	m_FlushLogTimer->SetInterval(1);
 	m_FlushLogTimer->OnTimerExpired.connect(boost::bind(&StreamLogger::FlushLogTimerHandler, this));
 	m_FlushLogTimer->Start();
@@ -125,10 +126,10 @@ bool StreamLogger::IsTty(std::ostream& stream)
 {
 #ifndef _WIN32
 	/* Eww... */
-	if (stream == std::cout)
+	if (&stream == &std::cout)
 		return isatty(fileno(stdout));
 
-	if (stream == std::cerr)
+	if (&stream == &std::cerr)
 		return isatty(fileno(stderr));
 #endif /*_ WIN32 */
 

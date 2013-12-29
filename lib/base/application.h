@@ -21,6 +21,7 @@
 #define APPLICATION_H
 
 #include "base/i2-base.h"
+#include "base/application.th"
 #include "base/threadpool.h"
 #include "base/dynamicobject.h"
 
@@ -33,7 +34,7 @@ class Component;
  *
  * @ingroup base
  */
-class I2_BASE_API Application : public DynamicObject {
+class I2_BASE_API Application : public ObjectImpl<Application> {
 public:
 	DECLARE_PTR_TYPEDEFS(Application);
 
@@ -49,6 +50,8 @@ public:
 	 * @returns The exit code of the application.
 	 */
 	virtual int Main(void) = 0;
+
+	static void SetResourceLimits(void);
 
 	static int GetArgC(void);
 	static void SetArgC(int argc);
@@ -70,29 +73,34 @@ public:
 	static String GetExePath(const String& argv0);
 
 	static String GetPrefixDir(void);
-	static void SetPrefixDir(const String& path);
+	static void DeclarePrefixDir(const String& path);
+
+	static String GetSysconfDir(void);
+	static void DeclareSysconfDir(const String& path);
 
 	static String GetLocalStateDir(void);
-	static void SetLocalStateDir(const String& path);
-
-	static String GetPkgLibDir(void);
-	static void SetPkgLibDir(const String& path);
+	static void DeclareLocalStateDir(const String& path);
 
 	static String GetPkgDataDir(void);
-	static void SetPkgDataDir(const String& path);
+	static void DeclarePkgDataDir(const String& path);
 
 	static String GetStatePath(void);
-	static void SetStatePath(const String& path);
+	static void DeclareStatePath(const String& path);
 
 	static String GetPidPath(void);
-	static void SetPidPath(const String& path);
+	static void DeclarePidPath(const String& path);
 
 	static String GetApplicationType(void);
-	static void SetApplicationType(const String& type);
+	static void DeclareApplicationType(const String& type);
+
+	static void MakeVariablesConstant(void);
 
 	static ThreadPool& GetTP(void);
 
 	static String GetVersion(void);
+
+	static double GetStartTime(void);
+	static void SetStartTime(double ts);
 
 protected:
 	virtual void OnConfigLoaded(void);
@@ -100,7 +108,7 @@ protected:
 
 	void RunEventLoop(void) const;
 
-	virtual void OnShutdown(void) = 0;
+	virtual void OnShutdown(void);
 
 private:
 	static Application *m_Instance; /**< The application instance. */
@@ -112,14 +120,16 @@ private:
 	static char **m_ArgV; /**< Command-line arguments. */
 	FILE *m_PidFile; /**< The PID file */
 	static bool m_Debugging; /**< Whether debugging is enabled. */
+	static double m_StartTime;
 
 #ifndef _WIN32
-	static void SigIntHandler(int signum);
+	static void SigIntTermHandler(int signum);
 #else /* _WIN32 */
 	static BOOL WINAPI CtrlHandler(DWORD type);
 	static LONG WINAPI SEHUnhandledExceptionFilter(PEXCEPTION_POINTERS exi);
 #endif /* _WIN32 */
 
+	static void DisplayVersionMessage(void);
 	static void DisplayBugMessage(void);
 
 	static void SigAbrtHandler(int signum);
