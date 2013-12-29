@@ -7,3 +7,8 @@ icinga2 source TODOs
 * Document embedded sources in tarball
   - third-party/
 
+* init
+  - configtest
+  - multi instanz
+  - pid file handling testen
+
