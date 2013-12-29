@@ -31,14 +31,13 @@
 #include "icinga/externalcommandprocessor.h"
 #include "icinga/compatutility.h"
 #include <boost/foreach.hpp>
-#include <boost/tuple/tuple.hpp>
 #include <boost/algorithm/string/join.hpp>
 
 using namespace icinga;
 
 REGISTER_DBTYPE(Service, "service", DbObjectTypeService, "service_object_id", ServiceDbObject);
 
-INITIALIZE_ONCE(ServiceDbObject, &ServiceDbObject::StaticInitialize);
+INITIALIZE_ONCE(&ServiceDbObject::StaticInitialize);
 
 void ServiceDbObject::StaticInitialize(void)
 {
@@ -78,20 +77,9 @@ ServiceDbObject::ServiceDbObject(const DbType::Ptr& type, const String& name1, c
 
 Dictionary::Ptr ServiceDbObject::GetConfigFields(void) const
 {
-	Dictionary::Ptr fields = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields = make_shared<Dictionary>();
 	Service::Ptr service = static_pointer_cast<Service>(GetObject());
-
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return Dictionary::Ptr();
-
-	Dictionary::Ptr attrs;
-
-	{
-		ObjectLock olock(service);
-		attrs = CompatUtility::GetServiceConfigAttributes(service);
-	}
 
 	fields->Set("host_object_id", host);
 	fields->Set("display_name", service->GetDisplayName());
@@ -99,105 +87,110 @@ Dictionary::Ptr ServiceDbObject::GetConfigFields(void) const
 	fields->Set("check_command_args", Empty);
 	fields->Set("eventhandler_command_object_id", service->GetEventCommand());
 	fields->Set("eventhandler_command_args", Empty);
-	fields->Set("notification_timeperiod_object_id", Notification::GetByName(attrs->Get("notification_period")));
+	fields->Set("notification_timeperiod_object_id", Notification::GetByName(CompatUtility::GetServiceNotificationNotificationPeriod(service)));
 	fields->Set("check_timeperiod_object_id", service->GetCheckPeriod());
 	fields->Set("failure_prediction_options", Empty);
-	fields->Set("check_interval", attrs->Get("check_interval"));
-	fields->Set("retry_interval", attrs->Get("retry_interval"));
-	fields->Set("max_check_attempts", attrs->Get("max_check_attempts"));
+	fields->Set("check_interval", CompatUtility::GetServiceCheckInterval(service));
+	fields->Set("retry_interval", CompatUtility::GetServiceRetryInterval(service));
+	fields->Set("max_check_attempts", service->GetMaxCheckAttempts());
 	fields->Set("first_notification_delay", Empty);
-	fields->Set("notification_interval", attrs->Get("notification_interval"));
-	fields->Set("notify_on_warning", attrs->Get("notify_on_warning"));
-	fields->Set("notify_on_unknown", attrs->Get("notify_on_unknown"));
-	fields->Set("notify_on_critical", attrs->Get("notify_on_critical"));
-	fields->Set("notify_on_recovery", attrs->Get("notify_on_recovery"));
-	fields->Set("notify_on_flapping", attrs->Get("notify_on_flapping"));
-	fields->Set("notify_on_downtime", attrs->Get("notify_on_downtime"));
+	fields->Set("notification_interval", CompatUtility::GetServiceNotificationNotificationInterval(service));
+	fields->Set("notify_on_warning", CompatUtility::GetServiceNotifyOnWarning(service));
+	fields->Set("notify_on_unknown", CompatUtility::GetServiceNotifyOnUnknown(service));
+	fields->Set("notify_on_critical", CompatUtility::GetServiceNotifyOnCritical(service));
+	fields->Set("notify_on_recovery", CompatUtility::GetServiceNotifyOnRecovery(service));
+	fields->Set("notify_on_flapping", CompatUtility::GetServiceNotifyOnFlapping(service));
+	fields->Set("notify_on_downtime", CompatUtility::GetServiceNotifyOnDowntime(service));
 	fields->Set("stalk_on_ok", 0);
 	fields->Set("stalk_on_warning", 0);
 	fields->Set("stalk_on_unknown", 0);
 	fields->Set("stalk_on_critical", 0);
-	fields->Set("is_volatile", attrs->Get("is_volatile"));
-	fields->Set("flap_detection_enabled", attrs->Get("flap_detection_enabled"));
+	fields->Set("is_volatile", CompatUtility::GetServiceIsVolatile(service));
+	fields->Set("flap_detection_enabled", CompatUtility::GetServiceFlapDetectionEnabled(service));
 	fields->Set("flap_detection_on_ok", Empty);
 	fields->Set("flap_detection_on_warning", Empty);
 	fields->Set("flap_detection_on_unknown", Empty);
 	fields->Set("flap_detection_on_critical", Empty);
-	fields->Set("low_flap_threshold", attrs->Get("low_flap_threshold"));
-	fields->Set("high_flap_threshold", attrs->Get("high_flap_threshold"));
-	fields->Set("process_performance_data", attrs->Get("process_performance_data"));
-	fields->Set("freshness_checks_enabled", attrs->Get("freshness_checks_enabled"));
-	fields->Set("freshness_threshold", Empty);
-	fields->Set("passive_checks_enabled", attrs->Get("passive_checks_enabled"));
-	fields->Set("event_handler_enabled", attrs->Get("event_handler_enabled"));
-	fields->Set("active_checks_enabled", attrs->Get("active_checks_enabled"));
+	fields->Set("low_flap_threshold", CompatUtility::GetServiceLowFlapThreshold(service));
+	fields->Set("high_flap_threshold", CompatUtility::GetServiceHighFlapThreshold(service));
+	fields->Set("process_performance_data", CompatUtility::GetServiceProcessPerformanceData(service));
+	fields->Set("freshness_checks_enabled", CompatUtility::GetServiceFreshnessChecksEnabled(service));
+	fields->Set("freshness_threshold", CompatUtility::GetServiceFreshnessThreshold(service));
+	fields->Set("passive_checks_enabled", CompatUtility::GetServicePassiveChecksEnabled(service));
+	fields->Set("event_handler_enabled", CompatUtility::GetServiceEventHandlerEnabled(service));
+	fields->Set("active_checks_enabled", CompatUtility::GetServiceActiveChecksEnabled(service));
 	fields->Set("retain_status_information", Empty);
 	fields->Set("retain_nonstatus_information", Empty);
-	fields->Set("notifications_enabled", attrs->Get("notifications_enabled"));
+	fields->Set("notifications_enabled", CompatUtility::GetServiceNotificationsEnabled(service));
 	fields->Set("obsess_over_service", Empty);
 	fields->Set("failure_prediction_enabled", Empty);
-	fields->Set("notes", attrs->Get("notes"));
-	fields->Set("notes_url", attrs->Get("notes_url"));
-	fields->Set("action_url", attrs->Get("action_url"));
-	fields->Set("icon_image", attrs->Get("icon_image"));
-	fields->Set("icon_image_alt", attrs->Get("icon_image_alt"));
+	fields->Set("notes", CompatUtility::GetCustomAttributeConfig(service, "notes"));
+	fields->Set("notes_url", CompatUtility::GetCustomAttributeConfig(service, "notes_url"));
+	fields->Set("action_url", CompatUtility::GetCustomAttributeConfig(service, "action_url"));
+	fields->Set("icon_image", CompatUtility::GetCustomAttributeConfig(service, "icon_image"));
+	fields->Set("icon_image_alt", CompatUtility::GetCustomAttributeConfig(service, "icon_image_alt"));
 
 	return fields;
 }
 
 Dictionary::Ptr ServiceDbObject::GetStatusFields(void) const
 {
-	Dictionary::Ptr fields = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields = make_shared<Dictionary>();
 	Service::Ptr service = static_pointer_cast<Service>(GetObject());
-	Dictionary::Ptr attrs;
+	CheckResult::Ptr cr = service->GetLastCheckResult();
 
-	{
-		ObjectLock olock(service);
-		attrs = CompatUtility::GetServiceStatusAttributes(service, CompatTypeService);
+	if (cr) {
+		fields->Set("output", CompatUtility::GetCheckResultOutput(cr));
+		fields->Set("long_output", CompatUtility::GetCheckResultLongOutput(cr));
+		fields->Set("perfdata", CompatUtility::GetCheckResultPerfdata(cr));
+		fields->Set("check_source", cr->GetCheckSource());
 	}
 
-	fields->Set("output", attrs->Get("plugin_output"));
-	fields->Set("long_output", attrs->Get("long_plugin_output"));
-	fields->Set("perfdata", attrs->Get("performance_data"));
-	fields->Set("check_source", attrs->Get("check_source"));
-	fields->Set("current_state", attrs->Get("current_state"));
-	fields->Set("has_been_checked", attrs->Get("has_been_checked"));
-	fields->Set("should_be_scheduled", attrs->Get("should_be_scheduled"));
-	fields->Set("current_check_attempt", attrs->Get("current_attempt"));
-	fields->Set("max_check_attempts", attrs->Get("max_attempts"));
-	fields->Set("last_check", DbValue::FromTimestamp(attrs->Get("last_check")));
-	fields->Set("next_check", DbValue::FromTimestamp(attrs->Get("next_check")));
-	fields->Set("check_type", attrs->Get("check_type"));
-	fields->Set("last_state_change", DbValue::FromTimestamp(attrs->Get("last_state_change")));
-	fields->Set("last_hard_state_change", DbValue::FromTimestamp(attrs->Get("last_hard_state_change")));
-	fields->Set("last_time_ok", DbValue::FromTimestamp(attrs->Get("last_time_ok")));
-	fields->Set("last_time_warning", DbValue::FromTimestamp(attrs->Get("last_time_warn")));
-	fields->Set("last_time_critical", DbValue::FromTimestamp(attrs->Get("last_time_critical")));
-	fields->Set("last_time_unknown", DbValue::FromTimestamp(attrs->Get("last_time_unknown")));
-	fields->Set("state_type", attrs->Get("state_type"));
-	fields->Set("last_notification", DbValue::FromTimestamp(attrs->Get("last_notification")));
-	fields->Set("next_notification", DbValue::FromTimestamp(attrs->Get("next_notification")));
+	fields->Set("current_state", CompatUtility::GetServiceCurrentState(service));
+	fields->Set("has_been_checked", CompatUtility::GetServiceHasBeenChecked(service));
+	fields->Set("should_be_scheduled", CompatUtility::GetServiceShouldBeScheduled(service));
+	fields->Set("current_check_attempt", service->GetCheckAttempt());
+	fields->Set("max_check_attempts", service->GetMaxCheckAttempts());
+
+	if (cr)
+		fields->Set("last_check", DbValue::FromTimestamp(cr->GetScheduleEnd()));
+
+	fields->Set("next_check", DbValue::FromTimestamp(service->GetNextCheck()));
+	fields->Set("check_type", CompatUtility::GetServiceCheckType(service));
+	fields->Set("last_state_change", DbValue::FromTimestamp(service->GetLastStateChange()));
+	fields->Set("last_hard_state_change", DbValue::FromTimestamp(service->GetLastHardStateChange()));
+	fields->Set("last_time_ok", DbValue::FromTimestamp(static_cast<int>(service->GetLastStateOK())));
+	fields->Set("last_time_warning", DbValue::FromTimestamp(static_cast<int>(service->GetLastStateWarning())));
+	fields->Set("last_time_critical", DbValue::FromTimestamp(static_cast<int>(service->GetLastStateCritical())));
+	fields->Set("last_time_unknown", DbValue::FromTimestamp(static_cast<int>(service->GetLastStateUnknown())));
+	fields->Set("state_type", service->GetStateType());
+	fields->Set("last_notification", DbValue::FromTimestamp(CompatUtility::GetServiceNotificationLastNotification(service)));
+	fields->Set("next_notification", DbValue::FromTimestamp(CompatUtility::GetServiceNotificationNextNotification(service)));
 	fields->Set("no_more_notifications", Empty);
-	fields->Set("notifications_enabled", attrs->Get("notifications_enabled"));
-	fields->Set("problem_has_been_acknowledged", attrs->Get("problem_has_been_acknowledged"));
-	fields->Set("acknowledgement_type", attrs->Get("acknowledgement_type"));
-	fields->Set("current_notification_number", attrs->Get("current_notification_number"));
-	fields->Set("passive_checks_enabled", attrs->Get("passive_checks_enabled"));
-	fields->Set("active_checks_enabled", attrs->Get("active_checks_enabled"));
-	fields->Set("event_handler_enabled", attrs->Get("event_handler_enabled"));
-	fields->Set("flap_detection_enabled", attrs->Get("flap_detection_enabled"));
-	fields->Set("is_flapping", attrs->Get("is_flapping"));
-	fields->Set("percent_state_change", attrs->Get("percent_state_change"));
-	fields->Set("latency", attrs->Get("check_latency"));
-	fields->Set("execution_time", attrs->Get("check_execution_time"));
-	fields->Set("scheduled_downtime_depth", attrs->Get("scheduled_downtime_depth"));
-	fields->Set("process_performance_data", attrs->Get("process_performance_data"));
-	fields->Set("event_handler", attrs->Get("event_handler"));
-	fields->Set("check_command", attrs->Get("check_command"));
-	fields->Set("normal_check_interval", attrs->Get("check_interval"));
-	fields->Set("retry_check_interval", attrs->Get("retry_interval"));
+	fields->Set("notifications_enabled", CompatUtility::GetServiceNotificationsEnabled(service));
+	fields->Set("problem_has_been_acknowledged", CompatUtility::GetServiceProblemHasBeenAcknowledged(service));
+	fields->Set("acknowledgement_type", CompatUtility::GetServiceAcknowledgementType(service));
+	fields->Set("current_notification_number", CompatUtility::GetServiceNotificationNotificationNumber(service));
+	fields->Set("passive_checks_enabled", CompatUtility::GetServicePassiveChecksEnabled(service));
+	fields->Set("active_checks_enabled", CompatUtility::GetServiceActiveChecksEnabled(service));
+	fields->Set("event_handler_enabled", CompatUtility::GetServiceEventHandlerEnabled(service));
+	fields->Set("flap_detection_enabled", CompatUtility::GetServiceFlapDetectionEnabled(service));
+	fields->Set("is_flapping", CompatUtility::GetServiceIsFlapping(service));
+	fields->Set("percent_state_change", CompatUtility::GetServicePercentStateChange(service));
+
+	if (cr) {
+		fields->Set("latency", Service::CalculateLatency(cr));
+		fields->Set("execution_time", Service::CalculateExecutionTime(cr));
+	}
+
+	fields->Set("scheduled_downtime_depth", service->GetDowntimeDepth());
+	fields->Set("process_performance_data", CompatUtility::GetServiceProcessPerformanceData(service));
+	fields->Set("event_handler", CompatUtility::GetServiceEventHandler(service));
+	fields->Set("check_command", CompatUtility::GetServiceCheckCommand(service));
+	fields->Set("normal_check_interval", CompatUtility::GetServiceCheckInterval(service));
+	fields->Set("retry_check_interval", CompatUtility::GetServiceRetryInterval(service));
 	fields->Set("check_timeperiod_object_id", service->GetCheckPeriod());
-	fields->Set("modified_service_attributes", attrs->Get("modified_attributes"));
+	fields->Set("modified_service_attributes", service->GetModifiedAttributes());
 
 	return fields;
 }
@@ -214,18 +207,11 @@ void ServiceDbObject::OnConfigUpdate(void)
 	/* service dependencies */
 	Log(LogDebug, "db_ido", "service dependencies for '" + service->GetName() + "'");
 
-	DbQuery query_del1;
-	query_del1.Table = GetType()->GetTable() + "dependencies";
-	query_del1.Type = DbQueryDelete;
-	query_del1.WhereCriteria = boost::make_shared<Dictionary>();
-	query_del1.WhereCriteria->Set("dependent_service_object_id", service);
-	OnQuery(query_del1);
-
 	BOOST_FOREACH(const Service::Ptr& parent, service->GetParentServices()) {
 		Log(LogDebug, "db_ido", "service parents: " + parent->GetName());
 
                 /* service dependencies */
-                Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
+                Dictionary::Ptr fields1 = make_shared<Dictionary>();
                 fields1->Set("service_object_id", parent);
                 fields1->Set("dependent_service_object_id", service);
                 fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
@@ -233,6 +219,7 @@ void ServiceDbObject::OnConfigUpdate(void)
                 DbQuery query1;
                 query1.Table = GetType()->GetTable() + "dependencies";
                 query1.Type = DbQueryInsert;
+		query1.Category = DbCatConfig;
                 query1.Fields = fields1;
                 OnQuery(query1);
 	}
@@ -243,7 +230,7 @@ void ServiceDbObject::OnConfigUpdate(void)
 	BOOST_FOREACH(const User::Ptr& user, CompatUtility::GetServiceNotificationUsers(service)) {
 		Log(LogDebug, "db_ido", "service contacts: " + user->GetName());
 
-		Dictionary::Ptr fields_contact = boost::make_shared<Dictionary>();
+		Dictionary::Ptr fields_contact = make_shared<Dictionary>();
 		fields_contact->Set("service_id", DbValue::FromObjectInsertID(service));
 		fields_contact->Set("contact_object_id", user);
 		fields_contact->Set("instance_id", 0); /* DbConnection class fills in real ID */
@@ -251,6 +238,7 @@ void ServiceDbObject::OnConfigUpdate(void)
 		DbQuery query_contact;
 		query_contact.Table = GetType()->GetTable() + "_contacts";
 		query_contact.Type = DbQueryInsert;
+		query_contact.Category = DbCatConfig;
 		query_contact.Fields = fields_contact;
 		OnQuery(query_contact);
 	}
@@ -260,7 +248,7 @@ void ServiceDbObject::OnConfigUpdate(void)
 	BOOST_FOREACH(const UserGroup::Ptr& usergroup, CompatUtility::GetServiceNotificationUserGroups(service)) {
 		Log(LogDebug, "db_ido", "service contactgroups: " + usergroup->GetName());
 
-		Dictionary::Ptr fields_contact = boost::make_shared<Dictionary>();
+		Dictionary::Ptr fields_contact = make_shared<Dictionary>();
 		fields_contact->Set("service_id", DbValue::FromObjectInsertID(service));
 		fields_contact->Set("contactgroup_object_id", usergroup);
 		fields_contact->Set("instance_id", 0); /* DbConnection class fills in real ID */
@@ -268,19 +256,13 @@ void ServiceDbObject::OnConfigUpdate(void)
 		DbQuery query_contact;
 		query_contact.Table = GetType()->GetTable() + "_contactgroups";
 		query_contact.Type = DbQueryInsert;
+		query_contact.Category = DbCatConfig;
 		query_contact.Fields = fields_contact;
 		OnQuery(query_contact);
 	}
 
 	/* custom variables */
 	Log(LogDebug, "db_ido", "service customvars for '" + service->GetName() + "'");
-
-	DbQuery query_del2;
-	query_del2.Table = "customvariables";
-	query_del2.Type = DbQueryDelete;
-	query_del2.WhereCriteria = boost::make_shared<Dictionary>();
-	query_del2.WhereCriteria->Set("object_id", service);
-	OnQuery(query_del2);
 
 	Dictionary::Ptr customvars;
 
@@ -290,16 +272,14 @@ void ServiceDbObject::OnConfigUpdate(void)
 	}
 
 	if (customvars) {
-		ObjectLock olock (customvars);
+		ObjectLock olock(customvars);
 
-		String key;
-		Value value;
-		BOOST_FOREACH(boost::tie(key, value), customvars) {
-			Log(LogDebug, "db_ido", "service customvar key: '" + key + "' value: '" + Convert::ToString(value) + "'");
+		BOOST_FOREACH(const Dictionary::Pair& kv, customvars) {
+			Log(LogDebug, "db_ido", "service customvar key: '" + kv.first + "' value: '" + Convert::ToString(kv.second) + "'");
 
-			Dictionary::Ptr fields2 = boost::make_shared<Dictionary>();
-			fields2->Set("varname", Convert::ToString(key));
-			fields2->Set("varvalue", Convert::ToString(value));
+			Dictionary::Ptr fields2 = make_shared<Dictionary>();
+			fields2->Set("varname", Convert::ToString(kv.first));
+			fields2->Set("varvalue", Convert::ToString(kv.second));
 			fields2->Set("config_type", 1);
 			fields2->Set("has_been_modified", 0);
 			fields2->Set("object_id", service);
@@ -308,32 +288,15 @@ void ServiceDbObject::OnConfigUpdate(void)
 			DbQuery query2;
 			query2.Table = "customvariables";
 			query2.Type = DbQueryInsert;
+			query2.Category = DbCatConfig;
 			query2.Fields = fields2;
 			OnQuery(query2);
 		}
 	}
 
 	/* update comments and downtimes on config change */
-	RemoveComments(service);
-	RemoveDowntimes(service);
 	AddComments(service);
 	AddDowntimes(service);
-
-	/* service host config update */
-	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
-
-	if (host->GetCheckService() != service)
-		return;
-
-	DbObject::Ptr dbobj = GetOrCreateByObject(host);
-
-	if (!dbobj)
-		return;
-
-	dbobj->SendConfigUpdate();
 }
 
 void ServiceDbObject::OnStatusUpdate(void)
@@ -342,9 +305,6 @@ void ServiceDbObject::OnStatusUpdate(void)
 	Host::Ptr host = service->GetHost();
 
 	/* update the host if hostcheck service */
-	if (!host)
-		return;
-
 	if (host->GetCheckService() != service)
 		return;
 
@@ -362,82 +322,77 @@ void ServiceDbObject::AddComments(const Service::Ptr& service)
 	/* dump all comments */
 	Dictionary::Ptr comments = service->GetComments();
 
-	if (!comments)
-		return;
+	if (comments->GetLength() > 0)
+		RemoveComments(service);
 
 	ObjectLock olock(comments);
 
-	String comment_id;
-	Dictionary::Ptr comment;
-	BOOST_FOREACH(boost::tie(comment_id, comment), comments) {
-		AddComment(service, comment);
+	BOOST_FOREACH(const Dictionary::Pair& kv, comments) {
+		AddComment(service, kv.second);
 	}
 }
 
-void ServiceDbObject::AddComment(const Service::Ptr& service, const Dictionary::Ptr& comment)
+void ServiceDbObject::AddComment(const Service::Ptr& service, const Comment::Ptr& comment)
 {
 	AddCommentInternal(service, comment, false);
 }
 
-void ServiceDbObject::AddCommentHistory(const Service::Ptr& service, const Dictionary::Ptr& comment)
+void ServiceDbObject::AddCommentHistory(const Service::Ptr& service, const Comment::Ptr& comment)
 {
 	AddCommentInternal(service, comment, true);
 }
 
-void ServiceDbObject::AddCommentInternal(const Service::Ptr& service, const Dictionary::Ptr& comment, bool historical)
+void ServiceDbObject::AddCommentInternal(const Service::Ptr& service, const Comment::Ptr& comment, bool historical)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	if (!comment) {
 		Log(LogWarning, "db_ido", "comment does not exist. not adding it.");
 		return;
 	}
 
-	Log(LogDebug, "db_ido", "adding service comment (id = " + comment->Get("legacy_id") + ") for '" + service->GetName() + "'");
+	Log(LogDebug, "db_ido", "adding service comment (id = " + Convert::ToString(comment->GetLegacyId()) + ") for '" + service->GetName() + "'");
 
 	/* add the service comment */
 	AddCommentByType(service, comment, historical);
 
 	/* add the hostcheck service comment to the host as well */
 	if (host->GetCheckService() == service) {
-		Log(LogDebug, "db_ido", "adding host comment (id = " + comment->Get("legacy_id") + ") for '" + host->GetName() + "'");
+		Log(LogDebug, "db_ido", "adding host comment (id = " + Convert::ToString(comment->GetLegacyId()) + ") for '" + host->GetName() + "'");
 		AddCommentByType(host, comment, historical);
 	}
 }
 
-void ServiceDbObject::AddCommentByType(const DynamicObject::Ptr& object, const Dictionary::Ptr& comment, bool historical)
+void ServiceDbObject::AddCommentByType(const DynamicObject::Ptr& object, const Comment::Ptr& comment, bool historical)
 {
-	unsigned long entry_time = static_cast<long>(comment->Get("entry_time"));
-	unsigned long entry_time_usec = (comment->Get("entry_time") - entry_time) * 1000 * 1000;
+	unsigned long entry_time = static_cast<long>(comment->GetEntryTime());
+	unsigned long entry_time_usec = (comment->GetEntryTime() - entry_time) * 1000 * 1000;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
 	fields1->Set("entry_time", DbValue::FromTimestamp(entry_time));
 	fields1->Set("entry_time_usec", entry_time_usec);
-	fields1->Set("entry_type", comment->Get("entry_type"));
+	fields1->Set("entry_type", comment->GetEntryType());
 	fields1->Set("object_id", object);
 
 	if (object->GetType() == DynamicType::GetByName("Host")) {
 		fields1->Set("comment_type", 2);
 		/* requires idoutils 1.10 schema fix */
-		fields1->Set("internal_comment_id", comment->Get("legacy_id"));
+		fields1->Set("internal_comment_id", comment->GetLegacyId());
 	} else if (object->GetType() == DynamicType::GetByName("Service")) {
 		fields1->Set("comment_type", 1);
-		fields1->Set("internal_comment_id", comment->Get("legacy_id"));
+		fields1->Set("internal_comment_id", comment->GetLegacyId());
 	} else {
 		Log(LogDebug, "db_ido", "unknown object type for adding comment.");
 		return;
 	}
 
 	fields1->Set("comment_time", DbValue::FromTimestamp(entry_time)); /* same as entry_time */
-	fields1->Set("author_name", comment->Get("author"));
-	fields1->Set("comment_data", comment->Get("text"));
+	fields1->Set("author_name", comment->GetAuthor());
+	fields1->Set("comment_data", comment->GetText());
 	fields1->Set("is_persistent", 1);
 	fields1->Set("comment_source", 1); /* external */
-	fields1->Set("expires", (comment->Get("expire_time") > 0) ? 1 : 0);
-	fields1->Set("expiration_time", comment->Get("expire_time"));
+	fields1->Set("expires", (comment->GetExpireTime() > 0) ? 1 : 0);
+	fields1->Set("expiration_time", comment->GetExpireTime());
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	DbQuery query1;
@@ -447,6 +402,7 @@ void ServiceDbObject::AddCommentByType(const DynamicObject::Ptr& object, const D
 		query1.Table = "commenthistory";
 	}
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatComment;
 	query1.Fields = fields1;
 	OnQuery(query1);
 }
@@ -455,71 +411,70 @@ void ServiceDbObject::RemoveComments(const Service::Ptr& service)
 {
 	Host::Ptr host = service->GetHost();
 
-	if (!host)
-		return;
-
 	Log(LogDebug, "db_ido", "removing service comments for '" + service->GetName() + "'");
 
 	DbQuery query1;
 	query1.Table = "comments";
 	query1.Type = DbQueryDelete;
-	query1.WhereCriteria = boost::make_shared<Dictionary>();
+	query1.Category = DbCatComment;
+	query1.WhereCriteria = make_shared<Dictionary>();
 	query1.WhereCriteria->Set("object_id", service);
 	OnQuery(query1);
 
 	/* delete hostcheck service's host comments */
 	if (host->GetCheckService() == service) {
+		query1.WhereCriteria = query1.WhereCriteria->ShallowClone();
 		query1.WhereCriteria->Set("object_id", host);
 		OnQuery(query1);
 	}
 }
 
-void ServiceDbObject::RemoveComment(const Service::Ptr& service, const Dictionary::Ptr& comment)
+void ServiceDbObject::RemoveComment(const Service::Ptr& service, const Comment::Ptr& comment)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	if (!comment) {
 		Log(LogWarning, "db_ido", "comment does not exist. not deleting it.");
 		return;
 	}
 
-	Log(LogDebug, "db_ido", "removing service comment (id = " + comment->Get("legacy_id") + ") for '" + service->GetName() + "'");
+	Log(LogDebug, "db_ido", "removing service comment (id = " + Convert::ToString(comment->GetLegacyId()) + ") for '" + service->GetName() + "'");
 
 	/* Status */
 	DbQuery query1;
 	query1.Table = "comments";
 	query1.Type = DbQueryDelete;
-	query1.WhereCriteria = boost::make_shared<Dictionary>();
+	query1.Category = DbCatComment;
+	query1.WhereCriteria = make_shared<Dictionary>();
 	query1.WhereCriteria->Set("object_id", service);
-	query1.WhereCriteria->Set("internal_comment_id", comment->Get("legacy_id"));
+	query1.WhereCriteria->Set("internal_comment_id", comment->GetLegacyId());
 	OnQuery(query1);
 
 	/* delete hostcheck service's host comments */
 	if (host->GetCheckService() == service) {
+		query1.WhereCriteria = query1.WhereCriteria->ShallowClone();
 		query1.WhereCriteria->Set("object_id", host);
 		OnQuery(query1);
 	}
 
 	/* History - update deletion time for service (and host in case) */
-	unsigned long entry_time = static_cast<long>(comment->Get("entry_time"));
+	unsigned long entry_time = static_cast<long>(comment->GetEntryTime());
+
 	double now = Utility::GetTime();
-	unsigned long deletion_time = static_cast<long>(now);
-	unsigned long deletion_time_usec = (now - deletion_time) * 1000 * 1000;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
 	DbQuery query2;
 	query2.Table = "commenthistory";
 	query2.Type = DbQueryUpdate;
+	query2.Category = DbCatComment;
 
-	Dictionary::Ptr fields2 = boost::make_shared<Dictionary>();
-	fields2->Set("deletion_time", DbValue::FromTimestamp(deletion_time));
-	fields2->Set("deletion_time_usec", deletion_time_usec);
+	Dictionary::Ptr fields2 = make_shared<Dictionary>();
+	fields2->Set("deletion_time", DbValue::FromTimestamp(time_bag.first));
+	fields2->Set("deletion_time_usec", time_bag.second);
 	query2.Fields = fields2;
 
-	query2.WhereCriteria = boost::make_shared<Dictionary>();
-	query2.WhereCriteria->Set("internal_comment_id", comment->Get("legacy_id"));
+	query2.WhereCriteria = make_shared<Dictionary>();
+	query2.WhereCriteria->Set("internal_comment_id", comment->GetLegacyId());
 	query2.WhereCriteria->Set("comment_time", DbValue::FromTimestamp(entry_time));
 	query2.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
@@ -532,81 +487,77 @@ void ServiceDbObject::AddDowntimes(const Service::Ptr& service)
 	/* dump all downtimes */
 	Dictionary::Ptr downtimes = service->GetDowntimes();
 
-	if (!downtimes)
-		return;
+	if (downtimes->GetLength() > 0)
+		RemoveDowntimes(service);
 
 	ObjectLock olock(downtimes);
 
-	String downtime_id;
-	Dictionary::Ptr downtime;
-	BOOST_FOREACH(boost::tie(downtime_id, downtime), downtimes) {
-		AddDowntime(service, downtime);
+	BOOST_FOREACH(const Dictionary::Pair& kv, downtimes) {
+		AddDowntime(service, kv.second);
 	}
 }
 
-void ServiceDbObject::AddDowntime(const Service::Ptr& service, const Dictionary::Ptr& downtime)
+void ServiceDbObject::AddDowntime(const Service::Ptr& service, const Downtime::Ptr& downtime)
 {
 	AddDowntimeInternal(service, downtime, false);
 }
 
-void ServiceDbObject::AddDowntimeHistory(const Service::Ptr& service, const Dictionary::Ptr& downtime)
+void ServiceDbObject::AddDowntimeHistory(const Service::Ptr& service, const Downtime::Ptr& downtime)
 {
 	AddDowntimeInternal(service, downtime, true);
 }
 
-void ServiceDbObject::AddDowntimeInternal(const Service::Ptr& service, const Dictionary::Ptr& downtime, bool historical)
+void ServiceDbObject::AddDowntimeInternal(const Service::Ptr& service, const Downtime::Ptr& downtime, bool historical)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	if (!downtime) {
 		Log(LogWarning, "db_ido", "downtime does not exist. not adding it.");
 		return;
 	}
 
-	Log(LogDebug, "db_ido", "adding service downtime (id = " + downtime->Get("legacy_id") + ") for '" + service->GetName() + "'");
+	Log(LogDebug, "db_ido", "adding service downtime (id = " + Convert::ToString(downtime->GetLegacyId()) + ") for '" + service->GetName() + "'");
 
 	/* add the service downtime */
 	AddDowntimeByType(service, downtime, historical);
 
 	/* add the hostcheck service downtime to the host as well */
 	if (host->GetCheckService() == service) {
-		Log(LogDebug, "db_ido", "adding host downtime (id = " + downtime->Get("legacy_id") + ") for '" + host->GetName() + "'");
+		Log(LogDebug, "db_ido", "adding host downtime (id = " + Convert::ToString(downtime->GetLegacyId()) + ") for '" + host->GetName() + "'");
 		AddDowntimeByType(host, downtime, historical);
 	}
 }
 
-void ServiceDbObject::AddDowntimeByType(const DynamicObject::Ptr& object, const Dictionary::Ptr& downtime, bool historical)
+void ServiceDbObject::AddDowntimeByType(const DynamicObject::Ptr& object, const Downtime::Ptr& downtime, bool historical)
 {
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
-	fields1->Set("entry_time", DbValue::FromTimestamp(downtime->Get("entry_time")));
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
+	fields1->Set("entry_time", DbValue::FromTimestamp(downtime->GetEntryTime()));
 	fields1->Set("object_id", object);
 
 	if (object->GetType() == DynamicType::GetByName("Host")) {
 		fields1->Set("downtime_type", 2);
 		/* requires idoutils 1.10 schema fix */
-		fields1->Set("internal_downtime_id", downtime->Get("legacy_id"));
+		fields1->Set("internal_downtime_id", downtime->GetLegacyId());
 	} else if (object->GetType() == DynamicType::GetByName("Service")) {
 		fields1->Set("downtime_type", 1);
-		fields1->Set("internal_downtime_id", downtime->Get("legacy_id"));
+		fields1->Set("internal_downtime_id", downtime->GetLegacyId());
 	} else {
 		Log(LogDebug, "db_ido", "unknown object type for adding downtime.");
 		return;
 	}
 
-	fields1->Set("author_name", downtime->Get("author"));
-	fields1->Set("triggered_by_id", downtime->Get("triggered_by"));
-	fields1->Set("is_fixed", downtime->Get("is_fixed"));
-	fields1->Set("duration", downtime->Get("duration"));
-	fields1->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->Get("start_time")));
-	fields1->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->Get("end_time")));
+	fields1->Set("author_name", downtime->GetAuthor());
+	fields1->Set("comment_data", downtime->GetComment());
+	fields1->Set("triggered_by_id", Service::GetDowntimeByID(downtime->GetTriggeredBy()));
+	fields1->Set("is_fixed", downtime->GetFixed());
+	fields1->Set("duration", downtime->GetDuration());
+	fields1->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->GetStartTime()));
+	fields1->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->GetEndTime()));
 	fields1->Set("was_started", Empty);
 	fields1->Set("actual_start_time", Empty);
 	fields1->Set("actual_start_time_usec", Empty);
 	fields1->Set("is_in_effect", Empty);
-	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->Get("trigger_time")));
+	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	DbQuery query1;
@@ -616,6 +567,7 @@ void ServiceDbObject::AddDowntimeByType(const DynamicObject::Ptr& object, const 
 		query1.Table = "downtimehistory";
 	}
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatDowntime;
 	query1.Fields = fields1;
 	OnQuery(query1);
 }
@@ -624,119 +576,115 @@ void ServiceDbObject::RemoveDowntimes(const Service::Ptr& service)
 {
 	Host::Ptr host = service->GetHost();
 
-	if (!host)
-		return;
-
 	Log(LogDebug, "db_ido", "removing service downtimes for '" + service->GetName() + "'");
 
 	DbQuery query1;
 	query1.Table = "scheduleddowntime";
 	query1.Type = DbQueryDelete;
-	query1.WhereCriteria = boost::make_shared<Dictionary>();
+	query1.Category = DbCatDowntime;
+	query1.WhereCriteria = make_shared<Dictionary>();
 	query1.WhereCriteria->Set("object_id", service);
 	OnQuery(query1);
 
 	/* delete hostcheck service's host downtimes */
 	if (host->GetCheckService() == service) {
+		query1.WhereCriteria = query1.WhereCriteria->ShallowClone();
 		query1.WhereCriteria->Set("object_id", host);
 		OnQuery(query1);
 	}
 }
 
-void ServiceDbObject::RemoveDowntime(const Service::Ptr& service, const Dictionary::Ptr& downtime)
+void ServiceDbObject::RemoveDowntime(const Service::Ptr& service, const Downtime::Ptr& downtime)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	if (!downtime) {
 		Log(LogWarning, "db_ido", "downtime does not exist. not adding it.");
 		return;
 	}
 
-	Log(LogDebug, "db_ido", "removing service downtime (id = " + downtime->Get("legacy_id") + ") for '" + service->GetName() + "'");
+	Log(LogDebug, "db_ido", "removing service downtime (id = " + Convert::ToString(downtime->GetLegacyId()) + ") for '" + service->GetName() + "'");
 
 	/* Status */
 	DbQuery query1;
 	query1.Table = "scheduleddowntime";
 	query1.Type = DbQueryDelete;
-	query1.WhereCriteria = boost::make_shared<Dictionary>();
+	query1.Category = DbCatDowntime;
+	query1.WhereCriteria = make_shared<Dictionary>();
 	query1.WhereCriteria->Set("object_id", service);
-	query1.WhereCriteria->Set("internal_downtime_id", downtime->Get("legacy_id"));
+	query1.WhereCriteria->Set("internal_downtime_id", downtime->GetLegacyId());
 	OnQuery(query1);
 
 	/* delete hostcheck service's host comments */
 	if (host->GetCheckService() == service) {
+		query1.WhereCriteria = query1.WhereCriteria->ShallowClone();
 		query1.WhereCriteria->Set("object_id", host);
 		OnQuery(query1);
 	}
 
 	/* History - update actual_end_time, was_cancelled for service (and host in case) */
 	double now = Utility::GetTime();
-	unsigned long actual_end_time = static_cast<long>(now);
-	unsigned long actual_end_time_usec = (now - actual_end_time) * 1000 * 1000;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
 	DbQuery query3;
 	query3.Table = "downtimehistory";
 	query3.Type = DbQueryUpdate;
+	query3.Category = DbCatDowntime;
 
-	Dictionary::Ptr fields3 = boost::make_shared<Dictionary>();
-	fields3->Set("was_cancelled", downtime->Get("was_cancelled") ? 1 : 0);
-	fields3->Set("actual_end_time", DbValue::FromTimestamp(actual_end_time));
-	fields3->Set("actual_end_time_usec", actual_end_time_usec);
+	Dictionary::Ptr fields3 = make_shared<Dictionary>();
+	fields3->Set("was_cancelled", downtime->GetWasCancelled() ? 1 : 0);
+	fields3->Set("actual_end_time", DbValue::FromTimestamp(time_bag.first));
+	fields3->Set("actual_end_time_usec", time_bag.second);
 	query3.Fields = fields3;
 
-	query3.WhereCriteria = boost::make_shared<Dictionary>();
-	query3.WhereCriteria->Set("internal_downtime_id", downtime->Get("legacy_id"));
-	query3.WhereCriteria->Set("entry_time", DbValue::FromTimestamp(downtime->Get("entry_time")));
-	query3.WhereCriteria->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->Get("start_time")));
-	query3.WhereCriteria->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->Get("end_time")));
+	query3.WhereCriteria = make_shared<Dictionary>();
+	query3.WhereCriteria->Set("internal_downtime_id", downtime->GetLegacyId());
+	query3.WhereCriteria->Set("entry_time", DbValue::FromTimestamp(downtime->GetEntryTime()));
+	query3.WhereCriteria->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->GetStartTime()));
+	query3.WhereCriteria->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->GetEndTime()));
 	query3.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	OnQuery(query3);
 }
 
-void ServiceDbObject::TriggerDowntime(const Service::Ptr& service, const Dictionary::Ptr& downtime)
+void ServiceDbObject::TriggerDowntime(const Service::Ptr& service, const Downtime::Ptr& downtime)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	if (!downtime) {
 		Log(LogWarning, "db_ido", "downtime does not exist. not updating it.");
 		return;
 	}
 
-	Log(LogDebug, "db_ido", "updating triggered service downtime (id = " + downtime->Get("legacy_id") + ") for '" + service->GetName() + "'");
+	Log(LogDebug, "db_ido", "updating triggered service downtime (id = " + Convert::ToString(downtime->GetLegacyId()) + ") for '" + service->GetName() + "'");
 
 	double now = Utility::GetTime();
-	unsigned long actual_start_time = static_cast<long>(now);
-	unsigned long actual_start_time_usec = static_cast<long>((now - actual_start_time) * 1000 * 1000);
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
 	/* Status */
 	DbQuery query1;
 	query1.Table = "scheduleddowntime";
 	query1.Type = DbQueryUpdate;
+	query1.Category = DbCatDowntime;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
 	fields1->Set("was_started", 1);
-	fields1->Set("actual_start_time", DbValue::FromTimestamp(actual_start_time));
-	fields1->Set("actual_start_time_usec", actual_start_time_usec);
+	fields1->Set("actual_start_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("actual_start_time_usec", time_bag.second);
 	fields1->Set("is_in_effect", 1);
-	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->Get("trigger_time")));
+	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
-	query1.WhereCriteria = boost::make_shared<Dictionary>();
+	query1.WhereCriteria = make_shared<Dictionary>();
 	query1.WhereCriteria->Set("object_id", service);
-	query1.WhereCriteria->Set("internal_downtime_id", downtime->Get("legacy_id"));
+	query1.WhereCriteria->Set("internal_downtime_id", downtime->GetLegacyId());
 
 	query1.Fields = fields1;
 	OnQuery(query1);
 
 	/* delete hostcheck service's host comments */
 	if (host->GetCheckService() == service) {
+		query1.WhereCriteria = query1.WhereCriteria->ShallowClone();
 		query1.WhereCriteria->Set("object_id", host);
 		OnQuery(query1);
 	}
@@ -745,20 +693,21 @@ void ServiceDbObject::TriggerDowntime(const Service::Ptr& service, const Diction
 	DbQuery query3;
 	query3.Table = "downtimehistory";
 	query3.Type = DbQueryUpdate;
+	query3.Category = DbCatDowntime;
 
-	Dictionary::Ptr fields3 = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields3 = make_shared<Dictionary>();
 	fields3->Set("was_started", 1);
 	fields3->Set("is_in_effect", 1);
-	fields3->Set("actual_start_time", DbValue::FromTimestamp(actual_start_time));
-	fields3->Set("actual_start_time_usec", actual_start_time_usec);
-	fields3->Set("trigger_time", DbValue::FromTimestamp(downtime->Get("trigger_time")));
+	fields3->Set("actual_start_time", DbValue::FromTimestamp(time_bag.first));
+	fields3->Set("actual_start_time_usec", time_bag.second);
+	fields3->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
 	query3.Fields = fields3;
 
-	query3.WhereCriteria = boost::make_shared<Dictionary>();
-	query3.WhereCriteria->Set("internal_downtime_id", downtime->Get("legacy_id"));
-	query3.WhereCriteria->Set("entry_time", DbValue::FromTimestamp(downtime->Get("entry_time")));
-	query3.WhereCriteria->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->Get("start_time")));
-	query3.WhereCriteria->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->Get("end_time")));
+	query3.WhereCriteria = make_shared<Dictionary>();
+	query3.WhereCriteria->Set("internal_downtime_id", downtime->GetLegacyId());
+	query3.WhereCriteria->Set("entry_time", DbValue::FromTimestamp(downtime->GetEntryTime()));
+	query3.WhereCriteria->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->GetStartTime()));
+	query3.WhereCriteria->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->GetEndTime()));
 	query3.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	OnQuery(query3);
@@ -770,26 +719,24 @@ void ServiceDbObject::AddAcknowledgementHistory(const Service::Ptr& service, con
 {
 	Host::Ptr host = service->GetHost();
 
-	if (!host)
-		return;
-
 	Log(LogDebug, "db_ido", "add acknowledgement history for '" + service->GetName() + "'");
 
 	double now = Utility::GetTime();
-	unsigned long entry_time = static_cast<long>(now);
-	unsigned long entry_time_usec = (now - entry_time) * 1000 * 1000;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
+
 	unsigned long end_time = static_cast<long>(expiry);
 
 	DbQuery query1;
 	query1.Table = "acknowledgements";
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatAcknowledgement;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
-	fields1->Set("entry_time", DbValue::FromTimestamp(entry_time));
-	fields1->Set("entry_time_usec", entry_time_usec);
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
+	fields1->Set("entry_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("entry_time_usec", time_bag.second);
 	fields1->Set("acknowledgement_type", type);
 	fields1->Set("object_id", service);
-	fields1->Set("state", service->GetState());
+	fields1->Set("state", CompatUtility::GetServiceCurrentState(service));
 	fields1->Set("author_name", author);
 	fields1->Set("comment_data", comment);
 	fields1->Set("is_sticky", type == AcknowledgementSticky ? 1 : 0);
@@ -800,6 +747,7 @@ void ServiceDbObject::AddAcknowledgementHistory(const Service::Ptr& service, con
 	OnQuery(query1);
 
 	if (host->GetCheckService() == service) {
+		fields1 = fields1->ShallowClone();
 		fields1->Set("object_id", host);
 		fields1->Set("state", host->GetState());
 		query1.Fields = fields1;
@@ -813,76 +761,60 @@ void ServiceDbObject::AddContactNotificationHistory(const Service::Ptr& service,
 {
 	Host::Ptr host = service->GetHost();
 
-	if (!host)
-		return;
-
 	Log(LogDebug, "db_ido", "add contact notification history for '" + service->GetName() + "'");
 
 	/* start and end happen at the same time */
 	double now = Utility::GetTime();
-	unsigned long start_time = static_cast<long>(now);
-	unsigned long end_time = start_time;
-	unsigned long start_time_usec = (now - start_time) * 1000 * 1000;
-	unsigned long end_time_usec = start_time_usec;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
 	DbQuery query1;
 	query1.Table = "contactnotifications";
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatNotification;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
 	fields1->Set("contact_object_id", user);
-	fields1->Set("start_time", DbValue::FromTimestamp(start_time));
-	fields1->Set("start_time_usec", start_time_usec);
-	fields1->Set("end_time", DbValue::FromTimestamp(end_time));
-	fields1->Set("end_time_usec", end_time_usec);
+	fields1->Set("start_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("start_time_usec", time_bag.second);
+	fields1->Set("end_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("end_time_usec", time_bag.second);
 
 	fields1->Set("notification_id", 0); /* DbConnection class fills in real ID */
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	query1.Fields = fields1;
 	OnQuery(query1);
-
-	if (host->GetCheckService() == service) {
-		query1.Fields = fields1;
-		OnQuery(query1);
-	}
 }
 
 void ServiceDbObject::AddNotificationHistory(const Service::Ptr& service, const std::set<User::Ptr>& users, NotificationType type,
-				      const Dictionary::Ptr& cr, const String& author, const String& text)
+    const CheckResult::Ptr& cr, const String& author, const String& text)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	Log(LogDebug, "db_ido", "add notification history for '" + service->GetName() + "'");
 
 	/* start and end happen at the same time */
 	double now = Utility::GetTime();
-	unsigned long start_time = static_cast<long>(now);
-	unsigned long end_time = start_time;
-	unsigned long start_time_usec = (now - start_time) * 1000 * 1000;
-	unsigned long end_time_usec = start_time_usec;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
 	DbQuery query1;
 	query1.Table = "notifications";
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatNotification;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
 	fields1->Set("notification_type", 1); /* service */
 	fields1->Set("notification_reason", CompatUtility::MapNotificationReasonType(type));
 	fields1->Set("object_id", service);
-	fields1->Set("start_time", DbValue::FromTimestamp(start_time));
-	fields1->Set("start_time_usec", start_time_usec);
-	fields1->Set("end_time", DbValue::FromTimestamp(end_time));
-	fields1->Set("end_time_usec", end_time_usec);
-	fields1->Set("state", service->GetState());
+	fields1->Set("start_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("start_time_usec", time_bag.second);
+	fields1->Set("end_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("end_time_usec", time_bag.second);
+	fields1->Set("state", CompatUtility::GetServiceCurrentState(service));
 
 	if (cr) {
-		Dictionary::Ptr output_bag = CompatUtility::GetCheckResultOutput(cr);
-		fields1->Set("output", output_bag->Get("output"));
-		fields1->Set("long_output", output_bag->Get("long_output"));
+		fields1->Set("output", CompatUtility::GetCheckResultOutput(cr));
+		fields1->Set("long_output", CompatUtility::GetCheckResultLongOutput(cr));
 	}
 
 	fields1->Set("escalated", 0);
@@ -893,6 +825,7 @@ void ServiceDbObject::AddNotificationHistory(const Service::Ptr& service, const 
 	OnQuery(query1);
 
 	if (host->GetCheckService() == service) {
+		fields1 = fields1->ShallowClone();
 		fields1->Set("notification_type", 2); /* host */
 		fields1->Set("object_id", host);
 		fields1->Set("state", host->GetState());
@@ -902,39 +835,35 @@ void ServiceDbObject::AddNotificationHistory(const Service::Ptr& service, const 
 }
 
 /* statehistory */
-void ServiceDbObject::AddStateChangeHistory(const Service::Ptr& service, const Dictionary::Ptr& cr, StateType type)
+void ServiceDbObject::AddStateChangeHistory(const Service::Ptr& service, const CheckResult::Ptr& cr, StateType type)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	Log(LogDebug, "db_ido", "add state change history for '" + service->GetName() + "'");
 
 	double now = Utility::GetTime();
-	unsigned long state_time = static_cast<long>(now);
-	unsigned long state_time_usec = (now - state_time) * 1000 * 1000;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
 	DbQuery query1;
 	query1.Table = "statehistory";
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatStateHistory;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
-	fields1->Set("state_time", DbValue::FromTimestamp(state_time));
-	fields1->Set("state_time_usec", state_time_usec);
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
+	fields1->Set("state_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("state_time_usec", time_bag.second);
 	fields1->Set("object_id", service);
 	fields1->Set("state_change", 1); /* service */
-	fields1->Set("state", service->GetState());
+	fields1->Set("state", CompatUtility::GetServiceCurrentState(service));
 	fields1->Set("state_type", service->GetStateType());
-	fields1->Set("current_check_attempt", service->GetCurrentCheckAttempt());
+	fields1->Set("current_check_attempt", service->GetCheckAttempt());
 	fields1->Set("max_check_attempts", service->GetMaxCheckAttempts());
 	fields1->Set("last_state", service->GetLastState());
 	fields1->Set("last_hard_state", service->GetLastHardState());
 
 	if (cr) {
-		Dictionary::Ptr output_bag = CompatUtility::GetCheckResultOutput(cr);
-		fields1->Set("output", output_bag->Get("output"));
-		fields1->Set("long_output", output_bag->Get("long_output"));
+		fields1->Set("output", CompatUtility::GetCheckResultOutput(cr));
+		fields1->Set("long_output", CompatUtility::GetCheckResultLongOutput(cr));
 	}
 
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
@@ -943,6 +872,7 @@ void ServiceDbObject::AddStateChangeHistory(const Service::Ptr& service, const D
 	OnQuery(query1);
 
 	if (host->GetCheckService() == service) {
+		fields1 = fields1->ShallowClone();
 		fields1->Set("object_id", host);
 		fields1->Set("state_change", 0); /* host */
 		/* get host states instead */
@@ -956,14 +886,11 @@ void ServiceDbObject::AddStateChangeHistory(const Service::Ptr& service, const D
 }
 
 /* logentries */
-void ServiceDbObject::AddCheckResultLogHistory(const Service::Ptr& service, const Dictionary::Ptr &cr)
+void ServiceDbObject::AddCheckResultLogHistory(const Service::Ptr& service, const CheckResult::Ptr &cr)
 {
 	Host::Ptr host = service->GetHost();
 
-	if (!host)
-		return;
-
-	Dictionary::Ptr vars_after = cr->Get("vars_after");
+	Dictionary::Ptr vars_after = cr->GetVarsAfter();
 
 	long state_after = vars_after->Get("state");
 	long stateType_after = vars_after->Get("state_type");
@@ -971,7 +898,7 @@ void ServiceDbObject::AddCheckResultLogHistory(const Service::Ptr& service, cons
 	bool reachable_after = vars_after->Get("reachable");
 	bool host_reachable_after = vars_after->Get("host_reachable");
 
-	Dictionary::Ptr vars_before = cr->Get("vars_before");
+	Dictionary::Ptr vars_before = cr->GetVarsBefore();
 
 	if (vars_before) {
 		long state_before = vars_before->Get("state");
@@ -1003,12 +930,10 @@ void ServiceDbObject::AddCheckResultLogHistory(const Service::Ptr& service, cons
 			return;
 	}
 
-        String output;
+	String output;
 
-        if (cr) {
-		Dictionary::Ptr output_bag = CompatUtility::GetCheckResultOutput(cr);
-		output = output_bag->Get("output");
-        }
+	if (cr)
+		output = CompatUtility::GetCheckResultOutput(cr);
 
 	std::ostringstream msgbuf;
 	msgbuf << "SERVICE ALERT: "
@@ -1051,12 +976,9 @@ void ServiceDbObject::AddCheckResultLogHistory(const Service::Ptr& service, cons
 	}
 }
 
-void ServiceDbObject::AddTriggerDowntimeLogHistory(const Service::Ptr& service, const Dictionary::Ptr& downtime)
+void ServiceDbObject::AddTriggerDowntimeLogHistory(const Service::Ptr& service, const Downtime::Ptr& downtime)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	if (!downtime)
 		return;
@@ -1083,12 +1005,9 @@ void ServiceDbObject::AddTriggerDowntimeLogHistory(const Service::Ptr& service, 
 	}
 }
 
-void ServiceDbObject::AddRemoveDowntimeLogHistory(const Service::Ptr& service, const Dictionary::Ptr& downtime)
+void ServiceDbObject::AddRemoveDowntimeLogHistory(const Service::Ptr& service, const Downtime::Ptr& downtime)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	if (!downtime)
 		return;
@@ -1096,7 +1015,7 @@ void ServiceDbObject::AddRemoveDowntimeLogHistory(const Service::Ptr& service, c
 	String downtime_output;
 	String downtime_state_str;
 
-	if (downtime->Get("was_cancelled") == true) {
+	if (downtime->GetWasCancelled()) {
 		downtime_output = "Scheduled downtime for service has been cancelled.";
 		downtime_state_str = "CANCELLED";
 	} else {
@@ -1127,13 +1046,10 @@ void ServiceDbObject::AddRemoveDowntimeLogHistory(const Service::Ptr& service, c
 }
 
 void ServiceDbObject::AddNotificationSentLogHistory(const Service::Ptr& service, const User::Ptr& user,
-    NotificationType const& notification_type, Dictionary::Ptr const& cr,
+    NotificationType notification_type, const CheckResult::Ptr& cr,
     const String& author, const String& comment_text)
 {
         Host::Ptr host = service->GetHost();
-
-        if (!host)
-                return;
 
 	CheckCommand::Ptr commandObj = service->GetCheckCommand();
 
@@ -1148,50 +1064,45 @@ void ServiceDbObject::AddNotificationSentLogHistory(const Service::Ptr& service,
 		author_comment = ";" + author + ";" + comment_text;
 	}
 
-        if (!cr)
-                return;
+	if (!cr)
+		return;
 
-        String output;
+	String output;
 
-        if (cr) {
-		Dictionary::Ptr output_bag = CompatUtility::GetCheckResultOutput(cr);
-		output = output_bag->Get("output");
-        }
+	if (cr)
+		output = CompatUtility::GetCheckResultOutput(cr);
 
-        std::ostringstream msgbuf;
-        msgbuf << "SERVICE NOTIFICATION: "
-		<< user->GetName() << ";"
-                << host->GetName() << ";"
-                << service->GetShortName() << ";"
-                << notification_type_str << " "
-		<< "(" << Service::StateToString(service->GetState()) << ");"
-		<< check_command << ";"
-		<< output << author_comment
-                << "";
+	std::ostringstream msgbuf;
+	msgbuf << "SERVICE NOTIFICATION: "
+	       << user->GetName() << ";"
+	       << host->GetName() << ";"
+	       << service->GetShortName() << ";"
+	       << notification_type_str << " "
+	       << "(" << Service::StateToString(service->GetState()) << ");"
+	       << check_command << ";"
+	       << output << author_comment
+	       << "";
 
-        AddLogHistory(service, msgbuf.str(), LogEntryTypeServiceNotification);
+	AddLogHistory(service, msgbuf.str(), LogEntryTypeServiceNotification);
 
-        if (service == host->GetCheckService()) {
-                std::ostringstream msgbuf;
-                msgbuf << "HOST NOTIFICATION: "
-			<< user->GetName() << ";"
-                        << host->GetName() << ";"
-			<< notification_type_str << " "
-			<< "(" << Service::StateToString(service->GetState()) << ");"
-			<< check_command << ";"
-			<< output << author_comment
-                        << "";
+	if (service == host->GetCheckService()) {
+		std::ostringstream msgbuf;
+		msgbuf << "HOST NOTIFICATION: "
+		       << user->GetName() << ";"
+		       << host->GetName() << ";"
+		       << notification_type_str << " "
+		       << "(" << Service::StateToString(service->GetState()) << ");"
+		       << check_command << ";"
+		       << output << author_comment
+		       << "";
 
-                AddLogHistory(service, msgbuf.str(), LogEntryTypeHostNotification);
-        }
+		AddLogHistory(service, msgbuf.str(), LogEntryTypeHostNotification);
+	}
 }
 
 void ServiceDbObject::AddFlappingLogHistory(const Service::Ptr& service, FlappingState flapping_state)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	String flapping_state_str;
 	String flapping_output;
@@ -1240,23 +1151,20 @@ void ServiceDbObject::AddLogHistory(const Service::Ptr& service, String buffer, 
 {
 	Host::Ptr host = service->GetHost();
 
-	if (!host)
-		return;
-
 	Log(LogDebug, "db_ido", "add log entry history for '" + service->GetName() + "'");
 
 	double now = Utility::GetTime();
-	unsigned long entry_time = static_cast<long>(now);
-	unsigned long entry_time_usec = (now - entry_time) * 1000 * 1000;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
 	DbQuery query1;
 	query1.Table = "logentries";
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatLog;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
-	fields1->Set("logentry_time", DbValue::FromTimestamp(entry_time));
-	fields1->Set("entry_time", DbValue::FromTimestamp(entry_time));
-	fields1->Set("entry_time_usec", entry_time_usec);
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
+	fields1->Set("logentry_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("entry_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("entry_time_usec", time_bag.second);
 	fields1->Set("object_id", service); // added in 1.10 see #4754
 	fields1->Set("logentry_type", type);
 	fields1->Set("logentry_data", buffer);
@@ -1267,6 +1175,7 @@ void ServiceDbObject::AddLogHistory(const Service::Ptr& service, String buffer, 
 	OnQuery(query1);
 
 	if (host->GetCheckService() == service) {
+		fields1 = fields1->ShallowClone();
 		fields1->Set("object_id", host); // added in 1.10 see #4754
 		query1.Fields = fields1;
 		OnQuery(query1);
@@ -1278,23 +1187,20 @@ void ServiceDbObject::AddFlappingHistory(const Service::Ptr& service, FlappingSt
 {
 	Host::Ptr host = service->GetHost();
 
-	if (!host)
-		return;
-
 	Log(LogDebug, "db_ido", "add flapping history for '" + service->GetName() + "'");
 
 	double now = Utility::GetTime();
-	unsigned long event_time = static_cast<long>(now);
-	unsigned long event_time_usec = (now - event_time) * 1000 * 1000;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
 	DbQuery query1;
 	query1.Table = "flappinghistory";
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatFlapping;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
 
-	fields1->Set("event_time", DbValue::FromTimestamp(event_time));
-	fields1->Set("event_time_usec", event_time_usec);
+	fields1->Set("event_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("event_time_usec", time_bag.second);
 
 	switch (flapping_state) {
 		case FlappingStarted:
@@ -1325,6 +1231,7 @@ void ServiceDbObject::AddFlappingHistory(const Service::Ptr& service, FlappingSt
 	OnQuery(query1);
 
 	if (host->GetCheckService() == service) {
+		fields1 = fields1->ShallowClone();
 		fields1->Set("object_id", host);
 		fields1->Set("flapping_type", 0); /* host */
 		query1.Fields = fields1;
@@ -1333,54 +1240,48 @@ void ServiceDbObject::AddFlappingHistory(const Service::Ptr& service, FlappingSt
 }
 
 /* servicechecks */
-void ServiceDbObject::AddServiceCheckHistory(const Service::Ptr& service, const Dictionary::Ptr &cr)
+void ServiceDbObject::AddServiceCheckHistory(const Service::Ptr& service, const CheckResult::Ptr &cr)
 {
-	Host::Ptr host = service->GetHost();
-
-	if (!host)
+	if (!cr)
 		return;
+
+	Host::Ptr host = service->GetHost();
 
 	Log(LogDebug, "db_ido", "add service check history for '" + service->GetName() + "'");
 
 	DbQuery query1;
 	query1.Table = "servicechecks";
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatCheck;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
-	Dictionary::Ptr attrs;
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
+	double execution_time = Service::CalculateExecutionTime(cr);
 
-	{
-		ObjectLock olock(service);
-		attrs = CompatUtility::GetServiceStatusAttributes(service, CompatTypeService);
-	}
-
-	fields1->Set("check_type", attrs->Get("check_type"));
-	fields1->Set("current_check_attempt", attrs->Get("current_attempt"));
-	fields1->Set("max_check_attempts", attrs->Get("max_attempts"));
-	fields1->Set("state", attrs->Get("current_state"));
-	fields1->Set("state_type", attrs->Get("state_type"));
+	fields1->Set("check_type", CompatUtility::GetServiceCheckType(service));
+	fields1->Set("current_check_attempt", service->GetCheckAttempt());
+	fields1->Set("max_check_attempts", service->GetMaxCheckAttempts());
+	fields1->Set("state", CompatUtility::GetServiceCurrentState(service));
+	fields1->Set("state_type", service->GetStateType());
 
 	double now = Utility::GetTime();
-	unsigned long start_time = static_cast<long>(now);
-	unsigned long start_time_usec = (now - start_time) * 1000 * 1000;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
-	double end = now + attrs->Get("check_execution_time");
-	unsigned long end_time = static_cast<long>(end);
-	unsigned long end_time_usec = (end - end_time) * 1000 * 1000;
+	double end = now + execution_time;
+	std::pair<unsigned long, unsigned long> time_bag_end = CompatUtility::ConvertTimestamp(end);
 
-	fields1->Set("start_time", DbValue::FromTimestamp(start_time));
-	fields1->Set("start_time_usec", start_time_usec);
-	fields1->Set("end_time", DbValue::FromTimestamp(end_time));
-	fields1->Set("end_time_usec", end_time_usec);
+	fields1->Set("start_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("start_time_usec", time_bag.second);
+	fields1->Set("end_time", DbValue::FromTimestamp(time_bag_end.first));
+	fields1->Set("end_time_usec", time_bag_end.second);
 	fields1->Set("command_object_id", service->GetCheckCommand());
 	fields1->Set("command_args", Empty);
-	fields1->Set("command_line", cr->Get("command"));
-	fields1->Set("execution_time", attrs->Get("check_execution_time"));
-	fields1->Set("latency", attrs->Get("check_latency"));
-	fields1->Set("return_code", cr->Get("exit_state"));
-	fields1->Set("output", attrs->Get("plugin_output"));
-	fields1->Set("long_output", attrs->Get("long_plugin_output"));
-	fields1->Set("perfdata", attrs->Get("performance_data"));
+	fields1->Set("command_line", cr->GetCommand());
+	fields1->Set("execution_time", execution_time);
+	fields1->Set("latency", Service::CalculateLatency(cr));
+	fields1->Set("return_code", cr->GetExitStatus());
+	fields1->Set("output", CompatUtility::GetCheckResultOutput(cr));
+	fields1->Set("long_output", CompatUtility::GetCheckResultLongOutput(cr));
+	fields1->Set("perfdata", CompatUtility::GetCheckResultPerfdata(cr));
 
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
@@ -1390,6 +1291,7 @@ void ServiceDbObject::AddServiceCheckHistory(const Service::Ptr& service, const 
 	if (host->GetCheckService() == service) {
 		query1.Table = "hostchecks";
 
+		fields1 = fields1->ShallowClone();
 		fields1->Remove("service_object_id");
 		fields1->Set("host_object_id", host);
 		fields1->Set("state", host->GetState());
@@ -1404,30 +1306,27 @@ void ServiceDbObject::AddEventHandlerHistory(const Service::Ptr& service)
 {
 	Host::Ptr host = service->GetHost();
 
-	if (!host)
-		return;
-
 	Log(LogDebug, "db_ido", "add eventhandler history for '" + service->GetName() + "'");
 
 	double now = Utility::GetTime();
-	unsigned long event_time = static_cast<long>(now);
-	unsigned long event_time_usec = (now - event_time) * 1000 * 1000;
+	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
 	DbQuery query1;
 	query1.Table = "eventhandlers";
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatEventHandler;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
 
 	fields1->Set("eventhandler_type", 1); /* service */
 	fields1->Set("object_id", service);
-	fields1->Set("state", service->GetState());
+	fields1->Set("state", CompatUtility::GetServiceCurrentState(service));
 	fields1->Set("state_type", service->GetStateType());
 
-	fields1->Set("start_time", DbValue::FromTimestamp(event_time));
-	fields1->Set("start_time_usec", event_time_usec);
-	fields1->Set("end_time", DbValue::FromTimestamp(event_time));
-	fields1->Set("end_time_usec", event_time_usec);
+	fields1->Set("start_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("start_time_usec", time_bag.second);
+	fields1->Set("end_time", DbValue::FromTimestamp(time_bag.first));
+	fields1->Set("end_time_usec", time_bag.second);
 	fields1->Set("command_object_id", service->GetEventCommand());
 
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
@@ -1436,6 +1335,7 @@ void ServiceDbObject::AddEventHandlerHistory(const Service::Ptr& service)
 	OnQuery(query1);
 
 	if (host->GetCheckService() == service) {
+		fields1 = fields1->ShallowClone();
 		fields1->Set("eventhandler_type", 0); /* host */
 		fields1->Set("object_id", host);
 		fields1->Set("state", host->GetState());
@@ -1453,8 +1353,9 @@ void ServiceDbObject::AddExternalCommandHistory(double time, const String& comma
 	DbQuery query1;
 	query1.Table = "externalcommands";
 	query1.Type = DbQueryInsert;
+	query1.Category = DbCatExternalCommand;
 
-	Dictionary::Ptr fields1 = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields1 = make_shared<Dictionary>();
 
 	fields1->Set("entry_time", DbValue::FromTimestamp(static_cast<long>(time)));
 	fields1->Set("command_type", CompatUtility::MapExternalCommandType(command));

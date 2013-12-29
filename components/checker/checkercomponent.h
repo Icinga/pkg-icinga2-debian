@@ -20,6 +20,7 @@
 #ifndef CHECKERCOMPONENT_H
 #define CHECKERCOMPONENT_H
 
+#include "checker/checkercomponent.th"
 #include "icinga/service.h"
 #include "base/dynamicobject.h"
 #include "base/timer.h"
@@ -46,24 +47,14 @@ struct ServiceNextCheckExtractor
 	 */
 	double operator()(const Service::Ptr& service)
 	{
-		if (!service->HasAuthority("checker"))
-			return Utility::GetTime() + 60;
-
-		double next = service->GetNextCheck();
-
-		while (next == 0) {
-			service->UpdateNextCheck();
-			next = service->GetNextCheck();
-		}
-
-		return next;
+		return service->GetNextCheck();
 	}
 };
 
 /**
  * @ingroup checker
  */
-class CheckerComponent : public DynamicObject
+class CheckerComponent : public ObjectImpl<CheckerComponent>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(CheckerComponent);
@@ -76,6 +67,7 @@ public:
 		>
 	> ServiceSet;
 
+	virtual void OnConfigLoaded(void);
 	virtual void Start(void);
 	virtual void Stop(void);
 
@@ -101,6 +93,8 @@ private:
 	void NextCheckChangedHandler(const Service::Ptr& service);
 
 	void RescheduleCheckTimer(void);
+
+	ThreadPool m_Pool;
 };
 
 }

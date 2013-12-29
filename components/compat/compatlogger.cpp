@@ -20,9 +20,11 @@
 #include "compat/compatlogger.h"
 #include "icinga/service.h"
 #include "icinga/checkcommand.h"
+#include "icinga/eventcommand.h"
 #include "icinga/notification.h"
 #include "icinga/macroprocessor.h"
 #include "icinga/externalcommandprocessor.h"
+#include "icinga/compatutility.h"
 #include "config/configcompilercontext.h"
 #include "base/dynamictype.h"
 #include "base/objectlock.h"
@@ -32,7 +34,6 @@
 #include "base/application.h"
 #include "base/utility.h"
 #include "base/scriptfunction.h"
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
 
@@ -40,10 +41,6 @@ using namespace icinga;
 
 REGISTER_TYPE(CompatLogger);
 REGISTER_SCRIPTFUNCTION(ValidateRotationMethod, &CompatLogger::ValidateRotationMethod);
-
-CompatLogger::CompatLogger(void)
-	: m_LastRotation(0)
-{ }
 
 /**
  * @threadsafety Always.
@@ -53,13 +50,14 @@ void CompatLogger::Start(void)
 	DynamicObject::Start();
 
 	Service::OnNewCheckResult.connect(bind(&CompatLogger::CheckResultHandler, this, _1, _2));
-	Service::OnNotificationSentToUser.connect(bind(&CompatLogger::NotificationSentHandler, this, _1, _2, _3, _4, _5, _6));
+	Service::OnNotificationSentToUser.connect(bind(&CompatLogger::NotificationSentHandler, this, _1, _2, _3, _4, _5, _6, _7));
 	Service::OnFlappingChanged.connect(bind(&CompatLogger::FlappingHandler, this, _1, _2));
 	Service::OnDowntimeTriggered.connect(boost::bind(&CompatLogger::TriggerDowntimeHandler, this, _1, _2));
 	Service::OnDowntimeRemoved.connect(boost::bind(&CompatLogger::RemoveDowntimeHandler, this, _1, _2));
+	Service::OnEventCommandExecuted.connect(bind(&CompatLogger::EventCommandHandler, this, _1));
 	ExternalCommandProcessor::OnNewExternalCommand.connect(boost::bind(&CompatLogger::ExternalCommandHandler, this, _2, _3));
 
-	m_RotationTimer = boost::make_shared<Timer>();
+	m_RotationTimer = make_shared<Timer>();
 	m_RotationTimer->OnTimerExpired.connect(boost::bind(&CompatLogger::RotationTimerHandler, this));
 	m_RotationTimer->Start();
 
@@ -70,36 +68,11 @@ void CompatLogger::Start(void)
 /**
  * @threadsafety Always.
  */
-String CompatLogger::GetLogDir(void) const
-{
-	if (!m_LogDir.IsEmpty())
-		return m_LogDir;
-	else
-		return Application::GetLocalStateDir() + "/log/icinga2/compat";
-}
-
-/**
- * @threadsafety Always.
- */
-String CompatLogger::GetRotationMethod(void) const
-{
-	if (!m_RotationMethod.IsEmpty())
-		return m_RotationMethod;
-	else
-		return "HOURLY";
-}
-
-/**
- * @threadsafety Always.
- */
-void CompatLogger::CheckResultHandler(const Service::Ptr& service, const Dictionary::Ptr &cr)
+void CompatLogger::CheckResultHandler(const Service::Ptr& service, const CheckResult::Ptr &cr)
 {
 	Host::Ptr host = service->GetHost();
 
-	if (!host)
-		return;
-
-	Dictionary::Ptr vars_after = cr->Get("vars_after");
+	Dictionary::Ptr vars_after = cr->GetVarsAfter();
 
 	long state_after = vars_after->Get("state");
 	long stateType_after = vars_after->Get("state_type");
@@ -107,7 +80,7 @@ void CompatLogger::CheckResultHandler(const Service::Ptr& service, const Diction
 	bool reachable_after = vars_after->Get("reachable");
 	bool host_reachable_after = vars_after->Get("host_reachable");
 
-	Dictionary::Ptr vars_before = cr->Get("vars_before");
+	Dictionary::Ptr vars_before = cr->GetVarsBefore();
 
 	if (vars_before) {
 		long state_before = vars_before->Get("state");
@@ -120,17 +93,9 @@ void CompatLogger::CheckResultHandler(const Service::Ptr& service, const Diction
 			return; /* Nothing changed, ignore this checkresult. */
 	}
 
-        String raw_output;
-        String output;
-
-        if (cr) {
-                raw_output = cr->Get("output");
-                size_t line_end = raw_output.Find("\n");
-
-                output = raw_output.SubStr(0, line_end);
-
-                boost::algorithm::replace_all(output, "\n", "\\n");
-        }
+	String output;
+	if (cr)
+		output = CompatUtility::GetCheckResultOutput(cr);
 
 	std::ostringstream msgbuf;
 	msgbuf << "SERVICE ALERT: "
@@ -173,12 +138,9 @@ void CompatLogger::CheckResultHandler(const Service::Ptr& service, const Diction
 /**
  * @threadsafety Always.
  */
-void CompatLogger::TriggerDowntimeHandler(const Service::Ptr& service, const Dictionary::Ptr& downtime)
+void CompatLogger::TriggerDowntimeHandler(const Service::Ptr& service, const Downtime::Ptr& downtime)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	if (!downtime)
 		return;
@@ -219,12 +181,9 @@ void CompatLogger::TriggerDowntimeHandler(const Service::Ptr& service, const Dic
 /**
  * @threadsafety Always.
  */
-void CompatLogger::RemoveDowntimeHandler(const Service::Ptr& service, const Dictionary::Ptr& downtime)
+void CompatLogger::RemoveDowntimeHandler(const Service::Ptr& service, const Downtime::Ptr& downtime)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	if (!downtime)
 		return;
@@ -232,7 +191,7 @@ void CompatLogger::RemoveDowntimeHandler(const Service::Ptr& service, const Dict
 	String downtime_output;
 	String downtime_state_str;
 
-	if (downtime->Get("was_cancelled") == true) {
+	if (downtime->GetWasCancelled()) {
 		downtime_output = "Scheduled downtime for service has been cancelled.";
 		downtime_state_str = "CANCELLED";
 	} else {
@@ -277,39 +236,24 @@ void CompatLogger::RemoveDowntimeHandler(const Service::Ptr& service, const Dict
  * @threadsafety Always.
  */
 void CompatLogger::NotificationSentHandler(const Service::Ptr& service, const User::Ptr& user,
-		NotificationType const& notification_type, Dictionary::Ptr const& cr,
-		const String& author, const String& comment_text)
+    NotificationType const& notification_type, CheckResult::Ptr const& cr,
+    const String& author, const String& comment_text, const String& command_name)
 {
         Host::Ptr host = service->GetHost();
-
-        if (!host)
-                return;
-
-	CheckCommand::Ptr commandObj = service->GetCheckCommand();
-
-	String check_command = "";
-	if (commandObj)
-		check_command = commandObj->GetName();
 
 	String notification_type_str = Notification::NotificationTypeToString(notification_type);
 
 	String author_comment = "";
 	if (notification_type == NotificationCustom || notification_type == NotificationAcknowledgement) {
-		author_comment = ";" + author + ";" + comment_text;
+		author_comment = author + ";" + comment_text;
 	}
 
         if (!cr)
                 return;
 
 	String output;
-	String raw_output;
-
-        if (cr) {
-                raw_output = cr->Get("output");
-                size_t line_end = raw_output.Find("\n");
-
-                output = raw_output.SubStr(0, line_end);
-        }
+	if (cr)
+		output = CompatUtility::GetCheckResultOutput(cr);
 
         std::ostringstream msgbuf;
         msgbuf << "SERVICE NOTIFICATION: "
@@ -318,8 +262,9 @@ void CompatLogger::NotificationSentHandler(const Service::Ptr& service, const Us
                 << service->GetShortName() << ";"
                 << notification_type_str << " "
 		<< "(" << Service::StateToString(service->GetState()) << ");"
-		<< check_command << ";"
-		<< output << author_comment
+		<< command_name << ";"
+		<< output << ";"
+		<< author_comment
                 << "";
 
         {
@@ -334,8 +279,9 @@ void CompatLogger::NotificationSentHandler(const Service::Ptr& service, const Us
                         << host->GetName() << ";"
                 	<< notification_type_str << " "
 			<< "(" << Service::StateToString(service->GetState()) << ");"
-			<< check_command << ";"
-			<< output << author_comment
+			<< command_name << ";"
+			<< output << ";"
+			<< author_comment
                         << "";
 
                 {
@@ -356,9 +302,6 @@ void CompatLogger::NotificationSentHandler(const Service::Ptr& service, const Us
 void CompatLogger::FlappingHandler(const Service::Ptr& service, FlappingState flapping_state)
 {
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	String flapping_state_str;
 	String flapping_output;
@@ -412,9 +355,7 @@ void CompatLogger::FlappingHandler(const Service::Ptr& service, FlappingState fl
                 ObjectLock oLock(this);
                 Flush();
         }
-
 }
-
 
 void CompatLogger::ExternalCommandHandler(const String& command, const std::vector<String>& arguments)
 {
@@ -427,6 +368,52 @@ void CompatLogger::ExternalCommandHandler(const String& command, const std::vect
         {
                 ObjectLock oLock(this);
                 WriteLine(msgbuf.str());
+        }
+}
+
+void CompatLogger::EventCommandHandler(const Service::Ptr& service)
+{
+	Host::Ptr host = service->GetHost();
+
+	EventCommand::Ptr event_command = service->GetEventCommand();
+	String event_command_name = event_command->GetName();
+	String state = Service::StateToString(service->GetState());
+	String state_type = Service::StateTypeToString(service->GetStateType());
+	long current_attempt = service->GetCheckAttempt();
+
+        std::ostringstream msgbuf;
+
+        msgbuf << "SERVICE EVENT HANDLER: "
+                << host->GetName() << ";"
+                << service->GetShortName() << ";"
+		<< state << ";"
+		<< state_type << ";"
+		<< current_attempt << ";"
+                << event_command_name;
+
+        {
+                ObjectLock oLock(this);
+                WriteLine(msgbuf.str());
+        }
+
+        if (service == host->GetCheckService()) {
+                std::ostringstream msgbuf;
+                msgbuf << "HOST EVENT HANDLER: "
+                        << host->GetName() << ";"
+			<< state << ";"
+			<< state_type << ";"
+			<< current_attempt << ";"
+			<< event_command_name;
+
+                {
+                        ObjectLock oLock(this);
+                        WriteLine(msgbuf.str());
+                }
+        }
+
+        {
+                ObjectLock oLock(this);
+                Flush();
         }
 }
 
@@ -491,13 +478,19 @@ void CompatLogger::ReopenFile(bool rotate)
 
 		ObjectLock olock(hc);
 
+		String output;
+		CheckResult::Ptr cr = hc->GetLastCheckResult();
+
+		if (cr)
+			output = CompatUtility::GetCheckResultOutput(cr);
+
 		std::ostringstream msgbuf;
-		msgbuf << "HOST STATE: CURRENT;"
+		msgbuf << "CURRENT HOST STATE: "
 		       << host->GetName() << ";"
 		       << Host::StateToString(Host::CalculateState(hc->GetState(), reachable)) << ";"
 		       << Service::StateTypeToString(hc->GetStateType()) << ";"
-		       << hc->GetCurrentCheckAttempt() << ";"
-		       << "";
+		       << hc->GetCheckAttempt() << ";"
+		       << output << "";
 
 		WriteLine(msgbuf.str());
 	}
@@ -505,17 +498,20 @@ void CompatLogger::ReopenFile(bool rotate)
 	BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjects<Service>()) {
 		Host::Ptr host = service->GetHost();
 
-		if (!host)
-			continue;
+		String output;
+		CheckResult::Ptr cr = service->GetLastCheckResult();
+
+		if (cr)
+			output = CompatUtility::GetCheckResultOutput(cr);
 
 		std::ostringstream msgbuf;
-		msgbuf << "SERVICE STATE: CURRENT;"
+		msgbuf << "CURRENT SERVICE STATE: "
 		       << host->GetName() << ";"
 		       << service->GetShortName() << ";"
 		       << Service::StateToString(service->GetState()) << ";"
 		       << Service::StateTypeToString(service->GetStateType()) << ";"
-		       << service->GetCurrentCheckAttempt() << ";"
-		       << "";
+		       << service->GetCheckAttempt() << ";"
+		       << output << "";
 
 		WriteLine(msgbuf.str());
 	}
@@ -599,22 +595,3 @@ void CompatLogger::ValidateRotationMethod(const String& location, const Dictiona
 	}
 }
 
-void CompatLogger::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
-{
-	DynamicObject::InternalSerialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		bag->Set("log_dir", m_LogDir);
-		bag->Set("rotation_method", m_RotationMethod);
-	}
-}
-
-void CompatLogger::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
-{
-	DynamicObject::InternalDeserialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		m_LogDir = bag->Get("log_dir");
-		m_RotationMethod = bag->Get("rotation_method");
-	}
-}

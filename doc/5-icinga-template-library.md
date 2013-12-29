@@ -58,6 +58,18 @@ plugindir       | **Required.** The directory containing this plugin.
 state           | **Optional.** The state. Can be one of 0 (ok), 1 (warning), 2 (critical) and 3 (unknown). Defaults to 0.
 text            | **Optional.** Plugin output. Defaults to "Check was successful.".
 
+### passive
+
+Specialised check command object for passive checks executing the `check_dummy` plugin with appropriate default values.
+
+Macros:
+
+Name            | Description
+----------------|--------------
+plugindir       | **Required.** The directory containing this plugin.
+state           | **Optional.** The state. Can be one of 0 (ok), 1 (warning), 2 (critical) and 3 (unknown). Defaults to 3.
+text            | **Optional.** Plugin output. Defaults to "No Passive Check Result Received.".
+
 ### tcp
 
 Check command object for the `check_tcp` plugin.
@@ -248,3 +260,10 @@ plugindir       | **Required.** The directory containing this plugin.
 address         | **Required.** The host's address.
 oid             | **Optional.** The SNMP OID. Defaults to "1.3.6.1.2.1.1.3.0".
 community       | **Optional.** The SNMP community. Defaults to "public".
+
+### icinga
+
+Check command for the built-in `icinga` check. This check returns performance
+data for the current Icinga instance.
+
+The `icinga` check command does not support any macros.

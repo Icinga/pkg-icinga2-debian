@@ -22,40 +22,70 @@
 #include "base/convert.h"
 #include "base/utility.h"
 #include "base/application.h"
+#include "base/dynamictype.h"
+#include "base/exception.h"
 #include "db_ido/dbtype.h"
 #include "db_ido/dbvalue.h"
 #include "db_ido_mysql/idomysqlconnection.h"
-#include <boost/exception/diagnostic_information.hpp>
 #include <boost/tuple/tuple.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(IdoMysqlConnection);
 
+#define SCHEMA_VERSION "1.11.0"
+
 void IdoMysqlConnection::Start(void)
 {
 	DbConnection::Start();
 
 	m_Connected = false;
-	m_RequiredSchemaVersion = "1.10.0";
 
-	m_TxTimer = boost::make_shared<Timer>();
+	m_QueryQueue.SetExceptionCallback(boost::bind(&IdoMysqlConnection::ExceptionHandler, this, _1));
+
+	m_TxTimer = make_shared<Timer>();
 	m_TxTimer->SetInterval(5);
 	m_TxTimer->OnTimerExpired.connect(boost::bind(&IdoMysqlConnection::TxTimerHandler, this));
 	m_TxTimer->Start();
 
-	m_ReconnectTimer = boost::make_shared<Timer>();
+	m_ReconnectTimer = make_shared<Timer>();
 	m_ReconnectTimer->SetInterval(10);
 	m_ReconnectTimer->OnTimerExpired.connect(boost::bind(&IdoMysqlConnection::ReconnectTimerHandler, this));
 	m_ReconnectTimer->Start();
+	m_ReconnectTimer->Reschedule(0);
 
 	ASSERT(mysql_thread_safe());
 }
 
 void IdoMysqlConnection::Stop(void)
 {
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::Disconnect, this));
+	m_QueryQueue.Join();
+}
+
+void IdoMysqlConnection::ExceptionHandler(boost::exception_ptr exp)
+{
+	Log(LogCritical, "db_ido_mysql", "Exception during database operation: " + DiagnosticInformation(exp));
+
+	boost::mutex::scoped_lock lock(m_ConnectionMutex);
+
+	if (m_Connected) {
+		mysql_close(&m_Connection);
+
+		m_Connected = false;
+	}
+}
+
+void IdoMysqlConnection::AssertOnWorkQueue(void)
+{
+	ASSERT(boost::this_thread::get_id() == m_QueryQueue.GetThreadId());
+}
+
+void IdoMysqlConnection::Disconnect(void)
+{
+	AssertOnWorkQueue();
+
 	boost::mutex::scoped_lock lock(m_ConnectionMutex);
 
 	if (!m_Connected)
@@ -69,6 +99,11 @@ void IdoMysqlConnection::Stop(void)
 
 void IdoMysqlConnection::TxTimerHandler(void)
 {
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::NewTransaction, this), true);
+}
+
+void IdoMysqlConnection::NewTransaction(void)
+{
 	boost::mutex::scoped_lock lock(m_ConnectionMutex);
 
 	if (!m_Connected)
@@ -80,6 +115,15 @@ void IdoMysqlConnection::TxTimerHandler(void)
 
 void IdoMysqlConnection::ReconnectTimerHandler(void)
 {
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::Reconnect, this));
+}
+
+void IdoMysqlConnection::Reconnect(void)
+{
+	AssertOnWorkQueue();
+
+	CONTEXT("Reconnecting to MySQL IDO database '" + GetName() + "'");
+
 	{
 		boost::mutex::scoped_lock lock(m_ConnectionMutex);
 
@@ -95,17 +139,19 @@ void IdoMysqlConnection::ReconnectTimerHandler(void)
 			reconnect = true;
 		}
 
+		ClearIDCache();
+
 		String ihost, iuser, ipasswd, idb;
 		const char *host, *user , *passwd, *db;
 		long port;
 
-		ihost = m_Host;
-		iuser = m_User;
-		ipasswd = m_Password;
-		idb = m_Database;
+		ihost = GetHost();
+		iuser = GetUser();
+		ipasswd = GetPassword();
+		idb = GetDatabase();
 
 		host = (!ihost.IsEmpty()) ? ihost.CStr() : NULL;
-		port = m_Port;
+		port = GetPort();
 		user = (!iuser.IsEmpty()) ? iuser.CStr() : NULL;
 		passwd = (!ipasswd.IsEmpty()) ? ipasswd.CStr() : NULL;
 		db = (!idb.IsEmpty()) ? idb.CStr() : NULL;
@@ -127,20 +173,17 @@ void IdoMysqlConnection::ReconnectTimerHandler(void)
 		Dictionary::Ptr version_row = version_rows->Get(0);
 		String version = version_row->Get("version");
 
-		if (Utility::CompareVersion(m_RequiredSchemaVersion, version) < 0) {
+		if (Utility::CompareVersion(SCHEMA_VERSION, version) < 0) {
 			BOOST_THROW_EXCEPTION(std::runtime_error("Schema version '" + version + "' does not match the required version '" +
-			   m_RequiredSchemaVersion + "'! Please check the upgrade documentation."));
+			   SCHEMA_VERSION + "'! Please check the upgrade documentation."));
 		}
 
-		String instanceName = "default";
-
-		if (!m_InstanceName.IsEmpty())
-			instanceName = m_InstanceName;
+		String instanceName = GetInstanceName();
 
 		Array::Ptr rows = Query("SELECT instance_id FROM " + GetTablePrefix() + "instances WHERE instance_name = '" + Escape(instanceName) + "'");
 
 		if (rows->GetLength() == 0) {
-			Query("INSERT INTO " + GetTablePrefix() + "instances (instance_name, instance_description) VALUES ('" + Escape(instanceName) + "', '" + m_InstanceDescription + "')");
+			Query("INSERT INTO " + GetTablePrefix() + "instances (instance_name, instance_description) VALUES ('" + Escape(instanceName) + "', '" + Escape(GetInstanceDescription()) + "')");
 			m_InstanceID = GetLastInsertID();
 		} else {
 			Dictionary::Ptr row = rows->Get(0);
@@ -163,10 +206,8 @@ void IdoMysqlConnection::ReconnectTimerHandler(void)
 		/* clear config tables for the initial config dump */
 		ClearConfigTables();
 
-		Query("UPDATE " + GetTablePrefix() + "objects SET is_active = 0");
-
 		std::ostringstream q1buf;
-		q1buf << "SELECT object_id, objecttype_id, name1, name2 FROM " + GetTablePrefix() + "objects WHERE instance_id = " << static_cast<long>(m_InstanceID);
+		q1buf << "SELECT object_id, objecttype_id, name1, name2, is_active FROM " + GetTablePrefix() + "objects WHERE instance_id = " << static_cast<long>(m_InstanceID);
 		rows = Query(q1buf.str());
 
 		ObjectLock olock(rows);
@@ -178,6 +219,7 @@ void IdoMysqlConnection::ReconnectTimerHandler(void)
 
 			DbObject::Ptr dbobj = dbtype->GetOrCreateObjectByName(row->Get("name1"), row->Get("name2"));
 			SetObjectID(dbobj, DbReference(row->Get("object_id")));
+			SetObjectActive(dbobj, row->Get("is_active"));
 		}
 
 		Query("BEGIN");
@@ -190,12 +232,15 @@ void IdoMysqlConnection::ClearConfigTables(void)
 {
 	/* TODO make hardcoded table names modular */
 	ClearConfigTable("commands");
+	ClearConfigTable("comments");
 	ClearConfigTable("contact_addresses");
 	ClearConfigTable("contact_notificationcommands");
 	ClearConfigTable("contactgroup_members");
 	ClearConfigTable("contactgroups");
 	ClearConfigTable("contacts");
+	ClearConfigTable("contactstatus");
 	ClearConfigTable("customvariables");
+	ClearConfigTable("customvariablestatus");
 	ClearConfigTable("host_contactgroups");
 	ClearConfigTable("host_contacts");
 	ClearConfigTable("host_parenthosts");
@@ -203,12 +248,16 @@ void IdoMysqlConnection::ClearConfigTables(void)
 	ClearConfigTable("hostgroup_members");
 	ClearConfigTable("hostgroups");
 	ClearConfigTable("hosts");
+	ClearConfigTable("hoststatus");
+	ClearConfigTable("programstatus");
+	ClearConfigTable("scheduleddowntime");
 	ClearConfigTable("service_contactgroups");
 	ClearConfigTable("service_contacts");
 	ClearConfigTable("servicedependencies");
 	ClearConfigTable("servicegroup_members");
 	ClearConfigTable("servicegroups");
 	ClearConfigTable("services");
+	ClearConfigTable("servicestatus");
 	ClearConfigTable("timeperiod_timeranges");
 	ClearConfigTable("timeperiods");
 }
@@ -220,21 +269,31 @@ void IdoMysqlConnection::ClearConfigTable(const String& table)
 
 Array::Ptr IdoMysqlConnection::Query(const String& query)
 {
+	AssertOnWorkQueue();
+
 	Log(LogDebug, "db_ido_mysql", "Query: " + query);
 
 	if (mysql_query(&m_Connection, query.CStr()) != 0)
-	    BOOST_THROW_EXCEPTION(std::runtime_error(mysql_error(&m_Connection)));
+		BOOST_THROW_EXCEPTION(
+		    database_error()
+		        << errinfo_message(mysql_error(&m_Connection))
+			<< errinfo_database_query(query)
+		);
 
-	MYSQL_RES *result = mysql_store_result(&m_Connection);
+	MYSQL_RES *result = mysql_use_result(&m_Connection);
 
 	if (!result) {
 		if (mysql_field_count(&m_Connection) > 0)
-			BOOST_THROW_EXCEPTION(std::runtime_error(mysql_error(&m_Connection)));
+			BOOST_THROW_EXCEPTION(
+			    database_error()
+				<< errinfo_message(mysql_error(&m_Connection))
+				<< errinfo_database_query(query)
+			);
 
 		return Array::Ptr();
 	}
 
-	Array::Ptr rows = boost::make_shared<Array>();
+	Array::Ptr rows = make_shared<Array>();
 
 	for (;;) {
 		Dictionary::Ptr row = FetchRow(result);
@@ -252,12 +311,16 @@ Array::Ptr IdoMysqlConnection::Query(const String& query)
 
 DbReference IdoMysqlConnection::GetLastInsertID(void)
 {
+	AssertOnWorkQueue();
+
 	return DbReference(mysql_insert_id(&m_Connection));
 }
 
 String IdoMysqlConnection::Escape(const String& s)
 {
-	ssize_t length = s.GetLength();
+	AssertOnWorkQueue();
+
+	size_t length = s.GetLength();
 	char *to = new char[s.GetLength() * 2 + 1];
 
 	mysql_real_escape_string(&m_Connection, to, s.CStr(), length);
@@ -271,6 +334,8 @@ String IdoMysqlConnection::Escape(const String& s)
 
 Dictionary::Ptr IdoMysqlConnection::FetchRow(MYSQL_RES *result)
 {
+	AssertOnWorkQueue();
+
 	MYSQL_ROW row;
 	MYSQL_FIELD *field;
 	unsigned long *lengths, i;
@@ -285,17 +350,11 @@ Dictionary::Ptr IdoMysqlConnection::FetchRow(MYSQL_RES *result)
 	if (!lengths)
 		return Dictionary::Ptr();
 
-	Dictionary::Ptr dict = boost::make_shared<Dictionary>();
+	Dictionary::Ptr dict = make_shared<Dictionary>();
 
 	mysql_field_seek(result, 0);
-	for (field = mysql_fetch_field(result), i = 0; field; field = mysql_fetch_field(result), i++) {
-		Value value;
-
-		if (field)
-			value = String(row[i], row[i] + lengths[i]);
-
-		dict->Set(field->name, value);
-	}
+	for (field = mysql_fetch_field(result), i = 0; field; field = mysql_fetch_field(result), i++)
+		dict->Set(field->name, String(row[i], row[i] + lengths[i]));
 
 	return dict;
 }
@@ -404,7 +463,17 @@ bool IdoMysqlConnection::FieldToEscapedString(const String& key, const Value& va
 
 void IdoMysqlConnection::ExecuteQuery(const DbQuery& query)
 {
+	ASSERT(query.Category != DbCatInvalid);
+
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query), true);
+}
+
+void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query)
+{
 	boost::mutex::scoped_lock lock(m_ConnectionMutex);
+
+	if ((query.Category & GetCategories()) == 0)
+		return;
 
 	if (!m_Connected)
 		return;
@@ -416,18 +485,17 @@ void IdoMysqlConnection::ExecuteQuery(const DbQuery& query)
 		where << " WHERE ";
 
 		ObjectLock olock(query.WhereCriteria);
-		String key;
 		Value value;
 		bool first = true;
 
-		BOOST_FOREACH(boost::tie(key, value), query.WhereCriteria) {
-			if (!FieldToEscapedString(key, value, &value))
+		BOOST_FOREACH(const Dictionary::Pair& kv, query.WhereCriteria) {
+			if (!FieldToEscapedString(kv.first, kv.second, &value))
 				return;
 
 			if (!first)
 				where << " AND ";
 
-			where << key << " = " << value;
+			where << kv.first << " = " << value;
 
 			if (first)
 				first = false;
@@ -448,12 +516,8 @@ void IdoMysqlConnection::ExecuteQuery(const DbQuery& query)
 
 		if (hasid)
 			type = DbQueryUpdate;
-		else {
-			if (query.WhereCriteria)
-				Query("DELETE FROM " + GetTablePrefix() + query.Table + where.str());
-
+		else
 			type = DbQueryInsert;
-		}
 	} else
 		type = query.Type;
 
@@ -472,31 +536,30 @@ void IdoMysqlConnection::ExecuteQuery(const DbQuery& query)
 	}
 
 	if (type == DbQueryInsert || type == DbQueryUpdate) {
-		String cols;
-		String values;
+		std::ostringstream colbuf, valbuf;
 
 		ObjectLock olock(query.Fields);
 
-		String key;
-		Value value;
 		bool first = true;
-		BOOST_FOREACH(boost::tie(key, value), query.Fields) {
-			if (!FieldToEscapedString(key, value, &value))
+		BOOST_FOREACH(const Dictionary::Pair& kv, query.Fields) {
+			Value value;
+
+			if (!FieldToEscapedString(kv.first, kv.second, &value))
 				return;
 
 			if (type == DbQueryInsert) {
 				if (!first) {
-					cols += ", ";
-					values += ", ";
+					colbuf << ", ";
+					valbuf << ", ";
 				}
 
-				cols += key;
-				values += Convert::ToString(value);
+				colbuf << kv.first;
+				valbuf << value;
 			} else {
 				if (!first)
 					qbuf << ", ";
 
-				qbuf << " " << key << " = " << value;
+				qbuf << " " << kv.first << " = " << value;
 			}
 
 			if (first)
@@ -504,7 +567,7 @@ void IdoMysqlConnection::ExecuteQuery(const DbQuery& query)
 		}
 
 		if (type == DbQueryInsert)
-			qbuf << " (" << cols << ") VALUES (" << values << ")";
+			qbuf << " (" << colbuf.str() << ") VALUES (" << valbuf.str() << ")";
 	}
 
 	if (type != DbQueryInsert)
@@ -521,13 +584,19 @@ void IdoMysqlConnection::ExecuteQuery(const DbQuery& query)
 		if (type == DbQueryInsert && query.ConfigUpdate)
 			SetInsertID(query.Object, GetLastInsertID());
 	}
+
 	if (type == DbQueryInsert && query.Table == "notifications") { // FIXME remove hardcoded table name
 		m_LastNotificationID = GetLastInsertID();
 		Log(LogDebug, "db_ido", "saving contactnotification notification_id=" + Convert::ToString(static_cast<long>(m_LastNotificationID)));
 	}
 }
 
-void IdoMysqlConnection::CleanUpExecuteQuery(const String& table, const String& time_key, double time_value)
+void IdoMysqlConnection::CleanUpExecuteQuery(const String& table, const String& time_column, double max_age)
+{
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalCleanUpExecuteQuery, this, table, time_column, max_age), true);
+}
+
+void IdoMysqlConnection::InternalCleanUpExecuteQuery(const String& table, const String& time_column, double max_age)
 {
 	boost::mutex::scoped_lock lock(m_ConnectionMutex);
 
@@ -535,36 +604,6 @@ void IdoMysqlConnection::CleanUpExecuteQuery(const String& table, const String& 
 		return;
 
 	Query("DELETE FROM " + GetTablePrefix() + table + " WHERE instance_id = " +
-	    Convert::ToString(static_cast<long>(m_InstanceID)) + " AND " + time_key +
-	    "<FROM_UNIXTIME(" + Convert::ToString(static_cast<long>(time_value)) + ")");
-}
-
-void IdoMysqlConnection::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
-{
-	DbConnection::InternalSerialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		bag->Set("host", m_Host);
-		bag->Set("port", m_Port);
-		bag->Set("user", m_User);
-		bag->Set("password", m_Password);
-		bag->Set("database", m_Database);
-		bag->Set("instance_name", m_InstanceName);
-		bag->Set("instance_description", m_InstanceDescription);
-	}
-}
-
-void IdoMysqlConnection::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
-{
-	DbConnection::InternalDeserialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		m_Host = bag->Get("host");
-		m_Port = bag->Get("port");
-		m_User = bag->Get("user");
-		m_Password = bag->Get("password");
-		m_Database = bag->Get("database");
-		m_InstanceName = bag->Get("instance_name");
-		m_InstanceDescription = bag->Get("instance_description");
-	}
+	    Convert::ToString(static_cast<long>(m_InstanceID)) + " AND " + time_column +
+	    " < FROM_UNIXTIME(" + Convert::ToString(static_cast<long>(max_age)) + ")");
 }

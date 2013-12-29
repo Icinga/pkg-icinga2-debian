@@ -19,7 +19,6 @@
 
 #include "base/utility.h"
 #include <boost/test/unit_test.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <iostream>
 
 using namespace icinga;
@@ -30,18 +29,17 @@ BOOST_AUTO_TEST_CASE(escape_basic)
 {
 #ifdef _WIN32
 	BOOST_CHECK(Utility::EscapeShellCmd("%PATH%") == "^%PATH^%");
-#endif /* _WIN32 */
-
+#else /* _WIN32 */
 	BOOST_CHECK(Utility::EscapeShellCmd("$PATH") == "\\$PATH");
 	BOOST_CHECK(Utility::EscapeShellCmd("\\$PATH") == "\\\\\\$PATH");
-
+#endif /* _WIN32 */
 }
 
 BOOST_AUTO_TEST_CASE(escape_quoted)
 {
 #ifdef _WIN32
-	BOOST_CHECK(Utility::EscapeShellCmd("'hello'") == "\\'hello\\'");
-	BOOST_CHECK(Utility::EscapeShellCmd("\"hello\"") == "\\\"hello\\\"");
+	BOOST_CHECK(Utility::EscapeShellCmd("'hello'") == "^'hello^'");
+	BOOST_CHECK(Utility::EscapeShellCmd("\"hello\"") == "^\"hello^\"");
 #else /* _WIN32 */
 	BOOST_CHECK(Utility::EscapeShellCmd("'hello'") == "'hello'");
 	BOOST_CHECK(Utility::EscapeShellCmd("'hello") == "\\'hello");

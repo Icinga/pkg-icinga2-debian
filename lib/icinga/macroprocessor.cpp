@@ -23,14 +23,13 @@
 #include "base/array.h"
 #include "base/objectlock.h"
 #include "base/logger_fwd.h"
-#include <boost/tuple/tuple.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
+#include "base/context.h"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 Value MacroProcessor::ResolveMacros(const Value& str, const std::vector<MacroResolver::Ptr>& resolvers,
-    const Dictionary::Ptr& cr, const MacroProcessor::EscapeCallback& escapeFn, const Array::Ptr& escapeMacros)
+	const CheckResult::Ptr& cr, const MacroProcessor::EscapeCallback& escapeFn, const Array::Ptr& escapeMacros)
 {
 	Value result;
 
@@ -40,7 +39,7 @@ Value MacroProcessor::ResolveMacros(const Value& str, const std::vector<MacroRes
 	if (str.IsScalar()) {
 		result = InternalResolveMacros(str, resolvers, cr, escapeFn, escapeMacros);
 	} else if (str.IsObjectType<Array>()) {
-		Array::Ptr resultArr = boost::make_shared<Array>();
+		Array::Ptr resultArr = make_shared<Array>();
 		Array::Ptr arr = str;
 
 		ObjectLock olock(arr);
@@ -59,8 +58,10 @@ Value MacroProcessor::ResolveMacros(const Value& str, const std::vector<MacroRes
 }
 
 bool MacroProcessor::ResolveMacro(const String& macro, const std::vector<MacroResolver::Ptr>& resolvers,
-    const Dictionary::Ptr& cr, String *result)
+    const CheckResult::Ptr& cr, String *result)
 {
+	CONTEXT("Resolving macro '" + macro + "'");
+
 	BOOST_FOREACH(const MacroResolver::Ptr& resolver, resolvers) {
 		if (resolver->ResolveMacro(macro, cr, result))
 			return true;
@@ -71,8 +72,10 @@ bool MacroProcessor::ResolveMacro(const String& macro, const std::vector<MacroRe
 
 
 String MacroProcessor::InternalResolveMacros(const String& str, const std::vector<MacroResolver::Ptr>& resolvers,
-    const Dictionary::Ptr& cr, const MacroProcessor::EscapeCallback& escapeFn, const Array::Ptr& escapeMacros)
+	const CheckResult::Ptr& cr, const MacroProcessor::EscapeCallback& escapeFn, const Array::Ptr& escapeMacros)
 {
+	CONTEXT("Resolving macros for string '" + str + "'");
+
 	size_t offset, pos_first, pos_second;
 	offset = 0;
 

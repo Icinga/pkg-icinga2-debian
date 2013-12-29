@@ -40,11 +40,12 @@ class I2_BASE_API ThreadPool
 public:
 	typedef boost::function<void ()> WorkFunction;
 
-	ThreadPool(void);
+	ThreadPool(int max_threads = -1);
 	~ThreadPool(void);
 
+	void Start(void);
 	void Stop(void);
-	void Join(void);
+	void Join(bool wait_for_stop = false);
 
 	bool Post(const WorkFunction& callback);
 
@@ -57,55 +58,70 @@ private:
 		ThreadBusy
 	};
 
-	struct ThreadStats
-	{
-		ThreadState State;
-		bool Zombie;
-		double Utilization;
-		double LastUpdate;
-
-		ThreadStats(ThreadState state = ThreadDead)
-			: State(state), Zombie(false), Utilization(0), LastUpdate(0)
-		{ }
-	};
-
-	int m_ID;
-	static int m_NextID;
-
-	ThreadStats m_ThreadStats[512];
-
-	boost::thread m_ManagerThread;
-	boost::thread m_StatsThread;
-
-	double m_WaitTime;
-	double m_ServiceTime;
-	int m_TaskCount;
-
-	double m_MaxLatency;
-
-	boost::mutex m_Mutex;
-	boost::condition_variable m_WorkCV;
-	boost::condition_variable m_MgmtCV;
-
-	bool m_Stopped;
-
 	struct WorkItem
 	{
 		WorkFunction Callback;
 		double Timestamp;
 	};
 
+	struct Queue;
 
-	std::deque<WorkItem> m_WorkItems;
+	struct WorkerThread
+	{
+		ThreadState State;
+		bool Zombie;
+		double Utilization;
+		double LastUpdate;
+		boost::thread *Thread;
 
-	void QueueThreadProc(int tid);
+		WorkerThread(ThreadState state = ThreadDead)
+			: State(state), Zombie(false), Utilization(0), LastUpdate(0), Thread(NULL)
+		{ }
+
+		void UpdateUtilization(ThreadState state = ThreadUnspecified);
+
+		void ThreadProc(Queue& queue);
+	};
+
+	struct Queue
+	{
+		boost::mutex Mutex;
+		boost::condition_variable CV;
+		boost::condition_variable CVStarved;
+
+		std::deque<WorkItem> Items;
+
+		double WaitTime;
+		double ServiceTime;
+		int TaskCount;
+
+		bool Stopped;
+
+		WorkerThread Threads[256];
+
+		Queue(void)
+			: WaitTime(0), ServiceTime(0), TaskCount(0), Stopped(false)
+		{ }
+
+		void SpawnWorker(boost::thread_group& group);
+		void KillWorker(boost::thread_group& group);
+	};
+
+	int m_ID;
+	static int m_NextID;
+
+	int m_MaxThreads;
+
+	boost::thread_group m_ThreadGroup;
+
+	boost::mutex m_MgmtMutex;
+	boost::condition_variable m_MgmtCV;
+	bool m_Stopped;
+
+	Queue m_Queues[16];
+
 	void ManagerThreadProc(void);
 	void StatsThreadProc(void);
-
-	void SpawnWorker(void);
-	void KillWorker(void);
-
-	void UpdateThreadUtilization(int tid, ThreadState state = ThreadUnspecified);
 };
 
 }

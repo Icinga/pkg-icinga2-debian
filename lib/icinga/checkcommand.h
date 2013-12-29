@@ -20,7 +20,7 @@
 #ifndef CHECKCOMMAND_H
 #define CHECKCOMMAND_H
 
-#include "icinga/command.h"
+#include "icinga/checkcommand.th"
 #include "icinga/service.h"
 
 namespace icinga
@@ -31,13 +31,13 @@ namespace icinga
  *
  * @ingroup icinga
  */
-class I2_ICINGA_API CheckCommand : public Command
+class I2_ICINGA_API CheckCommand : public ObjectImpl<CheckCommand>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(CheckCommand);
 	DECLARE_TYPENAME(CheckCommand);
 
-	virtual Dictionary::Ptr Execute(const Service::Ptr& service);
+	virtual CheckResult::Ptr Execute(const Service::Ptr& service);
 };
 
 }

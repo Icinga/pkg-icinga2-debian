@@ -27,7 +27,6 @@
 #include <map>
 #include <set>
 #include <boost/function.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 
 namespace icinga
 {
@@ -37,15 +36,11 @@ class I2_BASE_API DynamicType : public Object
 public:
 	DECLARE_PTR_TYPEDEFS(DynamicType);
 
-	typedef boost::function<DynamicObject::Ptr (void)> ObjectFactory;
-
-	DynamicType(const String& name, const ObjectFactory& factory);
+	DynamicType(const String& name);
 
 	String GetName(void) const;
 
 	static DynamicType::Ptr GetByName(const String& name);
-
-	static void RegisterType(const DynamicType::Ptr& type);
 
 	DynamicObject::Ptr CreateObject(const Dictionary::Ptr& serializedUpdate);
 	DynamicObject::Ptr GetObject(const String& name) const;
@@ -61,7 +56,7 @@ public:
 		std::vector<shared_ptr<T> > objects;
 
 		BOOST_FOREACH(const DynamicObject::Ptr& object, GetObjects(T::GetTypeName())) {
-			shared_ptr<T> tobject = dynamic_pointer_cast<T>(object);
+			shared_ptr<T> tobject = static_pointer_cast<T>(object);
 
 			ASSERT(tobject);
 
@@ -73,15 +68,14 @@ public:
 
 private:
 	String m_Name;
-	ObjectFactory m_ObjectFactory;
 
-	typedef std::map<String, DynamicObject::Ptr, string_iless> ObjectMap;
+	typedef std::map<String, DynamicObject::Ptr> ObjectMap;
 	typedef std::vector<DynamicObject::Ptr> ObjectVector;
 
 	ObjectMap m_ObjectMap;
 	ObjectVector m_ObjectVector;
 
-	typedef std::map<String, DynamicType::Ptr, string_iless> TypeMap;
+	typedef std::map<String, DynamicType::Ptr> TypeMap;
 	typedef std::vector<DynamicType::Ptr> TypeVector;
 
 	static TypeMap& InternalGetTypeMap(void);
@@ -90,46 +84,6 @@ private:
 
 	static std::vector<DynamicObject::Ptr> GetObjects(const String& type);
 };
-
-/**
- * A registry for DynamicType objects.
- *
- * @ingroup base
- */
-class DynamicTypeRegistry : public Registry<DynamicTypeRegistry, DynamicType::Ptr>
-{ };
-
-/**
- * Helper class for registering DynamicObject implementation classes.
- *
- * @ingroup base
- */
-class RegisterTypeHelper
-{
-public:
-	RegisterTypeHelper(const String& name, const DynamicType::ObjectFactory& factory)
-	{
-		DynamicType::Ptr type = boost::make_shared<DynamicType>(name, factory);
-		DynamicType::RegisterType(type);
-	}
-};
-
-/**
- * Factory function for DynamicObject-based classes.
- *
- * @ingroup base
- */
-template<typename T>
-shared_ptr<T> DynamicObjectFactory(void)
-{
-	return boost::make_shared<T>();
-}
-
-#define REGISTER_TYPE_ALIAS(type, alias) \
-	I2_EXPORT icinga::RegisterTypeHelper g_RegisterDT_ ## type(alias, DynamicObjectFactory<type>);
-
-#define REGISTER_TYPE(type) \
-	REGISTER_TYPE_ALIAS(type, #type)
 
 }
 

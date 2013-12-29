@@ -45,9 +45,9 @@
 
 %define logmsg logger -t %{name}/rpm
 
-Summary: network monitoring application
+Summary: Network monitoring application
 Name: icinga2
-Version: 0.0.3
+Version: 0.0.6
 Release: %{revision}%{?dist}
 License: GPLv2+
 Group: Applications/System
@@ -59,54 +59,61 @@ BuildRequires: doxygen
 BuildRequires: openssl-devel
 BuildRequires: gcc-c++
 BuildRequires: libstdc++-devel
-BuildRequires: automake
-BuildRequires: autoconf
-BuildRequires: libtool
-BuildRequires: flex
+BuildRequires: cmake
+BuildRequires: flex >= 2.5.35
 BuildRequires: bison
 BuildRequires: %{apachename}
 
+# redhat
 %if "%{_vendor}" == "redhat"
-BuildRequires: libtool-ltdl-devel
 %if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5"
 # el5 requires EPEL
 BuildRequires: boost%{el5_boost_version}-devel
 BuildRequires: boost%{el5_boost_version}
 Requires: boost%{el5_boost_version}-program-options
-Requires: boost%{el5_boost_version}-signals
 Requires: boost%{el5_boost_version}-system
 Requires: boost%{el5_boost_version}-test
 Requires: boost%{el5_boost_version}-thread
+Requires: boost%{el5_boost_version}-regex
 %else
 BuildRequires: boost-devel >= 1.41
 Requires: boost-program-options >= 1.41
-Requires: boost-signals >= 1.41
 Requires: boost-system >= 1.41
 Requires: boost-test >= 1.41
 Requires: boost-thread >= 1.41
+Requires: boost-regex >= 1.41
 %endif
 %endif
+#redhat
 
+# suse
 %if "%{_vendor}" == "suse"
-%if 0%{?sles_version} == 11
-BuildRequires: libgfortran46
+# sles
+# note: sles_version macro is not set in SLES11 anymore
+# note: sles service packs are not under version control
+%if 0%{?suse_version} == 1110
+BuildRequires: gcc-fortran
+BuildRequires: libgfortran43
 BuildRequires: boost-license%{sles_boost_version}
 BuildRequires: boost-devel >= 1.41
 Requires: boost-license%{sles_boost_version}
 Requires: libboost_program_options%{sles_boost_version}
-Requires: libboost_signals%{sles_boost_version}
 Requires: libboost_system%{sles_boost_version}
 Requires: libboost_test%{sles_boost_version}
 Requires: libboost_thread%{sles_boost_version}
-%else
+Requires: libboost_regex%{sles_boost_version}
+%endif
+# opensuse
+%if 0%{?suse_version} >= 1210
 BuildRequires: boost-devel >= 1.41
 Requires: libboost_program_options%{opensuse_boost_version}
-Requires: libboost_signals%{opensuse_boost_version}
 Requires: libboost_system%{opensuse_boost_version}
 Requires: libboost_test%{opensuse_boost_version}
 Requires: libboost_thread%{opensuse_boost_version}
+Requires: libboost_regex%{opensuse_boost_version}
 %endif
 %endif
+# suse
 
 Requires: %{name}-common = %{version}
 
@@ -140,7 +147,11 @@ Summary:      IDO MySQL database backend for Icinga 2
 Group:        Applications/System
 %if "%{_vendor}" == "suse"
 BuildRequires: libmysqlclient-devel
+%if 0%{?suse_version} >= 1210
 Requires: libmysqlclient18
+%else
+Requires: libmysqlclient15
+%endif
 %endif
 %if "%{_vendor}" == "redhat"
 # el5 only provides mysql package
@@ -159,6 +170,28 @@ Requires: %{name} = %{version}-%{release}
 Icinga 2 IDO mysql database backend. Compatible with Icinga 1.x
 IDOUtils schema >= 1.10
 
+
+%package ido-pgsql
+Summary:      IDO PostgreSQL database backend for Icinga 2
+Group:        Applications/System
+%if "%{_vendor}" == "suse"
+BuildRequires: postgresql-libs
+%endif
+%if "%{_vendor}" == "redhat"
+# el5 only provides mysql package
+%if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5"
+BuildRequires: postgresql84
+%endif
+%endif
+BuildRequires: postgresql-devel
+Requires: postgresql-libs
+Requires: %{name} = %{version}-%{release}
+
+%description ido-pgsql
+Icinga 2 IDO PostgreSQL database backend. Compatible with Icinga 1.x
+IDOUtils schema >= 1.10
+
+
 %package classicui-config
 Summary:      Icinga 2 Classic UI Standalone configuration
 Group:        Applications/System
@@ -176,19 +209,35 @@ for Icinga 2.
 %setup -q -n %{name}-%{version}
 
 %build
-%configure --with-icinga-user=%{icinga_user} \
-	--with-icinga-group=%{icinga_group} \
-	--with-icingacmd-user=%{icinga_user} \
-	--with-icingacmd-group=%{icingacmd_group}
+CMAKE_OPTS="-DCMAKE_INSTALL_PREFIX=/usr \
+         -DCMAKE_INSTALL_SYSCONFDIR=/etc \
+		 -DCMAKE_INSTALL_LOCALSTATEDIR=/var \
+         -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+         -DICINGA2_USER=%{icinga_user} \
+         -DICINGA2_GROUP=%{icinga_group} \
+	     -DICINGA2_COMMAND_USER=%{icinga_user} \
+	     -DICINGA2_COMMAND_GROUP=%{icingacmd_group}"
+%if "%{_vendor}" == "redhat"
+%if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5"
+# Boost_VERSION 1.41.0 vs 101400 - disable build tests
+# details in https://dev.icinga.org/issues/5033
+CMAKE_OPTS="$CMAKE_OPTS -DBOOST_LIBRARYDIR=/usr/lib/boost141 \
+ -DBOOST_INCLUDEDIR=/usr/include/boost141 \
+ -DBoost_ADDITIONAL_VERSIONS='1.41;1.41.0' \
+ -DBoost_NO_SYSTEM_PATHS=TRUE \
+ -DBUILD_TESTING=FALSE \
+ -DBoost_NO_BOOST_CMAKE=TRUE"
+%endif
+%endif
+
+cmake $CMAKE_OPTS .
 
 make %{?_smp_mflags}
 
 %install
 [ "%{buildroot}" != "/" ] && [ -d "%{buildroot}" ] && rm -rf %{buildroot}
 make install \
-	DESTDIR="%{buildroot}" \
-	INSTALL_OPTS="" \
-	COMMAND_OPTS=""
+	DESTDIR="%{buildroot}"
 
 # install classicui config
 install -D -m 0644 etc/icinga/icinga-classic.htpasswd %{buildroot}%{icingaclassicconfdir}/passwd
@@ -196,7 +245,12 @@ install -D -m 0644 etc/icinga/cgi.cfg %{buildroot}%{icingaclassicconfdir}/cgi.cf
 install -D -m 0644 etc/icinga/icinga-classic-apache.conf %{buildroot}%{apacheconfdir}/icinga.conf
 
 # fix plugin path on x64
+%if "%{_vendor}" != "suse"
 sed -i 's@plugindir = .*@plugindir = "%{_libdir}/nagios/plugins"@' %{buildroot}/%{_sysconfdir}/%{name}/conf.d/macros.conf
+%endif
+
+# remove features-enabled symlinks
+rm -f %{buildroot}/%{_sysconfdir}/%{name}/features-enabled/*.conf
 
 %clean
 [ "%{buildroot}" != "/" ] && [ -d "%{buildroot}" ] && rm -rf %{buildroot}
@@ -207,6 +261,70 @@ getent group %{icingacmd_group} >/dev/null || %{_sbindir}/groupadd -r %{icingacm
 getent passwd %{icinga_user} >/dev/null || %{_sbindir}/useradd -c "icinga" -s /sbin/nologin -r -d %{_localstatedir}/spool/%{name} -G %{icingacmd_group} -g %{icinga_group} %{icinga_user}
 exit 0
 
+# suse
+%if 0%{?suse_version}
+%post
+%{fillup_and_insserv icinga2}
+
+if [ ${1:-0} -eq 1 ]
+then
+	# initial installation, enable default features
+	%{_sbindir}/icinga2-enable-feature checker
+	%{_sbindir}/icinga2-enable-feature notification
+	%{_sbindir}/icinga2-enable-feature mainlog
+fi
+
+exit 0
+%postun
+%restart_on_update icinga2
+%insserv_cleanup
+
+if [ "$1" = "0" ]; then
+	# deinstallation of the package - remove enabled features
+	rm -rf %{_sysconfdir}/%{name}/features-enabled
+fi
+
+exit 0
+
+%preun
+%stop_on_removal icinga2
+
+# rhel
+%else
+
+%post
+/sbin/chkconfig --add icinga2
+
+if [ ${1:-0} -eq 1 ]
+then
+	# initial installation, enable default features
+	%{_sbindir}/icinga2-enable-feature checker
+	%{_sbindir}/icinga2-enable-feature notification
+	%{_sbindir}/icinga2-enable-feature mainlog
+fi
+
+exit 0
+
+%postun
+if [ "$1" -ge  "1" ]; then
+	/sbin/service icinga2 condrestart >/dev/null 2>&1 || :
+fi
+
+if [ "$1" = "0" ]; then
+	# deinstallation of the package - remove enabled features
+	rm -rf %{_sysconfdir}/%{name}/features-enabled
+fi
+
+exit 0
+%preun
+if [ "$1" = "0" ]; then
+	/sbin/service icinga2 stop > /dev/null 2>&1
+	/sbin/chkconfig --del icinga2
+fi
+
+%endif
+# suse/rhel
+
 %post ido-mysql
 if [ ${1:-0} -eq 1 ]
 then
@@ -214,11 +332,32 @@ then
 	%{_sbindir}/icinga2-enable-feature ido-mysql
 fi
 
+exit 0
+
 %postun ido-mysql
 if [ "$1" = "0" ]; then
 	# deinstallation of the package - remove feature
 	test -x %{_sbindir}/icinga2-disable-feature && %{_sbindir}/icinga2-disable-feature ido-mysql
 fi
+
+exit 0
+
+%post ido-pgsql
+if [ ${1:-0} -eq 1 ]
+then
+	# initial installation, enable ido-pgsql feature
+	%{_sbindir}/icinga2-enable-feature ido-pgsql
+fi
+
+exit 0
+
+%postun ido-pgsql
+if [ "$1" = "0" ]; then
+	# deinstallation of the package - remove feature
+	test -x %{_sbindir}/icinga2-disable-feature && %{_sbindir}/icinga2-disable-feature ido-pgsql
+fi
+
+exit 0
 
 %post classicui-config
 if [ ${1:-0} -eq 1 ]
@@ -229,6 +368,8 @@ then
         %{_sbindir}/icinga2-enable-feature command
 fi
 
+exit 0
+
 %postun classicui-config
 if [ "$1" = "0" ]; then
         # deinstallation of the package - remove feature
@@ -237,17 +378,21 @@ if [ "$1" = "0" ]; then
         test -x %{_sbindir}/icinga2-disable-feature && %{_sbindir}/icinga2-disable-feature command
 fi
 
+exit 0
+
 %files
 %defattr(-,root,root,-)
 %doc COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog
 %attr(755,-,-) %{_sysconfdir}/init.d/%{name}
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/features-available
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/features-enabled
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/scripts
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/%{name}.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/conf.d/*.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/features-available/*.conf
-%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/features-enabled/*.conf
+%config(noreplace) %{_sysconfdir}/%{name}/scripts/*
 %{_sbindir}/%{name}
 %{_bindir}/%{name}-migrate-config
 %{_bindir}/%{name}-build-ca
@@ -255,6 +400,7 @@ fi
 %{_sbindir}/%{name}-enable-feature
 %{_sbindir}/%{name}-disable-feature
 %exclude %{_libdir}/%{name}/libdb_ido_mysql*
+%exclude %{_libdir}/%{name}/libdb_ido_pgsql*
 %{_libdir}/%{name}
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/itl
@@ -264,15 +410,17 @@ fi
 %attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}
 %attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}/compat
 %attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}/compat/archives
-%attr(0755,%{icinga_user},%{icinga_group}) %{_localstatedir}/run/%{name}
+%attr(0755,%{icinga_user},%{icinga_group}) %ghost %{_localstatedir}/run/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %{_localstatedir}/lib/%{name}
 
-%attr(2755,%{icinga_user},%{icingacmd_group}) %{_localstatedir}/run/icinga2/cmd
+%attr(2755,%{icinga_user},%{icingacmd_group}) %ghost %{_localstatedir}/run/icinga2/cmd
 
 %files common
 %defattr(-,root,root,-)
 %doc COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/perfdata
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/tmp
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_datadir}/%{name}/itl
 %{_datadir}/%{name}/itl
 
@@ -287,22 +435,17 @@ fi
 %doc components/db_ido_mysql/schema COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog
 %{_libdir}/%{name}/libdb_ido_mysql*
 
+%files ido-pgsql
+%defattr(-,root,root,-)
+%doc components/db_ido_pgsql/schema COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog
+%{_libdir}/%{name}/libdb_ido_pgsql*
+
 %files classicui-config
 %defattr(-,root,root,-)
+%attr(0751,%{icinga_user},%{icinga_group}) %dir %{icingaclassicconfdir}
 %config(noreplace) %{icingaclassicconfdir}/cgi.cfg
 %config(noreplace) %{apacheconfdir}/icinga.conf
 %config(noreplace) %attr(0640,root,%{apachegroup}) %{icingaclassicconfdir}/passwd
 
 
 %changelog
-* Tue Oct 01 2013 Michael Friedrich <michael.friedrich@netways.de> - 0.0.3-1
-- revamp package
-
-* Sat May 04 2013 Michael Friedrich <michael.friedrich@netways.de> - 0.0.2-1
-- new initscript in initdir
-- itl is installed into datadir
-- man pages in mandir
-- use name macro to avoid typos
-
-* Fri Nov 19 2012 Gunnar Beutner <gunnar.beutner@netways.de> - 0.0.1-1
-- initial version

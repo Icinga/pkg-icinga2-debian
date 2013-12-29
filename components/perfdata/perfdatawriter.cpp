@@ -26,16 +26,12 @@
 #include "base/logger_fwd.h"
 #include "base/convert.h"
 #include "base/utility.h"
+#include "base/context.h"
 #include "base/application.h"
-#include <boost/smart_ptr/make_shared.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(PerfdataWriter);
-
-PerfdataWriter::PerfdataWriter(void)
-	: m_RotationInterval(30)
-{ }
 
 void PerfdataWriter::Start(void)
 {
@@ -43,7 +39,7 @@ void PerfdataWriter::Start(void)
 
 	Service::OnNewCheckResult.connect(boost::bind(&PerfdataWriter::CheckResultHandler, this, _1, _2));
 
-	m_RotationTimer = boost::make_shared<Timer>();
+	m_RotationTimer = make_shared<Timer>();
 	m_RotationTimer->OnTimerExpired.connect(boost::bind(&PerfdataWriter::RotationTimerHandler, this));
 	m_RotationTimer->SetInterval(GetRotationInterval());
 	m_RotationTimer->Start();
@@ -51,46 +47,14 @@ void PerfdataWriter::Start(void)
 	RotateFile();
 }
 
-String PerfdataWriter::GetPerfdataPath(void) const
+void PerfdataWriter::CheckResultHandler(const Service::Ptr& service, const CheckResult::Ptr& cr)
 {
-	if (!m_PerfdataPath.IsEmpty())
-		return m_PerfdataPath;
-	else
-		return Application::GetLocalStateDir() + "/cache/icinga2/perfdata/perfdata";
-}
+	CONTEXT("Writing performance data for service '" + service->GetShortName() + "' on host '" + service->GetHost()->GetName() + "'");
 
-String PerfdataWriter::GetFormatTemplate(void) const
-{
-	if (!m_FormatTemplate.IsEmpty()) {
-		return m_FormatTemplate;
-	} else {
-		return "DATATYPE::SERVICEPERFDATA\t"
-			"TIMET::$TIMET$\t"
-			"HOSTNAME::$HOSTNAME$\t"
-			"SERVICEDESC::$SERVICEDESC$\t"
-			"SERVICEPERFDATA::$SERVICEPERFDATA$\t"
-			"SERVICECHECKCOMMAND::$SERVICECHECKCOMMAND$\t"
-			"HOSTSTATE::$HOSTSTATE$\t"
-			"HOSTSTATETYPE::$HOSTSTATETYPE$\t"
-			"SERVICESTATE::$SERVICESTATE$\t"
-			"SERVICESTATETYPE::$SERVICESTATETYPE$";
-	}
-}
-
-double PerfdataWriter::GetRotationInterval(void) const
-{
-	return m_RotationInterval;
-}
-
-void PerfdataWriter::CheckResultHandler(const Service::Ptr& service, const Dictionary::Ptr& cr)
-{
 	if (!IcingaApplication::GetInstance()->GetEnablePerfdata() || !service->GetEnablePerfdata())
 		return;
 
 	Host::Ptr host = service->GetHost();
-
-	if (!host)
-		return;
 
 	std::vector<MacroResolver::Ptr> resolvers;
 	resolvers.push_back(service);
@@ -110,7 +74,7 @@ void PerfdataWriter::RotateFile(void)
 {
 	ObjectLock olock(this);
 
-	String tempFile = GetPerfdataPath();
+	String tempFile = GetTempPath();
 
 	if (m_OutputFile.good()) {
 		m_OutputFile.close();
@@ -130,24 +94,3 @@ void PerfdataWriter::RotationTimerHandler(void)
 	RotateFile();
 }
 
-void PerfdataWriter::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
-{
-	DynamicObject::InternalSerialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		bag->Set("perfdata_path", m_PerfdataPath);
-		bag->Set("format_template", m_FormatTemplate);
-		bag->Set("rotation_interval", m_RotationInterval);
-	}
-}
-
-void PerfdataWriter::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
-{
-	DynamicObject::InternalDeserialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		m_PerfdataPath = bag->Get("perfdata_path");
-		m_FormatTemplate = bag->Get("format_template");
-		m_RotationInterval = bag->Get("rotation_interval");
-	}
-}

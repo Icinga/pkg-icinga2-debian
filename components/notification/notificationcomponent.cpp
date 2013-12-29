@@ -23,8 +23,7 @@
 #include "base/objectlock.h"
 #include "base/logger_fwd.h"
 #include "base/utility.h"
-#include <boost/smart_ptr/make_shared.hpp>
-#include <boost/exception/diagnostic_information.hpp>
+#include "base/exception.h"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -41,7 +40,7 @@ void NotificationComponent::Start(void)
 	Service::OnNotificationsRequested.connect(boost::bind(&NotificationComponent::SendNotificationsHandler, this, _1,
 	    _2, _3, _4, _5));
 
-	m_NotificationTimer = boost::make_shared<Timer>();
+	m_NotificationTimer = make_shared<Timer>();
 	m_NotificationTimer->SetInterval(5);
 	m_NotificationTimer->OnTimerExpired.connect(boost::bind(&NotificationComponent::NotificationTimerHandler, this));
 	m_NotificationTimer->Start();
@@ -57,15 +56,12 @@ void NotificationComponent::NotificationTimerHandler(void)
 	double now = Utility::GetTime();
 
 	BOOST_FOREACH(const Notification::Ptr& notification, DynamicType::GetObjects<Notification>()) {
-		if (notification->GetNotificationInterval() <= 0)
+		Service::Ptr service = notification->GetService();
+
+		if (notification->GetNotificationInterval() <= 0 && notification->GetLastProblemNotification() < service->GetLastHardStateChange())
 			continue;
 
 		if (notification->GetNextNotification() > now)
-			continue;
-
-		Service::Ptr service = notification->GetService();
-
-		if (!service)
 			continue;
 
 		bool reachable = service->IsReachable();
@@ -94,7 +90,7 @@ void NotificationComponent::NotificationTimerHandler(void)
 		} catch (const std::exception& ex) {
 			std::ostringstream msgbuf;
 			msgbuf << "Exception occured during notification for service '"
-			       << GetName() << "': " << boost::diagnostic_information(ex);
+			       << GetName() << "': " << DiagnosticInformation(ex);
 			String message = msgbuf.str();
 
 			Log(LogWarning, "icinga", message);
@@ -106,7 +102,7 @@ void NotificationComponent::NotificationTimerHandler(void)
  * Processes icinga::SendNotifications messages.
  */
 void NotificationComponent::SendNotificationsHandler(const Service::Ptr& service, NotificationType type,
-    const Dictionary::Ptr& cr, const String& author, const String& text)
+    const CheckResult::Ptr& cr, const String& author, const String& text)
 {
-	service->SendNotifications(static_cast<NotificationType>(type), cr, author, text);
+	service->SendNotifications(type, cr, author, text);
 }

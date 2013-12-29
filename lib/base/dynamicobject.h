@@ -21,6 +21,7 @@
 #define DYNAMICOBJECT_H
 
 #include "base/i2-base.h"
+#include "base/dynamicobject.th"
 #include "base/object.h"
 #include "base/dictionary.h"
 #include "base/array.h"
@@ -32,17 +33,6 @@ namespace icinga
 {
 
 class DynamicType;
-
-/**
- * The type of an attribute for a DynamicObject.
- *
- * @ingroup base
- */
-enum AttributeType
-{
-	Attribute_State = 1,
-	Attribute_Config = 2,
-};
 
 enum DomainPriv
 {
@@ -57,15 +47,12 @@ enum DomainPriv
  *
  * @ingroup base
  */
-class I2_BASE_API DynamicObject : public Object
+class I2_BASE_API DynamicObject : public ObjectImpl<DynamicObject>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(DynamicObject);
 
-	~DynamicObject(void);
-
-	Dictionary::Ptr Serialize(int attributeTypes) const;
-	void Deserialize(const Dictionary::Ptr& update, int attributeTypes);
+	static void StaticInitialize(void);
 
 	static boost::signals2::signal<void (const DynamicObject::Ptr&)> OnStarted;
 	static boost::signals2::signal<void (const DynamicObject::Ptr&)> OnStopped;
@@ -75,16 +62,11 @@ public:
 	Value InvokeMethod(const String& method, const std::vector<Value>& arguments);
 
 	shared_ptr<DynamicType> GetType(void) const;
-	String GetName(void) const;
 
 	bool IsActive(void) const;
 
-	Array::Ptr GetAuthorities(void) const;
-
 	void SetAuthority(const String& type, bool value);
 	bool HasAuthority(const String& type) const;
-
-	Array::Ptr GetDomains(void) const;
 
 	void SetPrivileges(const String& instance, int privs);
 	bool HasPrivileges(const String& instance, int privs) const;
@@ -109,33 +91,18 @@ public:
 	{
 		DynamicObject::Ptr object = GetObject(T::GetTypeName(), name);
 
-		return dynamic_pointer_cast<T>(object);
+		return static_pointer_cast<T>(object);
 	}
 
-	static void DumpObjects(const String& filename, int attributeTypes = Attribute_State);
-	static void RestoreObjects(const String& filename, int attributeTypes = Attribute_State);
+	static void DumpObjects(const String& filename, int attributeTypes = FAState);
+	static void RestoreObjects(const String& filename, int attributeTypes = FAState);
 	static void StopObjects(void);
-
-	Dictionary::Ptr GetCustom(void) const;
 
 protected:
 	explicit DynamicObject(void);
 
-	virtual void InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const;
-	virtual void InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes);
-
 private:
-	String m_Name;
-	String m_Type;
-	Dictionary::Ptr m_Extensions;
-	Dictionary::Ptr m_Methods;
-	Dictionary::Ptr m_Custom;
-	Array::Ptr m_Authorities;
-	Array::Ptr m_Domains;
 	std::map<String, int> m_Privileges;
-
-	bool m_Active;
-	Dictionary::Ptr m_Authority;
 
 	static DynamicObject::Ptr GetObject(const String& type, const String& name);
 };

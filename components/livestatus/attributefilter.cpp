@@ -21,10 +21,11 @@
 #include "base/convert.h"
 #include "base/array.h"
 #include "base/objectlock.h"
+#include "base/logger_fwd.h"
 #include <boost/foreach.hpp>
+#include <boost/regex.hpp>
 
 using namespace icinga;
-using namespace livestatus;
 
 AttributeFilter::AttributeFilter(const String& column, const String& op, const String& operand)
 	: m_Column(column), m_Operator(op), m_Operand(operand)
@@ -59,11 +60,27 @@ bool AttributeFilter::Apply(const Table::Ptr& table, const Value& row)
 			else
 				return (static_cast<String>(value) == m_Operand);
 		} else if (m_Operator == "~") {
+			boost::regex expr(m_Operand.GetData());
+			String operand = value;
+			boost::smatch what;
+			bool ret = boost::regex_search(operand.GetData(), what, expr);
 
+			//Log(LogDebug, "livestatus", "Attribute filter '" + m_Operand + " " + m_Operator + " " +
+			//    static_cast<String>(value) + "' " + (ret ? "matches" : "doesn't match") + "." );
+
+			return ret;
 		} else if (m_Operator == "=~") {
 			return string_iless()(value, m_Operand);
 		} else if (m_Operator == "~~") {
+			boost::regex expr(m_Operand.GetData(), boost::regex::icase);
+			String operand = value;
+			boost::smatch what;
+			bool ret = boost::regex_search(operand.GetData(), what, expr);
 
+			//Log(LogDebug, "livestatus", "Attribute filter '" + m_Operand + " " + m_Operator + " " +
+			//    static_cast<String>(value) + "' " + (ret ? "matches" : "doesn't match") + "." );
+
+			return ret;
 		} else if (m_Operator == "<") {
 			if (value.GetType() == ValueNumber)
 				return (static_cast<double>(value) < Convert::ToDouble(m_Operand));

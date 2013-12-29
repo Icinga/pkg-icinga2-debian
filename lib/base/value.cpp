@@ -154,31 +154,6 @@ Value Value::FromJson(cJSON *json)
 }
 
 /**
- * Serializes a variant into a string.
- *
- * @returns A string representing this variant.
- */
-String Value::Serialize(void) const
-{
-	cJSON *json = ToJson();
-
-	char *jsonString;
-
-	if (Application::IsDebugging())
-		jsonString = cJSON_Print(json);
-	else
-		jsonString = cJSON_PrintUnformatted(json);
-
-	cJSON_Delete(json);
-
-	String result = jsonString;
-
-	free(jsonString);
-
-	return result;
-}
-
-/**
  * Serializes the variant.
  *
  * @returns A JSON object representing this variant.
@@ -200,7 +175,6 @@ cJSON *Value::ToJson(void) const
 				Array::Ptr array = *this;
 				return array->ToJson();
 			} else {
-				Log(LogDebug, "base", "Ignoring unknown object while converting variant to JSON.");
 				return cJSON_CreateNull();
 			}
 
@@ -213,25 +187,6 @@ cJSON *Value::ToJson(void) const
 }
 
 /**
- * Deserializes the string representation of a variant.
- *
- * @param jsonString A JSON string obtained from Value::Serialize
- * @returns The newly deserialized variant.
- */
-Value Value::Deserialize(const String& jsonString)
-{
-	cJSON *json = cJSON_Parse(jsonString.CStr());
-
-	if (!json)
-		BOOST_THROW_EXCEPTION(std::runtime_error("Invalid JSON String: " + jsonString));
-
-	Value value = FromJson(json);
-	cJSON_Delete(json);
-
-	return value;
-}
-
-/**
  * Returns the type of the value.
  *
  * @returns The type.
@@ -241,12 +196,106 @@ ValueType Value::GetType(void) const
 	return static_cast<ValueType>(m_Value.which());
 }
 
+bool Value::operator==(bool rhs)
+{
+	if (!IsScalar())
+		return false;
+
+	return static_cast<double>(*this) == rhs;
+}
+
+bool Value::operator!=(bool rhs)
+{
+	return !(*this == rhs);
+}
+
+bool Value::operator==(int rhs)
+{
+	if (!IsScalar())
+		return false;
+
+	return static_cast<double>(*this) == rhs;
+}
+
+bool Value::operator!=(int rhs)
+{
+	return !(*this == rhs);
+}
+
+bool Value::operator==(double rhs)
+{
+	if (!IsScalar())
+		return false;
+
+	return static_cast<double>(*this) == rhs;
+}
+
+bool Value::operator!=(double rhs)
+{
+	return !(*this == rhs);
+}
+
+bool Value::operator==(const char *rhs)
+{
+	return static_cast<String>(*this) == rhs;
+}
+
+bool Value::operator!=(const char *rhs)
+{
+	return !(*this == rhs);
+}
+
+bool Value::operator==(const String& rhs)
+{
+	return static_cast<String>(*this) == rhs;
+}
+
+bool Value::operator!=(const String& rhs)
+{
+	return !(*this == rhs);
+}
+
+bool Value::operator==(const Value& rhs)
+{
+	if (IsEmpty() != rhs.IsEmpty())
+		return false;
+
+	if (IsEmpty())
+		return true;
+
+	if (IsObject() != rhs.IsObject())
+		return false;
+
+	if (IsObject())
+		return static_cast<Object::Ptr>(*this) == static_cast<Object::Ptr>(rhs);
+
+	if (GetType() == ValueNumber || rhs.GetType() == ValueNumber)
+		return static_cast<double>(*this) == static_cast<double>(rhs);
+	else
+		return static_cast<String>(*this) == static_cast<String>(rhs);
+}
+
+bool Value::operator!=(const Value& rhs)
+{
+	return !(*this == rhs);
+}
+
 Value icinga::operator+(const Value& lhs, const char *rhs)
 {
 	return static_cast<String>(lhs) + rhs;
 }
 
 Value icinga::operator+(const char *lhs, const Value& rhs)
+{
+	return lhs + static_cast<String>(rhs);
+}
+
+Value icinga::operator+(const Value& lhs, const String& rhs)
+{
+	return static_cast<String>(lhs) + rhs;
+}
+
+Value icinga::operator+(const String& lhs, const Value& rhs)
 {
 	return lhs + static_cast<String>(rhs);
 }

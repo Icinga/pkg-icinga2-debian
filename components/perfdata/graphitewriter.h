@@ -20,6 +20,7 @@
 #ifndef GRAPHITEWRITER_H
 #define GRAPHITEWRITER_H
 
+#include "perfdata/graphitewriter.th"
 #include "icinga/service.h"
 #include "base/dynamicobject.h"
 #include "base/tcpsocket.h"
@@ -34,34 +35,25 @@ namespace icinga
  *
  * @ingroup perfdata
  */
-class GraphiteWriter : public DynamicObject
+class GraphiteWriter : public ObjectImpl<GraphiteWriter>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(GraphiteWriter);
 	DECLARE_TYPENAME(GraphiteWriter);
 
-        String GetHost(void) const;
-        String GetPort(void) const;
-
 protected:
 	virtual void Start(void);
 
-	virtual void InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const;
-	virtual void InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes);
-
 private:
-	String m_Host;
-	String m_Port;
-        Stream::Ptr m_Stream;
+	Stream::Ptr m_Stream;
         
-        Timer::Ptr m_ReconnectTimer;
+	Timer::Ptr m_ReconnectTimer;
 
-	void CheckResultHandler(const Service::Ptr& service, const Dictionary::Ptr& cr);
-        static void AddServiceMetric(std::vector<String>& metrics, const Service::Ptr& service, const String& name, const Value& value);
-        void SendMetrics(const std::vector<String>& metrics);
+	void CheckResultHandler(const Service::Ptr& service, const CheckResult::Ptr& cr);
+        void SendMetric(const String& prefix, const String& name, double value);
         static void SanitizeMetric(String& str);
-        
-        void ReconnectTimerHandler(void);
+
+	void ReconnectTimerHandler(void);
 };
 
 }

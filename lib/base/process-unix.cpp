@@ -24,10 +24,10 @@
 #include "base/logger_fwd.h"
 #include "base/utility.h"
 #include <boost/bind.hpp>
-#include <boost/tuple/tuple.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 #include <boost/thread/thread.hpp>
+#include <boost/algorithm/string/join.hpp>
 
 #ifndef _WIN32
 #include <execvpe.h>
@@ -50,7 +50,7 @@ ProcessResult Process::Run(void)
 
 	int fds[2];
 
-#if HAVE_PIPE2
+#ifdef HAVE_PIPE2
 	if (pipe2(fds, O_CLOEXEC) < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("pipe2")
@@ -68,6 +68,8 @@ ProcessResult Process::Run(void)
 #endif /* HAVE_PIPE2 */
 
 	// build argv
+	Log(LogDebug, "base", "Running command '" + boost::algorithm::join(m_Arguments, " ") + "'.");
+
 	char **argv = new char *[m_Arguments.size() + 1];
 
 	for (unsigned int i = 0; i < m_Arguments.size(); i++)
@@ -92,12 +94,10 @@ ProcessResult Process::Run(void)
 	if (m_ExtraEnvironment) {
 		ObjectLock olock(m_ExtraEnvironment);
 
-		String key;
-		Value value;
 		int index = envc;
-		BOOST_FOREACH(boost::tie(key, value), m_ExtraEnvironment) {
-			String kv = key + "=" + Convert::ToString(value);
-			envp[index] = strdup(kv.CStr());
+		BOOST_FOREACH(const Dictionary::Pair& kv, m_ExtraEnvironment) {
+			String skv = kv.first + "=" + Convert::ToString(kv.second);
+			envp[index] = strdup(skv.CStr());
 			index++;
 		}
 	}
@@ -106,11 +106,11 @@ ProcessResult Process::Run(void)
 
 	m_ExtraEnvironment.reset();
 
-#if HAVE_WORKING_VFORK
+#ifdef HAVE_VFORK
 	m_Pid = vfork();
-#else /* HAVE_WORKING_VFORK */
+#else /* HAVE_VFORK */
 	m_Pid = fork();
-#endif /* HAVE_WORKING_VFORK */
+#endif /* HAVE_VFORK */
 
 	if (m_Pid < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()
@@ -129,7 +129,9 @@ ProcessResult Process::Run(void)
 		(void) close(fds[0]);
 		(void) close(fds[1]);
 
-		if (execvpe(argv[0], argv, envp) < 0) {
+		(void) nice(5);
+
+		if (icinga2_execvpe(argv[0], argv, envp) < 0) {
 			perror("execvpe() failed.");
 			_exit(128);
 		}
@@ -154,7 +156,7 @@ ProcessResult Process::Run(void)
 	int fd = fds[0];
 	(void) close(fds[1]);
 
-		char buffer[512];
+	char buffer[512];
 
 	std::ostringstream outputStream;
 

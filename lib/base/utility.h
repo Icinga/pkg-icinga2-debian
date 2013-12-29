@@ -43,6 +43,12 @@ struct THREADNAME_INFO
 #	pragma pack(pop)
 #endif
 
+enum GlobType
+{
+	GlobFile = 1,
+	GlobDirectory = 2
+};
+
 /**
  * Helper functions.
  *
@@ -69,7 +75,8 @@ public:
 
 	static String NewUniqueID(void);
 
-	static bool Glob(const String& pathSpec, const boost::function<void (const String&)>& callback);
+	static bool Glob(const String& pathSpec, const boost::function<void (const String&)>& callback, int type = GlobFile | GlobDirectory);
+	static bool GlobRecursive(const String& path, const String& pattern, const boost::function<void (const String&)>& callback, int type = GlobFile | GlobDirectory);
 
 	static void QueueAsyncCallback(const boost::function<void (void)>& callback);
 
@@ -79,7 +86,7 @@ public:
 #ifdef _WIN32
 	HMODULE
 #else /* _WIN32 */
-	lt_dlhandle
+	void *
 #endif /* _WIN32 */
 	LoadExtensionLibrary(const String& library);
 
@@ -95,16 +102,19 @@ public:
 	static void SetThreadName(const String& name, bool os = true);
 	static String GetThreadName(void);
 
-	static unsigned long SDBM(const String& str);
+	static unsigned long SDBM(const String& str, size_t len = String::NPos);
 
 	static int CompareVersion(const String& v1, const String& v2);
 
 	static int Random(void);
 
+	static tm LocalTime(time_t ts);
+
 private:
 	Utility(void);
 
 	static boost::thread_specific_ptr<String> m_ThreadName;
+	static boost::thread_specific_ptr<unsigned int> m_RandSeed;
 };
 
 }

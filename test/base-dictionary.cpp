@@ -19,8 +19,8 @@
 
 #include "base/dictionary.h"
 #include "base/objectlock.h"
+#include "base/serializer.h"
 #include <boost/test/unit_test.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 #include <boost/tuple/tuple.hpp>
 
@@ -30,13 +30,13 @@ BOOST_AUTO_TEST_SUITE(base_dictionary)
 
 BOOST_AUTO_TEST_CASE(construct)
 {
-	Dictionary::Ptr dictionary = boost::make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = make_shared<Dictionary>();
 	BOOST_CHECK(dictionary);
 }
 
 BOOST_AUTO_TEST_CASE(get1)
 {
-	Dictionary::Ptr dictionary = boost::make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = make_shared<Dictionary>();
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
 
@@ -58,8 +58,8 @@ BOOST_AUTO_TEST_CASE(get1)
 
 BOOST_AUTO_TEST_CASE(get2)
 {
-	Dictionary::Ptr dictionary = boost::make_shared<Dictionary>();
-	Dictionary::Ptr other = boost::make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = make_shared<Dictionary>();
+	Dictionary::Ptr other = make_shared<Dictionary>();
 
 	dictionary->Set("test1", other);
 
@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(get2)
 
 BOOST_AUTO_TEST_CASE(foreach)
 {
-	Dictionary::Ptr dictionary = boost::make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = make_shared<Dictionary>();
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
 
@@ -82,23 +82,21 @@ BOOST_AUTO_TEST_CASE(foreach)
 
 	bool seen_test1 = false, seen_test2 = false;
 
-	String key;
-	Value value;
-	BOOST_FOREACH(boost::tie(key, value), dictionary) {
-		BOOST_CHECK(key == "test1" || key == "test2");
+	BOOST_FOREACH(const Dictionary::Pair& kv, dictionary) {
+		BOOST_CHECK(kv.first == "test1" || kv.first == "test2");
 
-		if (key == "test1") {
+		if (kv.first == "test1") {
 			BOOST_CHECK(!seen_test1);
 			seen_test1 = true;
 
-			BOOST_CHECK(value == 7);
+			BOOST_CHECK(kv.second == 7);
 
 			continue;
-		} else if (key == "test2") {
+		} else if (kv.first == "test2") {
 			BOOST_CHECK(!seen_test2);
 			seen_test2 = true;
 
-			BOOST_CHECK(value == "hello world");
+			BOOST_CHECK(kv.second == "hello world");
 		}
 	}
 
@@ -108,7 +106,7 @@ BOOST_AUTO_TEST_CASE(foreach)
 
 BOOST_AUTO_TEST_CASE(remove)
 {
-	Dictionary::Ptr dictionary = boost::make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = make_shared<Dictionary>();
 
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
@@ -141,7 +139,7 @@ BOOST_AUTO_TEST_CASE(remove)
 
 BOOST_AUTO_TEST_CASE(clone)
 {
-	Dictionary::Ptr dictionary = boost::make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = make_shared<Dictionary>();
 
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
@@ -162,16 +160,16 @@ BOOST_AUTO_TEST_CASE(clone)
 	BOOST_CHECK(dictionary->Get("test2") == "hello world");
 }
 
-BOOST_AUTO_TEST_CASE(serialize)
+BOOST_AUTO_TEST_CASE(json)
 {
-	Dictionary::Ptr dictionary = boost::make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = make_shared<Dictionary>();
 
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
 
-	String json = Value(dictionary).Serialize();
+	String json = JsonSerialize(dictionary);
 	BOOST_CHECK(json.GetLength() > 0);
-	Dictionary::Ptr deserialized = Value::Deserialize(json);
+	Dictionary::Ptr deserialized = JsonDeserialize(json);
 	BOOST_CHECK(deserialized->GetLength() == 2);
 	BOOST_CHECK(deserialized->Get("test1") == 7);
 	BOOST_CHECK(deserialized->Get("test2") == "hello world");

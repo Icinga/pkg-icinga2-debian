@@ -24,20 +24,11 @@
 #include "base/logger_fwd.h"
 #include "base/timer.h"
 #include "base/utility.h"
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(ServiceGroup);
-
-String ServiceGroup::GetDisplayName(void) const
-{
-	if (!m_DisplayName.IsEmpty())
-		return m_DisplayName;
-	else
-		return GetName();
-}
 
 std::set<Service::Ptr> ServiceGroup::GetMembers(void) const
 {
@@ -52,20 +43,4 @@ void ServiceGroup::AddMember(const Service::Ptr& service)
 void ServiceGroup::RemoveMember(const Service::Ptr& service)
 {
 	m_Members.erase(service);
-}
-
-void ServiceGroup::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
-{
-	DynamicObject::InternalSerialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config)
-		bag->Set("display_name", m_DisplayName);
-}
-
-void ServiceGroup::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
-{
-	DynamicObject::InternalDeserialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config)
-		m_DisplayName = bag->Get("display_name");
 }

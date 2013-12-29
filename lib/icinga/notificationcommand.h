@@ -20,7 +20,7 @@
 #ifndef NOTIFICATIONCOMMAND_H
 #define NOTIFICATIONCOMMAND_H
 
-#include "icinga/command.h"
+#include "icinga/notificationcommand.th"
 #include "icinga/notification.h"
 
 namespace icinga
@@ -33,14 +33,14 @@ class Notification;
  *
  * @ingroup icinga
  */
-class I2_ICINGA_API NotificationCommand : public Command
+class I2_ICINGA_API NotificationCommand : public ObjectImpl<NotificationCommand>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(NotificationCommand);
 	DECLARE_TYPENAME(NotificationCommand);
 
 	virtual Dictionary::Ptr Execute(const shared_ptr<Notification>& notification,
-	    const User::Ptr& user, const Dictionary::Ptr& cr, const NotificationType& type,
+		const User::Ptr& user, const CheckResult::Ptr& cr, const NotificationType& type,
 	    const String& author, const String& comment);
 };
 

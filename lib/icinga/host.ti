@@ -1,0 +1,24 @@
+#include "base/dynamicobject.h"
+
+namespace icinga
+{
+
+class Host : DynamicObject
+{
+	[config] String display_name {
+		get {{{
+			if (m_DisplayName.IsEmpty())
+				return GetName();
+			else
+				return m_DisplayName;
+		}}}
+	};
+	[config] Array::Ptr groups;
+	[config] Dictionary::Ptr macros;
+	[config] Array::Ptr host_dependencies;
+	[config] Array::Ptr service_dependencies;
+	[config] String check;
+	[config, protected] Dictionary::Ptr services (ServiceDescriptions);
+};
+
+}

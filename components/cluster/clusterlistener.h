@@ -20,6 +20,7 @@
 #ifndef CLUSTERLISTENER_H
 #define CLUSTERLISTENER_H
 
+#include "cluster/clusterlistener.th"
 #include "base/dynamicobject.h"
 #include "base/timer.h"
 #include "base/array.h"
@@ -38,7 +39,7 @@ namespace icinga
 /**
  * @ingroup cluster
  */
-class ClusterListener : public DynamicObject
+class ClusterListener : public ObjectImpl<ClusterListener>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(ClusterListener);
@@ -47,31 +48,11 @@ public:
 	virtual void Start(void);
 	virtual void Stop(void);
 
-	String GetCertificateFile(void) const;
-	String GetKeyFile(void) const;
-	String GetCAFile(void) const;
-	String GetBindHost(void) const;
-	String GetBindPort(void) const;
-	Array::Ptr GetPeers(void) const;
+	shared_ptr<SSL_CTX> GetSSLContext(void) const;
 	String GetClusterDir(void) const;
 
-	shared_ptr<SSL_CTX> GetSSLContext(void) const;
-	String GetIdentity(void) const;
-
-protected:
-	virtual void InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const;
-	virtual void InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes);
-
 private:
-	String m_CertPath;
-	String m_KeyPath;
-	String m_CAPath;
-	String m_BindHost;
-	String m_BindPort;
-	Array::Ptr m_Peers;
-
 	shared_ptr<SSL_CTX> m_SSLContext;
-	String m_Identity;
 
 	WorkQueue m_RelayQueue;
 	WorkQueue m_MessageQueue;
@@ -100,10 +81,9 @@ private:
 	void ReplayLog(const Endpoint::Ptr& endpoint, const Stream::Ptr& stream);
 
 	Stream::Ptr m_LogFile;
-	double m_LogMessageTimestamp;
 	size_t m_LogMessageCount;
 
-	void CheckResultHandler(const Service::Ptr& service, const Dictionary::Ptr& cr, const String& authority);
+	void CheckResultHandler(const Service::Ptr& service, const CheckResult::Ptr& cr, const String& authority);
 	void NextCheckChangedHandler(const Service::Ptr& service, double nextCheck, const String& authority);
 	void NextNotificationChangedHandler(const Notification::Ptr& notification, double nextCheck, const String& authority);
 	void ForceNextCheckChangedHandler(const Service::Ptr& service, bool forced, const String& authority);
@@ -112,10 +92,10 @@ private:
 	void EnablePassiveChecksChangedHandler(const Service::Ptr& service, bool enabled, const String& authority);
 	void EnableNotificationsChangedHandler(const Service::Ptr& service, bool enabled, const String& authority);
 	void EnableFlappingChangedHandler(const Service::Ptr& service, bool enabled, const String& authority);
-	void CommentAddedHandler(const Service::Ptr& service, const Dictionary::Ptr& comment, const String& authority);
-	void CommentRemovedHandler(const Service::Ptr& service, const Dictionary::Ptr& comment, const String& authority);
-	void DowntimeAddedHandler(const Service::Ptr& service, const Dictionary::Ptr& downtime, const String& authority);
-	void DowntimeRemovedHandler(const Service::Ptr& service, const Dictionary::Ptr& downtime, const String& authority);
+	void CommentAddedHandler(const Service::Ptr& service, const Comment::Ptr& comment, const String& authority);
+	void CommentRemovedHandler(const Service::Ptr& service, const Comment::Ptr& comment, const String& authority);
+	void DowntimeAddedHandler(const Service::Ptr& service, const Downtime::Ptr& downtime, const String& authority);
+	void DowntimeRemovedHandler(const Service::Ptr& service, const Downtime::Ptr& downtime, const String& authority);
 	void AcknowledgementSetHandler(const Service::Ptr& service, const String& author, const String& comment, AcknowledgementType type, double expiry, const String& authority);
 	void AcknowledgementClearedHandler(const Service::Ptr& service, const String& authority);
 
@@ -131,6 +111,8 @@ private:
 	void SetSecurityInfo(const Dictionary::Ptr& message, const DynamicObject::Ptr& object, int privs);
 
 	void PersistMessage(const Endpoint::Ptr& source, const Dictionary::Ptr& message);
+
+	static void MessageExceptionHandler(boost::exception_ptr exp);
 };
 
 }

@@ -109,6 +109,22 @@ size_t Array::GetLength(void) const
 }
 
 /**
+ * Insert the given value at the specified index
+ *
+ * @param index The index
+ * @param value The value to add
+ */
+void Array::Insert(unsigned int index, const Value& value)
+{
+	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
+
+	ASSERT(index <= m_Data.size());
+
+	m_Data.insert(m_Data.begin() + index, value);
+}
+
+/**
  * Removes the specified index from the array.
  *
  * @param index The index.
@@ -143,7 +159,7 @@ Array::Ptr Array::ShallowClone(void) const
 	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
-	Array::Ptr clone = boost::make_shared<Array>();
+	Array::Ptr clone = make_shared<Array>();
 
 	std::copy(m_Data.begin(), m_Data.end(), std::back_inserter(clone->m_Data));
 
@@ -158,7 +174,7 @@ Array::Ptr Array::ShallowClone(void) const
  */
 Array::Ptr Array::FromJson(cJSON *json)
 {
-	Array::Ptr array = boost::make_shared<Array>();
+	Array::Ptr array = make_shared<Array>();
 
 	ASSERT(json->type == cJSON_Array);
 

@@ -1,0 +1,18 @@
+#include "base/dynamicobject.h"
+
+namespace icinga
+{
+
+class UserGroup : DynamicObject
+{
+	[config] String display_name {
+		get {{{
+			if (m_DisplayName.IsEmpty())
+				return GetName();
+			else
+				return m_DisplayName;
+		}}}
+	};
+};
+
+}

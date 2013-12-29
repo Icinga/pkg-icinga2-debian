@@ -20,6 +20,7 @@
 #ifndef DBQUERY_H
 #define DBQUERY_H
 
+#include "db_ido/i2-db_ido.h"
 #include "base/dictionary.h"
 
 namespace icinga
@@ -32,20 +33,45 @@ enum DbQueryType
 	DbQueryDelete = 4
 };
 
+enum DbQueryCategory
+{
+	DbCatInvalid = -1,
+
+	DbCatConfig = (1 << 0),
+	DbCatState = (1 << 1),
+
+	DbCatAcknowledgement = (1 << 2),
+	DbCatComment = (1 << 3),
+	DbCatDowntime = (1 << 4),
+	DbCatEventHandler = (1 << 5),
+	DbCatExternalCommand = (1 << 6),
+	DbCatFlapping = (1 << 7),
+	DbCatCheck = (1 << 8),
+	DbCatLog = (1 << 9),
+	DbCatNotification = (1 << 10),
+	DbCatProgramStatus = (1 << 11),
+	DbCatRetention = (1 << 12),
+	DbCatStateHistory = (1 << 13)
+};
+
 class DbObject;
 
-struct DbQuery
+struct I2_DB_IDO_API DbQuery
 {
 	int Type;
+	DbQueryCategory Category;
 	String Table;
+	String IdColumn;
 	Dictionary::Ptr Fields;
 	Dictionary::Ptr WhereCriteria;
-	boost::shared_ptr<DbObject> Object;
+	shared_ptr<DbObject> Object;
 	bool ConfigUpdate;
 	bool StatusUpdate;
 
+	static void StaticInitialize(void);
+
 	DbQuery(void)
-		: Type(0), ConfigUpdate(false), StatusUpdate(false)
+		: Type(0), Category(DbCatInvalid), ConfigUpdate(false), StatusUpdate(false)
 	{ }
 };
 

@@ -47,23 +47,20 @@ public:
 
 	std::vector<ConfigItem::Ptr> GetParents(void) const;
 
-	void Link(void);
-	ExpressionList::Ptr GetLinkedExpressionList(void) const;
-
-	void GetProperties(void);
+	ExpressionList::Ptr GetLinkedExpressionList(void);
+	Dictionary::Ptr GetProperties(void);
 
 	DynamicObject::Ptr Commit(void);
 	void Register(void);
-
-	DynamicObject::Ptr GetDynamicObject(void) const;
 
 	DebugInfo GetDebugInfo(void) const;
 
 	static ConfigItem::Ptr GetObject(const String& type,
 	    const String& name);
+	static bool HasObject(const String& type, const String& name);
 
 	void ValidateItem(void);
-
+        
 	static bool ActivateItems(bool validateOnly);
 	static void DiscardItems(void);
 
@@ -81,13 +78,13 @@ private:
 	DebugInfo m_DebugInfo; /**< Debug information. */
 
 	ExpressionList::Ptr m_LinkedExpressionList;
-
-	DynamicObject::WeakPtr m_DynamicObject; /**< The instantiated version
-                                                 * of this configuration item */
+	Dictionary::Ptr m_Properties;
+        
+        DynamicObject::Ptr m_Object;
 
 	static boost::mutex m_Mutex;
 
-	typedef std::map<std::pair<String, String>, ConfigItem::Ptr, pair_string_iless> ItemMap;
+	typedef std::map<std::pair<String, String>, ConfigItem::Ptr> ItemMap;
 	static ItemMap m_Items; /**< All registered configuration items. */
 
 	static ConfigItem::Ptr GetObjectUnlocked(const String& type,

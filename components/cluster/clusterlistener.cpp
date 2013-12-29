@@ -29,9 +29,8 @@
 #include "base/zlibstream.h"
 #include "base/application.h"
 #include "base/convert.h"
-#include <boost/smart_ptr/make_shared.hpp>
+#include "base/context.h"
 #include <fstream>
-#include <boost/exception/diagnostic_information.hpp>
 
 using namespace icinga;
 
@@ -51,25 +50,30 @@ void ClusterListener::Start(void)
 	}
 
 	/* set up SSL context */
-	shared_ptr<X509> cert = GetX509Certificate(GetCertificateFile());
-	m_Identity = GetCertificateCN(cert);
-	Log(LogInformation, "cluster", "My identity: " + m_Identity);
+	shared_ptr<X509> cert = GetX509Certificate(GetCertPath());
+	SetIdentity(GetCertificateCN(cert));
+	Log(LogInformation, "cluster", "My identity: " + GetIdentity());
 
 	Endpoint::Ptr self = Endpoint::GetByName(GetIdentity());
 
 	if (!self)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("No configuration available for the local endpoint."));
 
-	m_SSLContext = MakeSSLContext(GetCertificateFile(), GetKeyFile(), GetCAFile());
+	m_SSLContext = MakeSSLContext(GetCertPath(), GetKeyPath(), GetCaPath());
+
+	if (!GetCrlPath().IsEmpty())
+		AddCRLToSSLContext(m_SSLContext, GetCrlPath());
 
 	/* create the primary JSON-RPC listener */
 	if (!GetBindPort().IsEmpty())
 		AddListener(GetBindPort());
 
-	m_ClusterTimer = boost::make_shared<Timer>();
+	m_ClusterTimer = make_shared<Timer>();
 	m_ClusterTimer->OnTimerExpired.connect(boost::bind(&ClusterListener::ClusterTimerHandler, this));
 	m_ClusterTimer->SetInterval(5);
 	m_ClusterTimer->Start();
+
+	m_MessageQueue.SetExceptionCallback(&ClusterListener::MessageExceptionHandler);
 
 	Service::OnNewCheckResult.connect(boost::bind(&ClusterListener::CheckResultHandler, this, _1, _2, _3));
 	Service::OnNextCheckChanged.connect(boost::bind(&ClusterListener::NextCheckChangedHandler, this, _1, _2, _3));
@@ -127,60 +131,9 @@ void ClusterListener::Stop(void)
 	RotateLogFile();
 }
 
-String ClusterListener::GetCertificateFile(void) const
-{
-	ObjectLock olock(this);
-
-	return m_CertPath;
-}
-
-String ClusterListener::GetKeyFile(void) const
-{
-	ObjectLock olock(this);
-
-	return m_KeyPath;
-}
-
-String ClusterListener::GetCAFile(void) const
-{
-	ObjectLock olock(this);
-
-	return m_CAPath;
-}
-
-String ClusterListener::GetBindHost(void) const
-{
-	ObjectLock olock(this);
-
-	return m_BindHost;
-}
-
-String ClusterListener::GetBindPort(void) const
-{
-	ObjectLock olock(this);
-
-	return m_BindPort;
-}
-
-Array::Ptr ClusterListener::GetPeers(void) const
-{
-	ObjectLock olock(this);
-
-	return m_Peers;
-}
-
 shared_ptr<SSL_CTX> ClusterListener::GetSSLContext(void) const
 {
-	ObjectLock olock(this);
-
 	return m_SSLContext;
-}
-
-String ClusterListener::GetIdentity(void) const
-{
-	ObjectLock olock(this);
-
-	return m_Identity;
 }
 
 /**
@@ -201,7 +154,7 @@ void ClusterListener::AddListener(const String& service)
 	s << "Adding new listener: port " << service;
 	Log(LogInformation, "cluster", s.str());
 
-	TcpSocket::Ptr server = boost::make_shared<TcpSocket>();
+	TcpSocket::Ptr server = make_shared<TcpSocket>();
 	server->Bind(service, AF_INET6);
 
 	boost::thread thread(boost::bind(&ClusterListener::ListenerThreadProc, this, server));
@@ -239,7 +192,7 @@ void ClusterListener::AddConnection(const String& node, const String& service) {
 			BOOST_THROW_EXCEPTION(std::logic_error("SSL context is required for AddConnection()"));
 	}
 
-	TcpSocket::Ptr client = boost::make_shared<TcpSocket>();
+	TcpSocket::Ptr client = make_shared<TcpSocket>();
 
 	client->Connect(node, service);
 	Utility::QueueAsyncCallback(boost::bind(&ClusterListener::NewClientHandler, this, client, TlsRoleClient));
@@ -256,21 +209,20 @@ void ClusterListener::PersistMessage(const Endpoint::Ptr& source, const Dictiona
 
 	ASSERT(ts != 0);
 
-	Dictionary::Ptr pmessage = boost::make_shared<Dictionary>();
+	Dictionary::Ptr pmessage = make_shared<Dictionary>();
 	pmessage->Set("timestamp", ts);
 
 	if (source)
 		pmessage->Set("source", source->GetName());
 
-	pmessage->Set("message", Value(message).Serialize());
+	pmessage->Set("message", JsonSerialize(message));
 	pmessage->Set("security", message->Get("security"));
 
 	ObjectLock olock(this);
 	if (m_LogFile) {
-		String json = Value(pmessage).Serialize();
-		NetString::WriteStringToStream(m_LogFile, json);
+		NetString::WriteStringToStream(m_LogFile, JsonSerialize(pmessage));
 		m_LogMessageCount++;
-		m_LogMessageTimestamp = ts;
+		SetLogMessageTimestamp(ts);
 
 		if (m_LogMessageCount > 50000) {
 			CloseLogFile();
@@ -330,7 +282,7 @@ void ClusterListener::RelayMessage(const Endpoint::Ptr& source, const Dictionary
 		{
 			ObjectLock olock(endpoint);
 
-			if (!endpoint->IsSyncing())
+			if (!endpoint->GetSyncing())
 				endpoint->SendMessage(message);
 		}
 	}
@@ -354,14 +306,14 @@ void ClusterListener::OpenLogFile(void)
 		return;
 	}
 
-	StdioStream::Ptr logStream = boost::make_shared<StdioStream>(fp, true);
+	StdioStream::Ptr logStream = make_shared<StdioStream>(fp, true);
 #ifdef HAVE_BIOZLIB
-	m_LogFile = boost::make_shared<ZlibStream>(logStream);
+	m_LogFile = make_shared<ZlibStream>(logStream);
 #else /* HAVE_BIOZLIB */
 	m_LogFile = logStream;
 #endif /* HAVE_BIOZLIB */
 	m_LogMessageCount = 0;
-	m_LogMessageTimestamp = 0;
+	SetLogMessageTimestamp(0);
 }
 
 void ClusterListener::CloseLogFile(void)
@@ -380,7 +332,7 @@ void ClusterListener::RotateLogFile(void)
 {
 	ASSERT(OwnsLock());
 
-	double ts = m_LogMessageTimestamp;
+	double ts = GetLogMessageTimestamp();
 
 	if (ts == 0)
 		ts = Utility::GetTime();
@@ -407,6 +359,8 @@ void ClusterListener::LogGlobHandler(std::vector<int>& files, const String& file
 
 void ClusterListener::ReplayLog(const Endpoint::Ptr& endpoint, const Stream::Ptr& stream)
 {
+	CONTEXT("Replaying log for Endpoint '" + endpoint->GetName() + "'");
+
 	int count = -1;
 	double peer_ts = endpoint->GetLocalLogPosition();
 	bool last_sync = false;
@@ -429,7 +383,7 @@ void ClusterListener::ReplayLog(const Endpoint::Ptr& endpoint, const Stream::Ptr
 		count = 0;
 
 		std::vector<int> files;
-		Utility::Glob(GetClusterDir() + "log/*", boost::bind(&ClusterListener::LogGlobHandler, boost::ref(files), _1));
+		Utility::Glob(GetClusterDir() + "log/*", boost::bind(&ClusterListener::LogGlobHandler, boost::ref(files), _1), GlobFile);
 		std::sort(files.begin(), files.end());
 
 		BOOST_FOREACH(int ts, files) {
@@ -441,9 +395,9 @@ void ClusterListener::ReplayLog(const Endpoint::Ptr& endpoint, const Stream::Ptr
 			Log(LogInformation, "cluster", "Replaying log: " + path);
 
 			std::fstream *fp = new std::fstream(path.CStr(), std::fstream::in);
-			StdioStream::Ptr logStream = boost::make_shared<StdioStream>(fp, true);
+			StdioStream::Ptr logStream = make_shared<StdioStream>(fp, true);
 #ifdef HAVE_BIOZLIB
-			ZlibStream::Ptr lstream = boost::make_shared<ZlibStream>(logStream);
+			ZlibStream::Ptr lstream = make_shared<ZlibStream>(logStream);
 #else /* HAVE_BIOZLIB */
 			Stream::Ptr lstream = logStream;
 #endif /* HAVE_BIOZLIB */
@@ -456,7 +410,7 @@ void ClusterListener::ReplayLog(const Endpoint::Ptr& endpoint, const Stream::Ptr
 					if (!NetString::ReadStringFromStream(lstream, &message))
 						break;
 
-					pmessage = Value::Deserialize(message);
+					pmessage = JsonDeserialize(message);
 				} catch (std::exception&) {
 					Log(LogWarning, "cluster", "Unexpected end-of-file for cluster log: " + path);
 
@@ -525,7 +479,9 @@ void ClusterListener::ReplayLog(const Endpoint::Ptr& endpoint, const Stream::Ptr
 
 void ClusterListener::ConfigGlobHandler(const Dictionary::Ptr& config, const String& file, bool basename)
 {
-	Dictionary::Ptr elem = boost::make_shared<Dictionary>();
+	CONTEXT("Creating config update for file '" + file + "'");
+
+	Dictionary::Ptr elem = make_shared<Dictionary>();
 
 	std::ifstream fp(file.CStr());
 	if (!fp)
@@ -544,9 +500,11 @@ void ClusterListener::ConfigGlobHandler(const Dictionary::Ptr& config, const Str
  */
 void ClusterListener::NewClientHandler(const Socket::Ptr& client, TlsRole role)
 {
-	NetworkStream::Ptr netStream = boost::make_shared<NetworkStream>(client);
+	CONTEXT("Handling new cluster client connection");
 
-	TlsStream::Ptr tlsStream = boost::make_shared<TlsStream>(netStream, role, m_SSLContext);
+	NetworkStream::Ptr netStream = make_shared<NetworkStream>(client);
+
+	TlsStream::Ptr tlsStream = make_shared<TlsStream>(netStream, role, m_SSLContext);
 	tlsStream->Handshake();
 
 	shared_ptr<X509> cert = tlsStream->GetPeerCertificate();
@@ -570,29 +528,28 @@ void ClusterListener::NewClientHandler(const Socket::Ptr& client, TlsRole role)
 		endpoint->SetClient(tlsStream);
 	}
 
-	Dictionary::Ptr config = boost::make_shared<Dictionary>();
+	Dictionary::Ptr config = make_shared<Dictionary>();
 	Array::Ptr configFiles = endpoint->GetConfigFiles();
 
 	if (configFiles) {
 		ObjectLock olock(configFiles);
 		BOOST_FOREACH(const String& pattern, configFiles) {
-			Utility::Glob(pattern, boost::bind(&ClusterListener::ConfigGlobHandler, boost::cref(config), _1, false));
+			Utility::Glob(pattern, boost::bind(&ClusterListener::ConfigGlobHandler, boost::cref(config), _1, false), GlobFile);
 		}
 	}
 
 	Log(LogInformation, "cluster", "Sending " + Convert::ToString(static_cast<long>(config->GetLength())) + " config files to endpoint '" + endpoint->GetName() + "'.");
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("identity", GetIdentity());
 	params->Set("config_files", config);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::Config");
 	message->Set("params", params);
 
-	String json = Value(message).Serialize();
-	NetString::WriteStringToStream(tlsStream, json);
+	NetString::WriteStringToStream(tlsStream, JsonSerialize(message));
 
 	ReplayLog(endpoint, tlsStream);
 }
@@ -600,16 +557,16 @@ void ClusterListener::NewClientHandler(const Socket::Ptr& client, TlsRole role)
 void ClusterListener::ClusterTimerHandler(void)
 {
 	/* broadcast a heartbeat message */
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("identity", GetIdentity());
 
 	/* Eww. */
-	Dictionary::Ptr features = boost::make_shared<Dictionary>();
+	Dictionary::Ptr features = make_shared<Dictionary>();
 	features->Set("checker", SupportsChecks() ? 1 : 0);
 	features->Set("notification", SupportsNotifications() ? 1 : 0);
 	params->Set("features", features);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::HeartBeat");
 	message->Set("params", params);
@@ -636,7 +593,7 @@ void ClusterListener::ClusterTimerHandler(void)
 	}
 
 	std::vector<int> files;
-	Utility::Glob(GetClusterDir() + "log/*", boost::bind(&ClusterListener::LogGlobHandler, boost::ref(files), _1));
+	Utility::Glob(GetClusterDir() + "log/*", boost::bind(&ClusterListener::LogGlobHandler, boost::ref(files), _1), GlobFile);
 	std::sort(files.begin(), files.end());
 
 	BOOST_FOREACH(int ts, files) {
@@ -695,7 +652,7 @@ void ClusterListener::ClusterTimerHandler(void)
 			} catch (std::exception& ex) {
 				std::ostringstream msgbuf;
 				msgbuf << "Exception occured while reconnecting to endpoint '"
-				       << endpoint->GetName() << "': " << boost::diagnostic_information(ex);
+				       << endpoint->GetName() << "': " << DiagnosticInformation(ex);
 				Log(LogWarning, "cluster", msgbuf.str());
 			}
 		}
@@ -706,7 +663,7 @@ void ClusterListener::SetSecurityInfo(const Dictionary::Ptr& message, const Dyna
 {
 	ASSERT(object);
 
-	Dictionary::Ptr security = boost::make_shared<Dictionary>();
+	Dictionary::Ptr security = make_shared<Dictionary>();
 	security->Set("type", object->GetType()->GetName());
 	security->Set("name", object->GetName());
 	security->Set("privs", privs);
@@ -714,16 +671,16 @@ void ClusterListener::SetSecurityInfo(const Dictionary::Ptr& message, const Dyna
 	message->Set("security", security);
 }
 
-void ClusterListener::CheckResultHandler(const Service::Ptr& service, const Dictionary::Ptr& cr, const String& authority)
+void ClusterListener::CheckResultHandler(const Service::Ptr& service, const CheckResult::Ptr& cr, const String& authority)
 {
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
-	params->Set("check_result", cr);
+	params->Set("check_result", Serialize(cr));
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::CheckResult");
 	message->Set("params", params);
@@ -738,11 +695,11 @@ void ClusterListener::NextCheckChangedHandler(const Service::Ptr& service, doubl
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
 	params->Set("next_check", nextCheck);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::SetNextCheck");
 	message->Set("params", params);
@@ -757,11 +714,11 @@ void ClusterListener::NextNotificationChangedHandler(const Notification::Ptr& no
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("notification", notification->GetName());
 	params->Set("next_notification", nextNotification);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::SetNextNotification");
 	message->Set("params", params);
@@ -776,11 +733,11 @@ void ClusterListener::ForceNextCheckChangedHandler(const Service::Ptr& service, 
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
 	params->Set("forced", forced);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::SetForceNextCheck");
 	message->Set("params", params);
@@ -795,11 +752,11 @@ void ClusterListener::ForceNextNotificationChangedHandler(const Service::Ptr& se
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
 	params->Set("forced", forced);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::SetForceNextNotification");
 	message->Set("params", params);
@@ -814,11 +771,11 @@ void ClusterListener::EnableActiveChecksChangedHandler(const Service::Ptr& servi
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::SetEnableActiveChecks");
 	message->Set("params", params);
@@ -833,11 +790,11 @@ void ClusterListener::EnablePassiveChecksChangedHandler(const Service::Ptr& serv
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::SetEnablePassiveChecks");
 	message->Set("params", params);
@@ -852,11 +809,11 @@ void ClusterListener::EnableNotificationsChangedHandler(const Service::Ptr& serv
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::SetEnableNotifications");
 	message->Set("params", params);
@@ -871,11 +828,11 @@ void ClusterListener::EnableFlappingChangedHandler(const Service::Ptr& service, 
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::SetEnableFlapping");
 	message->Set("params", params);
@@ -885,16 +842,16 @@ void ClusterListener::EnableFlappingChangedHandler(const Service::Ptr& service, 
 	AsyncRelayMessage(Endpoint::Ptr(), message, true);
 }
 
-void ClusterListener::CommentAddedHandler(const Service::Ptr& service, const Dictionary::Ptr& comment, const String& authority)
+void ClusterListener::CommentAddedHandler(const Service::Ptr& service, const Comment::Ptr& comment, const String& authority)
 {
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
-	params->Set("comment", comment);
+	params->Set("comment", Serialize(comment));
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::AddComment");
 	message->Set("params", params);
@@ -904,16 +861,16 @@ void ClusterListener::CommentAddedHandler(const Service::Ptr& service, const Dic
 	AsyncRelayMessage(Endpoint::Ptr(), message, true);
 }
 
-void ClusterListener::CommentRemovedHandler(const Service::Ptr& service, const Dictionary::Ptr& comment, const String& authority)
+void ClusterListener::CommentRemovedHandler(const Service::Ptr& service, const Comment::Ptr& comment, const String& authority)
 {
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
-	params->Set("id", comment->Get("id"));
+	params->Set("id", comment->GetId());
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::RemoveComment");
 	message->Set("params", params);
@@ -923,16 +880,16 @@ void ClusterListener::CommentRemovedHandler(const Service::Ptr& service, const D
 	AsyncRelayMessage(Endpoint::Ptr(), message, true);
 }
 
-void ClusterListener::DowntimeAddedHandler(const Service::Ptr& service, const Dictionary::Ptr& downtime, const String& authority)
+void ClusterListener::DowntimeAddedHandler(const Service::Ptr& service, const Downtime::Ptr& downtime, const String& authority)
 {
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
-	params->Set("downtime", downtime);
+	params->Set("downtime", Serialize(downtime));
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::AddDowntime");
 	message->Set("params", params);
@@ -942,16 +899,16 @@ void ClusterListener::DowntimeAddedHandler(const Service::Ptr& service, const Di
 	AsyncRelayMessage(Endpoint::Ptr(), message, true);
 }
 
-void ClusterListener::DowntimeRemovedHandler(const Service::Ptr& service, const Dictionary::Ptr& downtime, const String& authority)
+void ClusterListener::DowntimeRemovedHandler(const Service::Ptr& service, const Downtime::Ptr& downtime, const String& authority)
 {
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
-	params->Set("id", downtime->Get("id"));
+	params->Set("id", downtime->GetId());
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::RemoveDowntime");
 	message->Set("params", params);
@@ -966,14 +923,14 @@ void ClusterListener::AcknowledgementSetHandler(const Service::Ptr& service, con
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
 	params->Set("author", author);
 	params->Set("comment", comment);
 	params->Set("type", type);
 	params->Set("expiry", expiry);
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::SetAcknowledgement");
 	message->Set("params", params);
@@ -988,10 +945,10 @@ void ClusterListener::AcknowledgementClearedHandler(const Service::Ptr& service,
 	if (!authority.IsEmpty() && authority != GetIdentity())
 		return;
 
-	Dictionary::Ptr params = boost::make_shared<Dictionary>();
+	Dictionary::Ptr params = make_shared<Dictionary>();
 	params->Set("service", service->GetName());
 
-	Dictionary::Ptr message = boost::make_shared<Dictionary>();
+	Dictionary::Ptr message = make_shared<Dictionary>();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "cluster::ClearAcknowledgement");
 	message->Set("params", params);
@@ -1006,8 +963,15 @@ void ClusterListener::AsyncMessageHandler(const Endpoint::Ptr& sender, const Dic
 	m_MessageQueue.Enqueue(boost::bind(&ClusterListener::MessageHandler, this, sender, message));
 }
 
+void ClusterListener::MessageExceptionHandler(boost::exception_ptr exp)
+{
+	Log(LogCritical, "cluster", "Exception while processing cluster message: " + DiagnosticInformation(exp));
+}
+
 void ClusterListener::MessageHandler(const Endpoint::Ptr& sender, const Dictionary::Ptr& message)
 {
+	CONTEXT("Processing cluster message of type '" + message->Get("method") + "'");
+
 	sender->SetSeen(Utility::GetTime());
 
 	if (message->Contains("ts")) {
@@ -1018,10 +982,10 @@ void ClusterListener::MessageHandler(const Endpoint::Ptr& sender, const Dictiona
 			return;
 
 		if (sender->GetRemoteLogPosition() + 10 < ts) {
-			Dictionary::Ptr lparams = boost::make_shared<Dictionary>();
+			Dictionary::Ptr lparams = make_shared<Dictionary>();
 			lparams->Set("log_position", message->Get("ts"));
 
-			Dictionary::Ptr lmessage = boost::make_shared<Dictionary>();
+			Dictionary::Ptr lmessage = make_shared<Dictionary>();
 			lmessage->Set("jsonrpc", "2.0");
 			lmessage->Set("method", "cluster::SetLogPosition");
 			lmessage->Set("params", lparams);
@@ -1066,7 +1030,7 @@ void ClusterListener::MessageHandler(const Endpoint::Ptr& sender, const Dictiona
 			return;
 		}
 
-		Dictionary::Ptr cr = params->Get("check_result");
+		CheckResult::Ptr cr = Deserialize(params->Get("check_result"), true);
 
 		if (!cr)
 			return;
@@ -1260,11 +1224,10 @@ void ClusterListener::MessageHandler(const Endpoint::Ptr& sender, const Dictiona
 			return;
 		}
 
-		Dictionary::Ptr comment = params->Get("comment");
+		Comment::Ptr comment = Deserialize(params->Get("comment"), true);
 
-		long type = static_cast<long>(comment->Get("entry_type"));
-		service->AddComment(static_cast<CommentType>(type), comment->Get("author"),
-		    comment->Get("text"), comment->Get("expire_time"), comment->Get("id"), sender->GetName());
+		service->AddComment(comment->GetEntryType(), comment->GetAuthor(),
+		    comment->GetText(), comment->GetExpireTime(), comment->GetId(), sender->GetName());
 
 		AsyncRelayMessage(sender, message, true);
 	} else if (message->Get("method") == "cluster::RemoveComment") {
@@ -1304,12 +1267,13 @@ void ClusterListener::MessageHandler(const Endpoint::Ptr& sender, const Dictiona
 			return;
 		}
 
-		Dictionary::Ptr downtime = params->Get("downtime");
+		Downtime::Ptr downtime = Deserialize(params->Get("downtime"), true);
 
-		service->AddDowntime(downtime->Get("comment_id"),
-		    downtime->Get("start_time"), downtime->Get("end_time"),
-		    downtime->Get("fixed"), downtime->Get("triggered_by"),
-		    downtime->Get("duration"), downtime->Get("id"), sender->GetName());
+		service->AddDowntime(downtime->GetAuthor(), downtime->GetComment(),
+		    downtime->GetStartTime(), downtime->GetEndTime(),
+		    downtime->GetFixed(), downtime->GetTriggeredBy(),
+		    downtime->GetDuration(), downtime->GetScheduledBy(),
+		    downtime->GetId(), sender->GetName());
 
 		AsyncRelayMessage(sender, message, true);
 	} else if (message->Get("method") == "cluster::RemoveDowntime") {
@@ -1429,8 +1393,8 @@ void ClusterListener::MessageHandler(const Endpoint::Ptr& sender, const Dictiona
 				<< boost::errinfo_errno(errno));
 		}
 
-		Dictionary::Ptr localConfig = boost::make_shared<Dictionary>();
-		Utility::Glob(dir + "/*", boost::bind(&ClusterListener::ConfigGlobHandler, boost::cref(localConfig), _1, true));
+		Dictionary::Ptr localConfig = make_shared<Dictionary>();
+		Utility::Glob(dir + "/*", boost::bind(&ClusterListener::ConfigGlobHandler, boost::cref(localConfig), _1, true), GlobFile);
 
 		bool configChange = false;
 
@@ -1438,13 +1402,11 @@ void ClusterListener::MessageHandler(const Endpoint::Ptr& sender, const Dictiona
 		if (localConfig->GetLength() != remoteConfig->GetLength())
 			configChange = true;
 
-		String key;
-		Value value;
 		ObjectLock olock(remoteConfig);
-		BOOST_FOREACH(boost::tie(key, value), remoteConfig) {
-			Dictionary::Ptr remoteFile = value;
+		BOOST_FOREACH(const Dictionary::Pair& kv, remoteConfig) {
+			Dictionary::Ptr remoteFile = kv.second;
 			bool writeFile = false;
-			String hash = SHA256(key);
+			String hash = SHA256(kv.first);
 			String path = dir + "/" + hash;
 			
 			if (!localConfig->Contains(hash))
@@ -1474,8 +1436,8 @@ void ClusterListener::MessageHandler(const Endpoint::Ptr& sender, const Dictiona
 		olock.Unlock();
 
 		ObjectLock olock2(localConfig);
-		BOOST_FOREACH(boost::tie(key, boost::tuples::ignore), localConfig) {
-			String path = dir + "/" + key;
+		BOOST_FOREACH(const Dictionary::Pair& kv, localConfig) {
+			String path = dir + "/" + kv.first;
 			Log(LogInformation, "cluster", "Removing obsolete config file: " + path);
 			(void) unlink(path.CStr());
 			configChange = true;
@@ -1578,38 +1540,4 @@ bool ClusterListener::SupportsNotifications(void)
 		return false;
 
 	return !type->GetObjects().empty() && IcingaApplication::GetInstance()->GetEnableNotifications();
-}
-
-void ClusterListener::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
-{
-	DynamicObject::InternalSerialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		bag->Set("cert_path", m_CertPath);
-		bag->Set("key_path", m_KeyPath);
-		bag->Set("ca_path", m_CAPath);
-		bag->Set("bind_host", m_BindHost);
-		bag->Set("bind_port", m_BindPort);
-		bag->Set("peers", m_Peers);
-	}
-
-	if (attributeTypes & Attribute_State)
-		bag->Set("log_message_timestamp", m_LogMessageTimestamp);
-}
-
-void ClusterListener::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
-{
-	DynamicObject::InternalDeserialize(bag, attributeTypes);
-
-	if (attributeTypes & Attribute_Config) {
-		m_CertPath = bag->Get("cert_path");
-		m_KeyPath = bag->Get("key_path");
-		m_CAPath = bag->Get("ca_path");
-		m_BindHost = bag->Get("bind_host");
-		m_BindPort = bag->Get("bind_port");
-		m_Peers = bag->Get("peers");
-	}
-
-	if (attributeTypes & Attribute_State)
-		m_LogMessageTimestamp = bag->Get("log_message_timestamp");
 }

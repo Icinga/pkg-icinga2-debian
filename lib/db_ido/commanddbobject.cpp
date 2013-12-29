@@ -37,14 +37,10 @@ CommandDbObject::CommandDbObject(const DbType::Ptr& type, const String& name1, c
 
 Dictionary::Ptr CommandDbObject::GetConfigFields(void) const
 {
-	Dictionary::Ptr fields = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields = make_shared<Dictionary>();
 	Command::Ptr command = static_pointer_cast<Command>(GetObject());
 
-	Dictionary::Ptr attrs;
-
-	attrs = CompatUtility::GetCommandConfigAttributes(command);
-
-	fields->Set("command_line", attrs->Get("command_line"));
+	fields->Set("command_line", CompatUtility::GetCommandLine(command));
 
 	return fields;
 }

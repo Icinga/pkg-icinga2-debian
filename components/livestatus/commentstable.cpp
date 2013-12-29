@@ -26,7 +26,6 @@
 #include <boost/foreach.hpp>
 
 using namespace icinga;
-using namespace livestatus;
 
 CommentsTable::CommentsTable(void)
 {
@@ -61,67 +60,67 @@ void CommentsTable::FetchRows(const AddRowFunction& addRowFn)
 	BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjects<Service>()) {
 		Dictionary::Ptr comments = service->GetComments();
 
-		if (!comments)
-			continue;
-
 		ObjectLock olock(comments);
 
 		String id;
-		BOOST_FOREACH(boost::tie(id, boost::tuples::ignore), comments) {
+		Comment::Ptr comment;
+		BOOST_FOREACH(boost::tie(id, comment), comments) {
 			if (Service::GetOwnerByCommentID(id) == service)
-				addRowFn(id);
+				addRowFn(comment);
 		}
 	}
 }
 
 Object::Ptr CommentsTable::ServiceAccessor(const Value& row, const Column::ObjectAccessor& parentObjectAccessor)
 {
-	return Service::GetOwnerByCommentID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
+	return Service::GetOwnerByCommentID(comment->GetId());
 }
 
 Value CommentsTable::AuthorAccessor(const Value& row)
 {
-	Dictionary::Ptr comment = Service::GetCommentByID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
 
 	if (!comment)
 		return Empty;
 
-	return comment->Get("author");
+	return comment->GetAuthor();
 }
 
 Value CommentsTable::CommentAccessor(const Value& row)
 {
-	Dictionary::Ptr comment = Service::GetCommentByID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
 
 	if (!comment)
 		return Empty;
 
-	return comment->Get("text");
+	return comment->GetText();
 }
 
 Value CommentsTable::IdAccessor(const Value& row)
 {
-	Dictionary::Ptr comment = Service::GetCommentByID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
 
 	if (!comment)
 		return Empty;
 
-	return comment->Get("legacy_id");
+	return comment->GetLegacyId();
 }
 
 Value CommentsTable::EntryTimeAccessor(const Value& row)
 {
-	Dictionary::Ptr comment = Service::GetCommentByID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
 
 	if (!comment)
 		return Empty;
 
-	return static_cast<int>(comment->Get("entry_time"));
+	return static_cast<int>(comment->GetEntryTime());
 }
 
 Value CommentsTable::TypeAccessor(const Value& row)
 {
-	Service::Ptr svc = Service::GetOwnerByCommentID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
+	Service::Ptr svc = Service::GetOwnerByCommentID(comment->GetId());
 
 	if (!svc)
 		return Empty;
@@ -131,7 +130,8 @@ Value CommentsTable::TypeAccessor(const Value& row)
 
 Value CommentsTable::IsServiceAccessor(const Value& row)
 {
-	Service::Ptr svc = Service::GetOwnerByCommentID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
+	Service::Ptr svc = Service::GetOwnerByCommentID(comment->GetId());
 
 	if (!svc)
 		return Empty;
@@ -141,30 +141,30 @@ Value CommentsTable::IsServiceAccessor(const Value& row)
 
 Value CommentsTable::EntryTypeAccessor(const Value& row)
 {
-	Dictionary::Ptr comment = Service::GetCommentByID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
 
 	if (!comment)
 		return Empty;
 
-	return comment->Get("entry_type");
+	return comment->GetEntryType();
 }
 
 Value CommentsTable::ExpiresAccessor(const Value& row)
 {
-	Dictionary::Ptr comment = Service::GetCommentByID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
 
 	if (!comment)
 		return Empty;
 
-	return comment->Get("expires");
+	return comment->GetExpireTime() != 0;
 }
 
 Value CommentsTable::ExpireTimeAccessor(const Value& row)
 {
-	Dictionary::Ptr comment = Service::GetCommentByID(row);
+	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
 
 	if (!comment)
 		return Empty;
 
-	return static_cast<int>(comment->Get("expire_time"));
+	return static_cast<int>(comment->GetExpireTime());
 }

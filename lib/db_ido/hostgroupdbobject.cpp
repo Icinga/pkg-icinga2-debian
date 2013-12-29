@@ -35,7 +35,7 @@ HostGroupDbObject::HostGroupDbObject(const DbType::Ptr& type, const String& name
 
 Dictionary::Ptr HostGroupDbObject::GetConfigFields(void) const
 {
-	Dictionary::Ptr fields = boost::make_shared<Dictionary>();
+	Dictionary::Ptr fields = make_shared<Dictionary>();
 	HostGroup::Ptr group = static_pointer_cast<HostGroup>(GetObject());
 
 	fields->Set("alias", group->GetDisplayName());
@@ -52,21 +52,15 @@ void HostGroupDbObject::OnConfigUpdate(void)
 {
 	HostGroup::Ptr group = static_pointer_cast<HostGroup>(GetObject());
 
-	DbQuery query1;
-	query1.Table = DbType::GetByName("HostGroup")->GetTable() + "_members";
-	query1.Type = DbQueryDelete;
-	query1.WhereCriteria = boost::make_shared<Dictionary>();
-	query1.WhereCriteria->Set("hostgroup_id", DbValue::FromObjectInsertID(group));
-	OnQuery(query1);
-
 	BOOST_FOREACH(const Host::Ptr& host, group->GetMembers()) {
-		DbQuery query2;
-		query2.Table = DbType::GetByName("HostGroup")->GetTable() + "_members";
-		query2.Type = DbQueryInsert;
-		query2.Fields = boost::make_shared<Dictionary>();
-		query2.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
-		query2.Fields->Set("hostgroup_id", DbValue::FromObjectInsertID(group));
-		query2.Fields->Set("host_object_id", host);
-		OnQuery(query2);
+		DbQuery query1;
+		query1.Table = DbType::GetByName("HostGroup")->GetTable() + "_members";
+		query1.Type = DbQueryInsert;
+		query1.Category = DbCatConfig;
+		query1.Fields = make_shared<Dictionary>();
+		query1.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+		query1.Fields->Set("hostgroup_id", DbValue::FromObjectInsertID(group));
+		query1.Fields->Set("host_object_id", host);
+		OnQuery(query1);
 	}
 }

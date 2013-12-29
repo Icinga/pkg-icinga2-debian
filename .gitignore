@@ -1,0 +1,4 @@
+.vagrant
+build
+icinga-version.h.fallback
+*.komodoproject

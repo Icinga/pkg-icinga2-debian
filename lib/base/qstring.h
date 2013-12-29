@@ -28,6 +28,8 @@
 
 namespace icinga {
 
+class Value;
+
 /**
  * String class.
  *
@@ -64,6 +66,7 @@ public:
 
 	String& operator+=(const String& rhs);
 	String& operator+=(const char *rhs);
+	String& operator+=(const Value& rhs);
 	String& operator+=(char rhs);
 
 	bool IsEmpty(void) const;
@@ -76,13 +79,19 @@ public:
 	void Clear(void);
 	size_t GetLength(void) const;
 
+	std::string& GetData(void);
+
 	size_t Find(const String& str, size_t pos = 0) const;
+	size_t RFind(const String& str, size_t pos = NPos) const;
 	size_t FindFirstOf(const char *s, size_t pos = 0) const;
 	size_t FindFirstOf(char ch, size_t pos = 0) const;
+	size_t FindFirstNotOf(const char *s, size_t pos = 0) const;
+	size_t FindFirstNotOf(char ch, size_t pos = 0) const;
 	String SubStr(size_t first, size_t len = NPos) const;
 	void Replace(size_t first, size_t second, const String& str);
 
 	void Trim(void);
+	bool Contains(const String& str) const;
 
 	void swap(String& str);
 	Iterator erase(Iterator first, Iterator last);
@@ -143,30 +152,16 @@ struct string_iless : std::binary_function<String, String, bool>
 {
 	bool operator()(const String& s1, const String& s2) const
 	{
-		return strcasecmp(s1.CStr(), s2.CStr()) < 0;
+		 return strcasecmp(s1.CStr(), s2.CStr()) < 0;
 
-		/* The "right" way would be to do this - however the
-		 * overhead is _massive_ due to the repeated non-inlined
-		 * function calls:
+		 /* The "right" way would be to do this - however the
+		  * overhead is _massive_ due to the repeated non-inlined
+		  * function calls:
 
-		return lexicographical_compare(s1.Begin(), s1.End(),
-		    s2.Begin(), s2.End(), boost::algorithm::is_iless());
+		 return lexicographical_compare(s1.Begin(), s1.End(),
+		     s2.Begin(), s2.End(), boost::algorithm::is_iless());
 
-		 */
-	}
-};
-
-struct pair_string_iless : std::binary_function<std::pair<String, String>, std::pair<String, String>, bool>
-{
-	bool operator()(const std::pair<String, String>& p1, const std::pair<String, String>& p2) const
-	{
-		if (string_iless()(p1.first, p2.first))
-			return true;
-
-		if (string_iless()(p2.first, p1.first))
-			return false;
-
-		return string_iless()(p1.second, p2.second);
+		  */
 	}
 };
 

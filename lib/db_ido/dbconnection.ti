@@ -1,0 +1,26 @@
+#include "db_ido/dbquery.h"
+#include "base/dynamicobject.h"
+
+namespace icinga
+{
+
+abstract class DbConnection : DynamicObject
+{
+	[config] String table_prefix {
+		default {{{ return "icinga_"; }}}
+	};
+
+	[config] Dictionary::Ptr cleanup {
+		default {{{ return make_shared<Dictionary>(); }}}
+	};
+
+	[config] int categories {
+		default {{{
+			return DbCatConfig | DbCatState | DbCatAcknowledgement |
+			    DbCatComment | DbCatDowntime | DbCatEventHandler | DbCatExternalCommand | DbCatFlapping |
+			    DbCatLog | DbCatNotification | DbCatProgramStatus | DbCatRetention | DbCatStateHistory;
+		}}}
+	};
+};
+
+}

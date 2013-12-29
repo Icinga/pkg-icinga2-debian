@@ -18,32 +18,24 @@ The following requirements need to be fulfilled in order to build the
 application using a dist tarball (package names for RHEL and Debian in
 parentheses):
 
+* cmake
 * GNU make (make)
 * C++ compiler (gcc-c++ on RHEL, build-essential on Debian)
 * OpenSSL library and header files (openssl-devel on RHEL, libssl-dev
                                     on Debian)
 * Boost library and header files (boost-devel on RHEL, libboost-all-dev
                                   on Debian)
+* GNU bison (bison)
+* GNU flex (flex) >= 2.5.35
 * optional: Doxygen (doxygen)
 * optional: MySQL (mysql-devel on RHEL, libmysqlclient-dev on Debian)
 * optional: Python (python-devel on RHEL, python-dev on Debian)
 
-Packaging Requirements
-----------------------
+Note: RHEL5 ships an ancient flex version. Updated packages are available for
+example from the repoforge buildtools repository.
 
-In order to build a dist tarball for the application the following external
-software components need to be installed in addition to the build requirements
-mentioned above:
+http://mirror.hs-esslingen.de/repoforge/redhat/el5/en/{i386,x86_64}/buildtools/
 
-* GNU Automake (automake)
-* GNU Autoconf (autoconf)
-* GNU Libtool (libtool and libtool-ltdl-devel on RHEL, libtool and
-               libltdl-dev on Debian)
-* GNU bison (bison)
-* GNU flex (flex)
-
-In order to build the dist tarball (using "make dist") you need sufficiently
-recent versions of the packages listed above.
 
 User Requirements
 -----------------
@@ -72,19 +64,24 @@ Building Icinga 2
 Once you have installed all the necessary build requirements you can build
 Icinga 2 using the following commands:
 
-$ ./configure
+$ mkdir build && cd build
+$ cmake ..
 $ make
 $ make install
 
-The configure script supports all the usual parameters one comes to expect
-from autoconf. In particular you may want to use --prefix to specify an
-alternative installation prefix.
+You can specify an alternative installation prefix using -DCMAKE_INSTALL_PREFIX:
 
-Note: The Git repository does not contain any auto-generated Autotools files,
-i.e. there is no 'configure' script. In this case you will need to regenerate
-the 'configure' script by running 'autogen.sh'. However, as an end-user you
-should reconsider whether you really want to use the code from the Git
-repository. In general it is advisable to use one of the dist tarballs instead.
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/tmp/icinga2
+
+In addition to CMAKE_INSTALL_PREFIX the following Icinga-specific cmake
+variables are supported:
+
+- ICINGA2_USER: The user Icinga 2 should run as; defaults to "icinga"
+- ICINGA2_GROUP: The group Icinga 2 should run as; defaults to "icinga"
+- ICINGA2_COMMAND_USER: The command user Icinga 2 should use; defaults to "icinga"
+- ICINGA2_COMMAND_GROUP: The command group Icinga 2 should use; default to "icingacmd"
+- CMAKE_INSTALL_SYSCONFDIR: The configuration directory; defaults to CMAKE_INSTALL_PREFIX/etc
+- CMAKE_INSTALL_LOCALSTATEDIR: The state directory; defaults to CMAKE_INSTALL_PREFIX/var
 
 Running Icinga 2
 ----------------

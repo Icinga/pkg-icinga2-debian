@@ -20,8 +20,8 @@
 #ifndef COMPATLOGGER_H
 #define COMPATLOGGER_H
 
+#include "compat/compatlogger.th"
 #include "icinga/service.h"
-#include "base/dynamicobject.h"
 #include "base/timer.h"
 #include <fstream>
 
@@ -33,41 +33,28 @@ namespace icinga
  *
  * @ingroup compat
  */
-class CompatLogger : public DynamicObject
+class CompatLogger : public ObjectImpl<CompatLogger>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(CompatLogger);
 	DECLARE_TYPENAME(CompatLogger);
-
-	CompatLogger(void);
-
-	String GetLogDir(void) const;
-	String GetRotationMethod(void) const;
 
 	static void ValidateRotationMethod(const String& location, const Dictionary::Ptr& attrs);
 
 protected:
 	virtual void Start(void);
 
-	virtual void InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const;
-	virtual void InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes);
-
 private:
-	String m_LogDir;
-	String m_RotationMethod;
-
-	double m_LastRotation;
-
 	void WriteLine(const String& line);
 	void Flush(void);
 
-	void CheckResultHandler(const Service::Ptr& service, const Dictionary::Ptr& cr);
-	void DowntimeHandler(const Service::Ptr& service, DowntimeState downtime_state);
-	void NotificationSentHandler(const Service::Ptr& service, const User::Ptr& user, NotificationType const& notification_type, Dictionary::Ptr const& cr, const String& author, const String& comment_text);
+	void CheckResultHandler(const Service::Ptr& service, const CheckResult::Ptr& cr);
+	void NotificationSentHandler(const Service::Ptr& service, const User::Ptr& user, NotificationType const& notification_type, CheckResult::Ptr const& cr, const String& author, const String& comment_text, const String& command_name);
 	void FlappingHandler(const Service::Ptr& service, FlappingState flapping_state);
-        void TriggerDowntimeHandler(const Service::Ptr& service, const Dictionary::Ptr& downtime);
-        void RemoveDowntimeHandler(const Service::Ptr& service, const Dictionary::Ptr& downtime);
-        void ExternalCommandHandler(const String& command, const std::vector<String>& arguments);
+	void TriggerDowntimeHandler(const Service::Ptr& service, const Downtime::Ptr& downtime);
+	void RemoveDowntimeHandler(const Service::Ptr& service, const Downtime::Ptr& downtime);
+	void ExternalCommandHandler(const String& command, const std::vector<String>& arguments);
+	void EventCommandHandler(const Service::Ptr& service);
 
 	Timer::Ptr m_RotationTimer;
 	void RotationTimerHandler(void);

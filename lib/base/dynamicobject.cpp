@@ -19,6 +19,7 @@
 
 #include "base/dynamicobject.h"
 #include "base/dynamictype.h"
+#include "base/serializer.h"
 #include "base/netstring.h"
 #include "base/registry.h"
 #include "base/stdiostream.h"
@@ -27,6 +28,8 @@
 #include "base/logger_fwd.h"
 #include "base/exception.h"
 #include "base/scriptfunction.h"
+#include "base/initialize.h"
+#include "base/scriptvariable.h"
 #include <fstream>
 #include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
@@ -36,96 +39,35 @@
 
 using namespace icinga;
 
+REGISTER_TYPE(DynamicObject);
+INITIALIZE_ONCE(&DynamicObject::StaticInitialize);
+
 boost::signals2::signal<void (const DynamicObject::Ptr&)> DynamicObject::OnStarted;
 boost::signals2::signal<void (const DynamicObject::Ptr&)> DynamicObject::OnStopped;
 boost::signals2::signal<void (const DynamicObject::Ptr&)> DynamicObject::OnStateChanged;
 boost::signals2::signal<void (const DynamicObject::Ptr&, const String&, bool)> DynamicObject::OnAuthorityChanged;
 
+void DynamicObject::StaticInitialize(void)
+{
+	ScriptVariable::Set("DomainPrivRead", DomainPrivRead, true, true);
+	ScriptVariable::Set("DomainPrivCheckResult", DomainPrivCheckResult, true, true);
+	ScriptVariable::Set("DomainPrivCommand", DomainPrivCommand, true, true);
+
+	ScriptVariable::Set("DomainPrevReadOnly", DomainPrivRead, true, true);
+	ScriptVariable::Set("DomainPrivReadWrite", DomainPrivRead | DomainPrivCheckResult | DomainPrivCommand, true, true);
+}
+
 DynamicObject::DynamicObject(void)
-	: m_Active(false)
 { }
-
-DynamicObject::~DynamicObject(void)
-{ }
-
-Dictionary::Ptr DynamicObject::Serialize(int attributeTypes) const
-{
-	Dictionary::Ptr update = boost::make_shared<Dictionary>();
-
-	ASSERT(!OwnsLock());
-	ObjectLock olock(this);
-
-	InternalSerialize(update, attributeTypes);
-
-	/* Make sure our own InternalSerialize() method was called. */
-	ASSERT(update->Contains("__marker"));
-	update->Remove("__marker");
-
-	return update;
-}
-
-void DynamicObject::Deserialize(const Dictionary::Ptr& update, int attributeTypes)
-{
-	ASSERT(!OwnsLock());
-
-	{
-		ObjectLock olock(this);
-		InternalDeserialize(update, attributeTypes);
-	}
-}
-
-void DynamicObject::InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const
-{
-	if (attributeTypes & Attribute_Config) {
-		bag->Set("__name", m_Name);
-		bag->Set("__type", m_Type);
-		bag->Set("methods", m_Methods);
-		bag->Set("custom", m_Custom);
-		bag->Set("authorities", m_Authorities);
-		bag->Set("domains", m_Domains);
-	}
-
-	if (attributeTypes & Attribute_State)
-		bag->Set("extensions", m_Extensions);
-
-	/* This attribute is used by Serialize() to check that this
-	 * method was called. */
-	bag->Set("__marker", 1);
-}
-
-void DynamicObject::InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes)
-{
-	if (attributeTypes & Attribute_Config) {
-		m_Name = bag->Get("__name");
-		m_Type = bag->Get("__type");
-		m_Methods = bag->Get("methods");
-		m_Custom = bag->Get("custom");
-		m_Authorities = bag->Get("authorities");
-		m_Domains = bag->Get("domains");
-	}
-
-	if (attributeTypes & Attribute_State)
-		m_Extensions = bag->Get("extensions");
-}
 
 DynamicType::Ptr DynamicObject::GetType(void) const
 {
-	return DynamicType::GetByName(m_Type);
-}
-
-String DynamicObject::GetName(void) const
-{
-	return m_Name;
+	return DynamicType::GetByName(GetTypeName());
 }
 
 bool DynamicObject::IsActive(void) const
 {
-	return m_Active;
-}
-
-Array::Ptr DynamicObject::GetAuthorities(void) const
-{
-	return m_Authorities;
+	return GetActive();
 }
 
 void DynamicObject::SetAuthority(const String& type, bool value)
@@ -135,15 +77,15 @@ void DynamicObject::SetAuthority(const String& type, bool value)
 	{
 		ObjectLock olock(this);
 
-		if (!m_Authority)
-			m_Authority = boost::make_shared<Dictionary>();
-
 		bool old_value = HasAuthority(type);
 
 		if (old_value == value)
 			return;
 
-		m_Authority->Set(type, value);
+		if (GetAuthorityInfo() == NULL)
+			SetAuthorityInfo(make_shared<Dictionary>());
+
+		GetAuthorityInfo()->Set(type, value);
 	}
 
 	OnAuthorityChanged(GetSelf(), type, value);
@@ -151,15 +93,12 @@ void DynamicObject::SetAuthority(const String& type, bool value)
 
 bool DynamicObject::HasAuthority(const String& type) const
 {
-	if (!m_Authority)
+	Dictionary::Ptr authorityInfo = GetAuthorityInfo();
+
+	if (!authorityInfo || !authorityInfo->Contains(type))
 		return true;
 
-	return m_Authority->Get(type);
-}
-
-Array::Ptr DynamicObject::GetDomains(void) const
-{
-	return m_Domains;
+	return authorityInfo->Get(type);
 }
 
 void DynamicObject::SetPrivileges(const String& instance, int privs)
@@ -183,11 +122,11 @@ bool DynamicObject::HasPrivileges(const String& instance, int privs) const
 
 void DynamicObject::SetExtension(const String& key, const Object::Ptr& object)
 {
-	Dictionary::Ptr extensions = m_Extensions;
+	Dictionary::Ptr extensions = GetExtensions();
 
 	if (!extensions) {
-		extensions = boost::make_shared<Dictionary>();
-		m_Extensions = extensions;
+		extensions = make_shared<Dictionary>();
+		SetExtensions(extensions);
 	}
 
 	extensions->Set(key, object);
@@ -195,7 +134,7 @@ void DynamicObject::SetExtension(const String& key, const Object::Ptr& object)
 
 Object::Ptr DynamicObject::GetExtension(const String& key)
 {
-	Dictionary::Ptr extensions = m_Extensions;
+	Dictionary::Ptr extensions = GetExtensions();
 
 	if (!extensions)
 		return Object::Ptr();
@@ -205,7 +144,7 @@ Object::Ptr DynamicObject::GetExtension(const String& key)
 
 void DynamicObject::ClearExtension(const String& key)
 {
-	Dictionary::Ptr extensions = m_Extensions;
+	Dictionary::Ptr extensions = GetExtensions();
 
 	if (!extensions)
 		return;
@@ -224,9 +163,24 @@ void DynamicObject::Register(void)
 void DynamicObject::Start(void)
 {
 	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
 
-	ASSERT(!m_Active);
-	m_Active = true;
+	SetStartCalled(true);
+}
+
+void DynamicObject::Activate(void)
+{
+	ASSERT(!OwnsLock());
+
+	Start();
+
+	ASSERT(GetStartCalled());
+
+	{
+		ObjectLock olock(this);
+		ASSERT(!IsActive());
+		SetActive(true);
+	}
 
 	OnStarted(GetSelf());
 }
@@ -234,9 +188,27 @@ void DynamicObject::Start(void)
 void DynamicObject::Stop(void)
 {
 	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
 
-	ASSERT(m_Active);
-	m_Active = false;
+	SetStopCalled(true);
+}
+
+void DynamicObject::Deactivate(void)
+{
+	ASSERT(!OwnsLock());
+
+	{
+		ObjectLock olock(this);
+
+		if (!IsActive())
+			return;
+
+		SetActive(false);
+	}
+
+	Stop();
+
+	ASSERT(GetStopCalled());
 
 	OnStopped(GetSelf());
 }
@@ -256,7 +228,7 @@ Value DynamicObject::InvokeMethod(const String& method,
 {
 	Dictionary::Ptr methods;
 
-	methods = m_Methods;
+	methods = GetMethods();
 
 	if (!methods)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Method '" + method + "' does not exist."));
@@ -286,24 +258,23 @@ void DynamicObject::DumpObjects(const String& filename, int attributeTypes)
 	if (!fp)
 		BOOST_THROW_EXCEPTION(std::runtime_error("Could not open '" + filename + "' file"));
 
-	StdioStream::Ptr sfp = boost::make_shared<StdioStream>(&fp, false);
+	StdioStream::Ptr sfp = make_shared<StdioStream>(&fp, false);
 
 	BOOST_FOREACH(const DynamicType::Ptr& type, DynamicType::GetTypes()) {
 		BOOST_FOREACH(const DynamicObject::Ptr& object, type->GetObjects()) {
-			Dictionary::Ptr persistentObject = boost::make_shared<Dictionary>();
+			Dictionary::Ptr persistentObject = make_shared<Dictionary>();
 
 			persistentObject->Set("type", type->GetName());
 			persistentObject->Set("name", object->GetName());
 
-			Dictionary::Ptr update = object->Serialize(attributeTypes);
+			Dictionary::Ptr update = Serialize(object, attributeTypes);
 
 			if (!update)
 				continue;
 
 			persistentObject->Set("update", update);
 
-			Value value = persistentObject;
-			String json = value.Serialize();
+			String json = JsonSerialize(persistentObject);
 
 			NetString::WriteStringToStream(sfp, json);
 		}
@@ -332,13 +303,13 @@ void DynamicObject::RestoreObjects(const String& filename, int attributeTypes)
 	std::fstream fp;
 	fp.open(filename.CStr(), std::ios_base::in);
 
-	StdioStream::Ptr sfp = boost::make_shared<StdioStream>(&fp, false);
+	StdioStream::Ptr sfp = make_shared<StdioStream>(&fp, false);
 
 	unsigned long restored = 0;
 
 	String message;
 	while (NetString::ReadStringFromStream(sfp, &message)) {
-		Dictionary::Ptr persistentObject = Value::Deserialize(message);
+		Dictionary::Ptr persistentObject = JsonDeserialize(message);
 
 		String type = persistentObject->Get("type");
 		String name = persistentObject->Get("name");
@@ -353,8 +324,10 @@ void DynamicObject::RestoreObjects(const String& filename, int attributeTypes)
 
 		if (object) {
 			ASSERT(!object->IsActive());
+#ifdef _DEBUG
 			Log(LogDebug, "base", "Restoring object '" + name + "' of type '" + type + "'.");
-			object->Deserialize(update, attributeTypes);
+#endif /* _DEBUG */
+			Deserialize(object, update, false, attributeTypes);
 			object->OnStateLoaded();
 		}
 
@@ -372,8 +345,7 @@ void DynamicObject::StopObjects(void)
 {
 	BOOST_FOREACH(const DynamicType::Ptr& dt, DynamicType::GetTypes()) {
 		BOOST_FOREACH(const DynamicObject::Ptr& object, dt->GetObjects()) {
-			if (object->IsActive())
-				object->Stop();
+			object->Deactivate();
 		}
 	}
 }
@@ -382,9 +354,4 @@ DynamicObject::Ptr DynamicObject::GetObject(const String& type, const String& na
 {
 	DynamicType::Ptr dtype = DynamicType::GetByName(type);
 	return dtype->GetObject(name);
-}
-
-Dictionary::Ptr DynamicObject::GetCustom(void) const
-{
-	return m_Custom;
 }

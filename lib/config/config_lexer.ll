@@ -22,10 +22,13 @@
 #include "config/expression.h"
 #include "config/typerule.h"
 #include "config/configcompilercontext.h"
-#include "config/config_parser.h"
-#include <sstream>
 
 using namespace icinga;
+
+#include "config/config_parser.hh"
+#include <sstream>
+
+#define YYLTYPE icinga::DebugInfo
 
 #define YY_EXTRA_TYPE ConfigCompiler *
 #define YY_USER_ACTION 					\
@@ -209,13 +212,16 @@ name				{ yylval->type = TypeName; return T_TYPE_NAME; }
 object				return T_OBJECT;
 template			return T_TEMPLATE;
 include				return T_INCLUDE;
+include_recursive		return T_INCLUDE_RECURSIVE;
 library				return T_LIBRARY;
 inherits			return T_INHERITS;
 null				return T_NULL;
 partial				return T_PARTIAL;
 true				{ yylval->num = 1; return T_NUMBER; }
 false				{ yylval->num = 0; return T_NUMBER; }
-set				return T_SET;
+set				return T_VAR;
+var				return T_VAR;
+const				return T_CONST;
 \<\<				return T_SHIFT_LEFT;
 \>\>				return T_SHIFT_RIGHT;
 [a-zA-Z_][:a-zA-Z0-9\-_]*	{ yylval->text = strdup(yytext); return T_IDENTIFIER; }

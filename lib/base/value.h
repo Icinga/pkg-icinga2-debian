@@ -73,16 +73,38 @@ public:
 	operator double(void) const;
 	operator String(void) const;
 
+	bool operator==(bool rhs);
+	bool operator!=(bool rhs);
+
+	bool operator==(int rhs);
+	bool operator!=(int rhs);
+
+	bool operator==(double rhs);
+	bool operator!=(double rhs);
+
+	bool operator==(const char *rhs);
+	bool operator!=(const char *rhs);
+
+	bool operator==(const String& rhs);
+	bool operator!=(const String& rhs);
+
+	bool operator==(const Value& rhs);
+	bool operator!=(const Value& rhs);
+
 	template<typename T>
 	operator shared_ptr<T>(void) const
 	{
 		if (IsEmpty())
 			return shared_ptr<T>();
 
+#ifdef _DEBUG
 		shared_ptr<T> object = dynamic_pointer_cast<T>(boost::get<Object::Ptr>(m_Value));
 
 		if (!object)
 			BOOST_THROW_EXCEPTION(std::bad_cast());
+#else /* _DEBUG */
+		shared_ptr<T> object = static_pointer_cast<T>(boost::get<Object::Ptr>(m_Value));
+#endif /* _DEBUG */
 
 		return object;
 	}
@@ -97,14 +119,11 @@ public:
 		if (!IsObject())
 			return false;
 
-		return (dynamic_pointer_cast<T>(boost::get<Object::Ptr>(m_Value)));
+		return (dynamic_pointer_cast<T>(boost::get<Object::Ptr>(m_Value)) != NULL);
 	}
 
 	static Value FromJson(cJSON *json);
 	cJSON *ToJson(void) const;
-
-	String Serialize(void) const;
-	static Value Deserialize(const String& jsonString);
 
 	ValueType GetType(void) const;
 
@@ -116,6 +135,9 @@ static Value Empty;
 
 I2_BASE_API Value operator+(const Value& lhs, const char *rhs);
 I2_BASE_API Value operator+(const char *lhs, const Value& rhs);
+
+I2_BASE_API Value operator+(const Value& lhs, const String& rhs);
+I2_BASE_API Value operator+(const String& lhs, const Value& rhs);
 
 I2_BASE_API std::ostream& operator<<(std::ostream& stream, const Value& value);
 I2_BASE_API std::istream& operator>>(std::istream& stream, Value& value);

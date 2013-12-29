@@ -23,8 +23,6 @@
 #include "base/debug.h"
 #include "base/array.h"
 #include <sstream>
-#include <boost/tuple/tuple.hpp>
-#include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -34,6 +32,35 @@ Expression::Expression(const String& key, ExpressionOperator op,
 	: m_Key(key), m_Operator(op), m_Value(value), m_DebugInfo(debuginfo)
 {
 	ASSERT(op != OperatorExecute || value.IsObjectType<ExpressionList>());
+}
+
+Value Expression::DeepClone(const Value& value)
+{
+	if (value.IsObjectType<Array>()) {
+		Array::Ptr array = value;
+		Array::Ptr result = make_shared<Array>();
+
+		ObjectLock olock(array);
+
+		BOOST_FOREACH(const Value& item, array) {
+			result->Add(DeepClone(item));
+		}
+
+		return result;
+	} else if (value.IsObjectType<Dictionary>()) {
+		Dictionary::Ptr dict = value;
+		Dictionary::Ptr result = make_shared<Dictionary>();
+
+		ObjectLock olock(dict);
+
+		BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+			result->Set(kv.first, DeepClone(kv.second));
+		}
+
+		return result;
+	}
+
+	return value;
 }
 
 void Expression::Execute(const Dictionary::Ptr& dictionary) const
@@ -73,9 +100,11 @@ void Expression::Execute(const Dictionary::Ptr& dictionary) const
 
 		case OperatorSet:
 			if (valueExprl) {
-				dict = boost::make_shared<Dictionary>();
+				dict = make_shared<Dictionary>();
 				valueExprl->Execute(dict);
 				newValue = dict;
+			} else {
+				newValue = DeepClone(newValue);
 			}
 
 			break;
@@ -91,33 +120,32 @@ void Expression::Execute(const Dictionary::Ptr& dictionary) const
 
 			if (valueExprl) {
 				if (!dict)
-					dict = boost::make_shared<Dictionary>();
+					dict = make_shared<Dictionary>();
 
 				valueExprl->Execute(dict);
 
 				newValue = dict;
 			} else if (valueDict) {
 				if (!dict)
-					dict = boost::make_shared<Dictionary>();
+					dict = make_shared<Dictionary>();
 
 				ObjectLock olock(valueDict);
 
 				String key;
 				Value value;
-				BOOST_FOREACH(boost::tie(key, value), valueDict) {
-					dict->Set(key, value);
+				BOOST_FOREACH(const Dictionary::Pair& kv, valueDict) {
+					dict->Set(kv.first, DeepClone(kv.second));
 				}
 
 				newValue = dict;
 			} else if (valueArray) {
 				if (!array)
-					array = boost::make_shared<Array>();
-
+					array = make_shared<Array>();
 
 				ObjectLock olock(valueArray);
 
 				BOOST_FOREACH(const Value& value, valueArray) {
-					array->Add(value);
+					array->Add(DeepClone(value));
 				}
 
 				newValue = array;
@@ -161,7 +189,7 @@ void Expression::ExtractPath(const std::vector<String>& path, const ExpressionLi
 	}
 }
 
-void Expression::ExtractFiltered(const std::set<String, string_iless>& keys, const shared_ptr<ExpressionList>& result) const
+void Expression::ExtractFiltered(const std::set<String>& keys, const shared_ptr<ExpressionList>& result) const
 {
 	if (keys.find(m_Key) != keys.end()) {
 		result->AddExpression(*this);

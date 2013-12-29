@@ -20,28 +20,23 @@
 #ifndef LIVESTATUSLISTENER_H
 #define LIVESTATUSLISTENER_H
 
+#include "livestatus/listener.th"
 #include "livestatus/query.h"
-#include "base/dynamicobject.h"
 #include "base/socket.h"
 #include <boost/thread/thread.hpp>
 
 using namespace icinga;
 
-namespace livestatus
+namespace icinga
 {
 
 /**
  * @ingroup livestatus
  */
-class LivestatusListener : public DynamicObject
+class LivestatusListener : public ObjectImpl<LivestatusListener>
 {
 public:
 	DECLARE_PTR_TYPEDEFS(LivestatusListener);
-
-	String GetSocketType(void) const;
-	String GetSocketPath(void) const;
-	String GetBindHost(void) const;
-	String GetBindPort(void) const;
 
 	static int GetClientsConnected(void);
 	static int GetConnections(void);
@@ -51,17 +46,9 @@ public:
 protected:
 	virtual void Start(void);
 
-	virtual void InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const;
-	virtual void InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes);
-
 private:
-	String m_SocketType;
-	String m_SocketPath;
-	String m_BindHost;
-	String m_BindPort;
-
 	void ServerThreadProc(const Socket::Ptr& server);
-	void ClientThreadProc(const Socket::Ptr& client);
+	void ClientHandler(const Socket::Ptr& client);
 };
 
 }

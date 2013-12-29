@@ -21,8 +21,8 @@
 #define ICINGAAPPLICATION_H
 
 #include "icinga/i2-icinga.h"
+#include "icinga/icingaapplication.th"
 #include "icinga/macroresolver.h"
-#include "base/application.h"
 
 namespace icinga
 {
@@ -32,7 +32,7 @@ namespace icinga
  *
  * @ingroup icinga
  */
-class I2_ICINGA_API IcingaApplication : public Application, public MacroResolver
+class I2_ICINGA_API IcingaApplication : public ObjectImpl<IcingaApplication>, public MacroResolver
 {
 public:
 	DECLARE_PTR_TYPEDEFS(IcingaApplication);
@@ -47,9 +47,7 @@ public:
 	String GetPidPath(void) const;
 	Dictionary::Ptr GetMacros(void) const;
 
-	double GetStartTime(void) const;
-
-	virtual bool ResolveMacro(const String& macro, const Dictionary::Ptr& cr, String *result) const;
+	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, String *result) const;
 
 	bool GetEnableNotifications(void) const;
 	void SetEnableNotifications(bool enabled);
@@ -71,19 +69,7 @@ public:
 	void SetEnablePerfdata(bool enabled);
 	void ClearEnablePerfdata(void);
 
-protected:
-	virtual void InternalSerialize(const Dictionary::Ptr& bag, int attributeTypes) const;
-	virtual void InternalDeserialize(const Dictionary::Ptr& bag, int attributeTypes);
-
 private:
-	double m_StartTime;
-
-	Value m_OverrideEnableNotifications;
-	Value m_OverrideEnableEventHandlers;
-	Value m_OverrideEnableFlapping;
-	Value m_OverrideEnableChecks;
-	Value m_OverrideEnablePerfdata;
-
 	void DumpProgramState(void);
 
 	virtual void OnShutdown(void);

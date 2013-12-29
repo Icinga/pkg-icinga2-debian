@@ -25,8 +25,10 @@
 #include "base/dictionary.h"
 #include <vector>
 
-namespace livestatus
+namespace icinga
 {
+
+typedef boost::function<void (const Value&)> AddRowFunction;
 
 class Filter;
 
@@ -38,10 +40,7 @@ class Table : public Object
 public:
 	DECLARE_PTR_TYPEDEFS(Table);
 
-	typedef boost::function<void (const Value&)> AddRowFunction;
-
-	static Table::Ptr GetByName(const String& name);
-
+	static Table::Ptr GetByName(const String& name, const String& compat_log_path = "", const unsigned long& from = 0, const unsigned long& until = 0);
 
 	virtual String GetName(void) const = 0;
 
@@ -56,11 +55,11 @@ protected:
 
 	virtual void FetchRows(const AddRowFunction& addRowFn) = 0;
 
-	static Value ZeroAccessor(const Object::Ptr&);
-	static Value OneAccessor(const Object::Ptr&);
-	static Value EmptyStringAccessor(const Object::Ptr&);
-	static Value EmptyArrayAccessor(const Object::Ptr&);
-	static Value EmptyDictionaryAccessor(const Object::Ptr&);
+	static Value ZeroAccessor(const Value&);
+	static Value OneAccessor(const Value&);
+	static Value EmptyStringAccessor(const Value&);
+	static Value EmptyArrayAccessor(const Value&);
+	static Value EmptyDictionaryAccessor(const Value&);
 
 private:
 	std::map<String, Column> m_Columns;

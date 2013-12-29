@@ -32,7 +32,7 @@ using namespace icinga;
 
 boost::signals2::signal<void (const DbQuery&)> DbObject::OnQuery;
 
-INITIALIZE_ONCE(DbObject, &DbObject::StaticInitialize);
+INITIALIZE_ONCE(&DbObject::StaticInitialize);
 
 DbObject::DbObject(const shared_ptr<DbType>& type, const String& name1, const String& name2)
 	: m_Name1(name1), m_Name2(name2), m_Type(type), m_LastConfigUpdate(0), m_LastStatusUpdate(0)
@@ -78,11 +78,12 @@ void DbObject::SendConfigUpdate(void)
 	DbQuery query;
 	query.Table = GetType()->GetTable() + "s";
 	query.Type = DbQueryInsert | DbQueryUpdate;
+	query.Category = DbCatConfig;
 	query.Fields = fields;
 	query.Fields->Set(GetType()->GetIDColumn(), GetObject());
 	query.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	query.Fields->Set("config_type", 1);
-	query.WhereCriteria = boost::make_shared<Dictionary>();
+	query.WhereCriteria = make_shared<Dictionary>();
 	query.WhereCriteria->Set(GetType()->GetIDColumn(), GetObject());
 	query.Object = GetSelf();
 	query.ConfigUpdate = true;
@@ -103,11 +104,12 @@ void DbObject::SendStatusUpdate(void)
 	DbQuery query;
 	query.Table = GetType()->GetTable() + "status";
 	query.Type = DbQueryInsert | DbQueryUpdate;
+	query.Category = DbCatState;
 	query.Fields = fields;
 	query.Fields->Set(GetType()->GetIDColumn(), GetObject());
 	query.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	query.Fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
-	query.WhereCriteria = boost::make_shared<Dictionary>();
+	query.WhereCriteria = make_shared<Dictionary>();
 	query.WhereCriteria->Set(GetType()->GetIDColumn(), GetObject());
 	query.Object = GetSelf();
 	query.StatusUpdate = true;
@@ -162,9 +164,6 @@ DbObject::Ptr DbObject::GetOrCreateByObject(const DynamicObject::Ptr& object)
 
 	if (service) {
 		Host::Ptr host = service->GetHost();
-
-		if (!host)
-			return DbObject::Ptr();
 
 		name1 = service->GetHost()->GetName();
 		name2 = service->GetShortName();
