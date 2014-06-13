@@ -29,9 +29,7 @@ enable_default_features() {
     if is_fresh_install $@ \
        || dpkg --compare-versions "$2" lt "$FIX_VERSION"; then
         echo "enabling default icinga2 features"
-        for feature in checker notification mainlog; do
-            icinga2-enable-feature $feature
-        done
+        icinga2-enable-feature checker notification mainlog
     fi
     # handle new default features here in the future
 }
@@ -51,9 +49,10 @@ case "$1" in
         setperm nagios adm 2755 /var/log/icinga2/compat/archives
 
         setperm nagios nagios 0750 /var/lib/icinga2
-        setperm nagios nagios 0750 /var/lib/icinga2/cluster
-        setperm nagios nagios 0750 /var/lib/icinga2/cluster/config
-        setperm nagios nagios 0750 /var/lib/icinga2/cluster/log
+        setperm nagios nagios 0750 /var/lib/icinga2/api
+        setperm nagios nagios 0750 /var/lib/icinga2/api/log
+        setperm nagios nagios 0750 /var/lib/icinga2/api/repository
+        setperm nagios nagios 0750 /var/lib/icinga2/api/zones
 
         setperm nagios www-data 0750 /var/cache/icinga2
 

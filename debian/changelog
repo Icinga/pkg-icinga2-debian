@@ -1,28 +1,5 @@
-icinga2 (0.0.6-1~preview+0) UNRELEASED; urgency=medium
+icinga2 (2.0.0~beta2-1) UNRELEASED; urgency=low
 
-  *** Please note that at this point Icinga 2 is highly experimental software!
-  *** Only use it for testing and development environments.
-  *** Use Icinga 1.x for production environments!
+  * Initial Debian packaging for the Icinga 2 betas (Closes: #751509)
 
-  * Initial Debian packaging for the Icinga 2 alphas and betas
-  * [3dcc88b] Imported Upstream version 0.0.6
-  * [50d402e] Imported most of the Debian packaging changes from upstream
-  * [9b48657] Added nicer description and bumped standards
-  * [362d477] Added watch file
-  * [35ce03b] Added patch disable_git_version to avoid generation of
-              new version data
-  * 
-
- -- Markus Frosch <markus@lazyfrosch.de>  Sun, 29 Dec 2013 19:01:25 +0100
-
-icinga2 (0.0.3-1~icingaorg+0) UNRELEASED; urgency=low
-
-  * Initial Debian packaging for the Icinga 2 alphas and betas
-  * [dac8fa6] Imported Upstream version 0.0.3
-
-  *** Please note that at this point Icinga 2 is highly experimental software
-  *** and is missing a significant portion of the planned features. This
-  *** is merely a technology preview and if you're planning to set up
-  *** a production environment for Icinga you should use Icinga 1.x instead.
-
- -- Markus Frosch <markus@lazyfrosch.de>  Wed, 23 Oct 2013 17:41:03 +0200
+ -- Markus Frosch <markus@lazyfrosch.de>  Fri, 13 Jun 2014 14:39:39 +0200

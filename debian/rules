@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-export DH_VERBOSE=1
+#export DH_VERBOSE=1
 
 %:
 	dh $@
@@ -12,7 +12,8 @@ override_dh_auto_configure:
 		-DICINGA2_USER=nagios \
 		-DICINGA2_GROUP=nagios \
 		-DICINGA2_COMMAND_USER=nagios \
-		-DICINGA2_COMMAND_GROUP=www-data
+		-DICINGA2_COMMAND_GROUP=www-data \
+		-DICINGA2_GIT_VERSION_INFO=false
 
 override_dh_auto_install:
 	dh_auto_install
