@@ -1,15 +1,17 @@
 Installing Icinga 2
 ===================
 
-Please note that the current version of Icinga 2 isn't much more than a tech
-demo. Expect some rough edges when installing and running Icinga 2.
-
-For the "finished" version we're planning to release packages for the most
-common Linux distributions as well as for Windows - or at least co-operate
-with the package maintainers.
+The recommended way of installing Icinga 2 is to use packages. The Icinga
+project provides both release and development packages for a number
+of operating systems.
 
 Please check the documentation in the doc/ directory for a current list
-of available packages.
+of available packages and detailed installation instructions.
+
+There are a number of known caveats when installing from source such as
+incorrect directory and file permissions. So even if you're planning to
+not use the official packages it is advisable to build your own Debian
+or RPM packages.
 
 Build Requirements
 ------------------
@@ -27,7 +29,7 @@ parentheses):
                                   on Debian)
 * GNU bison (bison)
 * GNU flex (flex) >= 2.5.35
-* optional: Doxygen (doxygen)
+* recommended: libexecinfo on FreeBSD
 * optional: MySQL (mysql-devel on RHEL, libmysqlclient-dev on Debian)
 * optional: Python (python-devel on RHEL, python-dev on Debian)
 
@@ -35,7 +37,6 @@ Note: RHEL5 ships an ancient flex version. Updated packages are available for
 example from the repoforge buildtools repository.
 
 http://mirror.hs-esslingen.de/repoforge/redhat/el5/en/{i386,x86_64}/buildtools/
-
 
 User Requirements
 -----------------
@@ -48,7 +49,7 @@ configure script using the --with-icinga-user, --with-icinga-group,
 
 # groupadd icinga
 # groupadd icingacmd
-# useradd -c "icinga" -s /sbin/nologin -G icingacmd -g icinga
+# useradd -c "icinga" -s /sbin/nologin -G icingacmd -g icinga icinga
 
 Add the web server user to the icingacmd group in order to grant it write
 permissions to the external command pipe and livestatus socket:
@@ -57,6 +58,46 @@ permissions to the external command pipe and livestatus socket:
 
 Make sure to replace "www-data" with the name of the user your web server
 is running as.
+
+Building Release Tarballs
+-------------------------
+
+In order to build a release tarball you should first check out the Git repository
+in a new directory. If you're using an existing check-out you should make sure
+that there are no local modifications:
+
+$ git status
+
+Here's a short check-list for releases:
+
+* Update the .mailmap and AUTHORS files
+    $ git log --use-mailmap | grep ^Author: | cut -f2- -d' ' | sort | uniq > AUTHORS
+* Bump the version in icinga2.spec.
+* Update the ChangeLog and doc/1-about.md files.
+* Commit these changes to the "next" branch and create a signed tag (tags/v<VERSION>).
+    $ git commit -v -a -m "Release version <VERSION>."
+    $ git tag -u EE8E0720 -m "Version <VERSION>" v<VERSION>
+    $ git push --tags
+* Merge the "next" branch into the "master" branch (using --ff-only).
+    $ git checkout master
+    $ git merge --ff-only next
+    $ git push origin master
+* Bump the version to "v<NEXT-VERSION>-dev" and commit this change to the "next" branch.
+
+Note: CMake determines the Icinga 2 version number using "git describe" if the
+source directory is contained in a Git repository. Otherwise the version number
+is extracted from the icinga2.spec file. This behavior can be overridden by
+creating a file called "icinga-version.h.force" in the source directory.
+Alternatively the -DICINGA2_GIT_VERSION_INFO=ON option for CMake can be used to
+disable the usage of "git describe".
+
+Use "git archive" to build the release tarball:
+
+$ git archive --format=tgz --prefix=icinga2-<VERSION>/ tags/v<VERSION>
+
+Finally you should verify that the tarball only contains the files it should contain:
+
+$ tar ztf icinga2-<VERSION>.tar.gz | less
 
 Building Icinga 2
 -----------------
@@ -79,6 +120,7 @@ variables are supported:
 - ICINGA2_USER: The user Icinga 2 should run as; defaults to "icinga"
 - ICINGA2_GROUP: The group Icinga 2 should run as; defaults to "icinga"
 - ICINGA2_COMMAND_USER: The command user Icinga 2 should use; defaults to "icinga"
+- ICINGA2_GIT_VERSION_INFO: Whether to use Git to determine the version number; defaults to "ON"
 - ICINGA2_COMMAND_GROUP: The command group Icinga 2 should use; default to "icingacmd"
 - CMAKE_INSTALL_SYSCONFDIR: The configuration directory; defaults to CMAKE_INSTALL_PREFIX/etc
 - CMAKE_INSTALL_LOCALSTATEDIR: The state directory; defaults to CMAKE_INSTALL_PREFIX/var

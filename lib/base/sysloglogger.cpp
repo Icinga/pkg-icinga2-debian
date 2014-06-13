@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,13 +17,29 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/sysloglogger.h"
-#include "base/dynamictype.h"
+#include "base/sysloglogger.hpp"
+#include "base/dynamictype.hpp"
+#include "base/statsfunction.hpp"
 
 #ifndef _WIN32
 using namespace icinga;
 
 REGISTER_TYPE(SyslogLogger);
+
+REGISTER_STATSFUNCTION(SyslogLoggerStats, &SyslogLogger::StatsFunc);
+
+Value SyslogLogger::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+{
+	Dictionary::Ptr nodes = make_shared<Dictionary>();
+
+	BOOST_FOREACH(const SyslogLogger::Ptr& sysloglogger, DynamicType::GetObjects<SyslogLogger>()) {
+		nodes->Set(sysloglogger->GetName(), 1); //add more stats
+	}
+
+	status->Set("sysloglogger", nodes);
+
+	return 0;
+}
 
 /**
  * Processes a log entry and outputs it to syslog.
@@ -36,6 +52,9 @@ void SyslogLogger::ProcessLogEntry(const LogEntry& entry)
 	switch (entry.Severity) {
 		case LogDebug:
 			severity = LOG_DEBUG;
+			break;
+		case LogNotice:
+			severity = LOG_NOTICE;
 			break;
 		case LogWarning:
 			severity = LOG_WARNING;

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,16 +17,32 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "compat/externalcommandlistener.h"
-#include "icinga/externalcommandprocessor.h"
-#include "base/dynamictype.h"
-#include "base/logger_fwd.h"
-#include "base/exception.h"
-#include "base/application.h"
+#include "compat/externalcommandlistener.hpp"
+#include "icinga/externalcommandprocessor.hpp"
+#include "base/dynamictype.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/exception.hpp"
+#include "base/application.hpp"
+#include "base/statsfunction.hpp"
 
 using namespace icinga;
 
 REGISTER_TYPE(ExternalCommandListener);
+
+REGISTER_STATSFUNCTION(ExternalCommandListenerStats, &ExternalCommandListener::StatsFunc);
+
+Value ExternalCommandListener::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+{
+	Dictionary::Ptr nodes = make_shared<Dictionary>();
+
+	BOOST_FOREACH(const ExternalCommandListener::Ptr& externalcommandlistener, DynamicType::GetObjects<ExternalCommandListener>()) {
+		nodes->Set(externalcommandlistener->GetName(), 1); //add more stats
+	}
+
+	status->Set("externalcommandlistener", nodes);
+
+	return 0;
+}
 
 /**
  * Starts the component.
@@ -65,19 +81,19 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 	mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
 
 	if (!fifo_ok && mkfifo(commandPath.CStr(), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) < 0) {
-		BOOST_THROW_EXCEPTION(posix_error()
-		    << boost::errinfo_api_function("mkfifo")
-		    << boost::errinfo_errno(errno)
-		    << boost::errinfo_file_name(commandPath));
+		std::ostringstream msgbuf;
+		msgbuf << "mkfifo() for fifo path '" << commandPath << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+		Log(LogCritical, "LivestatusListener",  msgbuf.str());
+		return;
 	}
 
 	/* mkfifo() uses umask to mask off some bits, which means we need to chmod() the
 	 * fifo to get the right mask. */
 	if (chmod(commandPath.CStr(), mode) < 0) {
-		BOOST_THROW_EXCEPTION(posix_error()
-		    << boost::errinfo_api_function("chmod")
-		    << boost::errinfo_errno(errno)
-		    << boost::errinfo_file_name(commandPath));
+		std::ostringstream msgbuf;
+		msgbuf << "chmod() on fifo '" << commandPath << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+		Log(LogCritical, "LivestatusListener",  msgbuf.str());
+		return;
 	}
 
 	for (;;) {
@@ -88,19 +104,19 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 		} while (fd < 0 && errno == EINTR);
 
 		if (fd < 0) {
-			BOOST_THROW_EXCEPTION(posix_error()
-			    << boost::errinfo_api_function("open")
-			    << boost::errinfo_errno(errno)
-			    << boost::errinfo_file_name(commandPath));
+			std::ostringstream msgbuf;
+			msgbuf << "open() for fifo path '" << commandPath << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+			Log(LogCritical, "LivestatusListener",  msgbuf.str());
+			return;
 		}
 
 		FILE *fp = fdopen(fd, "r");
 
 		if (fp == NULL) {
-			(void) close(fd);
-			BOOST_THROW_EXCEPTION(posix_error()
-			    << boost::errinfo_api_function("fdopen")
-			    << boost::errinfo_errno(errno));
+			std::ostringstream msgbuf;
+			msgbuf << "fdopen() for fifo path '" << commandPath << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+			Log(LogCritical, "LivestatusListener",  msgbuf.str());
+			return;
 		}
 
 		char line[2048];
@@ -114,13 +130,13 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 			String command = line;
 
 			try {
-				Log(LogInformation, "compat", "Executing external command: " + command);
+				Log(LogInformation, "ExternalCommandListener", "Executing external command: " + command);
 
 				ExternalCommandProcessor::Execute(command);
-			} catch (const std::exception& ex) {
+			} catch (const std::exception&) {
 				std::ostringstream msgbuf;
-				msgbuf << "External command failed: " << DiagnosticInformation(ex);
-				Log(LogWarning, "compat", msgbuf.str());
+				msgbuf << "External command failed.";
+				Log(LogWarning, "ExternalCommandListener", msgbuf.str());
 			}
 		}
 

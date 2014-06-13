@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,23 +17,24 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "livestatus/table.h"
-#include "livestatus/statustable.h"
-#include "livestatus/contactgroupstable.h"
-#include "livestatus/contactstable.h"
-#include "livestatus/hostgroupstable.h"
-#include "livestatus/hoststable.h"
-#include "livestatus/servicegroupstable.h"
-#include "livestatus/servicestable.h"
-#include "livestatus/commandstable.h"
-#include "livestatus/commentstable.h"
-#include "livestatus/downtimestable.h"
-#include "livestatus/timeperiodstable.h"
-#include "livestatus/logtable.h"
-#include "livestatus/statehisttable.h"
-#include "livestatus/filter.h"
-#include "base/array.h"
-#include "base/dictionary.h"
+#include "livestatus/table.hpp"
+#include "livestatus/statustable.hpp"
+#include "livestatus/contactgroupstable.hpp"
+#include "livestatus/contactstable.hpp"
+#include "livestatus/hostgroupstable.hpp"
+#include "livestatus/hoststable.hpp"
+#include "livestatus/servicegroupstable.hpp"
+#include "livestatus/servicestable.hpp"
+#include "livestatus/commandstable.hpp"
+#include "livestatus/commentstable.hpp"
+#include "livestatus/downtimestable.hpp"
+#include "livestatus/endpointstable.hpp"
+#include "livestatus/timeperiodstable.hpp"
+#include "livestatus/logtable.hpp"
+#include "livestatus/statehisttable.hpp"
+#include "livestatus/filter.hpp"
+#include "base/array.hpp"
+#include "base/dictionary.hpp"
 #include <boost/tuple/tuple.hpp>
 #include <boost/foreach.hpp>
 #include <boost/bind.hpp>
@@ -71,6 +72,8 @@ Table::Ptr Table::GetByName(const String& name, const String& compat_log_path, c
 		return make_shared<LogTable>(compat_log_path, from, until);
 	else if (name == "statehist")
 		return make_shared<StateHistTable>(compat_log_path, from, until);
+	else if (name == "endpoints")
+		return make_shared<EndpointsTable>();
 
 	return Table::Ptr();
 }

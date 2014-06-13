@@ -2,7 +2,7 @@
 -- pgsql.sql
 -- DB definition for Postgresql
 --
--- Copyright (c) 2009-2013 Icinga Development Team (http://www.icinga.org)
+-- Copyright (c) 2009-2014 Icinga Development Team (http://www.icinga.org)
 --
 -- --------------------------------------------------------
 
@@ -627,6 +627,9 @@ CREATE TABLE  icinga_hostgroups (
   config_type INTEGER  default 0,
   hostgroup_object_id bigint default 0,
   alias TEXT  default '',
+  notes TEXT  default NULL,
+  notes_url TEXT  default NULL,
+  action_url TEXT  default NULL,
   CONSTRAINT PK_hostgroup_id PRIMARY KEY (hostgroup_id) ,
   CONSTRAINT UQ_hostgroups UNIQUE (instance_id,hostgroup_object_id)
 ) ;
@@ -770,6 +773,7 @@ CREATE TABLE  icinga_hoststatus (
   normal_check_interval double precision  default 0,
   retry_check_interval double precision  default 0,
   check_timeperiod_object_id bigint default 0,
+  is_reachable INTEGER  default 0,
   CONSTRAINT PK_hoststatus_id PRIMARY KEY (hoststatus_id) ,
   CONSTRAINT UQ_hoststatus UNIQUE (host_object_id)
 ) ;
@@ -1113,6 +1117,9 @@ CREATE TABLE  icinga_servicegroups (
   config_type INTEGER  default 0,
   servicegroup_object_id bigint default 0,
   alias TEXT  default '',
+  notes TEXT  default NULL,
+  notes_url TEXT  default NULL,
+  action_url TEXT  default NULL,
   CONSTRAINT PK_servicegroup_id PRIMARY KEY (servicegroup_id) ,
   CONSTRAINT UQ_servicegroups UNIQUE (instance_id,config_type,servicegroup_object_id)
 ) ;
@@ -1250,6 +1257,7 @@ CREATE TABLE  icinga_servicestatus (
   normal_check_interval double precision  default 0,
   retry_check_interval double precision  default 0,
   check_timeperiod_object_id bigint default 0,
+  is_reachable INTEGER  default 0,
   CONSTRAINT PK_servicestatus_id PRIMARY KEY (servicestatus_id) ,
   CONSTRAINT UQ_servicestatus UNIQUE (service_object_id)
 ) ;
@@ -1303,6 +1311,7 @@ CREATE TABLE  icinga_statehistory (
   last_hard_state INTEGER  default '-1',
   output TEXT  default '',
   long_output TEXT  default '',
+  check_source varchar(255) default NULL,
   CONSTRAINT PK_statehistory_id PRIMARY KEY (statehistory_id) 
 ) ;
 
@@ -1361,6 +1370,69 @@ CREATE TABLE  icinga_timeperiod_timeranges (
   end_sec INTEGER  default 0,
   CONSTRAINT PK_timeperiod_timerange_id PRIMARY KEY (timeperiod_timerange_id)
 ) ;
+
+
+-- --------------------------------------------------------
+-- Icinga 2 specific schema extensions
+-- --------------------------------------------------------
+
+--
+-- Table structure for table icinga_endpoints
+--
+
+CREATE TABLE  icinga_endpoints (
+  endpoint_id bigserial,
+  instance_id bigint default 0,
+  endpoint_object_id bigint default 0,
+  config_type integer default 0,
+  identity text DEFAULT NULL,
+  node text DEFAULT NULL,
+  CONSTRAINT PK_endpoint_id PRIMARY KEY (endpoint_id) ,
+  CONSTRAINT UQ_endpoints UNIQUE (instance_id,config_type,endpoint_object_id)
+) ;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table icinga_endpointstatus
+--
+
+CREATE TABLE  icinga_endpointstatus (
+  endpointstatus_id bigserial,
+  instance_id bigint default 0,
+  endpoint_object_id bigint default 0,
+  status_update_time timestamp with time zone default '1970-01-01 00:00:00',
+  identity text DEFAULT NULL,
+  node text DEFAULT NULL,
+  is_connected integer default 0,
+  CONSTRAINT PK_endpointstatus_id PRIMARY KEY (endpointstatus_id) ,
+  CONSTRAINT UQ_endpointstatus UNIQUE (endpoint_object_id)
+) ;
+
+
+ALTER TABLE icinga_servicestatus ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_hoststatus ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_contactstatus ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_programstatus ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_comments ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_scheduleddowntime ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_runtimevariables ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_customvariablestatus ADD COLUMN endpoint_object_id bigint default NULL;
+
+ALTER TABLE icinga_acknowledgements ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_commenthistory ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_contactnotifications ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_downtimehistory ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_eventhandlers ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_externalcommands ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_flappinghistory ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_hostchecks ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_logentries ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_notifications ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_processevents ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_servicechecks ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_statehistory ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_systemcommands ADD COLUMN endpoint_object_id bigint default NULL;
 
 
 -- -----------------------------------------
@@ -1550,10 +1622,12 @@ CREATE INDEX sla_idx_sthist ON icinga_statehistory (object_id, state_time DESC);
 CREATE INDEX sla_idx_dohist ON icinga_downtimehistory (object_id, actual_start_time, actual_end_time);
 CREATE INDEX sla_idx_obj ON icinga_objects (objecttype_id, is_active, name1);
 
+-- #4985
+CREATE INDEX commenthistory_delete_idx ON icinga_commenthistory (instance_id, comment_time, internal_comment_id);
 
 -- -----------------------------------------
 -- set dbversion
 -- -----------------------------------------
 
-SELECT updatedbversion('1.11.0');
+SELECT updatedbversion('1.11.3');
 

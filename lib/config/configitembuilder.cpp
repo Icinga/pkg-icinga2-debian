@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,16 +17,15 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "config/configitembuilder.h"
-#include "config/configcompilercontext.h"
-#include "base/dynamictype.h"
+#include "config/configitembuilder.hpp"
+#include "base/dynamictype.hpp"
 #include <sstream>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 ConfigItemBuilder::ConfigItemBuilder(void)
-	: m_Abstract(false), m_ExpressionList(make_shared<ExpressionList>())
+	: m_Abstract(false), m_Expressions(make_shared<Array>())
 {
 	m_DebugInfo.FirstLine = 0;
 	m_DebugInfo.FirstColumn = 0;
@@ -35,7 +34,7 @@ ConfigItemBuilder::ConfigItemBuilder(void)
 }
 
 ConfigItemBuilder::ConfigItemBuilder(const DebugInfo& debugInfo)
-	: m_Abstract(false), m_ExpressionList(make_shared<ExpressionList>())
+	: m_Abstract(false), m_Expressions(make_shared<Array>())
 {
 	m_DebugInfo = debugInfo;
 }
@@ -55,26 +54,19 @@ void ConfigItemBuilder::SetAbstract(bool abstract)
 	m_Abstract = abstract;
 }
 
-void ConfigItemBuilder::AddParent(const String& parent)
+void ConfigItemBuilder::SetScope(const Dictionary::Ptr& scope)
 {
-	m_Parents.push_back(parent);
+	m_Scope = scope;
 }
 
-void ConfigItemBuilder::AddExpression(const Expression& expr)
+void ConfigItemBuilder::SetZone(const String& zone)
 {
-	m_ExpressionList->AddExpression(expr);
+	m_Zone = zone;
 }
 
-void ConfigItemBuilder::AddExpression(const String& key, ExpressionOperator op,
-    const Value& value)
+void ConfigItemBuilder::AddExpression(const AExpression::Ptr& expr)
 {
-	Expression expr(key, op, value, m_DebugInfo);
-	AddExpression(expr);
-}
-
-void ConfigItemBuilder::AddExpressionList(const ExpressionList::Ptr& exprl)
-{
-	AddExpression("", OperatorExecute, exprl);
+	m_Expressions->Add(expr);
 }
 
 ConfigItem::Ptr ConfigItemBuilder::Compile(void)
@@ -97,22 +89,19 @@ ConfigItem::Ptr ConfigItemBuilder::Compile(void)
 		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
 	}
 
-	BOOST_FOREACH(const String& parent, m_Parents) {
-		if (parent == m_Name)
-			BOOST_THROW_EXCEPTION(std::invalid_argument("Configuration item '" + m_Name + "' of type '" + m_Type + "' must not inherit from itself."));
-	}
+	Array::Ptr exprs = make_shared<Array>();
+	Array::Ptr templateArray = make_shared<Array>();
+	templateArray->Add(m_Name);
 
-	ExpressionList::Ptr exprl = make_shared<ExpressionList>();
+	exprs->Add(make_shared<AExpression>(&AExpression::OpSetPlus,
+	    make_shared<AExpression>(&AExpression::OpLiteral, "templates", m_DebugInfo),
+	    make_shared<AExpression>(&AExpression::OpLiteral, templateArray, m_DebugInfo),
+	    m_DebugInfo));
 
-	Expression execExpr("", OperatorExecute, m_ExpressionList, m_DebugInfo);
-	exprl->AddExpression(execExpr);
-
-	Expression typeExpr("__type", OperatorSet, m_Type, m_DebugInfo);
-	exprl->AddExpression(typeExpr);
-
-	Expression nameExpr("__name", OperatorSet, m_Name, m_DebugInfo);
-	exprl->AddExpression(nameExpr);
+	exprs->Add(make_shared<AExpression>(&AExpression::OpDict, m_Expressions, true, m_DebugInfo));
+	
+	AExpression::Ptr exprl = make_shared<AExpression>(&AExpression::OpDict, exprs, true, m_DebugInfo);
 
 	return make_shared<ConfigItem>(m_Type, m_Name, m_Abstract, exprl,
-	    m_Parents, m_DebugInfo);
+	    m_DebugInfo, m_Scope, m_Zone);
 }

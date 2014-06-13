@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,35 +17,59 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/logger_fwd.h"
-#include "base/objectlock.h"
-#include "base/convert.h"
-#include "base/utility.h"
-#include "base/application.h"
-#include "base/dynamictype.h"
-#include "base/exception.h"
-#include "db_ido/dbtype.h"
-#include "db_ido/dbvalue.h"
-#include "db_ido_mysql/idomysqlconnection.h"
+#include "base/logger_fwd.hpp"
+#include "base/objectlock.hpp"
+#include "base/convert.hpp"
+#include "base/utility.hpp"
+#include "base/application.hpp"
+#include "base/dynamictype.hpp"
+#include "base/exception.hpp"
+#include "base/statsfunction.hpp"
+#include "db_ido/dbtype.hpp"
+#include "db_ido/dbvalue.hpp"
+#include "db_ido_mysql/idomysqlconnection.hpp"
 #include <boost/tuple/tuple.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
+#define SCHEMA_VERSION "1.11.3"
+
 REGISTER_TYPE(IdoMysqlConnection);
+REGISTER_STATSFUNCTION(IdoMysqlConnectionStats, &IdoMysqlConnection::StatsFunc);
 
-#define SCHEMA_VERSION "1.11.0"
-
-void IdoMysqlConnection::Start(void)
+Value IdoMysqlConnection::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata)
 {
-	DbConnection::Start();
+	Dictionary::Ptr nodes = make_shared<Dictionary>();
+
+	BOOST_FOREACH(const IdoMysqlConnection::Ptr& idomysqlconnection, DynamicType::GetObjects<IdoMysqlConnection>()) {
+		size_t items = idomysqlconnection->m_QueryQueue.GetLength();
+
+		Dictionary::Ptr stats = make_shared<Dictionary>();
+		stats->Set("version", SCHEMA_VERSION);
+		stats->Set("instance_name", idomysqlconnection->GetInstanceName());
+		stats->Set("query_queue_items", items);
+
+		nodes->Set(idomysqlconnection->GetName(), stats);
+
+		perfdata->Set("idomysqlconnection_" + idomysqlconnection->GetName() + "_query_queue_items", Convert::ToDouble(items));
+	}
+
+	status->Set("idomysqlconnection", nodes);
+
+	return 0;
+}
+
+void IdoMysqlConnection::Resume(void)
+{
+	DbConnection::Resume();
 
 	m_Connected = false;
 
 	m_QueryQueue.SetExceptionCallback(boost::bind(&IdoMysqlConnection::ExceptionHandler, this, _1));
 
 	m_TxTimer = make_shared<Timer>();
-	m_TxTimer->SetInterval(5);
+	m_TxTimer->SetInterval(1);
 	m_TxTimer->OnTimerExpired.connect(boost::bind(&IdoMysqlConnection::TxTimerHandler, this));
 	m_TxTimer->Start();
 
@@ -58,15 +82,21 @@ void IdoMysqlConnection::Start(void)
 	ASSERT(mysql_thread_safe());
 }
 
-void IdoMysqlConnection::Stop(void)
+void IdoMysqlConnection::Pause(void)
 {
+	DbConnection::Pause();
+
+	m_ReconnectTimer.reset();
+
 	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::Disconnect, this));
 	m_QueryQueue.Join();
 }
 
 void IdoMysqlConnection::ExceptionHandler(boost::exception_ptr exp)
 {
-	Log(LogCritical, "db_ido_mysql", "Exception during database operation: " + DiagnosticInformation(exp));
+	Log(LogCritical, "IdoMysqlConnection", "Exception during database operation: Verify that your database is operational!");
+
+	Log(LogDebug, "IdoMysqlConnection", "Exception during database operation: " + DiagnosticInformation(exp));
 
 	boost::mutex::scoped_lock lock(m_ConnectionMutex);
 
@@ -124,6 +154,8 @@ void IdoMysqlConnection::Reconnect(void)
 
 	CONTEXT("Reconnecting to MySQL IDO database '" + GetName() + "'");
 
+	std::vector<DbObject::Ptr> active_dbobjs;
+
 	{
 		boost::mutex::scoped_lock lock(m_ConnectionMutex);
 
@@ -156,43 +188,65 @@ void IdoMysqlConnection::Reconnect(void)
 		passwd = (!ipasswd.IsEmpty()) ? ipasswd.CStr() : NULL;
 		db = (!idb.IsEmpty()) ? idb.CStr() : NULL;
 
-		if (!mysql_init(&m_Connection))
-			BOOST_THROW_EXCEPTION(std::bad_alloc());
+		if (!mysql_init(&m_Connection)) {
+			std::ostringstream msgbuf;
+			msgbuf << "mysql_init() failed: \"" << mysql_error(&m_Connection) << "\"";
+			Log(LogCritical, "IdoMysqlConnection", msgbuf.str());
 
-		if (!mysql_real_connect(&m_Connection, host, user, passwd, db, port, NULL, 0))
+			BOOST_THROW_EXCEPTION(std::bad_alloc());
+		}
+
+		if (!mysql_real_connect(&m_Connection, host, user, passwd, db, port, NULL, CLIENT_FOUND_ROWS)) {
+			std::ostringstream msgbuf;
+			msgbuf << "Connection to database '" << db << "' with user '" << user << "' on '" << host << ":" << port
+			    << "' failed: \"" << mysql_error(&m_Connection) << "\"";
+			Log(LogCritical, "IdoMysqlConnection", msgbuf.str());
+
 			BOOST_THROW_EXCEPTION(std::runtime_error(mysql_error(&m_Connection)));
+		}
 
 		m_Connected = true;
 
 		String dbVersionName = "idoutils";
-		Array::Ptr version_rows = Query("SELECT version FROM " + GetTablePrefix() + "dbversion WHERE name='" + Escape(dbVersionName) + "'");
+		IdoMysqlResult result = Query("SELECT version FROM " + GetTablePrefix() + "dbversion WHERE name='" + Escape(dbVersionName) + "'");
 
-		if (version_rows->GetLength() == 0)
+		Dictionary::Ptr version_row = FetchRow(result);
+
+		if (!version_row) {
+			Log(LogCritical, "IdoMysqlConnection", "Schema does not provide any valid version! Verify your schema installation.");
 			BOOST_THROW_EXCEPTION(std::runtime_error("Schema does not provide any valid version! Verify your schema installation."));
+		}
 
-		Dictionary::Ptr version_row = version_rows->Get(0);
+		DiscardRows(result);
+
 		String version = version_row->Get("version");
 
 		if (Utility::CompareVersion(SCHEMA_VERSION, version) < 0) {
+			Log(LogCritical, "IdoMysqlConnection", "Schema version '" + version + "' does not match the required version '" +
+			   SCHEMA_VERSION + "'! Please check the upgrade documentation.");
+
 			BOOST_THROW_EXCEPTION(std::runtime_error("Schema version '" + version + "' does not match the required version '" +
-			   SCHEMA_VERSION + "'! Please check the upgrade documentation."));
+			   SCHEMA_VERSION + "'!"));
 		}
 
 		String instanceName = GetInstanceName();
 
-		Array::Ptr rows = Query("SELECT instance_id FROM " + GetTablePrefix() + "instances WHERE instance_name = '" + Escape(instanceName) + "'");
+		result = Query("SELECT instance_id FROM " + GetTablePrefix() + "instances WHERE instance_name = '" + Escape(instanceName) + "'");
 
-		if (rows->GetLength() == 0) {
+		Dictionary::Ptr row = FetchRow(result);
+
+		if (!row) {
 			Query("INSERT INTO " + GetTablePrefix() + "instances (instance_name, instance_description) VALUES ('" + Escape(instanceName) + "', '" + Escape(GetInstanceDescription()) + "')");
 			m_InstanceID = GetLastInsertID();
 		} else {
-			Dictionary::Ptr row = rows->Get(0);
+			DiscardRows(result);
+
 			m_InstanceID = DbReference(row->Get("instance_id"));
 		}
 
 		std::ostringstream msgbuf;
 		msgbuf << "MySQL IDO instance id: " << static_cast<long>(m_InstanceID) << " (schema version: '" + version + "')";
-		Log(LogInformation, "db_ido_mysql", msgbuf.str());
+		Log(LogInformation, "IdoMysqlConnection", msgbuf.str());
 
 		/* set session time zone to utc */
 		Query("SET SESSION TIME_ZONE='+00:00'");
@@ -204,14 +258,13 @@ void IdoMysqlConnection::Reconnect(void)
 		    + "', '" + (reconnect ? "RECONNECT" : "INITIAL") + "', NOW())");
 
 		/* clear config tables for the initial config dump */
-		ClearConfigTables();
+		PrepareDatabase();
 
 		std::ostringstream q1buf;
 		q1buf << "SELECT object_id, objecttype_id, name1, name2, is_active FROM " + GetTablePrefix() + "objects WHERE instance_id = " << static_cast<long>(m_InstanceID);
-		rows = Query(q1buf.str());
+		result = Query(q1buf.str());
 
-		ObjectLock olock(rows);
-		BOOST_FOREACH(const Dictionary::Ptr& row, rows) {
+		while ((row = FetchRow(result))) {
 			DbType::Ptr dbtype = DbType::GetByID(row->Get("objecttype_id"));
 
 			if (!dbtype)
@@ -220,46 +273,24 @@ void IdoMysqlConnection::Reconnect(void)
 			DbObject::Ptr dbobj = dbtype->GetOrCreateObjectByName(row->Get("name1"), row->Get("name2"));
 			SetObjectID(dbobj, DbReference(row->Get("object_id")));
 			SetObjectActive(dbobj, row->Get("is_active"));
+
+			if (GetObjectActive(dbobj))
+				active_dbobjs.push_back(dbobj);
 		}
 
 		Query("BEGIN");
 	}
 
 	UpdateAllObjects();
-}
 
-void IdoMysqlConnection::ClearConfigTables(void)
-{
-	/* TODO make hardcoded table names modular */
-	ClearConfigTable("commands");
-	ClearConfigTable("comments");
-	ClearConfigTable("contact_addresses");
-	ClearConfigTable("contact_notificationcommands");
-	ClearConfigTable("contactgroup_members");
-	ClearConfigTable("contactgroups");
-	ClearConfigTable("contacts");
-	ClearConfigTable("contactstatus");
-	ClearConfigTable("customvariables");
-	ClearConfigTable("customvariablestatus");
-	ClearConfigTable("host_contactgroups");
-	ClearConfigTable("host_contacts");
-	ClearConfigTable("host_parenthosts");
-	ClearConfigTable("hostdependencies");
-	ClearConfigTable("hostgroup_members");
-	ClearConfigTable("hostgroups");
-	ClearConfigTable("hosts");
-	ClearConfigTable("hoststatus");
-	ClearConfigTable("programstatus");
-	ClearConfigTable("scheduleddowntime");
-	ClearConfigTable("service_contactgroups");
-	ClearConfigTable("service_contacts");
-	ClearConfigTable("servicedependencies");
-	ClearConfigTable("servicegroup_members");
-	ClearConfigTable("servicegroups");
-	ClearConfigTable("services");
-	ClearConfigTable("servicestatus");
-	ClearConfigTable("timeperiod_timeranges");
-	ClearConfigTable("timeperiods");
+	/* deactivate all deleted configuration objects */
+	BOOST_FOREACH(const DbObject::Ptr& dbobj, active_dbobjs) {
+		if (dbobj->GetObject() == NULL) {
+			Log(LogNotice, "IdoMysqlConnection", "Deactivate deleted object name1: '" + Convert::ToString(dbobj->GetName1() +
+			    "' name2: '" + Convert::ToString(dbobj->GetName2() + "'.")));
+			DeactivateObject(dbobj);
+		}
+	}
 }
 
 void IdoMysqlConnection::ClearConfigTable(const String& table)
@@ -267,46 +298,47 @@ void IdoMysqlConnection::ClearConfigTable(const String& table)
 	Query("DELETE FROM " + GetTablePrefix() + table + " WHERE instance_id = " + Convert::ToString(static_cast<long>(m_InstanceID)));
 }
 
-Array::Ptr IdoMysqlConnection::Query(const String& query)
+IdoMysqlResult IdoMysqlConnection::Query(const String& query)
 {
 	AssertOnWorkQueue();
 
-	Log(LogDebug, "db_ido_mysql", "Query: " + query);
+	Log(LogDebug, "IdoMysqlConnection", "Query: " + query);
 
-	if (mysql_query(&m_Connection, query.CStr()) != 0)
+	if (mysql_query(&m_Connection, query.CStr()) != 0) {
+		std::ostringstream msgbuf;
+		String message = mysql_error(&m_Connection);
+		msgbuf << "Error \"" << message << "\" when executing query \"" << query << "\"";
+		Log(LogCritical, "IdoMysqlConnection", msgbuf.str());
+
 		BOOST_THROW_EXCEPTION(
 		    database_error()
 		        << errinfo_message(mysql_error(&m_Connection))
 			<< errinfo_database_query(query)
 		);
+	}
+
+	m_AffectedRows = mysql_affected_rows(&m_Connection);
 
 	MYSQL_RES *result = mysql_use_result(&m_Connection);
 
 	if (!result) {
-		if (mysql_field_count(&m_Connection) > 0)
+		if (mysql_field_count(&m_Connection) > 0) {
+			std::ostringstream msgbuf;
+			String message = mysql_error(&m_Connection);
+			msgbuf << "Error \"" << message << "\" when executing query \"" << query << "\"";
+			Log(LogCritical, "IdoMysqlConnection", msgbuf.str());
+
 			BOOST_THROW_EXCEPTION(
 			    database_error()
 				<< errinfo_message(mysql_error(&m_Connection))
 				<< errinfo_database_query(query)
 			);
+		}
 
-		return Array::Ptr();
+		return IdoMysqlResult();
 	}
 
-	Array::Ptr rows = make_shared<Array>();
-
-	for (;;) {
-		Dictionary::Ptr row = FetchRow(result);
-
-		if (!row)
-			break;
-
-		rows->Add(row);
-	}
-
-	mysql_free_result(result);
-
-	return rows;
+	return IdoMysqlResult(result, std::ptr_fun(mysql_free_result));
 }
 
 DbReference IdoMysqlConnection::GetLastInsertID(void)
@@ -314,6 +346,13 @@ DbReference IdoMysqlConnection::GetLastInsertID(void)
 	AssertOnWorkQueue();
 
 	return DbReference(mysql_insert_id(&m_Connection));
+}
+
+int IdoMysqlConnection::GetAffectedRows(void)
+{
+	AssertOnWorkQueue();
+
+	return m_AffectedRows;
 }
 
 String IdoMysqlConnection::Escape(const String& s)
@@ -332,7 +371,7 @@ String IdoMysqlConnection::Escape(const String& s)
 	return result;
 }
 
-Dictionary::Ptr IdoMysqlConnection::FetchRow(MYSQL_RES *result)
+Dictionary::Ptr IdoMysqlConnection::FetchRow(const IdoMysqlResult& result)
 {
 	AssertOnWorkQueue();
 
@@ -340,23 +379,31 @@ Dictionary::Ptr IdoMysqlConnection::FetchRow(MYSQL_RES *result)
 	MYSQL_FIELD *field;
 	unsigned long *lengths, i;
 
-	row = mysql_fetch_row(result);
+	row = mysql_fetch_row(result.get());
 
 	if (!row)
 		return Dictionary::Ptr();
 
-	lengths = mysql_fetch_lengths(result);
+	lengths = mysql_fetch_lengths(result.get());
 
 	if (!lengths)
 		return Dictionary::Ptr();
 
 	Dictionary::Ptr dict = make_shared<Dictionary>();
 
-	mysql_field_seek(result, 0);
-	for (field = mysql_fetch_field(result), i = 0; field; field = mysql_fetch_field(result), i++)
+	mysql_field_seek(result.get(), 0);
+	for (field = mysql_fetch_field(result.get()), i = 0; field; field = mysql_fetch_field(result.get()), i++)
 		dict->Set(field->name, String(row[i], row[i] + lengths[i]));
 
 	return dict;
+}
+
+void IdoMysqlConnection::DiscardRows(const IdoMysqlResult& result)
+{
+	Dictionary::Ptr row;
+
+	while ((row = FetchRow(result)))
+		; /* empty loop body */
 }
 
 void IdoMysqlConnection::ActivateObject(const DbObject::Ptr& dbobj)
@@ -413,7 +460,7 @@ bool IdoMysqlConnection::FieldToEscapedString(const String& key, const Value& va
 		return true;
 	}
 	if (key == "notification_id") {
-		*result = static_cast<long>(m_LastNotificationID);
+		*result = static_cast<long>(GetNotificationInsertID(value));
 		return true;
 	}
 
@@ -465,10 +512,10 @@ void IdoMysqlConnection::ExecuteQuery(const DbQuery& query)
 {
 	ASSERT(query.Category != DbCatInvalid);
 
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query), true);
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), true);
 }
 
-void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query)
+void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType *typeOverride)
 {
 	boost::mutex::scoped_lock lock(m_ConnectionMutex);
 
@@ -502,7 +549,11 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query)
 		}
 	}
 
-	if ((query.Type & DbQueryInsert) && (query.Type & DbQueryUpdate)) {
+	type = typeOverride ? *typeOverride : query.Type;
+
+	bool upsert = false;
+
+	if ((type & DbQueryInsert) && (type & DbQueryUpdate)) {
 		bool hasid = false;
 
 		ASSERT(query.Object);
@@ -514,12 +565,11 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query)
 		else
 			ASSERT(!"Invalid query flags.");
 
-		if (hasid)
-			type = DbQueryUpdate;
-		else
-			type = DbQueryInsert;
-	} else
-		type = query.Type;
+		if (!hasid)
+			upsert = true;
+
+		type = DbQueryUpdate;
+	}
 
 	switch (type) {
 		case DbQueryInsert:
@@ -543,6 +593,9 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query)
 		bool first = true;
 		BOOST_FOREACH(const Dictionary::Pair& kv, query.Fields) {
 			Value value;
+
+			if (kv.second.IsEmpty())
+				continue;
 
 			if (!FieldToEscapedString(kv.first, kv.second, &value))
 				return;
@@ -575,6 +628,15 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query)
 
 	Query(qbuf.str());
 
+	if (upsert && GetAffectedRows() == 0) {
+		lock.unlock();
+
+		DbQueryType to = DbQueryInsert;
+		InternalExecuteQuery(query, &to);
+
+		return;
+	}
+
 	if (query.Object) {
 		if (query.ConfigUpdate)
 			SetConfigUpdate(query.Object, true);
@@ -585,9 +647,9 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query)
 			SetInsertID(query.Object, GetLastInsertID());
 	}
 
-	if (type == DbQueryInsert && query.Table == "notifications") { // FIXME remove hardcoded table name
-		m_LastNotificationID = GetLastInsertID();
-		Log(LogDebug, "db_ido", "saving contactnotification notification_id=" + Convert::ToString(static_cast<long>(m_LastNotificationID)));
+	if (type == DbQueryInsert && query.Table == "notifications" && query.NotificationObject) { // FIXME remove hardcoded table name
+		SetNotificationInsertID(query.NotificationObject, GetLastInsertID());
+		Log(LogDebug, "IdoMysqlConnection", "saving contactnotification notification_id=" + Convert::ToString(static_cast<long>(GetLastInsertID())));
 	}
 }
 
@@ -606,4 +668,16 @@ void IdoMysqlConnection::InternalCleanUpExecuteQuery(const String& table, const 
 	Query("DELETE FROM " + GetTablePrefix() + table + " WHERE instance_id = " +
 	    Convert::ToString(static_cast<long>(m_InstanceID)) + " AND " + time_column +
 	    " < FROM_UNIXTIME(" + Convert::ToString(static_cast<long>(max_age)) + ")");
+}
+
+void IdoMysqlConnection::FillIDCache(const DbType::Ptr& type)
+{
+	String query = "SELECT " + type->GetIDColumn() + " AS object_id, " + type->GetTable() + "_id FROM " + GetTablePrefix() + type->GetTable() + "s";
+	IdoMysqlResult result = Query(query);
+
+	Dictionary::Ptr row;
+
+	while ((row = FetchRow(result))) {
+		SetInsertID(type, DbReference(row->Get("object_id")), DbReference(row->Get(type->GetTable() + "_id")));
+	}
 }

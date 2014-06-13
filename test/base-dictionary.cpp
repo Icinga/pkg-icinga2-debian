@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,9 +17,9 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/dictionary.h"
-#include "base/objectlock.h"
-#include "base/serializer.h"
+#include "base/dictionary.hpp"
+#include "base/objectlock.hpp"
+#include "base/serializer.hpp"
 #include <boost/test/unit_test.hpp>
 #include <boost/foreach.hpp>
 #include <boost/tuple/tuple.hpp>
@@ -115,6 +115,11 @@ BOOST_AUTO_TEST_CASE(remove)
 	BOOST_CHECK(dictionary->GetLength() == 2);
 
 	dictionary->Set("test1", Empty);
+
+	BOOST_CHECK(dictionary->Contains("test1"));
+	BOOST_CHECK(dictionary->GetLength() == 2);
+
+	dictionary->Remove("test1");
 
 	BOOST_CHECK(!dictionary->Contains("test1"));
 	BOOST_CHECK(dictionary->GetLength() == 1);

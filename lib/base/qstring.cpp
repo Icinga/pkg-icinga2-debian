@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,17 +17,14 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/qstring.h"
-#include "base/value.h"
+#include "base/qstring.hpp"
+#include "base/value.hpp"
 #include <boost/algorithm/string/trim.hpp>
-#include <boost/algorithm/string/join.hpp>
-#include <boost/algorithm/string/compare.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/classification.hpp>
+#include <ostream>
 
 using namespace icinga;
 
-const size_t String::NPos = std::string::npos;
+const String::SizeType String::NPos = std::string::npos;
 
 String::String(void)
 	: m_Data()
@@ -41,7 +38,7 @@ String::String(const std::string& data)
 	: m_Data(data)
 { }
 
-String::String(size_t n, char c)
+String::String(String::SizeType n, char c)
 	: m_Data(n, c)
 { }
 
@@ -67,12 +64,12 @@ String& String::operator=(const char *rhs)
 	return *this;
 }
 
-const char& String::operator[](size_t pos) const
+const char& String::operator[](String::SizeType pos) const
 {
 	return m_Data[pos];
 }
 
-char& String::operator[](size_t pos)
+char& String::operator[](String::SizeType pos)
 {
 	return m_Data[pos];
 }
@@ -126,7 +123,7 @@ void String::Clear(void)
 	m_Data.clear();
 }
 
-size_t String::GetLength(void) const
+String::SizeType String::GetLength(void) const
 {
 	return m_Data.size();
 }
@@ -136,42 +133,47 @@ std::string& String::GetData(void)
 	return m_Data;
 }
 
-size_t String::Find(const String& str, size_t pos) const
+const std::string& String::GetData(void) const
+{
+	return m_Data;
+}
+
+String::SizeType String::Find(const String& str, String::SizeType pos) const
 {
 	return m_Data.find(str, pos);
 }
 
-size_t String::RFind(const String& str, size_t pos) const
+String::SizeType String::RFind(const String& str, String::SizeType pos) const
 {
 	return m_Data.rfind(str, pos);
 }
 
-size_t String::FindFirstOf(const char *s, size_t pos) const
+String::SizeType String::FindFirstOf(const char *s, String::SizeType pos) const
 {
 	return m_Data.find_first_of(s, pos);
 }
 
-size_t String::FindFirstOf(char ch, size_t pos) const
+String::SizeType String::FindFirstOf(char ch, String::SizeType pos) const
 {
 	return m_Data.find_first_of(ch, pos);
 }
 
-size_t String::FindFirstNotOf(const char *s, size_t pos) const
+String::SizeType String::FindFirstNotOf(const char *s, String::SizeType pos) const
 {
 	return m_Data.find_first_not_of(s, pos);
 }
 
-size_t String::FindFirstNotOf(char ch, size_t pos) const
+String::SizeType String::FindFirstNotOf(char ch, String::SizeType pos) const
 {
 	return m_Data.find_first_not_of(ch, pos);
 }
 
-String String::SubStr(size_t first, size_t len) const
+String String::SubStr(String::SizeType first, String::SizeType len) const
 {
 	return m_Data.substr(first, len);
 }
 
-void String::Replace(size_t first, size_t second, const String& str)
+void String::Replace(String::SizeType first, String::SizeType second, const String& str)
 {
 	m_Data.replace(first, second, str);
 }

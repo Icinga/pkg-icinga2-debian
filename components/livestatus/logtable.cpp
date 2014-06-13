@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,25 +17,25 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "livestatus/logtable.h"
-#include "livestatus/logutility.h"
-#include "livestatus/hoststable.h"
-#include "livestatus/servicestable.h"
-#include "livestatus/contactstable.h"
-#include "livestatus/commandstable.h"
-#include "icinga/icingaapplication.h"
-#include "icinga/cib.h"
-#include "icinga/service.h"
-#include "icinga/host.h"
-#include "icinga/user.h"
-#include "icinga/checkcommand.h"
-#include "icinga/eventcommand.h"
-#include "icinga/notificationcommand.h"
-#include "base/convert.h"
-#include "base/utility.h"
-#include "base/logger_fwd.h"
-#include "base/application.h"
-#include "base/objectlock.h"
+#include "livestatus/logtable.hpp"
+#include "livestatus/livestatuslogutility.hpp"
+#include "livestatus/hoststable.hpp"
+#include "livestatus/servicestable.hpp"
+#include "livestatus/contactstable.hpp"
+#include "livestatus/commandstable.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "icinga/cib.hpp"
+#include "icinga/service.hpp"
+#include "icinga/host.hpp"
+#include "icinga/user.hpp"
+#include "icinga/checkcommand.hpp"
+#include "icinga/eventcommand.hpp"
+#include "icinga/notificationcommand.hpp"
+#include "base/convert.hpp"
+#include "base/utility.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/application.hpp"
+#include "base/objectlock.hpp"
 #include <boost/foreach.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <boost/algorithm/string.hpp>
@@ -91,16 +91,16 @@ String LogTable::GetName(void) const
 
 void LogTable::FetchRows(const AddRowFunction& addRowFn)
 {
-	Log(LogInformation, "livestatus", "Pre-selecting log file from " + Convert::ToString(m_TimeFrom) + " until " + Convert::ToString(m_TimeUntil));
+	Log(LogDebug, "LogTable", "Pre-selecting log file from " + Convert::ToString(m_TimeFrom) + " until " + Convert::ToString(m_TimeUntil));
 
 	/* create log file index */
-	LogUtility::CreateLogIndex(m_CompatLogPath, m_LogFileIndex);
+	LivestatusLogUtility::CreateLogIndex(m_CompatLogPath, m_LogFileIndex);
 
 	/* generate log cache */
-	LogUtility::CreateLogCache(m_LogFileIndex, this, m_TimeFrom, m_TimeUntil, addRowFn);
+	LivestatusLogUtility::CreateLogCache(m_LogFileIndex, this, m_TimeFrom, m_TimeUntil, addRowFn);
 }
 
-/* gets called in LogUtility::CreateLogCache */
+/* gets called in LivestatusLogUtility::CreateLogCache */
 void LogTable::UpdateLogEntries(const Dictionary::Ptr& log_entry_attrs, int line_count, int lineno, const AddRowFunction& addRowFn)
 {
 	/* additional attributes only for log table */
@@ -109,7 +109,7 @@ void LogTable::UpdateLogEntries(const Dictionary::Ptr& log_entry_attrs, int line
 	addRowFn(log_entry_attrs);
 }
 
-Object::Ptr LogTable::HostAccessor(const Value& row, const Column::ObjectAccessor& parentObjectAccessor)
+Object::Ptr LogTable::HostAccessor(const Value& row, const Column::ObjectAccessor&)
 {
 	String host_name = static_cast<Dictionary::Ptr>(row)->Get("host_name");
 
@@ -119,7 +119,7 @@ Object::Ptr LogTable::HostAccessor(const Value& row, const Column::ObjectAccesso
 	return Host::GetByName(host_name);
 }
 
-Object::Ptr LogTable::ServiceAccessor(const Value& row, const Column::ObjectAccessor& parentObjectAccessor)
+Object::Ptr LogTable::ServiceAccessor(const Value& row, const Column::ObjectAccessor&)
 {
 	String host_name = static_cast<Dictionary::Ptr>(row)->Get("host_name");
 	String service_description = static_cast<Dictionary::Ptr>(row)->Get("service_description");
@@ -130,7 +130,7 @@ Object::Ptr LogTable::ServiceAccessor(const Value& row, const Column::ObjectAcce
 	return Service::GetByNamePair(host_name, service_description);
 }
 
-Object::Ptr LogTable::ContactAccessor(const Value& row, const Column::ObjectAccessor& parentObjectAccessor)
+Object::Ptr LogTable::ContactAccessor(const Value& row, const Column::ObjectAccessor&)
 {
 	String contact_name = static_cast<Dictionary::Ptr>(row)->Get("contact_name");
 
@@ -140,7 +140,7 @@ Object::Ptr LogTable::ContactAccessor(const Value& row, const Column::ObjectAcce
 	return User::GetByName(contact_name);
 }
 
-Object::Ptr LogTable::CommandAccessor(const Value& row, const Column::ObjectAccessor& parentObjectAccessor)
+Object::Ptr LogTable::CommandAccessor(const Value& row, const Column::ObjectAccessor&)
 {
 	String command_name = static_cast<Dictionary::Ptr>(row)->Get("command_name");
 

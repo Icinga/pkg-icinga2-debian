@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,77 +17,107 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/notification.h"
-#include "icinga/notificationcommand.h"
-#include "icinga/macroprocessor.h"
-#include "icinga/service.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
-#include "base/utility.h"
-#include "base/convert.h"
-#include "base/exception.h"
-#include "base/initialize.h"
-#include "base/scriptvariable.h"
+#include "icinga/notification.hpp"
+#include "icinga/notificationcommand.hpp"
+#include "icinga/service.hpp"
+#include "config/configcompilercontext.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/utility.hpp"
+#include "base/convert.hpp"
+#include "base/exception.hpp"
+#include "base/initialize.hpp"
+#include "base/scriptvariable.hpp"
+#include "base/scriptfunction.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(Notification);
+REGISTER_SCRIPTFUNCTION(ValidateNotificationFilters, &Notification::ValidateFilters);
 INITIALIZE_ONCE(&Notification::StaticInitialize);
 
-boost::signals2::signal<void (const Notification::Ptr&, double, const String&)> Notification::OnNextNotificationChanged;
+boost::signals2::signal<void (const Notification::Ptr&, double, const MessageOrigin&)> Notification::OnNextNotificationChanged;
+
+String NotificationNameComposer::MakeName(const String& shortName, const Dictionary::Ptr props) const
+{
+	if (!props)
+		return "";
+
+	String name = props->Get("host_name");
+
+	if (props->Contains("service_name"))
+		name += "!" + props->Get("service_name");
+
+	name += "!" + shortName;
+
+	return name;
+}
 
 void Notification::StaticInitialize(void)
 {
-	ScriptVariable::Set("NotificationDowntimeStart", NotificationDowntimeStart, true, true);
-	ScriptVariable::Set("NotificationDowntimeEnd", NotificationDowntimeEnd, true, true);
-	ScriptVariable::Set("NotificationDowntimeRemoved", NotificationDowntimeRemoved, true, true);
-	ScriptVariable::Set("NotificationCustom", NotificationCustom, true, true);
-	ScriptVariable::Set("NotificationAcknowledgement", NotificationAcknowledgement, true, true);
-	ScriptVariable::Set("NotificationProblem", NotificationProblem, true, true);
-	ScriptVariable::Set("NotificationRecovery", NotificationRecovery, true, true);
-	ScriptVariable::Set("NotificationFlappingStart", NotificationFlappingStart, true, true);
-	ScriptVariable::Set("NotificationFlappingEnd", NotificationFlappingEnd, true, true);
+	ScriptVariable::Set("OK", StateFilterOK, true, true);
+	ScriptVariable::Set("Warning", StateFilterWarning, true, true);
+	ScriptVariable::Set("Critical", StateFilterCritical, true, true);
+	ScriptVariable::Set("Unknown", StateFilterUnknown, true, true);
+	ScriptVariable::Set("Up", StateFilterUp, true, true);
+	ScriptVariable::Set("Down", StateFilterDown, true, true);
 
-	ScriptVariable::Set("NotificationFilterDowntimeStart", 1 << NotificationDowntimeStart, true, true);
-	ScriptVariable::Set("NotificationFilterDowntimeEnd", 1 << NotificationDowntimeEnd, true, true);
-	ScriptVariable::Set("NotificationFilterDowntimeRemoved", 1 << NotificationDowntimeRemoved, true, true);
-	ScriptVariable::Set("NotificationFilterCustom", 1 << NotificationCustom, true, true);
-	ScriptVariable::Set("NotificationFilterAcknowledgement", 1 << NotificationAcknowledgement, true, true);
-	ScriptVariable::Set("NotificationFilterProblem", 1 << NotificationProblem, true, true);
-	ScriptVariable::Set("NotificationFilterRecovery", 1 << NotificationRecovery, true, true);
-	ScriptVariable::Set("NotificationFilterFlappingStart", 1 << NotificationFlappingStart, true, true);
-	ScriptVariable::Set("NotificationFilterFlappingEnd", 1 << NotificationFlappingEnd, true, true);
+	ScriptVariable::Set("DowntimeStart", 1 << NotificationDowntimeStart, true, true);
+	ScriptVariable::Set("DowntimeEnd", 1 << NotificationDowntimeEnd, true, true);
+	ScriptVariable::Set("DowntimeRemoved", 1 << NotificationDowntimeRemoved, true, true);
+	ScriptVariable::Set("Custom", 1 << NotificationCustom, true, true);
+	ScriptVariable::Set("Acknowledgement", 1 << NotificationAcknowledgement, true, true);
+	ScriptVariable::Set("Problem", 1 << NotificationProblem, true, true);
+	ScriptVariable::Set("Recovery", 1 << NotificationRecovery, true, true);
+	ScriptVariable::Set("FlappingStart", 1 << NotificationFlappingStart, true, true);
+	ScriptVariable::Set("FlappingEnd", 1 << NotificationFlappingEnd, true, true);
+}
+
+void Notification::OnConfigLoaded(void)
+{
+	SetTypeFilter(FilterArrayToInt(GetTypes(), ~0));
+	SetStateFilter(FilterArrayToInt(GetStates(), ~0));
+
+	Checkable::Ptr obj = GetCheckable();
+
+	if (obj)
+		obj->AddNotification(GetSelf());
 }
 
 void Notification::Start(void)
 {
 	DynamicObject::Start();
 
-	GetService()->AddNotification(GetSelf());
+	Checkable::Ptr obj = GetCheckable();
+
+	if (obj)
+		obj->AddNotification(GetSelf());
 }
 
 void Notification::Stop(void)
 {
 	DynamicObject::Stop();
 
-	GetService()->RemoveNotification(GetSelf());
+	Checkable::Ptr obj = GetCheckable();
+
+	if (obj)
+		obj->RemoveNotification(GetSelf());
 }
 
-Service::Ptr Notification::GetService(void) const
+Checkable::Ptr Notification::GetCheckable(void) const
 {
-	Host::Ptr host = Host::GetByName(GetHostRaw());
+	Host::Ptr host = Host::GetByName(GetHostName());
 
-	if (GetServiceRaw().IsEmpty())
-		return host->GetCheckService();
+	if (GetServiceName().IsEmpty())
+		return host;
 	else
-		return host->GetServiceByShortName(GetServiceRaw());
+		return host->GetServiceByShortName(GetServiceName());
 }
 
-NotificationCommand::Ptr Notification::GetNotificationCommand(void) const
+NotificationCommand::Ptr Notification::GetCommand(void) const
 {
-	return NotificationCommand::GetByName(GetNotificationCommandRaw());
+	return NotificationCommand::GetByName(GetCommandRaw());
 }
 
 std::set<User::Ptr> Notification::GetUsers(void) const
@@ -134,9 +164,9 @@ std::set<UserGroup::Ptr> Notification::GetUserGroups(void) const
 	return result;
 }
 
-TimePeriod::Ptr Notification::GetNotificationPeriod(void) const
+TimePeriod::Ptr Notification::GetPeriod(void) const
 {
-	return TimePeriod::GetByName(GetNotificationPeriodRaw());
+	return TimePeriod::GetByName(GetPeriodRaw());
 }
 
 double Notification::GetNextNotification(void) const
@@ -148,11 +178,11 @@ double Notification::GetNextNotification(void) const
  * Sets the timestamp when the next periodical notification should be sent.
  * This does not affect notifications that are sent for state changes.
  */
-void Notification::SetNextNotification(double time, const String& authority)
+void Notification::SetNextNotification(double time, const MessageOrigin& origin)
 {
 	SetNextNotificationRaw(time);
 
-	OnNextNotificationChanged(GetSelf(), time, authority);
+	OnNextNotificationChanged(GetSelf(), time, origin);
 }
 
 void Notification::UpdateNotificationNumber(void)
@@ -195,43 +225,53 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 {
 	ASSERT(!OwnsLock());
 
+	Checkable::Ptr checkable = GetCheckable();
+
 	if (!force) {
-		TimePeriod::Ptr tp = GetNotificationPeriod();
+		TimePeriod::Ptr tp = GetPeriod();
 
 		if (tp && !tp->IsInside(Utility::GetTime())) {
-			Log(LogInformation, "icinga", "Not sending notifications for notification object '" + GetName() + "': not in timeperiod");
+			Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': not in timeperiod");
 			return;
 		}
 
 		double now = Utility::GetTime();
 		Dictionary::Ptr times = GetTimes();
-		Service::Ptr service = GetService();
 
 		if (type == NotificationProblem) {
-			if (times && times->Contains("begin") && now < service->GetLastHardStateChange() + times->Get("begin")) {
-				Log(LogInformation, "icinga", "Not sending notifications for notification object '" + GetName() + "': before escalation range");
+			if (times && times->Contains("begin") && now < checkable->GetLastHardStateChange() + times->Get("begin")) {
+				Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': before escalation range");
 				return;
 			}
 
-			if (times && times->Contains("end") && now > service->GetLastHardStateChange() + times->Get("end")) {
-				Log(LogInformation, "icinga", "Not sending notifications for notification object '" + GetName() + "': after escalation range");
+			if (times && times->Contains("end") && now > checkable->GetLastHardStateChange() + times->Get("end")) {
+				Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': after escalation range");
 				return;
 			}
 		}
 
 		unsigned long ftype = 1 << type;
 
-		Log(LogDebug, "icinga", "FType=" + Convert::ToString(ftype) + ", TypeFilter=" + Convert::ToString(GetNotificationTypeFilter()));
+		Log(LogDebug, "Notification", "FType=" + Convert::ToString(ftype) + ", TypeFilter=" + Convert::ToString(GetTypeFilter()));
 
-		if (!(ftype & GetNotificationTypeFilter())) {
-			Log(LogInformation, "icinga", "Not sending notifications for notification object '" + GetName() + "': type filter does not match");
+		if (!(ftype & GetTypeFilter())) {
+			Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': type filter does not match");
 			return;
 		}
 
-		unsigned long fstate = 1 << GetService()->GetState();
+		Host::Ptr host;
+		Service::Ptr service;
+		tie(host, service) = GetHostService(checkable);
 
-		if (!(fstate & GetNotificationStateFilter())) {
-			Log(LogInformation, "icinga", "Not sending notifications for notification object '" + GetName() + "': state filter does not match");
+		unsigned long fstate;
+
+		if (service)
+			fstate = ServiceStateToFilter(service->GetState());
+		else
+			fstate = HostStateToFilter(host->GetState());
+
+		if (!(fstate & GetStateFilter())) {
+			Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': state filter does not match");
 			return;
 		}
 	}
@@ -256,51 +296,76 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 		std::copy(members.begin(), members.end(), std::inserter(allUsers, allUsers.begin()));
 	}
 
-	unsigned long notified_users = 0;
+	Service::OnNotificationSendStart(GetSelf(), checkable, allUsers, type, cr, author, text);
+
+	std::set<User::Ptr> allNotifiedUsers;
 	BOOST_FOREACH(const User::Ptr& user, allUsers) {
-		Log(LogDebug, "icinga", "Sending notification for user '" + user->GetName() + "'");
+		if (!CheckNotificationUserFilters(type, user, force))
+			continue;
+
+		Log(LogInformation, "Notification", "Sending notification for user '" + user->GetName() + "'");
 		Utility::QueueAsyncCallback(boost::bind(&Notification::ExecuteNotificationHelper, this, type, user, cr, force, author, text));
-		notified_users++;
+
+		/* collect all notified users */
+		allNotifiedUsers.insert(user);
 	}
 
-	Service::OnNotificationSentToAllUsers(GetService(), allUsers, type, cr, author, text);
+	/* used in db_ido for notification history */
+	Service::OnNotificationSentToAllUsers(GetSelf(), checkable, allNotifiedUsers, type, cr, author, text);
+}
+
+bool Notification::CheckNotificationUserFilters(NotificationType type, const User::Ptr& user, bool force)
+{
+	ASSERT(!OwnsLock());
+
+	if (!force) {
+		TimePeriod::Ptr tp = user->GetPeriod();
+
+		if (tp && !tp->IsInside(Utility::GetTime())) {
+			Log(LogNotice, "Notification", "Not sending notifications for notification object '" +
+			    GetName() + " and user '" + user->GetName() + "': user not in timeperiod");
+			return false;
+		}
+
+		unsigned long ftype = 1 << type;
+
+		if (!(ftype & user->GetTypeFilter())) {
+			Log(LogNotice, "Notification", "Not sending notifications for notification object '" +
+			    GetName() + " and user '" + user->GetName() + "': type filter does not match");
+			return false;
+		}
+
+		Checkable::Ptr checkable = GetCheckable();
+		Host::Ptr host;
+		Service::Ptr service;
+		tie(host, service) = GetHostService(checkable);
+
+		unsigned long fstate;
+
+		if (service)
+				fstate = ServiceStateToFilter(service->GetState());
+		else
+				fstate = HostStateToFilter(host->GetState());
+
+		if (!(fstate & user->GetStateFilter())) {
+			Log(LogNotice, "Notification", "Not sending notifications for notification object '" +
+			    GetName() + " and user '" + user->GetName() + "': state filter does not match");
+			return false;
+		}
+	}
+
+	return true;
 }
 
 void Notification::ExecuteNotificationHelper(NotificationType type, const User::Ptr& user, const CheckResult::Ptr& cr, bool force, const String& author, const String& text)
 {
 	ASSERT(!OwnsLock());
 
-	if (!force) {
-		TimePeriod::Ptr tp = user->GetNotificationPeriod();
-
-		if (tp && !tp->IsInside(Utility::GetTime())) {
-			Log(LogInformation, "icinga", "Not sending notifications for notification object '" +
-			    GetName() + " and user '" + user->GetName() + "': user not in timeperiod");
-			return;
-		}
-
-		unsigned long ftype = 1 << type;
-
-		if (!(ftype & user->GetNotificationTypeFilter())) {
-			Log(LogInformation, "icinga", "Not sending notifications for notification object '" +
-			    GetName() + " and user '" + user->GetName() + "': type filter does not match");
-			return;
-		}
-
-		unsigned long fstate = 1 << GetService()->GetState();
-
-		if (!(fstate & user->GetNotificationStateFilter())) {
-			Log(LogInformation, "icinga", "Not sending notifications for notification object '" +
-			    GetName() + " and user '" + user->GetName() + "': state filter does not match");
-			return;
-		}
-	}
-
 	try {
-		NotificationCommand::Ptr command = GetNotificationCommand();
+		NotificationCommand::Ptr command = GetCommand();
 
 		if (!command) {
-			Log(LogDebug, "icinga", "No notification_command found for notification '" + GetName() + "'. Skipping execution.");
+			Log(LogDebug, "Notification", "No notification_command found for notification '" + GetName() + "'. Skipping execution.");
 			return;
 		}
 
@@ -312,31 +377,84 @@ void Notification::ExecuteNotificationHelper(NotificationType type, const User::
 			SetLastNotification(Utility::GetTime());
 		}
 
-		Service::OnNotificationSentToUser(GetService(), user, type, cr, author, text, command->GetName());
+		/* required by compatlogger */
+		Service::OnNotificationSentToUser(GetSelf(), GetCheckable(), user, type, cr, author, text, command->GetName());
 
-		Log(LogInformation, "icinga", "Completed sending notification for service '" + GetService()->GetName() + "'");
+		Log(LogInformation, "Notification", "Completed sending notification for object '" + GetCheckable()->GetName() + "'");
 	} catch (const std::exception& ex) {
 		std::ostringstream msgbuf;
-		msgbuf << "Exception occured during notification for service '"
-		       << GetService()->GetName() << "': " << DiagnosticInformation(ex);
-		Log(LogWarning, "icinga", msgbuf.str());
+		msgbuf << "Exception occured during notification for object '"
+		       << GetCheckable()->GetName() << "': " << DiagnosticInformation(ex);
+		Log(LogWarning, "Notification", msgbuf.str());
 	}
 }
 
-bool Notification::ResolveMacro(const String& macro, const CheckResult::Ptr&, String *result) const
+int icinga::ServiceStateToFilter(ServiceState state)
 {
-	if (macro.SubStr(0, 13) == "_NOTIFICATION") {
-		Dictionary::Ptr custom = GetCustom();
-		*result = custom ? custom->Get(macro.SubStr(13)) : "";
-		return true;
+	switch (state) {
+		case ServiceOK:
+			return StateFilterOK;
+		case ServiceWarning:
+			return StateFilterWarning;
+		case ServiceCritical:
+			return StateFilterCritical;
+		case ServiceUnknown:
+			return StateFilterUnknown;
+		default:
+			VERIFY(!"Invalid state type.");
 	}
-
-	Dictionary::Ptr macros = GetMacros();
-
-	if (macros && macros->Contains(macro)) {
-		*result = macros->Get(macro);
-		return true;
-	}
-
-	return false;
 }
+
+int icinga::HostStateToFilter(HostState state)
+{
+	switch (state) {
+		case HostUp:
+			return StateFilterUp;
+		case HostDown:
+			return StateFilterDown;
+		default:
+			VERIFY(!"Invalid state type.");
+	}
+}
+
+int icinga::FilterArrayToInt(const Array::Ptr& typeFilters, int defaultValue)
+{
+	Value resultTypeFilter;
+
+	if (!typeFilters)
+		return defaultValue;
+
+	resultTypeFilter = 0;
+
+	ObjectLock olock(typeFilters);
+	BOOST_FOREACH(const Value& typeFilter, typeFilters) {
+		resultTypeFilter = resultTypeFilter | typeFilter;
+	}
+
+	return resultTypeFilter;
+}
+
+void Notification::ValidateFilters(const String& location, const Dictionary::Ptr& attrs)
+{
+	int sfilter = FilterArrayToInt(attrs->Get("states"), 0);
+
+	if (!attrs->Contains("service_name") && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0) {
+		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
+		    location + ": State filter is invalid.");
+	}
+
+	if (attrs->Contains("service_name") && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
+		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
+		    location + ": State filter is invalid.");
+	}
+
+	int tfilter = FilterArrayToInt(attrs->Get("types"), 0);
+
+	if ((tfilter & ~(1 << NotificationDowntimeStart | 1 << NotificationDowntimeEnd | 1 << NotificationDowntimeRemoved |
+	    1 << NotificationCustom | 1 << NotificationAcknowledgement | 1 << NotificationProblem | 1 << NotificationRecovery |
+	    1 << NotificationFlappingStart | 1 << NotificationFlappingEnd)) != 0) {
+		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
+		    location + ": Type filter is invalid.");
+	}
+}
+

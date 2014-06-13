@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,17 +17,22 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/api.h"
-#include "base/scriptfunction.h"
-#include "base/logger_fwd.h"
+#include "icinga/api.hpp"
+#include "remote/apifunction.hpp"
+#include "base/logger_fwd.hpp"
 
 using namespace icinga;
 
-REGISTER_SCRIPTFUNCTION(GetAnswerToEverything, &API::GetAnswerToEverything);
+REGISTER_APIFUNCTION(GetAnswerToEverything, uapi, boost::bind(&API::GetAnswerToEverything, _2));
 
-int API::GetAnswerToEverything(const String& text)
+Value API::GetAnswerToEverything(const Dictionary::Ptr& params)
 {
-	Log(LogInformation, "icinga", "Hello from the Icinga 2 API: " + text);
+	String text;
+
+	if (params)
+		text = params->Get("text");
+
+	Log(LogInformation, "API", "Hello from the Icinga 2 API: " + text);
 
 	return 42;
 }

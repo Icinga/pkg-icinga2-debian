@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,14 +17,12 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/tlsstream.h"
-#include "base/stream_bio.h"
-#include "base/objectlock.h"
-#include "base/debug.h"
-#include "base/utility.h"
-#include "base/exception.h"
+#include "base/tlsstream.hpp"
+#include "base/utility.hpp"
+#include "base/exception.hpp"
+#include "base/logger_fwd.hpp"
 #include <boost/bind.hpp>
-#include <boost/make_shared.hpp>
+#include <iostream>
 
 using namespace icinga;
 
@@ -37,21 +35,16 @@ bool I2_EXPORT TlsStream::m_SSLIndexInitialized = false;
  * @param role The role of the client.
  * @param sslContext The SSL context for the client.
  */
-TlsStream::TlsStream(const Stream::Ptr& innerStream, TlsRole role, shared_ptr<SSL_CTX> sslContext)
-	: m_SSLContext(sslContext), m_Role(role)
+TlsStream::TlsStream(const Socket::Ptr& socket, ConnectionRole role, shared_ptr<SSL_CTX> sslContext)
+	: m_Socket(socket), m_Role(role)
 {
-	m_InnerStream = dynamic_pointer_cast<BufferedStream>(innerStream);
-	
-	if (!m_InnerStream)
-		m_InnerStream = make_shared<BufferedStream>(innerStream);
-
-	m_InnerStream->MakeNonBlocking();
-	
-	m_SSL = shared_ptr<SSL>(SSL_new(m_SSLContext.get()), SSL_free);
-
-	m_SSLContext.reset();
+	m_SSL = shared_ptr<SSL>(SSL_new(sslContext.get()), SSL_free);
 
 	if (!m_SSL) {
+		std::ostringstream msgbuf;
+		msgbuf << "SSL_new() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), NULL) << "\"";
+		Log(LogCritical, "TlsStream", msgbuf.str());
+
 		BOOST_THROW_EXCEPTION(openssl_error()
 			<< boost::errinfo_api_function("SSL_new")
 			<< errinfo_openssl_error(ERR_get_error()));
@@ -66,10 +59,13 @@ TlsStream::TlsStream(const Stream::Ptr& innerStream, TlsRole role, shared_ptr<SS
 
 	SSL_set_verify(m_SSL.get(), SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
 
-	m_BIO = BIO_new_I2Stream(m_InnerStream);
+	socket->MakeNonBlocking();
+
+	m_BIO = BIO_new_socket(socket->GetFD(), 0);
+	BIO_set_nbio(m_BIO, 1);
 	SSL_set_bio(m_SSL.get(), m_BIO, m_BIO);
 
-	if (m_Role == TlsRoleServer)
+	if (m_Role == RoleServer)
 		SSL_set_accept_state(m_SSL.get());
 	else
 		SSL_set_connect_state(m_SSL.get());
@@ -97,29 +93,38 @@ shared_ptr<X509> TlsStream::GetPeerCertificate(void) const
 
 void TlsStream::Handshake(void)
 {
-	ASSERT(!OwnsLock());
+	for (;;) {
+		int rc, err;
 
-	int rc;
+		{
+			boost::mutex::scoped_lock lock(m_SSLLock);
+			rc = SSL_do_handshake(m_SSL.get());
 
-	ObjectLock olock(this);
+			if (rc > 0)
+				break;
 
-	while ((rc = SSL_do_handshake(m_SSL.get())) <= 0) {
-		switch (SSL_get_error(m_SSL.get(), rc)) {
+			err = SSL_get_error(m_SSL.get(), rc);
+		}
+
+		switch (err) {
 			case SSL_ERROR_WANT_READ:
-				olock.Unlock();
-				m_InnerStream->WaitReadable(1);
-				olock.Lock();
+				try {
+					m_Socket->Poll(true, false);
+				} catch (std::exception&) {}
 				continue;
 			case SSL_ERROR_WANT_WRITE:
-				olock.Unlock();
-				m_InnerStream->WaitWritable(1);
-				olock.Lock();
+				try {
+					m_Socket->Poll(false, true);
+				} catch (std::exception&) {}
 				continue;
 			case SSL_ERROR_ZERO_RETURN:
 				Close();
 				return;
 			default:
-				I2Stream_check_exception(m_BIO);
+				std::ostringstream msgbuf;
+				msgbuf << "SSL_do_handshake() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), NULL) << "\"";
+				Log(LogCritical, "TlsStream", msgbuf.str());
+
 				BOOST_THROW_EXCEPTION(openssl_error()
 				    << boost::errinfo_api_function("SSL_do_handshake")
 				    << errinfo_openssl_error(ERR_get_error()));
@@ -132,32 +137,39 @@ void TlsStream::Handshake(void)
  */
 size_t TlsStream::Read(void *buffer, size_t count)
 {
-	ASSERT(!OwnsLock());
-
 	size_t left = count;
 
-	ObjectLock olock(this);
-
 	while (left > 0) {
-		int rc = SSL_read(m_SSL.get(), ((char *)buffer) + (count - left), left);
+		int rc, err;
+
+		{
+			boost::mutex::scoped_lock lock(m_SSLLock);
+			rc = SSL_read(m_SSL.get(), ((char *)buffer) + (count - left), left);
+
+			if (rc <= 0)
+				err = SSL_get_error(m_SSL.get(), rc);
+		}
 
 		if (rc <= 0) {
-			switch (SSL_get_error(m_SSL.get(), rc)) {
+			switch (err) {
 				case SSL_ERROR_WANT_READ:
-					olock.Unlock();
-					m_InnerStream->WaitReadable(1);
-					olock.Lock();
+					try {
+						m_Socket->Poll(true, false);
+					} catch (std::exception&) {}
 					continue;
 				case SSL_ERROR_WANT_WRITE:
-					olock.Unlock();
-					m_InnerStream->WaitWritable(1);
-					olock.Lock();
+					try {
+						m_Socket->Poll(false, true);
+					} catch (std::exception&) {}
 					continue;
 				case SSL_ERROR_ZERO_RETURN:
 					Close();
 					return count - left;
 				default:
-					I2Stream_check_exception(m_BIO);
+					std::ostringstream msgbuf;
+					msgbuf << "SSL_read() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), NULL) << "\"";
+					Log(LogCritical, "TlsStream", msgbuf.str());
+
 					BOOST_THROW_EXCEPTION(openssl_error()
 					    << boost::errinfo_api_function("SSL_read")
 					    << errinfo_openssl_error(ERR_get_error()));
@@ -172,32 +184,39 @@ size_t TlsStream::Read(void *buffer, size_t count)
 
 void TlsStream::Write(const void *buffer, size_t count)
 {
-	ASSERT(!OwnsLock());
-
 	size_t left = count;
 
-	ObjectLock olock(this);
-
 	while (left > 0) {
-		int rc = SSL_write(m_SSL.get(), ((const char *)buffer) + (count - left), left);
+		int rc, err;
+
+		{
+			boost::mutex::scoped_lock lock(m_SSLLock);
+			rc = SSL_write(m_SSL.get(), ((const char *)buffer) + (count - left), left);
+
+			if (rc <= 0)
+				err = SSL_get_error(m_SSL.get(), rc);
+		}
 
 		if (rc <= 0) {
-			switch (SSL_get_error(m_SSL.get(), rc)) {
+			switch (err) {
 				case SSL_ERROR_WANT_READ:
-					olock.Unlock();
-					m_InnerStream->WaitReadable(1);
-					olock.Lock();
+					try {
+						m_Socket->Poll(true, false);
+					} catch (std::exception&) {}
 					continue;
 				case SSL_ERROR_WANT_WRITE:
-					olock.Unlock();
-					m_InnerStream->WaitWritable(1);
-					olock.Lock();
+					try {
+						m_Socket->Poll(false, true);
+					} catch (std::exception&) {}
 					continue;
 				case SSL_ERROR_ZERO_RETURN:
 					Close();
 					return;
 				default:
-					I2Stream_check_exception(m_BIO);
+					std::ostringstream msgbuf;
+					msgbuf << "SSL_write() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), NULL) << "\"";
+					Log(LogCritical, "TlsStream", msgbuf.str());
+
 					BOOST_THROW_EXCEPTION(openssl_error()
 					    << boost::errinfo_api_function("SSL_write")
 					    << errinfo_openssl_error(ERR_get_error()));
@@ -213,10 +232,43 @@ void TlsStream::Write(const void *buffer, size_t count)
  */
 void TlsStream::Close(void)
 {
-	m_InnerStream->Close();
+	for (;;) {
+		int rc, err;
+
+		{
+			boost::mutex::scoped_lock lock(m_SSLLock);
+
+			do {
+				rc = SSL_shutdown(m_SSL.get());
+			} while (rc == 0);
+
+			if (rc > 0)
+				break;
+
+			err = SSL_get_error(m_SSL.get(), rc);
+		}
+
+		switch (err) {
+			case SSL_ERROR_WANT_READ:
+				try {
+					m_Socket->Poll(true, false);
+				} catch (std::exception&) {}
+				continue;
+			case SSL_ERROR_WANT_WRITE:
+				try {
+					m_Socket->Poll(false, true);
+				} catch (std::exception&) {}
+				continue;
+			default:
+				goto close_socket;
+		}
+	}
+
+close_socket:
+	m_Socket->Close();
 }
 
 bool TlsStream::IsEof(void) const
 {
-	return m_InnerStream->IsEof();
+	return (BIO_eof(m_BIO) == 1);
 }

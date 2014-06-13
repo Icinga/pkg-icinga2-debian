@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,7 +17,7 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "classcompiler.h"
+#include "classcompiler.hpp"
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -53,28 +53,28 @@ size_t ClassCompiler::ReadInput(char *buffer, size_t max_size)
 	return static_cast<size_t>(m_Input->gcount());
 }
 
-void ClassCompiler::HandleInclude(const std::string& path, const ClassDebugInfo& locp)
+void ClassCompiler::HandleInclude(const std::string& path, const ClassDebugInfo&)
 {
 	std::cout << "#include \"" << path << "\"" << std::endl << std::endl;
 }
 
-void ClassCompiler::HandleAngleInclude(const std::string& path, const ClassDebugInfo& locp)
+void ClassCompiler::HandleAngleInclude(const std::string& path, const ClassDebugInfo&)
 {
 	std::cout << "#include <" << path << ">" << std::endl << std::endl;
 }
 
-void ClassCompiler::HandleNamespaceBegin(const std::string& name, const ClassDebugInfo& locp)
+void ClassCompiler::HandleNamespaceBegin(const std::string& name, const ClassDebugInfo&)
 {
 	std::cout << "namespace " << name << std::endl
 			  << "{" << std::endl << std::endl;
 }
 
-void ClassCompiler::HandleNamespaceEnd(const ClassDebugInfo& locp)
+void ClassCompiler::HandleNamespaceEnd(const ClassDebugInfo&)
 {
 	std::cout << "}" << std::endl;
 }
 
-void ClassCompiler::HandleCode(const std::string& code, const ClassDebugInfo& locp)
+void ClassCompiler::HandleCode(const std::string& code, const ClassDebugInfo&)
 {
 	std::cout << code << std::endl;
 }
@@ -100,7 +100,7 @@ unsigned long ClassCompiler::SDBM(const std::string& str, size_t len = std::stri
         return hash;
 }
 
-void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo& locp)
+void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 {
 	std::vector<Field>::const_iterator it;
 
@@ -111,8 +111,13 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo& locp)
 	/* TypeImpl */
 	std::cout << "template<>" << std::endl
 		<< "class TypeImpl<" << klass.Name << ">"
-		<< " : public Type" << std::endl
-		<< "{" << std::endl
+		<< " : public Type";
+	
+	if (!klass.TypeBase.empty())
+		std::cout << ", public " + klass.TypeBase;
+
+	std::cout << std::endl
+		<< " {" << std::endl
 		<< "public:" << std::endl;
 
 	/* GetName */
@@ -409,7 +414,14 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo& locp)
 				prot = "public";
 
 			std::cout << prot << ":" << std::endl
-					  << "\t" << "void Set" << it->GetFriendlyName() << "(const " << it->Type << "& value)" << std::endl
+					  << "\t" << "void Set" << it->GetFriendlyName() << "(";
+
+			if (it->Type == "bool" || it->Type == "double" || it->Type == "int")
+				std::cout << it->Type;
+			else
+				std::cout << "const " << it->Type << "&";
+
+			std::cout << " value)" << std::endl
 					  << "\t" << "{" << std::endl;
 
 			if (it->SetAccessor.empty())
@@ -474,13 +486,13 @@ void ClassCompiler::CompileStream(const std::string& path, std::istream *stream)
 {
 	stream->exceptions(std::istream::badbit);
 
-	std::cout << "#include \"base/object.h\"" << std::endl
-			  << "#include \"base/type.h\"" << std::endl
-			  << "#include \"base/debug.h\"" << std::endl
-			  << "#include \"base/value.h\"" << std::endl
-			  << "#include \"base/array.h\"" << std::endl
-			  << "#include \"base/dictionary.h\"" << std::endl
-			  << "#include \"base/utility.h\"" << std::endl << std::endl
+	std::cout << "#include \"base/object.hpp\"" << std::endl
+			  << "#include \"base/type.hpp\"" << std::endl
+			  << "#include \"base/debug.hpp\"" << std::endl
+			  << "#include \"base/value.hpp\"" << std::endl
+			  << "#include \"base/array.hpp\"" << std::endl
+			  << "#include \"base/dictionary.hpp\"" << std::endl
+			  << "#include \"base/utility.hpp\"" << std::endl << std::endl
 			  << "#ifdef _MSC_VER" << std::endl
 			  << "#pragma warning( push )" << std::endl
 			  << "#pragma warning( disable : 4244 )" << std::endl

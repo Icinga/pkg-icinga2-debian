@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,11 +17,10 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/workqueue.h"
-#include "base/utility.h"
-#include "base/debug.h"
-#include "base/logger_fwd.h"
-#include "base/convert.h"
+#include "base/workqueue.hpp"
+#include "base/utility.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/convert.hpp"
 #include <boost/bind.hpp>
 #include <boost/foreach.hpp>
 
@@ -33,8 +32,6 @@ WorkQueue::WorkQueue(size_t maxItems)
 	: m_ID(m_NextID++), m_MaxItems(maxItems), m_Stopped(false),
 	  m_Processing(false), m_ExceptionCallback(WorkQueue::DefaultExceptionCallback)
 {
-	m_Thread = boost::thread(boost::bind(&WorkQueue::WorkerThreadProc, this));
-
 	m_StatusTimer = make_shared<Timer>();
 	m_StatusTimer->SetInterval(10);
 	m_StatusTimer->OnTimerExpired.connect(boost::bind(&WorkQueue::StatusTimerHandler, this));
@@ -68,6 +65,9 @@ void WorkQueue::Enqueue(const WorkCallback& callback, bool allowInterleaved)
 
 	boost::mutex::scoped_lock lock(m_Mutex);
 
+	if (m_Thread.get_id() == boost::thread::id())
+		m_Thread = boost::thread(boost::bind(&WorkQueue::WorkerThreadProc, this));
+
 	if (!wq_thread) {
 		while (m_Items.size() >= m_MaxItems)
 			m_CVFull.wait(lock);
@@ -91,7 +91,8 @@ void WorkQueue::Join(bool stop)
 		m_CVEmpty.notify_all();
 		lock.unlock();
 
-		m_Thread.join();
+		if (m_Thread.joinable())
+			m_Thread.join();
 	}
 }
 
@@ -107,7 +108,14 @@ void WorkQueue::SetExceptionCallback(const ExceptionCallback& callback)
 	m_ExceptionCallback = callback;
 }
 
-void WorkQueue::DefaultExceptionCallback(boost::exception_ptr exp)
+size_t WorkQueue::GetLength(void)
+{
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	return m_Items.size();
+}
+
+void WorkQueue::DefaultExceptionCallback(boost::exception_ptr)
 {
 	throw;
 }
@@ -116,7 +124,7 @@ void WorkQueue::StatusTimerHandler(void)
 {
 	boost::mutex::scoped_lock lock(m_Mutex);
 
-	Log(LogInformation, "base", "WQ #" + Convert::ToString(m_ID) + " items: " + Convert::ToString(m_Items.size()));
+	Log(LogNotice, "WorkQueue", "#" + Convert::ToString(m_ID) + " items: " + Convert::ToString(m_Items.size()));
 }
 
 void WorkQueue::WorkerThreadProc(void)

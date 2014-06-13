@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -15,12 +15,12 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(graphitewriter.ti graphitewriter.th)
-mkclass_target(perfdatawriter.ti perfdatawriter.th)
+mkclass_target(graphitewriter.ti graphitewriter.thpp)
+mkclass_target(perfdatawriter.ti perfdatawriter.thpp)
 
 mkembedconfig_target(perfdata-type.conf perfdata-type.cpp)
 
-add_library(perfdata SHARED graphitewriter.cpp graphitewriter.th perfdatawriter.cpp perfdatawriter.th perfdata-type.cpp)
+add_library(perfdata SHARED graphitewriter.cpp graphitewriter.thpp perfdatawriter.cpp perfdatawriter.thpp perfdata-type.cpp)
 
 target_link_libraries(perfdata ${Boost_LIBRARIES} base config icinga)
 

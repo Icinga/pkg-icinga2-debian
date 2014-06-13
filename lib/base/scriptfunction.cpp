@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,9 +17,8 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/scriptfunction.h"
-#include "base/registry.h"
-#include "base/singleton.h"
+#include "base/scriptfunction.hpp"
+#include "base/scriptvariable.hpp"
 
 using namespace icinga;
 
@@ -32,14 +31,29 @@ Value ScriptFunction::Invoke(const std::vector<Value>& arguments)
 	return m_Callback(arguments);
 }
 
-RegisterFunctionHelper::RegisterFunctionHelper(const String& name, const ScriptFunction::Callback& function)
+ScriptFunction::Ptr ScriptFunction::GetByName(const String& name)
 {
-	ScriptFunction::Ptr func = make_shared<ScriptFunction>(function);
-	ScriptFunctionRegistry::GetInstance()->Register(name, func);
+	ScriptVariable::Ptr sv = ScriptVariable::GetByName(name);
+
+	if (!sv)
+		return ScriptFunction::Ptr();
+
+	return sv->GetData();
 }
 
-ScriptFunctionRegistry *ScriptFunctionRegistry::GetInstance(void)
+void ScriptFunction::Register(const String& name, const ScriptFunction::Ptr& function)
 {
-	return Singleton<ScriptFunctionRegistry>::GetInstance();
+	ScriptVariable::Ptr sv = ScriptVariable::Set(name, function);
+	sv->SetConstant(true);
+}
+
+void ScriptFunction::Unregister(const String& name)
+{
+	ScriptVariable::Unregister(name);
+}
+
+RegisterFunctionHelper::RegisterFunctionHelper(const String& name, const ScriptFunction::Callback& function)
+{
+	ScriptFunction::Register(name, make_shared<ScriptFunction>(function));
 }
 

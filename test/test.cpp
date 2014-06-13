@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -20,5 +20,17 @@
 #define BOOST_TEST_MAIN
 #define BOOST_TEST_MODULE icinga2_test
 
+#include "base/application.hpp"
 #include <BoostTestTargetConfig.h>
 
+using namespace icinga;
+
+struct InitLibBase
+{
+	InitLibBase(void)
+	{
+		Application::InitializeBase();
+	}
+};
+
+BOOST_GLOBAL_FIXTURE(InitLibBase);

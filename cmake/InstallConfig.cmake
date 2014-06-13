@@ -1,4 +1,5 @@
 function(install_if_not_exists src dest)
+  set(real_dest "${dest}")
   if(NOT IS_ABSOLUTE "${src}")
     set(src "${CMAKE_CURRENT_SOURCE_DIR}/${src}")
   endif()
@@ -6,6 +7,16 @@ function(install_if_not_exists src dest)
   if (NOT IS_ABSOLUTE "${dest}")
     set(dest "${CMAKE_INSTALL_PREFIX}/${dest}")
   endif()
+  get_filename_component(basename_dest "${src}" NAME)
+  string(REPLACE "/" "\\\\" nsis_src "${src}")
+  string(REPLACE "/" "\\\\" nsis_dest_dir "${real_dest}")
+  string(REPLACE "/" "\\\\" nsis_dest "${real_dest}/${basename_dest}")
+  set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "${CPACK_NSIS_EXTRA_INSTALL_COMMANDS}
+    SetOverwrite off
+    CreateDirectory '$INSTDIR\\\\${nsis_dest_dir}'
+    File '/oname=${nsis_dest}' '${nsis_src}'
+    SetOverwrite on
+  " PARENT_SCOPE)
   install(CODE "
     if(NOT EXISTS \"\$ENV{DESTDIR}${dest}/${src_name}\")
       #file(INSTALL \"${src}\" DESTINATION \"${dest}\")
@@ -22,4 +33,3 @@ function(install_if_not_exists src dest)
     endif()
   ")
 endfunction(install_if_not_exists)
-

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,11 +17,11 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "livestatus/attributefilter.h"
-#include "base/convert.h"
-#include "base/array.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
+#include "livestatus/attributefilter.hpp"
+#include "base/convert.hpp"
+#include "base/array.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
 #include <boost/foreach.hpp>
 #include <boost/regex.hpp>
 
@@ -60,24 +60,36 @@ bool AttributeFilter::Apply(const Table::Ptr& table, const Value& row)
 			else
 				return (static_cast<String>(value) == m_Operand);
 		} else if (m_Operator == "~") {
-			boost::regex expr(m_Operand.GetData());
-			String operand = value;
-			boost::smatch what;
-			bool ret = boost::regex_search(operand.GetData(), what, expr);
+			bool ret;
+			try {
+				boost::regex expr(m_Operand.GetData());
+				String operand = value;
+				boost::smatch what;
+				ret = boost::regex_search(operand.GetData(), what, expr);
+			} catch (boost::exception&) {
+				Log(LogWarning, "AttributeFilter", "Regex '" + m_Operand + " " + m_Operator + " " + Convert::ToString(value) + "' error.");
+				ret = false;
+			}
 
-			//Log(LogDebug, "livestatus", "Attribute filter '" + m_Operand + " " + m_Operator + " " +
+			//Log(LogDebug, "LivestatusListener/AttributeFilter", "Attribute filter '" + m_Operand + " " + m_Operator + " " +
 			//    static_cast<String>(value) + "' " + (ret ? "matches" : "doesn't match") + "." );
 
 			return ret;
 		} else if (m_Operator == "=~") {
 			return string_iless()(value, m_Operand);
 		} else if (m_Operator == "~~") {
-			boost::regex expr(m_Operand.GetData(), boost::regex::icase);
-			String operand = value;
-			boost::smatch what;
-			bool ret = boost::regex_search(operand.GetData(), what, expr);
+			bool ret;
+			try {
+				boost::regex expr(m_Operand.GetData(), boost::regex::icase);
+				String operand = value;
+				boost::smatch what;
+				ret = boost::regex_search(operand.GetData(), what, expr);
+			} catch (boost::exception&) {
+				Log(LogWarning, "AttributeFilter", "Regex '" + m_Operand + " " + m_Operator + " " + Convert::ToString(value) + "' error.");
+				ret = false;
+			}
 
-			//Log(LogDebug, "livestatus", "Attribute filter '" + m_Operand + " " + m_Operator + " " +
+			//Log(LogDebug, "LivestatusListener/AttributeFilter", "Attribute filter '" + m_Operand + " " + m_Operator + " " +
 			//    static_cast<String>(value) + "' " + (ret ? "matches" : "doesn't match") + "." );
 
 			return ret;

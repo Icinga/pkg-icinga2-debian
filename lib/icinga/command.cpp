@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,20 +17,26 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/command.h"
+#include "icinga/command.hpp"
 
 using namespace icinga;
 
 REGISTER_TYPE(Command);
 
-bool Command::ResolveMacro(const String& macro, const CheckResult::Ptr&, String *result) const
+int Command::GetModifiedAttributes(void) const
 {
-	Dictionary::Ptr macros = GetMacros();
+	int attrs = 0;
 
-	if (macros && macros->Contains(macro)) {
-		*result = macros->Get(macro);
-		return true;
+	if (!GetOverrideVars().IsEmpty())
+		attrs |= ModAttrCustomVariable;
+
+	return attrs;
+}
+
+void Command::SetModifiedAttributes(int flags, const MessageOrigin& origin)
+{
+	if ((flags & ModAttrCustomVariable) == 0) {
+		SetOverrideVars(Empty);
+		OnVarsChanged(GetSelf(), origin);
 	}
-
-	return false;
 }

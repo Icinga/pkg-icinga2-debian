@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,19 +17,24 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/macroprocessor.h"
-#include "icinga/macroresolver.h"
-#include "base/utility.h"
-#include "base/array.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
-#include "base/context.h"
+#include "icinga/macroprocessor.hpp"
+#include "icinga/macroresolver.hpp"
+#include "icinga/customvarobject.hpp"
+#include "base/array.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/context.hpp"
+#include "base/dynamicobject.hpp"
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 using namespace icinga;
 
-Value MacroProcessor::ResolveMacros(const Value& str, const std::vector<MacroResolver::Ptr>& resolvers,
-	const CheckResult::Ptr& cr, const MacroProcessor::EscapeCallback& escapeFn, const Array::Ptr& escapeMacros)
+Value MacroProcessor::ResolveMacros(const Value& str, const ResolverList& resolvers,
+    const CheckResult::Ptr& cr, String *missingMacro,
+    const MacroProcessor::EscapeCallback& escapeFn)
 {
 	Value result;
 
@@ -37,7 +42,7 @@ Value MacroProcessor::ResolveMacros(const Value& str, const std::vector<MacroRes
 		return Empty;
 
 	if (str.IsScalar()) {
-		result = InternalResolveMacros(str, resolvers, cr, escapeFn, escapeMacros);
+		result = InternalResolveMacros(str, resolvers, cr, missingMacro, escapeFn);
 	} else if (str.IsObjectType<Array>()) {
 		Array::Ptr resultArr = make_shared<Array>();
 		Array::Ptr arr = str;
@@ -46,7 +51,7 @@ Value MacroProcessor::ResolveMacros(const Value& str, const std::vector<MacroRes
 
 		BOOST_FOREACH(const Value& arg, arr) {
 			/* Note: don't escape macros here. */
-			resultArr->Add(InternalResolveMacros(arg, resolvers, cr, EscapeCallback(), Array::Ptr()));
+			resultArr->Add(InternalResolveMacros(arg, resolvers, cr, missingMacro, EscapeCallback()));
 		}
 
 		result = resultArr;
@@ -57,24 +62,102 @@ Value MacroProcessor::ResolveMacros(const Value& str, const std::vector<MacroRes
 	return result;
 }
 
-bool MacroProcessor::ResolveMacro(const String& macro, const std::vector<MacroResolver::Ptr>& resolvers,
-    const CheckResult::Ptr& cr, String *result)
+bool MacroProcessor::ResolveMacro(const String& macro, const ResolverList& resolvers,
+    const CheckResult::Ptr& cr, String *result, bool *recursive_macro)
 {
 	CONTEXT("Resolving macro '" + macro + "'");
 
-	BOOST_FOREACH(const MacroResolver::Ptr& resolver, resolvers) {
-		if (resolver->ResolveMacro(macro, cr, result))
+	*recursive_macro = false;
+
+	std::vector<String> tokens;
+	boost::algorithm::split(tokens, macro, boost::is_any_of("."));
+
+	String objName;
+	if (tokens.size() > 1) {
+		objName = tokens[0];
+		tokens.erase(tokens.begin());
+	}
+
+	BOOST_FOREACH(const ResolverSpec& resolver, resolvers) {
+		if (!objName.IsEmpty() && objName != resolver.first)
+			continue;
+
+		if (objName.IsEmpty()) {
+			CustomVarObject::Ptr dobj = dynamic_pointer_cast<CustomVarObject>(resolver.second);
+
+			if (dobj) {
+				Dictionary::Ptr vars = dobj->GetVars();
+
+				if (vars && vars->Contains(macro)) {
+					*result = vars->Get(macro);
+					*recursive_macro = true;
+					return true;
+				}
+			}
+		}
+
+		MacroResolver::Ptr mresolver = dynamic_pointer_cast<MacroResolver>(resolver.second);
+
+		if (mresolver && mresolver->ResolveMacro(boost::algorithm::join(tokens, "."), cr, result))
 			return true;
+
+		Value ref = resolver.second;
+		bool valid = true;
+
+		BOOST_FOREACH(const String& token, tokens) {
+			if (ref.IsObjectType<Dictionary>()) {
+				Dictionary::Ptr dict = ref;
+				if (dict->Contains(token)) {
+					ref = dict->Get(token);
+					continue;
+				} else {
+					valid = false;
+					break;
+				}
+			} else if (ref.IsObject()) {
+				Object::Ptr object = ref;
+
+				const Type *type = object->GetReflectionType();
+
+				if (!type) {
+					valid = false;
+					break;
+				}
+
+				int field = type->GetFieldId(token);
+
+				if (field == -1) {
+					valid = false;
+					break;
+				}
+
+				ref = object->GetField(field);
+			}
+		}
+
+		if (valid) {
+			if (tokens[0] == "vars" ||
+			    tokens[0] == "action_url" ||
+			    tokens[0] == "notes_url" ||
+			    tokens[0] == "notes")
+				*recursive_macro = true;
+
+			*result = ref;
+			return true;
+		}
 	}
 
 	return false;
 }
 
-
-String MacroProcessor::InternalResolveMacros(const String& str, const std::vector<MacroResolver::Ptr>& resolvers,
-	const CheckResult::Ptr& cr, const MacroProcessor::EscapeCallback& escapeFn, const Array::Ptr& escapeMacros)
+String MacroProcessor::InternalResolveMacros(const String& str, const ResolverList& resolvers,
+    const CheckResult::Ptr& cr, String *missingMacro,
+    const MacroProcessor::EscapeCallback& escapeFn, int recursionLevel)
 {
 	CONTEXT("Resolving macros for string '" + str + "'");
+
+	if (recursionLevel > 15)
+		BOOST_THROW_EXCEPTION(std::runtime_error("Infinite recursion detected while resolving macros"));
 
 	size_t offset, pos_first, pos_second;
 	offset = 0;
@@ -89,7 +172,8 @@ String MacroProcessor::InternalResolveMacros(const String& str, const std::vecto
 		String name = result.SubStr(pos_first + 1, pos_second - pos_first - 1);
 
 		String resolved_macro;
-		bool found = ResolveMacro(name, resolvers, cr, &resolved_macro);
+		bool recursive_macro;
+		bool found = ResolveMacro(name, resolvers, cr, &resolved_macro, &recursive_macro);
 
 		/* $$ is an escape sequence for $. */
 		if (name.IsEmpty()) {
@@ -97,26 +181,23 @@ String MacroProcessor::InternalResolveMacros(const String& str, const std::vecto
 			found = true;
 		}
 
-		if (!found)
-			Log(LogWarning, "icinga", "Macro '" + name + "' is not defined.");
-
-		if (escapeFn && escapeMacros) {
-			bool escape = false;
-
-			ObjectLock olock(escapeMacros);
-			BOOST_FOREACH(const String& escapeMacro, escapeMacros) {
-				if (escapeMacro == name) {
-					escape = true;
-					break;
-				}
-			}
-
-			if (escape)
-				resolved_macro = escapeFn(resolved_macro);
+		if (!found) {
+			if (!missingMacro)
+				Log(LogWarning, "MacroProcessor", "Macro '" + name + "' is not defined.");
+			else
+				*missingMacro = name;
 		}
 
+		/* recursively resolve macros in the macro if it was a user macro */
+		if (recursive_macro)
+			resolved_macro = InternalResolveMacros(resolved_macro,
+			    resolvers, cr, missingMacro, EscapeCallback(), recursionLevel + 1);
+
+		if (escapeFn)
+			resolved_macro = escapeFn(resolved_macro);
+
 		result.Replace(pos_first, pos_second - pos_first + 1, resolved_macro);
-		offset = pos_first + resolved_macro.GetLength();
+		offset = pos_first + resolved_macro.GetLength() + 1;
 	}
 
 	return result;

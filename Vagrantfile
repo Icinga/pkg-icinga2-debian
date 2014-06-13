@@ -2,6 +2,17 @@
 # vi: set ft=ruby :
 
 VAGRANTFILE_API_VERSION = "2"
+VAGRANT_REQUIRED_VERSION = "1.2.0"
+
+# Require 1.2.x at least
+if ! defined? Vagrant.require_version
+  if Gem::Version.new(Vagrant::VERSION) < Gem::Version.new(VAGRANT_REQUIRED_VERSION)
+    puts "Vagrant >= " + VAGRANT_REQUIRED_VERSION + " required. Your version is " + Vagrant::VERSION
+    exit 1
+  end
+else
+  Vagrant.require_version ">= " + VAGRANT_REQUIRED_VERSION
+end
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # All Vagrant configuration is done here. The most common configuration
@@ -9,11 +20,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # please see the online documentation at vagrantup.com.
 
   # Every Vagrant virtual environment requires a box to build off of.
-  config.vm.box = "centos-6.4-i386-vbox"
+  config.vm.box = "centos-6.5-i386-vbox"
 
   # The url from where the 'config.vm.box' box will be fetched if it
   # doesn't already exist on the user's system.
-  config.vm.box_url = "http://boxes.icinga.org/centos-64-i386-vbox4212.box"
+  config.vm.box_url = "http://boxes.icinga.org/centos-65-i386-vbox.box"
 
   # The hostname the machine should have. Defaults to nil. If nil, Vagrant
   # won't manage the hostname. If set to a string, the hostname will be set on boot.

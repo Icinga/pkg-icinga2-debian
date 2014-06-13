@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,27 +17,57 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "checker/checkercomponent.h"
-#include "icinga/icingaapplication.h"
-#include "icinga/cib.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/utility.h"
-#include "base/logger_fwd.h"
-#include "base/exception.h"
+#include "checker/checkercomponent.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "icinga/cib.hpp"
+#include "remote/apilistener.hpp"
+#include "base/dynamictype.hpp"
+#include "base/objectlock.hpp"
+#include "base/utility.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/exception.hpp"
+#include "base/convert.hpp"
+#include "base/statsfunction.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(CheckerComponent);
 
+REGISTER_STATSFUNCTION(CheckerComponentStats, &CheckerComponent::StatsFunc);
+
+Value CheckerComponent::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata)
+{
+	Dictionary::Ptr nodes = make_shared<Dictionary>();
+
+	BOOST_FOREACH(const CheckerComponent::Ptr& checker, DynamicType::GetObjects<CheckerComponent>()) {
+		unsigned long idle = checker->GetIdleCheckables();
+		unsigned long pending = checker->GetPendingCheckables();
+
+		Dictionary::Ptr stats = make_shared<Dictionary>();
+		stats->Set("idle", idle);
+		stats->Set("pending", pending);
+
+		nodes->Set(checker->GetName(), stats);
+
+		String perfdata_prefix = "checkercomponent_" + checker->GetName() + "_";
+		perfdata->Set(perfdata_prefix + "idle", Convert::ToDouble(idle));
+		perfdata->Set(perfdata_prefix + "pending", Convert::ToDouble(pending));
+	}
+
+	status->Set("checkercomponent", nodes);
+
+	return 0;
+}
+
 void CheckerComponent::OnConfigLoaded(void)
 {
 	DynamicObject::OnStarted.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
 	DynamicObject::OnStopped.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
-	DynamicObject::OnAuthorityChanged.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
+	DynamicObject::OnPaused.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
+	DynamicObject::OnResumed.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
 
-	Service::OnNextCheckChanged.connect(bind(&CheckerComponent::NextCheckChangedHandler, this, _1));
+	Checkable::OnNextCheckChanged.connect(bind(&CheckerComponent::NextCheckChangedHandler, this, _1));
 }
 
 void CheckerComponent::Start(void)
@@ -56,13 +86,18 @@ void CheckerComponent::Start(void)
 
 void CheckerComponent::Stop(void)
 {
+	Log(LogInformation, "CheckerComponent", "Checker stopped.");
+
 	{
 		boost::mutex::scoped_lock lock(m_Mutex);
 		m_Stopped = true;
 		m_CV.notify_all();
 	}
 
+	m_ResultTimer->Stop();
 	m_Thread.join();
+
+	DynamicObject::Stop();
 }
 
 void CheckerComponent::CheckThreadProc(void)
@@ -72,8 +107,8 @@ void CheckerComponent::CheckThreadProc(void)
 	boost::mutex::scoped_lock lock(m_Mutex);
 
 	for (;;) {
-		typedef boost::multi_index::nth_index<ServiceSet, 1>::type CheckTimeView;
-		CheckTimeView& idx = boost::get<1>(m_IdleServices);
+		typedef boost::multi_index::nth_index<CheckableSet, 1>::type CheckTimeView;
+		CheckTimeView& idx = boost::get<1>(m_IdleCheckables);
 
 		while (idx.begin() == idx.end() && !m_Stopped)
 			m_CV.wait(lock);
@@ -82,15 +117,9 @@ void CheckerComponent::CheckThreadProc(void)
 			break;
 
 		CheckTimeView::iterator it = idx.begin();
-		Service::Ptr service = *it;
+		Checkable::Ptr checkable = *it;
 
-		if (!service->HasAuthority("checker")) {
-			m_IdleServices.erase(service);
-
-			continue;
-		}
-
-		double wait = service->GetNextCheck() - Utility::GetTime();
+		double wait = checkable->GetNextCheck() - Utility::GetTime();
 
 		if (wait > 0) {
 			/* Wait for the next check. */
@@ -99,136 +128,179 @@ void CheckerComponent::CheckThreadProc(void)
 			continue;
 		}
 
-		m_IdleServices.erase(service);
+		m_IdleCheckables.erase(checkable);
 
-		bool forced = service->GetForceNextCheck();
+		bool forced = checkable->GetForceNextCheck();
 		bool check = true;
 
 		if (!forced) {
-			if (!service->GetEnableActiveChecks() || !IcingaApplication::GetInstance()->GetEnableChecks()) {
-				Log(LogDebug, "checker", "Skipping check for service '" + service->GetName() + "': active checks are disabled");
+			if (!checkable->IsReachable(DependencyCheckExecution)) {
+				Log(LogNotice, "CheckerComponent", "Skipping check for object '" + checkable->GetName() + "': Dependency failed.");
 				check = false;
 			}
 
-			TimePeriod::Ptr tp = service->GetCheckPeriod();
+			Host::Ptr host;
+			Service::Ptr service;
+			tie(host, service) = GetHostService(checkable);
+
+			if (host && !service && (!checkable->GetEnableActiveChecks() || !IcingaApplication::GetInstance()->GetEnableHostChecks())) {
+				Log(LogNotice, "CheckerComponent", "Skipping check for host '" + host->GetName() + "': active host checks are disabled");
+				check = false;
+			}
+			if (host && service && (!checkable->GetEnableActiveChecks() || !IcingaApplication::GetInstance()->GetEnableServiceChecks())) {
+				Log(LogNotice, "CheckerComponent", "Skipping check for service '" + service->GetName() + "': active service checks are disabled");
+				check = false;
+			}
+
+			TimePeriod::Ptr tp = checkable->GetCheckPeriod();
 
 			if (tp && !tp->IsInside(Utility::GetTime())) {
-				Log(LogDebug, "checker", "Skipping check for service '" + service->GetName() + "': not in check_period");
+				Log(LogNotice, "CheckerComponent", "Skipping check for object '" + checkable->GetName() + "': not in check_period");
 				check = false;
 			}
 		}
 
-		/* reschedule the service if checks are disabled */
+		/* reschedule the checkable if checks are disabled */
 		if (!check) {
-			m_IdleServices.insert(service);
+			m_IdleCheckables.insert(checkable);
 			lock.unlock();
 
-			service->UpdateNextCheck();
+			checkable->UpdateNextCheck();
 
 			lock.lock();
 
 			continue;
 		}
 
-		m_PendingServices.insert(service);
+		m_PendingCheckables.insert(checkable);
 
 		lock.unlock();
 
 		if (forced) {
-			ObjectLock olock(service);
-			service->SetForceNextCheck(false);
+			ObjectLock olock(checkable);
+			checkable->SetForceNextCheck(false);
 		}
 
-		Log(LogDebug, "checker", "Executing service check for '" + service->GetName() + "'");
+		Log(LogDebug, "CheckerComponent", "Executing check for '" + checkable->GetName() + "'");
 
 		CheckerComponent::Ptr self = GetSelf();
-		m_Pool.Post(boost::bind(&CheckerComponent::ExecuteCheckHelper, self, service));
+		Utility::QueueAsyncCallback(boost::bind(&CheckerComponent::ExecuteCheckHelper, self, checkable));
 
 		lock.lock();
 	}
 }
 
-void CheckerComponent::ExecuteCheckHelper(const Service::Ptr& service)
+void CheckerComponent::ExecuteCheckHelper(const Checkable::Ptr& checkable)
 {
 	try {
-		service->ExecuteCheck();
+		checkable->ExecuteCheck();
 	} catch (const std::exception& ex) {
-		Log(LogCritical, "checker", "Exception occured while checking service '" + service->GetName() + "': " + DiagnosticInformation(ex));
+		CheckResult::Ptr cr = make_shared<CheckResult>();
+		cr->SetState(ServiceUnknown);
+
+		String output = "Exception occured while checking '" + checkable->GetName() + "': " + DiagnosticInformation(ex);
+		cr->SetOutput(output);
+
+		double now = Utility::GetTime();
+		cr->SetScheduleStart(now);
+		cr->SetScheduleEnd(now);
+		cr->SetExecutionStart(now);
+		cr->SetExecutionEnd(now);
+
+		checkable->ProcessCheckResult(cr);
+
+		Log(LogCritical, "checker", output);
 	}
 
 	{
 		boost::mutex::scoped_lock lock(m_Mutex);
 
-		/* remove the service from the list of pending services; if it's not in the
+		/* remove the object from the list of pending objects; if it's not in the
 		 * list this was a manual (i.e. forced) check and we must not re-add the
-		 * service to the services list because it's already there. */
-		CheckerComponent::ServiceSet::iterator it;
-		it = m_PendingServices.find(service);
-		if (it != m_PendingServices.end()) {
-			m_PendingServices.erase(it);
+		 * object to the list because it's already there. */
+		CheckerComponent::CheckableSet::iterator it;
+		it = m_PendingCheckables.find(checkable);
+		if (it != m_PendingCheckables.end()) {
+			m_PendingCheckables.erase(it);
 
-			if (service->IsActive() && service->HasAuthority("checker"))
-				m_IdleServices.insert(service);
+			if (checkable->IsActive())
+				m_IdleCheckables.insert(checkable);
 
 			m_CV.notify_all();
 		}
 	}
 
-	Log(LogDebug, "checker", "Check finished for service '" + service->GetName() + "'");
+	Log(LogDebug, "CheckerComponent", "Check finished for object '" + checkable->GetName() + "'");
 }
 
 void CheckerComponent::ResultTimerHandler(void)
 {
-	Log(LogDebug, "checker", "ResultTimerHandler entered.");
-
 	std::ostringstream msgbuf;
 
 	{
 		boost::mutex::scoped_lock lock(m_Mutex);
 
-		msgbuf << "Pending services: " << m_PendingServices.size() << "; Idle services: " << m_IdleServices.size() << "; Checks/s: " << CIB::GetActiveChecksStatistics(5) / 5.0;
+		msgbuf << "Pending checkables: " << m_PendingCheckables.size() << "; Idle checkables: " << m_IdleCheckables.size() << "; Checks/s: "
+		    << (CIB::GetActiveHostChecksStatistics(5) + CIB::GetActiveServiceChecksStatistics(5)) / 5.0;
 	}
 
-	Log(LogInformation, "checker", msgbuf.str());
+	Log(LogNotice, "CheckerComponent", msgbuf.str());
 }
 
 void CheckerComponent::ObjectHandler(const DynamicObject::Ptr& object)
 {
-	if (object->GetType() != DynamicType::GetByName("Service"))
+	if (!Type::GetByName("Checkable")->IsAssignableFrom(object->GetReflectionType()))
 		return;
 
-	Service::Ptr service = static_pointer_cast<Service>(object);
+	Checkable::Ptr checkable = static_pointer_cast<Checkable>(object);
+
+	Zone::Ptr zone = Zone::GetByName(checkable->GetZone());
+	bool same_zone = (!zone || Zone::GetLocalZone() == zone);
 
 	{
 		boost::mutex::scoped_lock lock(m_Mutex);
 
-		if (object->IsActive() && object->HasAuthority("checker")) {
-			if (m_PendingServices.find(service) != m_PendingServices.end())
+		if (object->IsActive() && !object->IsPaused() && same_zone) {
+			if (m_PendingCheckables.find(checkable) != m_PendingCheckables.end())
 				return;
 
-			m_IdleServices.insert(service);
+			m_IdleCheckables.insert(checkable);
 		} else {
-			m_IdleServices.erase(service);
-			m_PendingServices.erase(service);
+			m_IdleCheckables.erase(checkable);
+			m_PendingCheckables.erase(checkable);
 		}
 
 		m_CV.notify_all();
 	}
 }
 
-void CheckerComponent::NextCheckChangedHandler(const Service::Ptr& service)
+void CheckerComponent::NextCheckChangedHandler(const Checkable::Ptr& checkable)
 {
 	boost::mutex::scoped_lock lock(m_Mutex);
 
-	/* remove and re-insert the service from the set in order to force an index update */
-	typedef boost::multi_index::nth_index<ServiceSet, 0>::type ServiceView;
-	ServiceView& idx = boost::get<0>(m_IdleServices);
+	/* remove and re-insert the object from the set in order to force an index update */
+	typedef boost::multi_index::nth_index<CheckableSet, 0>::type CheckableView;
+	CheckableView& idx = boost::get<0>(m_IdleCheckables);
 
-	ServiceView::iterator it = idx.find(service);
+	CheckableView::iterator it = idx.find(checkable);
 	if (it == idx.end())
 		return;
 
-	idx.erase(service);
-	idx.insert(service);
+	idx.erase(checkable);
+	idx.insert(checkable);
 	m_CV.notify_all();
+}
+
+unsigned long CheckerComponent::GetIdleCheckables(void)
+{
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	return m_IdleCheckables.size();
+}
+
+unsigned long CheckerComponent::GetPendingCheckables(void)
+{
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	return m_PendingCheckables.size();
 }

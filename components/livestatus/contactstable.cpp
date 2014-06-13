@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,12 +17,13 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "livestatus/contactstable.h"
-#include "icinga/user.h"
-#include "icinga/timeperiod.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/utility.h"
+#include "livestatus/contactstable.hpp"
+#include "icinga/user.hpp"
+#include "icinga/timeperiod.hpp"
+#include "icinga/compatutility.hpp"
+#include "base/dynamictype.hpp"
+#include "base/objectlock.hpp"
+#include "base/utility.hpp"
 #include <boost/foreach.hpp>
 #include <boost/tuple/tuple.hpp>
 
@@ -47,9 +48,9 @@ void ContactsTable::AddColumns(Table *table, const String& prefix,
 	table->AddColumn(prefix + "service_notifications_enabled", Column(&ContactsTable::ServiceNotificationsEnabledAccessor, objectAccessor));
 	table->AddColumn(prefix + "in_host_notification_period", Column(&ContactsTable::InHostNotificationPeriodAccessor, objectAccessor));
 	table->AddColumn(prefix + "in_service_notification_period", Column(&ContactsTable::InServiceNotificationPeriodAccessor, objectAccessor));
-	table->AddColumn(prefix + "custom_variable_names", Column(&ContactsTable::CustomVariableNamesAccessor, objectAccessor));
-	table->AddColumn(prefix + "custom_variable_values", Column(&ContactsTable::CustomVariableValuesAccessor, objectAccessor));
-	table->AddColumn(prefix + "custom_variables", Column(&ContactsTable::CustomVariablesAccessor, objectAccessor));
+	table->AddColumn(prefix + "vars_variable_names", Column(&ContactsTable::CustomVariableNamesAccessor, objectAccessor));
+	table->AddColumn(prefix + "vars_variable_values", Column(&ContactsTable::CustomVariableValuesAccessor, objectAccessor));
+	table->AddColumn(prefix + "vars_variables", Column(&ContactsTable::CustomVariablesAccessor, objectAccessor));
 	table->AddColumn(prefix + "modified_attributes", Column(&ContactsTable::ModifiedAttributesAccessor, objectAccessor));
 	table->AddColumn(prefix + "modified_attributes_list", Column(&ContactsTable::ModifiedAttributesListAccessor, objectAccessor));
 }
@@ -93,12 +94,7 @@ Value ContactsTable::EmailAccessor(const Value& row)
 	if (!user)
 		return Empty;
 
-	Dictionary::Ptr macros = user->GetMacros();
-
-	if (!macros)
-		return Empty;
-
-	return macros->Get("email");
+	return user->GetEmail();
 }
 
 Value ContactsTable::PagerAccessor(const Value& row)
@@ -108,12 +104,7 @@ Value ContactsTable::PagerAccessor(const Value& row)
 	if (!user)
 		return Empty;
 
-	Dictionary::Ptr macros = user->GetMacros();
-
-	if (!macros)
-		return Empty;
-
-	return macros->Get("pager");
+	return user->GetPager();
 }
 
 Value ContactsTable::HostNotificationPeriodAccessor(const Value& row)
@@ -124,7 +115,7 @@ Value ContactsTable::HostNotificationPeriodAccessor(const Value& row)
 		return Empty;
 
 	/* same as service */
-	TimePeriod::Ptr timeperiod = user->GetNotificationPeriod();
+	TimePeriod::Ptr timeperiod = user->GetPeriod();
 
 	if (!timeperiod)
 		return Empty;
@@ -139,7 +130,7 @@ Value ContactsTable::ServiceNotificationPeriodAccessor(const Value& row)
 	if (!user)
 		return Empty;
 
-	TimePeriod::Ptr timeperiod = user->GetNotificationPeriod();
+	TimePeriod::Ptr timeperiod = user->GetPeriod();
 
 	if (!timeperiod)
 		return Empty;
@@ -174,7 +165,7 @@ Value ContactsTable::InHostNotificationPeriodAccessor(const Value& row)
 	if (!user)
 		return Empty;
 
-	TimePeriod::Ptr timeperiod = user->GetNotificationPeriod();
+	TimePeriod::Ptr timeperiod = user->GetPeriod();
 
 	if (!timeperiod)
 		return Empty;
@@ -189,7 +180,7 @@ Value ContactsTable::InServiceNotificationPeriodAccessor(const Value& row)
 	if (!user)
 		return Empty;
 
-	TimePeriod::Ptr timeperiod = user->GetNotificationPeriod();
+	TimePeriod::Ptr timeperiod = user->GetPeriod();
 
 	if (!timeperiod)
 		return Empty;
@@ -204,26 +195,17 @@ Value ContactsTable::CustomVariableNamesAccessor(const Value& row)
 	if (!user)
 		return Empty;
 
-	Dictionary::Ptr custom = user->GetCustom();
+	Dictionary::Ptr vars = user->GetVars();
 
-	if (!custom)
+	if (!vars)
 		return Empty;
 
 	Array::Ptr cv = make_shared<Array>();
 
-	ObjectLock olock(custom);
+	ObjectLock olock(vars);
 	String key;
 	Value value;
-	BOOST_FOREACH(boost::tie(key, value), custom) {
-		if (key == "notes" ||
-		    key == "action_url" ||
-		    key == "notes_url" ||
-		    key == "icon_image" ||
-		    key == "icon_image_alt" ||
-		    key == "statusmap_image" ||
-		    key == "2d_coords")
-			continue;
-
+	BOOST_FOREACH(boost::tie(key, value), vars) {
 		cv->Add(key);
 	}
 
@@ -237,26 +219,17 @@ Value ContactsTable::CustomVariableValuesAccessor(const Value& row)
 	if (!user)
 		return Empty;
 
-	Dictionary::Ptr custom = user->GetCustom();
+	Dictionary::Ptr vars = user->GetVars();
 
-	if (!custom)
+	if (!vars)
 		return Empty;
 
 	Array::Ptr cv = make_shared<Array>();
 
-	ObjectLock olock(custom);
+	ObjectLock olock(vars);
 	String key;
 	Value value;
-	BOOST_FOREACH(boost::tie(key, value), custom) {
-		if (key == "notes" ||
-		    key == "action_url" ||
-		    key == "notes_url" ||
-		    key == "icon_image" ||
-		    key == "icon_image_alt" ||
-		    key == "statusmap_image" ||
-		    key == "2d_coords")
-			continue;
-
+	BOOST_FOREACH(boost::tie(key, value), vars) {
 		cv->Add(value);
 	}
 
@@ -270,26 +243,17 @@ Value ContactsTable::CustomVariablesAccessor(const Value& row)
 	if (!user)
 		return Empty;
 
-	Dictionary::Ptr custom = user->GetCustom();
+	Dictionary::Ptr vars = user->GetVars();
 
-	if (!custom)
+	if (!vars)
 		return Empty;
 
 	Array::Ptr cv = make_shared<Array>();
 
-	ObjectLock olock(custom);
+	ObjectLock olock(vars);
 	String key;
 	Value value;
-	BOOST_FOREACH(boost::tie(key, value), custom) {
-		if (key == "notes" ||
-		    key == "action_url" ||
-		    key == "notes_url" ||
-		    key == "icon_image" ||
-		    key == "icon_image_alt" ||
-		    key == "statusmap_image" ||
-		    key == "2d_coords")
-			continue;
-
+	BOOST_FOREACH(boost::tie(key, value), vars) {
 		Array::Ptr key_val = make_shared<Array>();
 		key_val->Add(key);
 		key_val->Add(value);
@@ -307,7 +271,7 @@ Value ContactsTable::ModifiedAttributesAccessor(const Value& row)
 		return Empty;
 
 	/* not supported */
-	return Empty;
+	return user->GetModifiedAttributes();
 }
 
 Value ContactsTable::ModifiedAttributesListAccessor(const Value& row)
@@ -317,6 +281,5 @@ Value ContactsTable::ModifiedAttributesListAccessor(const Value& row)
 	if (!user)
 		return Empty;
 
-	/* not supported */
-	return Empty;
+	return CompatUtility::GetModifiedAttributesList(user);
 }

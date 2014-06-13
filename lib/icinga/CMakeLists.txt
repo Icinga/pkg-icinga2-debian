@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -15,44 +15,46 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(checkcommand.ti checkcommand.th)
-mkclass_target(checkresult.ti checkresult.th)
-mkclass_target(command.ti command.th)
-mkclass_target(comment.ti comment.th)
-mkclass_target(domain.ti domain.th)
-mkclass_target(downtime.ti downtime.th)
-mkclass_target(eventcommand.ti eventcommand.th)
-mkclass_target(hostgroup.ti hostgroup.th)
-mkclass_target(host.ti host.th)
-mkclass_target(icingaapplication.ti icingaapplication.th)
-mkclass_target(notificationcommand.ti notificationcommand.th)
-mkclass_target(notification.ti notification.th)
-mkclass_target(perfdatavalue.ti perfdatavalue.th)
-mkclass_target(scheduleddowntime.ti scheduleddowntime.th)
-mkclass_target(servicegroup.ti servicegroup.th)
-mkclass_target(service.ti service.th)
-mkclass_target(timeperiod.ti timeperiod.th)
-mkclass_target(usergroup.ti usergroup.th)
-mkclass_target(user.ti user.th)
+mkclass_target(checkable.ti checkable.thpp)
+mkclass_target(checkcommand.ti checkcommand.thpp)
+mkclass_target(checkresult.ti checkresult.thpp)
+mkclass_target(command.ti command.thpp)
+mkclass_target(comment.ti comment.thpp)
+mkclass_target(dependency.ti dependency.thpp)
+mkclass_target(downtime.ti downtime.thpp)
+mkclass_target(eventcommand.ti eventcommand.thpp)
+mkclass_target(hostgroup.ti hostgroup.thpp)
+mkclass_target(host.ti host.thpp)
+mkclass_target(icingaapplication.ti icingaapplication.thpp)
+mkclass_target(customvarobject.ti customvarobject.thpp)
+mkclass_target(icingastatuswriter.ti icingastatuswriter.thpp)
+mkclass_target(notificationcommand.ti notificationcommand.thpp)
+mkclass_target(notification.ti notification.thpp)
+mkclass_target(perfdatavalue.ti perfdatavalue.thpp)
+mkclass_target(scheduleddowntime.ti scheduleddowntime.thpp)
+mkclass_target(servicegroup.ti servicegroup.thpp)
+mkclass_target(service.ti service.thpp)
+mkclass_target(timeperiod.ti timeperiod.thpp)
+mkclass_target(usergroup.ti usergroup.thpp)
+mkclass_target(user.ti user.thpp)
 
 mkembedconfig_target(icinga-type.conf icinga-type.cpp)
 
 add_library(icinga SHARED
-  api.cpp api.h checkcommand.cpp checkcommand.th checkresult.cpp checkresult.th
-  cib.cpp command.cpp command.th comment.cpp comment.th compatutility.cpp
-  domain.cpp domain.th downtime.cpp downtime.th eventcommand.cpp eventcommand.th
-  externalcommandprocessor.cpp host.cpp host.th hostgroup.cpp hostgroup.th
-  icingaapplication.cpp icingaapplication.th legacytimeperiod.cpp
-  macroprocessor.cpp macroresolver.cpp notificationcommand.cpp notificationcommand.th
-  notification.cpp notification.th perfdatavalue.cpp perfdatavalue.th
-  pluginutility.cpp scheduleddowntime.cpp scheduleddowntime.th service-check.cpp
-  service-comment.cpp service.cpp service-downtime.cpp service-event.cpp
-  service-flapping.cpp service.th servicegroup.cpp servicegroup.th
-  service-notification.cpp timeperiod.cpp timeperiod.th user.cpp user.th
-  usergroup.cpp usergroup.th icinga-type.cpp
+  api.cpp apievents.cpp checkable.cpp checkable.thpp checkable-dependency.cpp checkable-downtime.cpp checkable-event.cpp
+  checkable-flapping.cpp checkcommand.cpp checkcommand.thpp checkresult.cpp checkresult.thpp
+  cib.cpp command.cpp command.thpp comment.cpp comment.thpp compatutility.cpp dependency.cpp dependency.thpp
+  dependency-apply.cpp downtime.cpp downtime.thpp eventcommand.cpp eventcommand.thpp
+  externalcommandprocessor.cpp host.cpp host.thpp hostgroup.cpp hostgroup.thpp icingaapplication.cpp
+  icingaapplication.thpp customvarobject.cpp customvarobject.thpp icingastatuswriter.cpp icingastatuswriter.thpp
+  legacytimeperiod.cpp macroprocessor.cpp notificationcommand.cpp notificationcommand.thpp notification.cpp
+  notification.thpp notification-apply.cpp perfdatavalue.cpp perfdatavalue.thpp pluginutility.cpp scheduleddowntime.cpp
+  scheduleddowntime.thpp scheduleddowntime-apply.cpp service-apply.cpp checkable-check.cpp checkable-comment.cpp
+  service.cpp service.thpp servicegroup.cpp servicegroup.thpp checkable-notification.cpp timeperiod.cpp timeperiod.thpp
+  user.cpp user.thpp usergroup.cpp usergroup.thpp icinga-type.cpp
 )
 
-target_link_libraries(icinga ${Boost_LIBRARIES} base config)
+target_link_libraries(icinga ${Boost_LIBRARIES} base config remote)
 
 set_target_properties (
   icinga PROPERTIES

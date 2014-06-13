@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,11 +17,11 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "db_ido/servicegroupdbobject.h"
-#include "db_ido/dbtype.h"
-#include "db_ido/dbvalue.h"
-#include "base/objectlock.h"
-#include "base/initialize.h"
+#include "db_ido/servicegroupdbobject.hpp"
+#include "db_ido/dbtype.hpp"
+#include "db_ido/dbvalue.hpp"
+#include "base/objectlock.hpp"
+#include "base/initialize.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -38,6 +38,9 @@ Dictionary::Ptr ServiceGroupDbObject::GetConfigFields(void) const
 	ServiceGroup::Ptr group = static_pointer_cast<ServiceGroup>(GetObject());
 
 	fields->Set("alias", group->GetDisplayName());
+	fields->Set("notes", group->GetNotes());
+	fields->Set("notes_url", group->GetNotesUrl());
+	fields->Set("action_url", group->GetActionUrl());
 
 	return fields;
 }

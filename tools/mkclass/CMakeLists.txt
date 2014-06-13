@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -24,7 +24,7 @@ add_flex_bison_dependency(class_lexer class_parser)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable(mkclass mkclass.cpp classcompiler.cpp classcompiler.h ${FLEX_class_lexer_OUTPUTS} ${BISON_class_parser_OUTPUTS})
+add_executable(mkclass mkclass.cpp classcompiler.cpp classcompiler.hpp ${FLEX_class_lexer_OUTPUTS} ${BISON_class_parser_OUTPUTS})
 
 set_target_properties (
   mkclass PROPERTIES

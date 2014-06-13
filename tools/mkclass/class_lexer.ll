@@ -1,7 +1,7 @@
 %{
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -18,7 +18,7 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "classcompiler.h"
+#include "classcompiler.hpp"
 
 using namespace icinga;
 
@@ -53,10 +53,10 @@ static void lb_init(lex_buf *lb)
 	lb->size = 0;
 }
 
-static void lb_cleanup(lex_buf *lb)
+/*static void lb_cleanup(lex_buf *lb)
 {
 	free(lb->buf);
-}
+}*/
 
 static void lb_append_char(lex_buf *lb, char new_char)
 {

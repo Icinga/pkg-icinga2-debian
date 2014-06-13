@@ -1,9 +1,9 @@
-#include "base/dynamicobject.h"
+#include "icinga/customvarobject.hpp"
 
 namespace icinga
 {
 
-class PerfdataValue
+safe class PerfdataValue
 {
 	[state] double value;
 	[state] bool counter;

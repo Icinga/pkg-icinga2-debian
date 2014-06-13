@@ -2,7 +2,7 @@
 -- mysql.sql
 -- DB definition for MySQL
 --
--- Copyright (c) 2009-2013 Icinga Development Team (http://www.icinga.org)
+-- Copyright (c) 2009-2014 Icinga Development Team (http://www.icinga.org)
 --
 -- -- --------------------------------------------------------
 
@@ -152,10 +152,10 @@ CREATE TABLE IF NOT EXISTS icinga_conninfo (
   conninfo_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   instance_id bigint unsigned default 0,
   agent_name varchar(32) character set latin1  default '',
-  agent_version varchar(16) character set latin1  default '',
-  disposition varchar(16) character set latin1  default '',
-  connect_source varchar(16) character set latin1  default '',
-  connect_type varchar(16) character set latin1  default '',
+  agent_version varchar(32) character set latin1  default '',
+  disposition varchar(32) character set latin1  default '',
+  connect_source varchar(32) character set latin1  default '',
+  connect_type varchar(32) character set latin1  default '',
   connect_time timestamp  default '0000-00-00 00:00:00',
   disconnect_time timestamp  default '0000-00-00 00:00:00',
   last_checkin_time timestamp  default '0000-00-00 00:00:00',
@@ -600,6 +600,9 @@ CREATE TABLE IF NOT EXISTS icinga_hostgroups (
   config_type smallint default 0,
   hostgroup_object_id bigint unsigned default 0,
   alias TEXT character set latin1  default '',
+  notes TEXT character set latin1  default NULL,
+  notes_url TEXT character set latin1  default NULL,
+  action_url TEXT character set latin1  default NULL,
   PRIMARY KEY  (hostgroup_id),
   UNIQUE KEY instance_id (instance_id,hostgroup_object_id)
 ) ENGINE=InnoDB  COMMENT='Hostgroup definitions';
@@ -744,6 +747,7 @@ CREATE TABLE IF NOT EXISTS icinga_hoststatus (
   normal_check_interval double  default '0',
   retry_check_interval double  default '0',
   check_timeperiod_object_id bigint unsigned default 0,
+  is_reachable smallint default 0,
   PRIMARY KEY  (hoststatus_id),
   UNIQUE KEY object_id (host_object_id)
 ) ENGINE=InnoDB  COMMENT='Current host status information';
@@ -1086,6 +1090,9 @@ CREATE TABLE IF NOT EXISTS icinga_servicegroups (
   config_type smallint default 0,
   servicegroup_object_id bigint unsigned default 0,
   alias TEXT character set latin1  default '',
+  notes TEXT character set latin1  default NULL,
+  notes_url TEXT character set latin1  default NULL,
+  action_url TEXT character set latin1  default NULL,
   PRIMARY KEY  (servicegroup_id),
   UNIQUE KEY instance_id (instance_id,config_type,servicegroup_object_id)
 ) ENGINE=InnoDB  COMMENT='Servicegroup definitions';
@@ -1224,6 +1231,7 @@ CREATE TABLE IF NOT EXISTS icinga_servicestatus (
   normal_check_interval double  default '0',
   retry_check_interval double  default '0',
   check_timeperiod_object_id bigint unsigned default 0,
+  is_reachable smallint default 0,
   PRIMARY KEY  (servicestatus_id),
   UNIQUE KEY object_id (service_object_id)
 ) ENGINE=InnoDB  COMMENT='Current service status information';
@@ -1277,6 +1285,7 @@ CREATE TABLE IF NOT EXISTS icinga_statehistory (
   last_hard_state smallint default 0,
   output TEXT character set latin1  default '',
   long_output TEXT  default '',
+  check_source varchar(255) character set latin1 default NULL,
   PRIMARY KEY  (statehistory_id)
 ) ENGINE=InnoDB COMMENT='Historical host and service state changes';
 
@@ -1335,6 +1344,67 @@ CREATE TABLE IF NOT EXISTS icinga_timeperiod_timeranges (
   end_sec  int default 0,
   PRIMARY KEY  (timeperiod_timerange_id)
 ) ENGINE=InnoDB  COMMENT='Timeperiod definitions';
+
+
+-- --------------------------------------------------------
+-- Icinga 2 specific schema extensions
+-- --------------------------------------------------------
+
+--
+-- Table structure for table icinga_endpoints
+--
+
+CREATE TABLE IF NOT EXISTS icinga_endpoints (
+  endpoint_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  instance_id bigint unsigned default 0,
+  endpoint_object_id bigint(20) unsigned DEFAULT '0',
+  config_type smallint(6) DEFAULT '0',
+  identity varchar(255) DEFAULT NULL,
+  node varchar(255) DEFAULT NULL,
+  PRIMARY KEY  (endpoint_id)
+) ENGINE=InnoDB COMMENT='Endpoint configuration';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table icinga_endpointstatus
+--
+
+CREATE TABLE IF NOT EXISTS icinga_endpointstatus (
+  endpointstatus_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  instance_id bigint unsigned default 0,
+  endpoint_object_id bigint(20) unsigned DEFAULT '0',
+  status_update_time timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
+  identity varchar(255) DEFAULT NULL,
+  node varchar(255) DEFAULT NULL,
+  is_connected smallint(6),
+  PRIMARY KEY  (endpointstatus_id)
+) ENGINE=InnoDB COMMENT='Endpoint status';
+
+
+ALTER TABLE icinga_servicestatus ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_hoststatus ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_contactstatus ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_programstatus ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_comments ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_scheduleddowntime ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_runtimevariables ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_customvariablestatus ADD COLUMN endpoint_object_id bigint default NULL;
+
+ALTER TABLE icinga_acknowledgements ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_commenthistory ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_contactnotifications ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_downtimehistory ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_eventhandlers ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_externalcommands ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_flappinghistory ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_hostchecks ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_logentries ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_notifications ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_processevents ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_servicechecks ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_statehistory ADD COLUMN endpoint_object_id bigint default NULL;
+ALTER TABLE icinga_systemcommands ADD COLUMN endpoint_object_id bigint default NULL;
 
 
 -- -----------------------------------------
@@ -1524,9 +1594,12 @@ CREATE INDEX sla_idx_sthist ON icinga_statehistory (object_id, state_time DESC);
 CREATE INDEX sla_idx_dohist ON icinga_downtimehistory (object_id, actual_start_time, actual_end_time);
 CREATE INDEX sla_idx_obj ON icinga_objects (objecttype_id, is_active, name1);
 
+-- #4985
+CREATE INDEX commenthistory_delete_idx ON icinga_commenthistory (instance_id, comment_time, internal_comment_id);
+
 -- -----------------------------------------
 -- set dbversion
 -- -----------------------------------------
-INSERT INTO icinga_dbversion (name, version, create_time, modify_time) VALUES ('idoutils', '1.11.0', NOW(), NOW()) ON DUPLICATE KEY UPDATE version='1.11.0', modify_time=NOW();
+INSERT INTO icinga_dbversion (name, version, create_time, modify_time) VALUES ('idoutils', '1.11.3', NOW(), NOW()) ON DUPLICATE KEY UPDATE version='1.11.3', modify_time=NOW();
 
 

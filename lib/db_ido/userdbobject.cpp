@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,14 +17,14 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "db_ido/userdbobject.h"
-#include "db_ido/dbtype.h"
-#include "db_ido/dbvalue.h"
-#include "icinga/user.h"
-#include "icinga/notification.h"
-#include "base/convert.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
+#include "db_ido/userdbobject.hpp"
+#include "db_ido/dbtype.hpp"
+#include "db_ido/dbvalue.hpp"
+#include "icinga/user.hpp"
+#include "icinga/notification.hpp"
+#include "base/convert.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -41,30 +41,24 @@ Dictionary::Ptr UserDbObject::GetConfigFields(void) const
 	User::Ptr user = static_pointer_cast<User>(GetObject());
 
 	fields->Set("alias", user->GetDisplayName());
-
-	Dictionary::Ptr macros = user->GetMacros();
-
-	if (macros) { /* Yuck. */
-		fields->Set("email_address", macros->Get("email"));
-		fields->Set("pager_address", macros->Get("pager"));
-	}
-
-	fields->Set("host_timeperiod_object_id", user->GetNotificationPeriod());
-	fields->Set("service_timeperiod_object_id", user->GetNotificationPeriod());
+	fields->Set("email_address", user->GetEmail());
+	fields->Set("pager_address", user->GetPager());
+	fields->Set("host_timeperiod_object_id", user->GetPeriod());
+	fields->Set("service_timeperiod_object_id", user->GetPeriod());
 	fields->Set("host_notifications_enabled", user->GetEnableNotifications());
 	fields->Set("service_notifications_enabled", user->GetEnableNotifications());
 	fields->Set("can_submit_commands", 1);
-	fields->Set("notify_service_recovery", user->GetNotificationStateFilter() & NotificationRecovery);
-	fields->Set("notify_service_warning", user->GetNotificationStateFilter() & NotificationProblem);
-	fields->Set("notify_service_unknown", user->GetNotificationStateFilter() & NotificationProblem);
-	fields->Set("notify_service_critical", user->GetNotificationStateFilter() & NotificationProblem);
-	fields->Set("notify_service_flapping", user->GetNotificationStateFilter() & (NotificationFlappingStart | NotificationFlappingEnd));
-	fields->Set("notify_service_downtime", user->GetNotificationStateFilter() & (NotificationDowntimeStart | NotificationDowntimeEnd | NotificationDowntimeRemoved));
-	fields->Set("notify_host_recovery", user->GetNotificationStateFilter() & NotificationRecovery);
-	fields->Set("notify_host_down", user->GetNotificationStateFilter() & NotificationProblem);
-	fields->Set("notify_host_unreachable", user->GetNotificationStateFilter() & NotificationProblem);
-	fields->Set("notify_host_flapping", user->GetNotificationStateFilter() & (NotificationFlappingStart | NotificationFlappingEnd));
-	fields->Set("notify_host_downtime", user->GetNotificationStateFilter() & (NotificationDowntimeStart | NotificationDowntimeEnd | NotificationDowntimeRemoved));
+	fields->Set("notify_service_recovery", (user->GetStateFilter() & NotificationRecovery) != 0);
+	fields->Set("notify_service_warning", (user->GetStateFilter() & NotificationProblem) != 0);
+	fields->Set("notify_service_unknown", (user->GetStateFilter() & NotificationProblem) != 0);
+	fields->Set("notify_service_critical", (user->GetStateFilter() & NotificationProblem) != 0);
+	fields->Set("notify_service_flapping", (user->GetStateFilter() & (NotificationFlappingStart | NotificationFlappingEnd)) != 0);
+	fields->Set("notify_service_downtime", (user->GetStateFilter() & (NotificationDowntimeStart | NotificationDowntimeEnd | NotificationDowntimeRemoved)) != 0);
+	fields->Set("notify_host_recovery", (user->GetStateFilter() & NotificationRecovery) != 0);
+	fields->Set("notify_host_down", (user->GetStateFilter() & NotificationProblem) != 0);
+	fields->Set("notify_host_unreachable", (user->GetStateFilter() & NotificationProblem) != 0);
+	fields->Set("notify_host_flapping", (user->GetStateFilter() & (NotificationFlappingStart | NotificationFlappingEnd)) != 0);
+	fields->Set("notify_host_downtime", (user->GetStateFilter() & (NotificationDowntimeStart | NotificationDowntimeEnd | NotificationDowntimeRemoved)) != 0);
 
 	return fields;
 }
@@ -78,7 +72,7 @@ Dictionary::Ptr UserDbObject::GetStatusFields(void) const
 	fields->Set("service_notifications_enabled", user->GetEnableNotifications());
 	fields->Set("last_host_notification", DbValue::FromTimestamp(user->GetLastNotification()));
 	fields->Set("last_service_notification", DbValue::FromTimestamp(user->GetLastNotification()));
-	fields->Set("modified_attributes", Empty);
+	fields->Set("modified_attributes", user->GetModifiedAttributes());
 	fields->Set("modified_host_attributes", Empty);
 	fields->Set("modified_service_attributes", Empty);
 
@@ -91,14 +85,14 @@ void UserDbObject::OnConfigUpdate(void)
 	User::Ptr user = static_pointer_cast<User>(GetObject());
 
 	/* contact addresses */
-	Log(LogDebug, "db_ido", "contact addresses for '" + user->GetName() + "'");
+	Log(LogDebug, "UserDbObject", "contact addresses for '" + user->GetName() + "'");
 
-	Dictionary::Ptr macros = user->GetMacros();
+	Dictionary::Ptr vars = user->GetVars();
 
-	if (macros) { /* This is sparta. */
+	if (vars) { /* This is sparta. */
 		for (int i = 1; i <= 6; i++) {
 			String key = "address" + Convert::ToString(i);
-			String val = macros->Get(key);
+			String val = vars->Get(key);
 
 			if (val.IsEmpty())
 				continue;

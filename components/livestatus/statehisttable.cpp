@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,25 +17,25 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "livestatus/statehisttable.h"
-#include "livestatus/logutility.h"
-#include "livestatus/hoststable.h"
-#include "livestatus/servicestable.h"
-#include "livestatus/contactstable.h"
-#include "livestatus/commandstable.h"
-#include "icinga/icingaapplication.h"
-#include "icinga/cib.h"
-#include "icinga/service.h"
-#include "icinga/host.h"
-#include "icinga/user.h"
-#include "icinga/checkcommand.h"
-#include "icinga/eventcommand.h"
-#include "icinga/notificationcommand.h"
-#include "base/convert.h"
-#include "base/utility.h"
-#include "base/logger_fwd.h"
-#include "base/application.h"
-#include "base/objectlock.h"
+#include "livestatus/statehisttable.hpp"
+#include "livestatus/livestatuslogutility.hpp"
+#include "livestatus/hoststable.hpp"
+#include "livestatus/servicestable.hpp"
+#include "livestatus/contactstable.hpp"
+#include "livestatus/commandstable.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "icinga/cib.hpp"
+#include "icinga/service.hpp"
+#include "icinga/host.hpp"
+#include "icinga/user.hpp"
+#include "icinga/checkcommand.hpp"
+#include "icinga/eventcommand.hpp"
+#include "icinga/notificationcommand.hpp"
+#include "base/convert.hpp"
+#include "base/utility.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/application.hpp"
+#include "base/objectlock.hpp"
 #include <boost/smart_ptr/make_shared.hpp>
 #include <boost/foreach.hpp>
 #include <boost/tuple/tuple.hpp>
@@ -68,23 +68,15 @@ void StateHistTable::UpdateLogEntries(const Dictionary::Ptr& log_entry_attrs, in
 	String state_type = log_entry_attrs->Get("state_type"); //SOFT, HARD, STARTED, STOPPED, ...
 	String log_line = log_entry_attrs->Get("message"); /* use message from log table */
 
-	Service::Ptr state_hist_service;
+	Checkable::Ptr checkable;
 
-	/* host alert == get service check */
-	if (service_description.IsEmpty()) {
-		Host::Ptr state_host = Host::GetByName(host_name);
-
-		if (!state_host)
-			return;
-
-		state_hist_service = state_host->GetCheckService();
-	} else {
-		/* assign service ptr as key */
-		state_hist_service = Service::GetByNamePair(host_name, service_description);
-	}
+	if (service_description.IsEmpty())
+		checkable = Host::GetByName(host_name);
+	else
+		checkable = Service::GetByNamePair(host_name, service_description);
 
 	/* invalid log line for state history */
-	if (!state_hist_service)
+	if (!checkable)
 		return;
 
 	Array::Ptr state_hist_service_states;
@@ -92,14 +84,25 @@ void StateHistTable::UpdateLogEntries(const Dictionary::Ptr& log_entry_attrs, in
 	unsigned long query_part = m_TimeUntil - m_TimeFrom;
 
 	/* insert new service states array with values if not existing */
-	if (m_ServicesCache.find(state_hist_service) == m_ServicesCache.end()) {
+	if (m_CheckablesCache.find(checkable) == m_CheckablesCache.end()) {
 
 		/* create new values */
 		state_hist_service_states = make_shared<Array>();
 		state_hist_bag = make_shared<Dictionary>();
 
-		state_hist_bag->Set("host_name", state_hist_service->GetHost()->GetName());
-		state_hist_bag->Set("service_description", state_hist_service->GetShortName());
+		Service::Ptr service = dynamic_pointer_cast<Service>(checkable);
+		Host::Ptr host;
+
+		if (service)
+			host = service->GetHost();
+		else
+			host = static_pointer_cast<Host>(checkable);
+
+		state_hist_bag->Set("host_name", host->GetName());
+
+		if (service)
+			state_hist_bag->Set("service_description", service->GetShortName());
+
 		state_hist_bag->Set("state", state);
 		state_hist_bag->Set("in_downtime", 0);
 		state_hist_bag->Set("in_host_downtime", 0);
@@ -114,9 +117,9 @@ void StateHistTable::UpdateLogEntries(const Dictionary::Ptr& log_entry_attrs, in
 
 		state_hist_service_states->Add(state_hist_bag);
 
-		Log(LogDebug, "livestatus", "statehist: Adding new service '" + state_hist_service->GetName() + "' to services cache.");
+		Log(LogDebug, "StateHistTable", "statehist: Adding new object '" + checkable->GetName() + "' to services cache.");
 	} else {
-		state_hist_service_states = m_ServicesCache[state_hist_service];
+		state_hist_service_states = m_CheckablesCache[checkable];
 		state_hist_bag = state_hist_service_states->Get(state_hist_service_states->GetLength()-1); /* fetch latest state from history */
 
 		/* state duration */
@@ -124,8 +127,8 @@ void StateHistTable::UpdateLogEntries(const Dictionary::Ptr& log_entry_attrs, in
 		/* determine service notifications notification_period and compare against current timestamp */
 		bool in_notification_period = true;
 		String notification_period_name;
-		BOOST_FOREACH(const Notification::Ptr& notification, state_hist_service->GetNotifications()) {
-			TimePeriod::Ptr notification_period = notification->GetNotificationPeriod();
+		BOOST_FOREACH(const Notification::Ptr& notification, checkable->GetNotifications()) {
+			TimePeriod::Ptr notification_period = notification->GetPeriod();
 
 			if (notification_period) {
 				if (notification_period->IsInside(static_cast<double>(time)))
@@ -170,8 +173,8 @@ void StateHistTable::UpdateLogEntries(const Dictionary::Ptr& log_entry_attrs, in
 
 					state_hist_service_states->Add(state_hist_bag_new);
 
-					Log(LogDebug, "livestatus", "statehist: State change detected for service '" +
-					    state_hist_service->GetName() + "' in '" + log_line + "'.");
+					Log(LogDebug, "StateHistTable", "statehist: State change detected for object '" +
+					    checkable->GetName() + "' in '" + log_line + "'.");
 				}
 				break;
 			case LogEntryTypeHostFlapping:
@@ -202,7 +205,7 @@ void StateHistTable::UpdateLogEntries(const Dictionary::Ptr& log_entry_attrs, in
 
 	}
 
-	m_ServicesCache[state_hist_service] = state_hist_service_states;
+	m_CheckablesCache[checkable] = state_hist_service_states;
 
 	/* TODO find a way to directly call addRowFn() - right now m_ServicesCache depends on historical lines ("already seen service") */
 }
@@ -249,25 +252,25 @@ String StateHistTable::GetName(void) const
 
 void StateHistTable::FetchRows(const AddRowFunction& addRowFn)
 {
-	Log(LogInformation, "livestatus", "Pre-selecting log file from " + Convert::ToString(m_TimeFrom) + " until " + Convert::ToString(m_TimeUntil));
+	Log(LogDebug, "StateHistTable", "Pre-selecting log file from " + Convert::ToString(m_TimeFrom) + " until " + Convert::ToString(m_TimeUntil));
 
 	/* create log file index */
-	LogUtility::CreateLogIndex(m_CompatLogPath, m_LogFileIndex);
+	LivestatusLogUtility::CreateLogIndex(m_CompatLogPath, m_LogFileIndex);
 
 	/* generate log cache */
-	LogUtility::CreateLogCache(m_LogFileIndex, this, m_TimeFrom, m_TimeUntil, addRowFn);
+	LivestatusLogUtility::CreateLogCache(m_LogFileIndex, this, m_TimeFrom, m_TimeUntil, addRowFn);
 
-	Service::Ptr state_hist_service;
+	Checkable::Ptr checkable;
 
-	BOOST_FOREACH(boost::tie(state_hist_service, boost::tuples::ignore), m_ServicesCache) {
-		BOOST_FOREACH(const Dictionary::Ptr& state_hist_bag, m_ServicesCache[state_hist_service]) {
+	BOOST_FOREACH(boost::tie(checkable, boost::tuples::ignore), m_CheckablesCache) {
+		BOOST_FOREACH(const Dictionary::Ptr& state_hist_bag, m_CheckablesCache[checkable]) {
 			/* pass a dictionary from state history array */
 			addRowFn(state_hist_bag);
 		}
 	}
 }
 
-Object::Ptr StateHistTable::HostAccessor(const Value& row, const Column::ObjectAccessor& parentObjectAccessor)
+Object::Ptr StateHistTable::HostAccessor(const Value& row, const Column::ObjectAccessor&)
 {
 	String host_name = static_cast<Dictionary::Ptr>(row)->Get("host_name");
 
@@ -277,7 +280,7 @@ Object::Ptr StateHistTable::HostAccessor(const Value& row, const Column::ObjectA
 	return Host::GetByName(host_name);
 }
 
-Object::Ptr StateHistTable::ServiceAccessor(const Value& row, const Column::ObjectAccessor& parentObjectAccessor)
+Object::Ptr StateHistTable::ServiceAccessor(const Value& row, const Column::ObjectAccessor&)
 {
 	String host_name = static_cast<Dictionary::Ptr>(row)->Get("host_name");
 	String service_description = static_cast<Dictionary::Ptr>(row)->Get("service_description");
@@ -376,7 +379,7 @@ Value StateHistTable::DurationOkAccessor(const Value& row)
 {
 	Dictionary::Ptr state_hist_bag = static_cast<Dictionary::Ptr>(row);
 
-	if (state_hist_bag->Get("state") == StateOK)
+	if (state_hist_bag->Get("state") == ServiceOK)
 		return (state_hist_bag->Get("until") - state_hist_bag->Get("from"));
 
 	return 0;
@@ -386,7 +389,7 @@ Value StateHistTable::DurationPartOkAccessor(const Value& row)
 {
 	Dictionary::Ptr state_hist_bag = static_cast<Dictionary::Ptr>(row);
 
-	if (state_hist_bag->Get("state") == StateOK)
+	if (state_hist_bag->Get("state") == ServiceOK)
 		return (state_hist_bag->Get("until") - state_hist_bag->Get("from")) / state_hist_bag->Get("query_part");
 
 	return 0;
@@ -396,7 +399,7 @@ Value StateHistTable::DurationWarningAccessor(const Value& row)
 {
 	Dictionary::Ptr state_hist_bag = static_cast<Dictionary::Ptr>(row);
 
-	if (state_hist_bag->Get("state") == StateWarning)
+	if (state_hist_bag->Get("state") == ServiceWarning)
 		return (state_hist_bag->Get("until") - state_hist_bag->Get("from"));
 
 	return 0;
@@ -406,7 +409,7 @@ Value StateHistTable::DurationPartWarningAccessor(const Value& row)
 {
 	Dictionary::Ptr state_hist_bag = static_cast<Dictionary::Ptr>(row);
 
-	if (state_hist_bag->Get("state") == StateWarning)
+	if (state_hist_bag->Get("state") == ServiceWarning)
 		return (state_hist_bag->Get("until") - state_hist_bag->Get("from")) / state_hist_bag->Get("query_part");
 
 	return 0;
@@ -416,7 +419,7 @@ Value StateHistTable::DurationCriticalAccessor(const Value& row)
 {
 	Dictionary::Ptr state_hist_bag = static_cast<Dictionary::Ptr>(row);
 
-	if (state_hist_bag->Get("state") == StateCritical)
+	if (state_hist_bag->Get("state") == ServiceCritical)
 		return (state_hist_bag->Get("until") - state_hist_bag->Get("from"));
 
 	return 0;
@@ -426,7 +429,7 @@ Value StateHistTable::DurationPartCriticalAccessor(const Value& row)
 {
 	Dictionary::Ptr state_hist_bag = static_cast<Dictionary::Ptr>(row);
 
-	if (state_hist_bag->Get("state") == StateCritical)
+	if (state_hist_bag->Get("state") == ServiceCritical)
 		return (state_hist_bag->Get("until") - state_hist_bag->Get("from")) / state_hist_bag->Get("query_part");
 
 	return 0;
@@ -436,7 +439,7 @@ Value StateHistTable::DurationUnknownAccessor(const Value& row)
 {
 	Dictionary::Ptr state_hist_bag = static_cast<Dictionary::Ptr>(row);
 
-	if (state_hist_bag->Get("state") == StateUnknown)
+	if (state_hist_bag->Get("state") == ServiceUnknown)
 		return (state_hist_bag->Get("until") - state_hist_bag->Get("from"));
 
 	return 0;
@@ -446,7 +449,7 @@ Value StateHistTable::DurationPartUnknownAccessor(const Value& row)
 {
 	Dictionary::Ptr state_hist_bag = static_cast<Dictionary::Ptr>(row);
 
-	if (state_hist_bag->Get("state") == StateUnknown)
+	if (state_hist_bag->Get("state") == ServiceUnknown)
 		return (state_hist_bag->Get("until") - state_hist_bag->Get("from")) / state_hist_bag->Get("query_part");
 
 	return 0;

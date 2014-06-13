@@ -43,14 +43,16 @@ def main():
             "where c.display_name = 'PassiveService1'"
     state_time = float(next(iter(run_query(query)), {}).get('last_check', '0'))
     if state_time == 0:
-        print '"PassiveService1" seems not to have been checked yet'
+        utils.Logger.fail('"PassiveService1" seems not'
+                          ' to have been checked yet\n')
         return 1
 
     if (state_time + CHECK_INTERVAL) - time.time() < 30:
         time.sleep(45)
 
     # Now pass the checkresult in
-    with open(os.path.join(CHECKRESULT_LOCATION, 'cfoobar'), 'w') as f:
+    resultfile_path = os.path.join(CHECKRESULT_LOCATION, 'cfoobar')
+    with open(resultfile_path, 'w') as f:
         f.write(CHECKRESULT_TEMPLATE % {
             'hostname': 'nsca-ng',
             'servicename': 'PassiveService1',
@@ -62,9 +64,14 @@ def main():
             'output': 'Passing in CheckResult header files works!'
             })
 
+    utils.Logger.debug('Written file: {0}\n'.format(resultfile_path))
+
     # And notfiy Icinga that the file has been completely written...
-    with open(os.path.join(CHECKRESULT_LOCATION, 'cfoobar.ok'), 'w') as f:
+    resultfileok_path = os.path.join(CHECKRESULT_LOCATION, 'cfoobar.ok')
+    with open(resultfileok_path, 'w') as f:
         pass
+
+    utils.Logger.debug('Written file: {0}\n'.format(resultfileok_path))
 
     # Lastly check whether the service changed its state
     time.sleep(CHECKRESULT_READ_INTERVAL * 2)
@@ -76,10 +83,11 @@ def main():
             "where c.display_name = 'PassiveService1'"
     output = next(iter(run_query(query)), {}).get('output', '')
     if output != 'Passing in CheckResult header files works!':
-        print 'Checkresult header files seem not to be processed properly'
+        utils.Logger.fail('Checkresult header files seem '
+                          'not to be processed properly\n')
         return 1
 
-    print 'Checkresult header files are processed properly'
+    utils.Logger.ok('Checkresult header files are processed properly\n')
     return 0
 
 

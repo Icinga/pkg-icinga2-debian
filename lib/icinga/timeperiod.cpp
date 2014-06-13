@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,13 +17,12 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/timeperiod.h"
-#include "config/configitem.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
-#include "base/timer.h"
-#include "base/utility.h"
+#include "icinga/timeperiod.hpp"
+#include "base/dynamictype.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/timer.hpp"
+#include "base/utility.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -56,7 +55,7 @@ void TimePeriod::AddSegment(double begin, double end)
 {
 	ASSERT(OwnsLock());
 
-	Log(LogDebug, "icinga", "Adding segment '" + Utility::FormatDateTime("%c", begin) + "' <-> '" + Utility::FormatDateTime("%c", end) + "' to TimePeriod '" + GetName() + "'");
+	Log(LogDebug, "TimePeriod", "Adding segment '" + Utility::FormatDateTime("%c", begin) + "' <-> '" + Utility::FormatDateTime("%c", end) + "' to TimePeriod '" + GetName() + "'");
 
 	if (GetValidBegin().IsEmpty() || begin < GetValidBegin())
 		SetValidBegin(begin);
@@ -107,7 +106,7 @@ void TimePeriod::RemoveSegment(double begin, double end)
 {
 	ASSERT(OwnsLock());
 
-	Log(LogDebug, "icinga", "Removing segment '" + Utility::FormatDateTime("%c", begin) + "' <-> '" + Utility::FormatDateTime("%c", end) + "' from TimePeriod '" + GetName() + "'");
+	Log(LogDebug, "TimePeriod", "Removing segment '" + Utility::FormatDateTime("%c", begin) + "' <-> '" + Utility::FormatDateTime("%c", end) + "' from TimePeriod '" + GetName() + "'");
 
 	if (GetValidBegin().IsEmpty() || begin < GetValidBegin())
 		SetValidBegin(begin);
@@ -155,7 +154,7 @@ void TimePeriod::PurgeSegments(double end)
 {
 	ASSERT(OwnsLock());
 
-	Log(LogDebug, "icinga", "Purging segments older than '" + Utility::FormatDateTime("%c", end) + "' from TimePeriod '" + GetName() + "'");
+	Log(LogDebug, "TimePeriod", "Purging segments older than '" + Utility::FormatDateTime("%c", end) + "' from TimePeriod '" + GetName() + "'");
 
 	if (GetValidBegin().IsEmpty() || end < GetValidBegin())
 		return;
@@ -276,17 +275,17 @@ void TimePeriod::Dump(void)
 {
 	Array::Ptr segments = GetSegments();
 
-	Log(LogDebug, "icinga", "Dumping TimePeriod '" + GetName() + "'");
-	Log(LogDebug, "icinga", "Valid from '" + Utility::FormatDateTime("%c", GetValidBegin()) + "' until '" + Utility::FormatDateTime("%c", GetValidEnd()));
+	Log(LogDebug, "TimePeriod", "Dumping TimePeriod '" + GetName() + "'");
+	Log(LogDebug, "TimePeriod", "Valid from '" + Utility::FormatDateTime("%c", GetValidBegin()) + "' until '" + Utility::FormatDateTime("%c", GetValidEnd()));
 
 	if (segments) {
 		ObjectLock dlock(segments);
 		BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
-			Log(LogDebug, "icinga", "Segment: " +
+			Log(LogDebug, "TimePeriod", "Segment: " +
 			    Utility::FormatDateTime("%c", segment->Get("begin")) + " <-> " +
 			    Utility::FormatDateTime("%c", segment->Get("end")));
 		}
 	}
 
-	Log(LogDebug, "icinga", "---");
+	Log(LogDebug, "TimePeriod", "---");
 }

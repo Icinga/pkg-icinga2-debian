@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,54 +17,36 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "methods/plugineventtask.h"
-#include "icinga/eventcommand.h"
-#include "icinga/macroprocessor.h"
-#include "icinga/icingaapplication.h"
-#include "base/dynamictype.h"
-#include "base/logger_fwd.h"
-#include "base/scriptfunction.h"
-#include "base/utility.h"
-#include "base/process.h"
+#include "methods/plugineventtask.hpp"
+#include "icinga/eventcommand.hpp"
+#include "icinga/macroprocessor.hpp"
+#include "icinga/pluginutility.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "base/dynamictype.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/scriptfunction.hpp"
+#include "base/utility.hpp"
+#include "base/process.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_SCRIPTFUNCTION(PluginEvent, &PluginEventTask::ScriptFunc);
 
-void PluginEventTask::ScriptFunc(const Service::Ptr& service)
+void PluginEventTask::ScriptFunc(const Checkable::Ptr& checkable)
 {
-	EventCommand::Ptr commandObj = service->GetEventCommand();
-	Value raw_command = commandObj->GetCommandLine();
+	EventCommand::Ptr commandObj = checkable->GetEventCommand();
 
-	std::vector<MacroResolver::Ptr> resolvers;
-	resolvers.push_back(service);
-	resolvers.push_back(service->GetHost());
-	resolvers.push_back(commandObj);
-	resolvers.push_back(IcingaApplication::GetInstance());
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
 
-	Value command = MacroProcessor::ResolveMacros(raw_command, resolvers, service->GetLastCheckResult(), Utility::EscapeShellCmd, commandObj->GetEscapeMacros());
+	MacroProcessor::ResolverList resolvers;
+	if (service)
+		resolvers.push_back(std::make_pair("service", service));
+	resolvers.push_back(std::make_pair("host", host));
+	resolvers.push_back(std::make_pair("command", commandObj));
+	resolvers.push_back(std::make_pair("icinga", IcingaApplication::GetInstance()));
 
-	Dictionary::Ptr envMacros = make_shared<Dictionary>();
-
-	Array::Ptr export_macros = commandObj->GetExportMacros();
-
-	if (export_macros) {
-		BOOST_FOREACH(const String& macro, export_macros) {
-			String value;
-
-			if (!MacroProcessor::ResolveMacro(macro, resolvers, service->GetLastCheckResult(), &value)) {
-				Log(LogWarning, "icinga", "export_macros for command '" + commandObj->GetName() + "' refers to unknown macro '" + macro + "'");
-				continue;
-			}
-
-			envMacros->Set(macro, value);
-		}
-	}
-
-	Process::Ptr process = make_shared<Process>(Process::SplitCommand(command), envMacros);
-
-	process->SetTimeout(commandObj->GetTimeout());
-
-	process->Run();
+	PluginUtility::ExecuteCommand(commandObj, checkable, checkable->GetLastCheckResult(), resolvers);
 }

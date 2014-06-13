@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -15,31 +15,40 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
+file(GLOB DOCSRCS "*.md")
+
 if(UNIX OR CYGWIN)
-  # TODO: dependencies
   add_custom_command(
-    OUTPUT index.html
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/htdocs/index.html
     COMMAND ./mkdoc.sh
-    ARGS > ${CMAKE_CURRENT_BINARY_DIR}/index.html.tmp
-    COMMAND ${CMAKE_COMMAND}
-    ARGS -E copy ${CMAKE_CURRENT_BINARY_DIR}/index.html.tmp ${CMAKE_CURRENT_BINARY_DIR}/index.html
+    ARGS ${CMAKE_CURRENT_BINARY_DIR}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  )
-
-  add_custom_target(index-html ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/index.html)
-
-  install(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/index.html jquery.min.js jquery.toc.min.js toc.css toc-margin.css toc-print.css
-    DESTINATION ${CMAKE_INSTALL_DOCDIR}/htdocs
+    DEPENDS ${DOCSRCS}
   )
 
   install(
-    DIRECTORY strapdownjs
-    DESTINATION ${CMAKE_INSTALL_DOCDIR}/htdocs
+    DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/htdocs
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}
   )
+
+  add_custom_target(index-html ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/htdocs/index.html)
 
   install(
     FILES icinga2.8
     DESTINATION ${CMAKE_INSTALL_MANDIR}/man8
+  )
+endif()
+
+# pandoc is not available or working everywhere, so install the unprocessed markdown files too
+install(
+  FILES ${DOCSRCS}
+  DESTINATION ${CMAKE_INSTALL_DOCDIR}/markdown
+)
+
+if(UNIX OR CYGWIN)
+  # maybe someone wants to process his own doc files after installing current pandoc/sphinx
+  install(
+    FILES conf.py mkdoc.sh
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}/markdown
   )
 endif()

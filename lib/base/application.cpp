@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,22 +17,21 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/application.h"
-#include "base/stacktrace.h"
-#include "base/timer.h"
-#include "base/logger_fwd.h"
-#include "base/exception.h"
-#include "base/objectlock.h"
-#include "base/utility.h"
-#include "base/debug.h"
-#include "base/type.h"
-#include "base/scriptvariable.h"
+#include "base/application.hpp"
+#include "base/stacktrace.hpp"
+#include "base/timer.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/exception.hpp"
+#include "base/objectlock.hpp"
+#include "base/utility.hpp"
+#include "base/debug.hpp"
+#include "base/type.hpp"
+#include "base/convert.hpp"
+#include "base/scriptvariable.hpp"
+#include "base/process.hpp"
 #include "icinga-version.h"
 #include <sstream>
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/thread/thread.hpp>
-#include <boost/bind.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/exception/errinfo_api_function.hpp>
@@ -44,10 +43,13 @@ using namespace icinga;
 
 REGISTER_TYPE(Application);
 
+boost::signals2::signal<void (void)> Application::OnReopenLogs;
 Application *Application::m_Instance = NULL;
 bool Application::m_ShuttingDown = false;
-bool Application::m_Restarting = false;
-bool Application::m_Debugging = false;
+bool Application::m_RequestRestart = false;
+bool Application::m_RequestReopenLogs = false;
+pid_t Application::m_ReloadProcess = 0;
+static bool l_Restarting = false;
 int Application::m_ArgC;
 char **Application::m_ArgV;
 double Application::m_StartTime;
@@ -71,11 +73,6 @@ void Application::OnConfigLoaded(void)
 	}
 #endif /* _WIN32 */
 
-#ifdef _WIN32
-	if (IsDebuggerPresent())
-		m_Debugging = true;
-#endif /* _WIN32 */
-
 	ASSERT(m_Instance == NULL);
 	m_Instance = this;
 }
@@ -91,12 +88,48 @@ void Application::Stop(void)
 	WSACleanup();
 #endif /* _WIN32 */
 
-	ClosePidFile();
+	// Getting a shutdown-signal when a restart is in progress usually
+	// means that the restart succeeded and the new process wants to take
+	// over. Write the PID of the new process to the pidfile before this
+	// process exits to keep systemd happy.
+	if (l_Restarting) {
+		try {
+			UpdatePidFile(GetPidPath(), m_ReloadProcess);
+		} catch (std::exception&) {
+			/* abort restart */
+			Log(LogCritical, "Application", "Cannot update PID file. Aborting restart operation.");
+			return;
+		}
+		ClosePidFile(false);
+	} else
+		ClosePidFile(true);
+
+	DynamicObject::Stop();
 }
 
 Application::~Application(void)
 {
 	m_Instance = NULL;
+}
+
+void Application::InitializeBase(void)
+{
+#ifndef _WIN32
+	rlimit rl;
+	if (getrlimit(RLIMIT_NOFILE, &rl) >= 0) {
+		rlim_t maxfds = rl.rlim_max;
+
+		if (maxfds == RLIM_INFINITY)
+			maxfds = 65536;
+
+		for (rlim_t i = 3; i < maxfds; i++) {
+			if (close(i) >= 0)
+				std::cerr << "Closed FD " << i << " which we inherited from our parent process." << std::endl;
+		}
+	}
+#endif /* _WIN32 */
+
+	Utility::ExecuteDeferredInitializers();
 }
 
 /**
@@ -115,15 +148,16 @@ Application::Ptr Application::GetInstance(void)
 void Application::SetResourceLimits(void)
 {
 #ifndef _WIN32
-#	ifdef RLIMIT_NOFILE
 	rlimit rl;
+
+#	ifdef RLIMIT_NOFILE
 	rl.rlim_cur = 16 * 1024;
 	rl.rlim_max = rl.rlim_cur;
 
 	if (setrlimit(RLIMIT_NOFILE, &rl) < 0)
-		Log(LogDebug, "base", "Could not adjust resource limit for open file handles (RLIMIT_NOFILE)");
+		Log(LogNotice, "Application", "Could not adjust resource limit for open file handles (RLIMIT_NOFILE)");
 #	else /* RLIMIT_NOFILE */
-	Log(LogDebug, "base", "System does not support adjusting the resource limit for open file handles (RLIMIT_NOFILE)");
+	Log(LogNotice, "Application", "System does not support adjusting the resource limit for open file handles (RLIMIT_NOFILE)");
 #	endif /* RLIMIT_NOFILE */
 
 #	ifdef RLIMIT_NPROC
@@ -131,10 +165,58 @@ void Application::SetResourceLimits(void)
 	rl.rlim_max = rl.rlim_cur;
 
 	if (setrlimit(RLIMIT_NPROC, &rl) < 0)
-		Log(LogDebug, "base", "Could not adjust resource limit for number of processes (RLIMIT_NPROC)");
+		Log(LogNotice, "Application", "Could not adjust resource limit for number of processes (RLIMIT_NPROC)");
 #	else /* RLIMIT_NPROC */
-	Log(LogDebug, "base", "System does not support adjusting the resource limit for number of processes (RLIMIT_NPROC)");
+	Log(LogNotice, "Application", "System does not support adjusting the resource limit for number of processes (RLIMIT_NPROC)");
 #	endif /* RLIMIT_NPROC */
+
+#	ifdef RLIMIT_STACK
+	int argc = Application::GetArgC();
+	char **argv = Application::GetArgV();
+	bool set_stack_rlimit = true;
+
+	for (int i = 0; i < argc; i++) {
+		if (strcmp(argv[i], "--no-stack-rlimit") == 0) {
+			set_stack_rlimit = false;
+			break;
+		}
+	}
+
+	if (set_stack_rlimit) {
+		rl.rlim_cur = 256 * 1024;
+		rl.rlim_max = rl.rlim_cur;
+
+		if (setrlimit(RLIMIT_STACK, &rl) < 0)
+			Log(LogNotice, "Application", "Could not adjust resource limit for stack size (RLIMIT_STACK)");
+		else {
+			char **new_argv = static_cast<char **>(malloc(sizeof(char *) * (argc + 2)));
+
+			if (!new_argv) {
+				perror("malloc");
+				exit(1);
+			}
+
+			for (int i = 0; i < argc; i++)
+				new_argv[i] = argv[i];
+
+			new_argv[argc] = strdup("--no-stack-rlimit");
+
+			if (!new_argv[argc]) {
+				perror("strdup");
+				exit(1);
+			}
+
+			new_argv[argc + 1] = NULL;
+
+			if (execvp(new_argv[0], new_argv) < 0)
+				perror("execvp");
+
+			exit(1);
+		}
+	}
+#	else /* RLIMIT_STACK */
+	Log(LogNotice, "Application", "System does not support adjusting the resource limit for stack size (RLIMIT_STACK)");
+#	endif /* RLIMIT_STACK */
 #endif /* _WIN32 */
 }
 
@@ -162,22 +244,58 @@ void Application::SetArgV(char **argv)
  * Processes events for registered sockets and timers and calls whatever
  * handlers have been set up for these events.
  */
-void Application::RunEventLoop(void) const
+void Application::RunEventLoop(void)
 {
-	/* Start the system time watch thread. */
-	boost::thread t(&Application::TimeWatchThreadProc);
-	t.detach();
-
 	Timer::Initialize();
 
-	while (!m_ShuttingDown && !m_Restarting)
-		Utility::Sleep(0.5);
+	double lastLoop = Utility::GetTime();
 
-	Log(LogInformation, "base", "Shutting down Icinga...");
+mainloop:
+	while (!m_ShuttingDown && !m_RequestRestart) {
+		/* Watches for changes to the system time. Adjusts timers if necessary. */
+		Utility::Sleep(2.5);
+
+		if (m_RequestReopenLogs) {
+			Log(LogNotice, "Application", "Reopening log files");
+			m_RequestReopenLogs = false;
+			OnReopenLogs();
+		}
+
+		double now = Utility::GetTime();
+		double timeDiff = lastLoop - now;
+
+		if (abs(timeDiff) > 15) {
+			/* We made a significant jump in time. */
+			std::ostringstream msgbuf;
+			msgbuf << "We jumped "
+				<< (timeDiff < 0 ? "forward" : "backward")
+				<< " in time: " << abs(timeDiff) << " seconds";
+			Log(LogInformation, "Application", msgbuf.str());
+
+			Timer::AdjustTimers(-timeDiff);
+		}
+
+		lastLoop = now;
+	}
+		
+	if (m_RequestRestart) {
+		m_RequestRestart = false;         // we are now handling the request, once is enough
+
+		// are we already restarting? ignore request if we already are
+		if (l_Restarting)
+			goto mainloop;
+
+		l_Restarting = true;
+		m_ReloadProcess = StartReloadProcess();
+
+		goto mainloop;
+	}
+	
+	Log(LogInformation, "Application", "Shutting down Icinga...");
+	DynamicObject::StopObjects();
 	Application::GetInstance()->OnShutdown();
 
 #ifdef _DEBUG
-	DynamicObject::StopObjects();
 	GetTP().Stop();
 	m_ShuttingDown = false;
 
@@ -192,34 +310,35 @@ void Application::OnShutdown(void)
 	/* Nothing to do here. */
 }
 
-/**
- * Watches for changes to the system time. Adjusts timers if necessary.
- */
-void Application::TimeWatchThreadProc(void)
+static void ReloadProcessCallback(const ProcessResult& pr)
 {
-	Utility::SetThreadName("Time Watch");
+	if (pr.ExitStatus != 0)
+		Log(LogCritical, "Application", "Found error in config: reloading aborted");
+	l_Restarting = false;
+}
 
-	double lastLoop = Utility::GetTime();
+pid_t Application::StartReloadProcess(void)
+{
+	Log(LogInformation, "Application", "Got reload command: Starting new instance.");
 
-	for (;;) {
-		Utility::Sleep(5);
+	// prepare arguments
+	Array::Ptr args = make_shared<Array>();
+	args->Add(GetExePath(m_ArgV[0]));
 
-		double now = Utility::GetTime();
-		double timeDiff = lastLoop - now;
-
-		if (abs(timeDiff) > 15) {
-			/* We made a significant jump in time. */
-			std::ostringstream msgbuf;
-			msgbuf << "We jumped "
-			       << (timeDiff < 0 ? "forward" : "backward")
-			       << " in time: " << abs(timeDiff) << " seconds";
-			Log(LogInformation, "base", msgbuf.str());
-
-			Timer::AdjustTimers(-timeDiff);
-		}
-
-		lastLoop = now;
+	for (int i=1; i < Application::GetArgC(); i++) {
+		if (std::string(Application::GetArgV()[i]) != "--reload-internal")
+			args->Add(Application::GetArgV()[i]);
+		else
+			i++;     // the next parameter after --reload-internal is the pid, remove that too
 	}
+	args->Add("--reload-internal");
+	args->Add(Convert::ToString(Utility::GetPid()));
+
+	Process::Ptr process = make_shared<Process>(Process::PrepareCommand(args));
+	process->SetTimeout(300);
+	process->Run(&ReloadProcessCallback);
+ 
+	return process->GetPID();
 }
 
 /**
@@ -237,7 +356,16 @@ void Application::RequestShutdown(void)
  */
 void Application::RequestRestart(void)
 {
-	m_Restarting = true;
+	m_RequestRestart = true;
+}
+
+/**
+ * Signals the application to reopen log files during the
+ * next execution of the event loop.
+ */
+void Application::RequestReopenLogs(void)
+{
+	m_RequestReopenLogs = true;
 }
 
 /**
@@ -318,26 +446,6 @@ String Application::GetExePath(const String& argv0)
 }
 
 /**
- * Sets whether debugging is enabled.
- *
- * @param debug Whether to enable debugging.
- */
-void Application::SetDebugging(bool debug)
-{
-	m_Debugging = debug;
-}
-
-/**
- * Retrieves the debugging mode of the application.
- *
- * @returns true if the application is being debugged, false otherwise
- */
-bool Application::IsDebugging(void)
-{
-	return m_Debugging;
-}
-
-/**
  * Display version information.
  */
 void Application::DisplayVersionMessage(void)
@@ -386,6 +494,17 @@ void Application::SigIntTermHandler(int signum)
 		return;
 
 	instance->RequestShutdown();
+}
+
+/**
+ * Signal handler for SIGUSR1. This signal causes Icinga to re-open
+ * its log files and is mainly for use by logrotate.
+ *
+ * @param - The signal number.
+ */
+void Application::SigUsr1Handler(int)
+{
+	RequestReopenLogs();
 }
 
 /**
@@ -452,7 +571,7 @@ void Application::ExceptionHandler(void)
 	DisplayVersionMessage();
 
 	try {
-		throw;
+		RethrowUncaughtException();
 	} catch (const std::exception& ex) {
 		std::cerr << std::endl
 			  << DiagnosticInformation(ex)
@@ -518,36 +637,21 @@ int Application::Run(void)
 
 	sa.sa_handler = SIG_IGN;
 	sigaction(SIGPIPE, &sa, NULL);
+
+	sa.sa_handler = &Application::SigUsr1Handler;
+	sigaction(SIGUSR1, &sa, NULL);
 #else /* _WIN32 */
 	SetConsoleCtrlHandler(&Application::CtrlHandler, TRUE);
 #endif /* _WIN32 */
 
-	UpdatePidFile(GetPidPath());
+	try {
+		UpdatePidFile(GetPidPath());
+	} catch (std::exception&) {
+		Log(LogCritical, "Application", "Cannot update PID file '" + GetPidPath() + "'. Aborting.");
+		return false;
+	}
 
 	result = Main();
-
-	if (m_Restarting) {
-		Log(LogInformation, "base", "Restarting application.");
-
-#ifndef _WIN32
-		String exePath = GetExePath(m_ArgV[0]);
-
-		int fdcount = getdtablesize();
-
-		for (int i = 3; i < fdcount; i++)
-			(void) close(i);
-
-		(void) execv(exePath.CStr(), m_ArgV);
-#else /* _WIN32 */
-		STARTUPINFO si;
-		PROCESS_INFORMATION pi;
-		memset(&si, 0, sizeof(si));
-		si.cb = sizeof(si);
-		CreateProcess(NULL, GetCommandLine(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
-#endif /* _WIN32 */
-
-		_exit(0);
-	}
 
 	return result;
 }
@@ -557,8 +661,9 @@ int Application::Run(void)
  * if the PID file is already locked by another instance of the application.
  *
  * @param filename The name of the PID file.
+ * @param pid The PID to write; default is the current PID
  */
-void Application::UpdatePidFile(const String& filename)
+void Application::UpdatePidFile(const String& filename, pid_t pid)
 {
 	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
@@ -573,8 +678,10 @@ void Application::UpdatePidFile(const String& filename)
 	if (m_PidFile == NULL)
 		m_PidFile = fopen(filename.CStr(), "w");
 
-	if (m_PidFile == NULL)
+	if (m_PidFile == NULL) {
+		Log(LogCritical, "Application", "Could not open PID file '" + filename + "'.");
 		BOOST_THROW_EXCEPTION(std::runtime_error("Could not open PID file '" + filename + "'"));
+	}
 
 #ifndef _WIN32
 	int fd = fileno(m_PidFile);
@@ -589,35 +696,105 @@ void Application::UpdatePidFile(const String& filename)
 	lock.l_whence = SEEK_SET;
 
 	if (fcntl(fd, F_SETLK, &lock) < 0) {
-		Log(LogCritical, "base", "Could not lock PID file. Make sure that only one instance of the application is running.");
+		Log(LogCritical, "Application", "Could not lock PID file. Make sure that only one instance of the application is running.");
 
 		_exit(EXIT_FAILURE);
 	}
 
 	if (ftruncate(fd, 0) < 0) {
+		std::ostringstream msgbuf;
+		msgbuf << "ftruncate() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+		Log(LogCritical, "Application",  msgbuf.str());
+
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("ftruncate")
 		    << boost::errinfo_errno(errno));
 	}
 #endif /* _WIN32 */
 
-	fprintf(m_PidFile, "%d", Utility::GetPid());
+	fprintf(m_PidFile, "%d\n", pid);
 	fflush(m_PidFile);
 }
 
 /**
  * Closes the PID file. Does nothing if the PID file is not currently open.
  */
-void Application::ClosePidFile(void)
+void Application::ClosePidFile(bool unlink)
 {
 	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	if (m_PidFile != NULL)
+	{
+		if (unlink) {
+			String pidpath = GetPidPath();
+			::unlink(pidpath.CStr());
+		}
+
 		fclose(m_PidFile);
+	}
 
 	m_PidFile = NULL;
 }
+
+/**
+ * Checks if another process currently owns the pidfile and read it
+ *
+ * @param filename The name of the PID file.
+ * @returns 0: no process owning the pidfile, pid of the process otherwise
+ */
+pid_t Application::ReadPidFile(const String& filename)
+{
+	FILE *pidfile = fopen(filename.CStr(), "r");
+
+	if (pidfile == NULL)
+		return 0;
+
+#ifndef _WIN32
+	int fd = fileno(pidfile);
+
+	struct flock lock;
+
+	lock.l_start = 0;
+	lock.l_len = 0;
+	lock.l_type = F_WRLCK;
+	lock.l_whence = SEEK_SET;
+
+	if (fcntl(fd, F_GETLK, &lock) < 0) {
+		int error = errno;
+		fclose(pidfile);
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("fcntl")
+		    << boost::errinfo_errno(error));
+	}
+
+	if (lock.l_type == F_UNLCK) {
+		// nobody has locked the file: no icinga running
+		fclose(pidfile);
+		return -1;
+	}
+#endif /* _WIN32 */
+
+	pid_t runningpid;
+	int res = fscanf(pidfile, "%d", &runningpid);
+	fclose(pidfile);
+
+	// bogus result?
+	if (res != 1)
+		return 0;
+
+#ifdef _WIN32
+	HANDLE hProcess = OpenProcess(0, FALSE, runningpid);
+
+	if (!hProcess)
+		return 0;
+
+	CloseHandle(hProcess);
+#endif /* _WIN32 */
+
+	return runningpid;
+}
+
 
 /**
  * Retrieves the path of the installation prefix.
@@ -626,7 +803,7 @@ void Application::ClosePidFile(void)
  */
 String Application::GetPrefixDir(void)
 {
-	return ScriptVariable::Get("IcingaPrefixDir");
+	return ScriptVariable::Get("PrefixDir");
 }
 
 /**
@@ -636,7 +813,7 @@ String Application::GetPrefixDir(void)
  */
 void Application::DeclarePrefixDir(const String& path)
 {
-	ScriptVariable::Set("IcingaPrefixDir", path, false);
+	ScriptVariable::Set("PrefixDir", path, false);
 }
 
 /**
@@ -646,7 +823,7 @@ void Application::DeclarePrefixDir(const String& path)
  */
 String Application::GetSysconfDir(void)
 {
-	return ScriptVariable::Get("IcingaSysconfDir");
+	return ScriptVariable::Get("SysconfDir");
 }
 
 /**
@@ -656,7 +833,7 @@ String Application::GetSysconfDir(void)
  */
 void Application::DeclareSysconfDir(const String& path)
 {
-	ScriptVariable::Set("IcingaSysconfDir", path, false);
+	ScriptVariable::Set("SysconfDir", path, false);
 }
 
 /**
@@ -666,7 +843,27 @@ void Application::DeclareSysconfDir(const String& path)
  */
 String Application::GetLocalStateDir(void)
 {
-	return ScriptVariable::Get("IcingaLocalStateDir");
+	return ScriptVariable::Get("LocalStateDir");
+}
+
+/**
+ * Sets the path of the zones dir.
+ *
+ * @param path The new path.
+ */
+void Application::DeclareZonesDir(const String& path)
+{
+	ScriptVariable::Set("ZonesDir", path, false);
+}
+
+/**
+ * Retrieves the path for the local state dir.
+ *
+ * @returns The path.
+ */
+String Application::GetZonesDir(void)
+{
+	return ScriptVariable::Get("ZonesDir");
 }
 
 /**
@@ -676,7 +873,7 @@ String Application::GetLocalStateDir(void)
  */
 void Application::DeclareLocalStateDir(const String& path)
 {
-	ScriptVariable::Set("IcingaLocalStateDir", path, false);
+	ScriptVariable::Set("LocalStateDir", path, false);
 }
 
 /**
@@ -686,7 +883,7 @@ void Application::DeclareLocalStateDir(const String& path)
  */
 String Application::GetPkgDataDir(void)
 {
-	return ScriptVariable::Get("IcingaPkgDataDir");
+	return ScriptVariable::Get("PkgDataDir");
 }
 
 /**
@@ -696,7 +893,27 @@ String Application::GetPkgDataDir(void)
  */
 void Application::DeclarePkgDataDir(const String& path)
 {
-	ScriptVariable::Set("IcingaPkgDataDir", path, false);
+	ScriptVariable::Set("PkgDataDir", path, false);
+}
+
+/**
+ * Retrieves the path for the include conf dir.
+ *
+ * @returns The path.
+ */
+String Application::GetIncludeConfDir(void)
+{
+	return ScriptVariable::Get("IncludeConfDir");
+}
+
+/**
+ * Sets the path for the package data dir.
+ *
+ * @param path The new path.
+ */
+void Application::DeclareIncludeConfDir(const String& path)
+{
+	ScriptVariable::Set("IncludeConfDir", path, false);
 }
 
 /**
@@ -706,7 +923,7 @@ void Application::DeclarePkgDataDir(const String& path)
  */
 String Application::GetStatePath(void)
 {
-	return ScriptVariable::Get("IcingaStatePath");
+	return ScriptVariable::Get("StatePath");
 }
 
 /**
@@ -716,7 +933,7 @@ String Application::GetStatePath(void)
  */
 void Application::DeclareStatePath(const String& path)
 {
-	ScriptVariable::Set("IcingaStatePath", path, false);
+	ScriptVariable::Set("StatePath", path, false);
 }
 
 /**
@@ -726,7 +943,7 @@ void Application::DeclareStatePath(const String& path)
  */
 String Application::GetPidPath(void)
 {
-	return ScriptVariable::Get("IcingaPidPath");
+	return ScriptVariable::Get("PidPath");
 }
 
 /**
@@ -736,7 +953,7 @@ String Application::GetPidPath(void)
  */
 void Application::DeclarePidPath(const String& path)
 {
-	ScriptVariable::Set("IcingaPidPath", path, false);
+	ScriptVariable::Set("PidPath", path, false);
 }
 
 /**
@@ -761,12 +978,12 @@ void Application::DeclareApplicationType(const String& type)
 
 void Application::MakeVariablesConstant(void)
 {
-	ScriptVariable::GetByName("IcingaPrefixDir")->SetConstant(true);
-	ScriptVariable::GetByName("IcingaSysconfDir")->SetConstant(true);
-	ScriptVariable::GetByName("IcingaLocalStateDir")->SetConstant(true);
-	ScriptVariable::GetByName("IcingaPkgDataDir")->SetConstant(true);
-	ScriptVariable::GetByName("IcingaStatePath")->SetConstant(true);
-	ScriptVariable::GetByName("IcingaPidPath")->SetConstant(true);
+	ScriptVariable::GetByName("PrefixDir")->SetConstant(true);
+	ScriptVariable::GetByName("SysconfDir")->SetConstant(true);
+	ScriptVariable::GetByName("LocalStateDir")->SetConstant(true);
+	ScriptVariable::GetByName("PkgDataDir")->SetConstant(true);
+	ScriptVariable::GetByName("StatePath")->SetConstant(false);
+	ScriptVariable::GetByName("PidPath")->SetConstant(false);
 	ScriptVariable::GetByName("ApplicationType")->SetConstant(true);
 }
 

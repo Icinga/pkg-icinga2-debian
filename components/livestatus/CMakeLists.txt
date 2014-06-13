@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -15,13 +15,23 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(listener.ti listener.th)
+mkclass_target(livestatuslistener.ti livestatuslistener.thpp)
 
 mkembedconfig_target(livestatus-type.conf livestatus-type.cpp)
 
-add_library(livestatus SHARED aggregator.cpp andfilter.cpp attributefilter.cpp avgaggregator.cpp column.cpp combinerfilter.cpp commandstable.cpp commentstable.cpp contactgroupstable.cpp contactstable.cpp countaggregator.cpp downtimestable.cpp filter.cpp historytable.cpp hostgroupstable.cpp hoststable.cpp invavgaggregator.cpp invsumaggregator.cpp listener.cpp listener.th logutility.cpp logtable.cpp maxaggregator.cpp minaggregator.cpp negatefilter.cpp orfilter.cpp query.cpp servicegroupstable.cpp servicestable.cpp statehisttable.cpp statustable.cpp stdaggregator.cpp sumaggregator.cpp table.cpp timeperiodstable.cpp livestatus-type.cpp)
+add_library(livestatus SHARED aggregator.cpp andfilter.cpp attributefilter.cpp
+  avgaggregator.cpp column.cpp combinerfilter.cpp commandstable.cpp
+  commentstable.cpp contactgroupstable.cpp contactstable.cpp countaggregator.cpp
+  downtimestable.cpp endpointstable.cpp filter.cpp historytable.cpp
+  hostgroupstable.cpp hoststable.cpp invavgaggregator.cpp invsumaggregator.cpp
+  livestatuslistener.cpp livestatuslistener.thpp livestatusquery.cpp
+  livestatuslogutility.cpp logtable.cpp maxaggregator.cpp
+  minaggregator.cpp negatefilter.cpp orfilter.cpp
+  servicegroupstable.cpp servicestable.cpp statehisttable.cpp
+  statustable.cpp stdaggregator.cpp sumaggregator.cpp table.cpp
+  timeperiodstable.cpp livestatus-type.cpp)
 
-target_link_libraries(livestatus ${Boost_LIBRARIES} base config icinga)
+target_link_libraries(livestatus ${Boost_LIBRARIES} base config icinga remote)
 
 set_target_properties (
   livestatus PROPERTIES

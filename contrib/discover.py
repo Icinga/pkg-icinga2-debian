@@ -2,7 +2,7 @@
 
 #/******************************************************************************
 # * Icinga 2                                                                   *
-# * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+# * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
 # *                                                                            *
 # * This program is free software; you can redistribute it and/or              *
 # * modify it under the terms of the GNU General Public License                *
@@ -106,21 +106,22 @@ def process_host(host_element):
     hosts[name] = { "name": name, "address": address, "services": services }
 
 def print_host(host):
-    print "object Host \"%s\" inherits \"discovered-host\" {" % (host["name"])
-    print "\tmacros[\"address\"] = \"%s\"," % (host["address"])
-
-    for serv, service in host["services"].iteritems():
-        print ""
-        print "\tservices[\"%s\"] = {" % (serv)
-        print "\t\ttemplates = [ \"discovered-service\" ],"
-        print ""
-        print "\t\tcheck_command = \"%s\"," % (service["command"])
-        print ""
-        print "\t\tmacros[\"port\"] = %s" % (service["port"])
-        print "\t},"
-
+    print "object Host \"%s\" {" % (host["name"])
+    print "\timport \"discovered-host\","
+    print ""
+    print "\taddress = \"%s\"," % (host["address"])
     print "}"
     print ""
+
+    for serv, service in host["services"].iteritems():
+        print "apply Service \"%s\" {" % (serv)
+        print "\timport \"discovered-service\","
+        print ""
+        print "\tcheck_command = \"%s\"," % (service["command"])
+        print ""
+        print "\tvars.port = %s" % (service["port"])
+        print "}"
+        print ""
 
 for arg in sys.argv[1:]:
     # Expects XML output from 'nmap -oX'

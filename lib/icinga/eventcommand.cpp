@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,16 +17,15 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/eventcommand.h"
-#include "base/dynamictype.h"
+#include "icinga/eventcommand.hpp"
 
 using namespace icinga;
 
 REGISTER_TYPE(EventCommand);
 
-void EventCommand::Execute(const Service::Ptr& service)
+void EventCommand::Execute(const Checkable::Ptr& checkable)
 {
 	std::vector<Value> arguments;
-	arguments.push_back(service);
+	arguments.push_back(checkable);
 	InvokeMethod("execute", arguments);
 }

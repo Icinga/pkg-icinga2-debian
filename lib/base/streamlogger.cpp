@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,11 +17,9 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/streamlogger.h"
-#include "base/utility.h"
-#include "base/objectlock.h"
-#include <boost/thread/thread.hpp>
-#include <fstream>
+#include "base/streamlogger.hpp"
+#include "base/utility.hpp"
+#include "base/objectlock.hpp"
 #include <iostream>
 
 using namespace icinga;
@@ -42,6 +40,15 @@ void StreamLogger::Start(void)
 	m_Tty = false;
 }
 
+void StreamLogger::Stop(void)
+{
+	Logger::Stop();
+
+	// make sure we flush the log data on shutdown, even if we don't call the destructor
+	if (m_Stream)
+		m_Stream->flush();
+}
+
 /**
  * Destructor for the StreamLogger class.
  */
@@ -59,6 +66,9 @@ void StreamLogger::FlushLogTimerHandler(void)
 void StreamLogger::BindStream(std::ostream *stream, bool ownsStream)
 {
 	ObjectLock olock(this);
+
+	if (m_OwnsStream)
+		delete m_Stream;
 
 	m_Stream = stream;
 	m_OwnsStream = ownsStream;
@@ -83,8 +93,16 @@ void StreamLogger::ProcessLogEntry(std::ostream& stream, bool tty, const LogEntr
 
 	boost::mutex::scoped_lock lock(m_Mutex);
 
+	stream << "[" << timestamp << "] ";
+
 	if (tty) {
 		switch (entry.Severity) {
+			case LogNotice:
+				stream << "\x1b[1;34m"; // blue
+				break;
+			case LogInformation:
+				stream << "\x1b[1;32m"; // green
+				break;
 			case LogWarning:
 				stream << "\x1b[1;33m"; // yellow;
 				break;
@@ -96,14 +114,17 @@ void StreamLogger::ProcessLogEntry(std::ostream& stream, bool tty, const LogEntr
 		}
 	}
 
-	stream << "[" << timestamp << "] <" << Utility::GetThreadName() << "> "
-		 << Logger::SeverityToString(entry.Severity) << "/" << entry.Facility << ": "
-		 << entry.Message;
+	try {
+		stream << Logger::SeverityToString(entry.Severity);
+	} catch (std::exception&) {
+		/* bail early */
+		return;
+	}
 
 	if (tty)
 		stream << "\x1b[0m"; // clear colors
 
-	stream << "\n";
+	stream << "/" << entry.Facility << ": " << entry.Message << "\n";
 }
 
 /**

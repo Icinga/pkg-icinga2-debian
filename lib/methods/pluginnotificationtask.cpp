@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,16 +17,17 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "methods/pluginnotificationtask.h"
-#include "icinga/notification.h"
-#include "icinga/notificationcommand.h"
-#include "icinga/service.h"
-#include "icinga/macroprocessor.h"
-#include "icinga/icingaapplication.h"
-#include "base/scriptfunction.h"
-#include "base/logger_fwd.h"
-#include "base/utility.h"
-#include "base/process.h"
+#include "methods/pluginnotificationtask.hpp"
+#include "icinga/notification.hpp"
+#include "icinga/notificationcommand.hpp"
+#include "icinga/pluginutility.hpp"
+#include "icinga/service.hpp"
+#include "icinga/macroprocessor.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "base/scriptfunction.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/utility.hpp"
+#include "base/process.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -36,59 +37,41 @@ REGISTER_SCRIPTFUNCTION(PluginNotification, &PluginNotificationTask::ScriptFunc)
 void PluginNotificationTask::ScriptFunc(const Notification::Ptr& notification, const User::Ptr& user, const CheckResult::Ptr& cr, int itype,
     const String& author, const String& comment)
 {
-	NotificationCommand::Ptr commandObj = notification->GetNotificationCommand();
+	NotificationCommand::Ptr commandObj = notification->GetCommand();
 
 	NotificationType type = static_cast<NotificationType>(itype);
 
-	Service::Ptr service = notification->GetService();
+	Checkable::Ptr checkable = notification->GetCheckable();
 
-	Value raw_command = commandObj->GetCommandLine();
+	Dictionary::Ptr notificationExtra = make_shared<Dictionary>();
+	notificationExtra->Set("type", Notification::NotificationTypeToString(type));
+	notificationExtra->Set("author", author);
+	notificationExtra->Set("comment", comment);
 
-	StaticMacroResolver::Ptr notificationMacroResolver = make_shared<StaticMacroResolver>();
-	notificationMacroResolver->Add("NOTIFICATIONTYPE", Notification::NotificationTypeToString(type));
-	notificationMacroResolver->Add("NOTIFICATIONAUTHOR", author);
-	notificationMacroResolver->Add("NOTIFICATIONAUTHORNAME", author);
-	notificationMacroResolver->Add("NOTIFICATIONCOMMENT", comment);
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
 
-	std::vector<MacroResolver::Ptr> resolvers;
-	resolvers.push_back(user);
-	resolvers.push_back(notificationMacroResolver);
-	resolvers.push_back(notification);
-	resolvers.push_back(service);
-	resolvers.push_back(service->GetHost());
-	resolvers.push_back(commandObj);
-	resolvers.push_back(IcingaApplication::GetInstance());
+	MacroProcessor::ResolverList resolvers;
+	resolvers.push_back(std::make_pair("user", user));
+	resolvers.push_back(std::make_pair("notification", notificationExtra));
+	resolvers.push_back(std::make_pair("notification", notification));
+	if (service)
+		resolvers.push_back(std::make_pair("service", service));
+	resolvers.push_back(std::make_pair("host", host));
+	resolvers.push_back(std::make_pair("command", commandObj));
+	resolvers.push_back(std::make_pair("icinga", IcingaApplication::GetInstance()));
 
-	Value command = MacroProcessor::ResolveMacros(raw_command, resolvers, cr, Utility::EscapeShellCmd, commandObj->GetEscapeMacros());
+	PluginUtility::ExecuteCommand(commandObj, checkable, cr, resolvers, boost::bind(&PluginNotificationTask::ProcessFinishedHandler, checkable, _1, _2));
+}
 
-	Dictionary::Ptr envMacros = make_shared<Dictionary>();
-
-	Array::Ptr export_macros = commandObj->GetExportMacros();
-
-	if (export_macros) {
-		BOOST_FOREACH(const String& macro, export_macros) {
-			String value;
-
-			if (!MacroProcessor::ResolveMacro(macro, resolvers, cr, &value)) {
-				Log(LogWarning, "icinga", "export_macros for notification '" + notification->GetName() + "' refers to unknown macro '" + macro + "'");
-				continue;
-			}
-
-			envMacros->Set(macro, value);
-		}
-	}
-
-	Process::Ptr process = make_shared<Process>(Process::SplitCommand(command), envMacros);
-
-	process->SetTimeout(commandObj->GetTimeout());
-
-	ProcessResult pr = process->Run();
-
+void PluginNotificationTask::ProcessFinishedHandler(const Checkable::Ptr& checkable, const Value& command, const ProcessResult& pr)
+{
 	if (pr.ExitStatus != 0) {
 		std::ostringstream msgbuf;
-		msgbuf << "Notification command '" << command << "' for service '"
-		       << service->GetName() << "' failed; exit status: "
+		msgbuf << "Notification command '" << command << "' for object '"
+		       << checkable->GetName() << "' failed; exit status: "
 		       << pr.ExitStatus << ", output: " << pr.Output;
-		Log(LogWarning, "icinga", msgbuf.str());
+		Log(LogWarning, "PluginNotificationTask", msgbuf.str());
 	}
 }

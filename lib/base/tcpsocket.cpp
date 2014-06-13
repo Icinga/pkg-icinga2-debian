@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,11 +17,13 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/tcpsocket.h"
-#include "base/exception.h"
+#include "base/tcpsocket.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/utility.hpp"
+#include "base/exception.hpp"
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/errinfo_errno.hpp>
-#include <boost/exception/errinfo_file_name.hpp>
+#include <iostream>
 
 using namespace icinga;
 
@@ -60,6 +62,10 @@ void TcpSocket::Bind(const String& node, const String& service, int family)
 	    service.CStr(), &hints, &result);
 
 	if (rc != 0) {
+		std::ostringstream msgbuf;
+		msgbuf << "getaddrinfo() failed with return code " << rc << ", \"" << Utility::FormatErrorNumber(rc) << "\"";
+		Log(LogCritical, "TcpSocket",  msgbuf.str());
+
 		BOOST_THROW_EXCEPTION(socket_error()
 		    << boost::errinfo_api_function("getaddrinfo")
 		    << errinfo_getaddrinfo_error(rc));
@@ -112,6 +118,10 @@ void TcpSocket::Bind(const String& node, const String& service, int family)
 	freeaddrinfo(result);
 
 	if (GetFD() == INVALID_SOCKET) {
+		std::ostringstream msgbuf;
+		msgbuf << "Invalid socket: " << Utility::FormatErrorNumber(error);
+		Log(LogCritical, "TcpSocket",  msgbuf.str());
+
 #ifndef _WIN32
 		BOOST_THROW_EXCEPTION(socket_error()
 		    << boost::errinfo_api_function(func)
@@ -145,6 +155,10 @@ void TcpSocket::Connect(const String& node, const String& service)
 	int rc = getaddrinfo(node.CStr(), service.CStr(), &hints, &result);
 
 	if (rc != 0) {
+		std::ostringstream msgbuf;
+		msgbuf << "getaddrinfo() failed with return code " << rc << ", \"" << Utility::FormatErrorNumber(rc) << "\"";
+		Log(LogCritical, "TcpSocket",  msgbuf.str());
+
 		BOOST_THROW_EXCEPTION(socket_error()
 		    << boost::errinfo_api_function("getaddrinfo")
 		    << errinfo_getaddrinfo_error(rc));
@@ -189,6 +203,10 @@ void TcpSocket::Connect(const String& node, const String& service)
 	freeaddrinfo(result);
 
 	if (GetFD() == INVALID_SOCKET) {
+		std::ostringstream msgbuf;
+		msgbuf << "Invalid socket: " << Utility::FormatErrorNumber(error);
+		Log(LogCritical, "TcpSocket",  msgbuf.str());
+
 #ifndef _WIN32
 		BOOST_THROW_EXCEPTION(socket_error()
 		    << boost::errinfo_api_function(func)

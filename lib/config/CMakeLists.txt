@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -27,10 +27,10 @@ mkembedconfig_target(base-type.conf base-type.cpp)
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library(config SHARED
-  aexpression.cpp avalue.cpp base-type.conf base-type.cpp
-  configcompilercontext.cpp configcompiler.cpp configitembuilder.cpp
+  aexpression.cpp applyrule.cpp base-type.conf base-type.cpp
+  configcompilercontext.cpp configcompiler.cpp configerror.cpp configitembuilder.cpp
   configitem.cpp ${FLEX_config_lexer_OUTPUTS} ${BISON_config_parser_OUTPUTS}
-  configtype.cpp expression.cpp expressionlist.cpp typerule.cpp typerulelist.cpp
+  configtype.cpp debuginfo.cpp objectrule.cpp typerule.cpp typerulelist.cpp
 )
 
 target_link_libraries(config ${Boost_LIBRARIES} base) 

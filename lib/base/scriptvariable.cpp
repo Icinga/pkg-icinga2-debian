@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,8 +17,8 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/scriptvariable.h"
-#include "base/logger_fwd.h"
+#include "base/scriptvariable.hpp"
+#include "base/singleton.hpp"
 
 using namespace icinga;
 
@@ -55,10 +55,8 @@ Value ScriptVariable::Get(const String& name)
 {
 	ScriptVariable::Ptr sv = GetByName(name);
 
-	if (!sv) {
-		Log(LogWarning, "icinga", "Tried to access undefined variable: " + name);
-		return Empty;
-	}
+	if (!sv)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Tried to access undefined script variable '" + name + "'"));
 
 	return sv->GetData();
 }
@@ -81,6 +79,11 @@ ScriptVariable::Ptr ScriptVariable::Set(const String& name, const Value& value, 
 		sv->SetConstant(true);
 
 	return sv;
+}
+
+void ScriptVariable::Unregister(const String& name)
+{
+	ScriptVariableRegistry::GetInstance()->Unregister(name);
 }
 
 ScriptVariableRegistry *ScriptVariableRegistry::GetInstance(void)

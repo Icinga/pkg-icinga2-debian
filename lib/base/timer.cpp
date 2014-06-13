@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,12 +17,11 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/timer.h"
-#include "base/application.h"
-#include "base/debug.h"
-#include "base/utility.h"
-#include "base/logger_fwd.h"
+#include "base/timer.hpp"
+#include "base/debug.hpp"
+#include "base/utility.hpp"
 #include <boost/bind.hpp>
+#include <boost/foreach.hpp>
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
@@ -32,37 +31,11 @@
 
 using namespace icinga;
 
-/**
- * @ingroup base
- */
-struct icinga::TimerNextExtractor
-{
-	typedef double result_type;
-
-	/**
-	 * Extracts the next timestamp from a Timer.
-	 *
-	 * Note: Caller must hold l_Mutex.
-	 *
-	 * @param wtimer Weak pointer to the timer.
-	 * @returns The next timestamp
-	 */
-	double operator()(const weak_ptr<Timer>& wtimer)
-	{
-		Timer::Ptr timer = wtimer.lock();
-
-		if (!timer)
-			return 0;
-
-		return timer->m_Next;
-	}
-};
-
 typedef boost::multi_index_container<
-	Timer::WeakPtr,
+	Timer::Holder,
 	boost::multi_index::indexed_by<
-		boost::multi_index::ordered_unique<boost::multi_index::identity<Timer::WeakPtr> >,
-		boost::multi_index::ordered_non_unique<TimerNextExtractor>
+		boost::multi_index::ordered_unique<boost::multi_index::const_mem_fun<Timer::Holder, Timer *, &Timer::Holder::GetObject> >,
+		boost::multi_index::ordered_non_unique<boost::multi_index::const_mem_fun<Timer::Holder, double, &Timer::Holder::GetNextUnlocked> >
 	>
 > TimerSet;
 
@@ -80,13 +53,21 @@ Timer::Timer(void)
 { }
 
 /**
+ * Destructor for the Timer class.
+ */
+Timer::~Timer(void)
+{
+	Stop();
+}
+
+/**
  * Initializes the timer sub-system.
  */
 void Timer::Initialize(void)
 {
 	boost::mutex::scoped_lock lock(l_Mutex);
 	l_StopThread = false;
-	l_Thread = boost::thread(boost::bind(&Timer::TimerThreadProc));
+	l_Thread = boost::thread(&Timer::TimerThreadProc);
 }
 
 /**
@@ -174,7 +155,7 @@ void Timer::Stop(void)
 	boost::mutex::scoped_lock lock(l_Mutex);
 
 	m_Started = false;
-	l_Timers.erase(GetSelf());
+	l_Timers.erase(this);
 
 	/* Notify the worker thread that we've disabled a timer. */
 	l_CV.notify_all();
@@ -204,8 +185,8 @@ void Timer::Reschedule(double next)
 
 	if (m_Started) {
 		/* Remove and re-add the timer to update the index. */
-		l_Timers.erase(GetSelf());
-		l_Timers.insert(GetSelf());
+		l_Timers.erase(this);
+		l_Timers.insert(this);
 
 		/* Notify the worker that we've rescheduled a timer. */
 		l_CV.notify_all();
@@ -240,16 +221,19 @@ void Timer::AdjustTimers(double adjustment)
 	typedef boost::multi_index::nth_index<TimerSet, 1>::type TimerView;
 	TimerView& idx = boost::get<1>(l_Timers);
 
-	TimerView::iterator it;
-	for (it = idx.begin(); it != idx.end(); it++) {
-		Timer::Ptr timer = it->lock();
+	std::vector<Timer *> timers;
 
+	BOOST_FOREACH(Timer *timer, idx) {
 		if (abs(now - (timer->m_Next + adjustment)) <
 		    abs(now - timer->m_Next)) {
 			timer->m_Next += adjustment;
-			l_Timers.erase(timer);
-			l_Timers.insert(timer);
+			timers.push_back(timer);
 		}
+	}
+
+	BOOST_FOREACH(Timer *timer, timers) {
+		l_Timers.erase(timer);
+		l_Timers.insert(timer);
 	}
 
 	/* Notify the worker that we've rescheduled some timers. */
@@ -277,20 +261,11 @@ void Timer::TimerThreadProc(void)
 			break;
 
 		NextTimerView::iterator it = idx.begin();
-		Timer::Ptr timer = it->lock();
-
-		if (!timer) {
-			/* Remove the timer from the list if it's not alive anymore. */
-			idx.erase(it);
-			continue;
-		}
+		Timer *timer = *it;
 
 		double wait = timer->m_Next - Utility::GetTime();
 
-		if (wait > 0) {
-			/* Make sure the timer we just examined can be destroyed while we're waiting. */
-			timer.reset();
-
+		if (wait > 0.01) {
 			/* Wait for the next timer. */
 			l_CV.timed_wait(lock, boost::posix_time::milliseconds(wait * 1000));
 
@@ -301,9 +276,11 @@ void Timer::TimerThreadProc(void)
 		 * until the current call is completed. */
 		l_Timers.erase(timer);
 
+		Timer::Ptr ptimer = timer->GetSelf();
+
 		lock.unlock();
 
 		/* Asynchronously call the timer. */
-		Utility::QueueAsyncCallback(boost::bind(&Timer::Call, timer));
+		Utility::QueueAsyncCallback(boost::bind(&Timer::Call, ptimer));
 	}
 }

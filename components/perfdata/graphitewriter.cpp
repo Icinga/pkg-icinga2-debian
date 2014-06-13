@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,23 +17,23 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "perfdata/graphitewriter.h"
-#include "icinga/service.h"
-#include "icinga/macroprocessor.h"
-#include "icinga/icingaapplication.h"
-#include "icinga/compatutility.h"
-#include "icinga/perfdatavalue.h"
-#include "base/tcpsocket.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
-#include "base/convert.h"
-#include "base/utility.h"
-#include "base/application.h"
-#include "base/stream.h"
-#include "base/networkstream.h"
-#include "base/bufferedstream.h"
-#include "base/exception.h"
+#include "perfdata/graphitewriter.hpp"
+#include "icinga/service.hpp"
+#include "icinga/macroprocessor.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "icinga/compatutility.hpp"
+#include "icinga/perfdatavalue.hpp"
+#include "base/tcpsocket.hpp"
+#include "base/dynamictype.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/convert.hpp"
+#include "base/utility.hpp"
+#include "base/application.hpp"
+#include "base/stream.hpp"
+#include "base/networkstream.hpp"
+#include "base/exception.hpp"
+#include "base/statsfunction.hpp"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/foreach.hpp>
@@ -43,6 +43,21 @@
 using namespace icinga;
 
 REGISTER_TYPE(GraphiteWriter);
+
+REGISTER_STATSFUNCTION(GraphiteWriterStats, &GraphiteWriter::StatsFunc);
+
+Value GraphiteWriter::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+{
+	Dictionary::Ptr nodes = make_shared<Dictionary>();
+
+	BOOST_FOREACH(const GraphiteWriter::Ptr& graphitewriter, DynamicType::GetObjects<GraphiteWriter>()) {
+		nodes->Set(graphitewriter->GetName(), 1); //add more stats
+	}
+
+	status->Set("graphitewriter", nodes);
+
+	return 0;
+}
 
 void GraphiteWriter::Start(void)
 {
@@ -62,44 +77,68 @@ void GraphiteWriter::ReconnectTimerHandler(void)
 	try {
 		if (m_Stream) {
 			m_Stream->Write("\n", 1);
-			Log(LogWarning, "perfdata", "GraphiteWriter already connected on socket on host '" + GetHost() + "' port '" + GetPort() + "'.");
+			Log(LogNotice, "GraphiteWriter", "Already connected on socket on host '" + GetHost() + "' port '" + GetPort() + "'.");
 			return;
 		}
-	} catch (const std::exception& ex) {
-		Log(LogWarning, "perfdata", "GraphiteWriter socket on host '" + GetHost() + "' port '" + GetPort() + "' gone. Attempting to reconnect.");	
+	} catch (const std::exception&) {
+		Log(LogWarning, "GraphiteWriter", "Socket on host '" + GetHost() + "' port '" + GetPort() + "' gone. Attempting to reconnect.");
 	}
 
 	TcpSocket::Ptr socket = make_shared<TcpSocket>();
 
-	Log(LogDebug, "perfdata", "GraphiteWriter: Reconnect to tcp socket on host '" + GetHost() + "' port '" + GetPort() + "'.");
-	socket->Connect(GetHost(), GetPort());
+	Log(LogNotice, "GraphiteWriter", "Reconnect to tcp socket on host '" + GetHost() + "' port '" + GetPort() + "'.");
 
-	NetworkStream::Ptr net_stream = make_shared<NetworkStream>(socket);
-	m_Stream = make_shared<BufferedStream>(net_stream);
+	try {
+		socket->Connect(GetHost(), GetPort());
+	} catch (std::exception&) {
+		Log(LogCritical, "GraphiteWriter", "Can't connect to tcp socket on host '" + GetHost() + "' port '" + GetPort() + "'.");
+		return;
+	}
+
+	m_Stream = make_shared<NetworkStream>(socket);
 }
 
-void GraphiteWriter::CheckResultHandler(const Service::Ptr& service, const CheckResult::Ptr& cr)
+void GraphiteWriter::CheckResultHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
 {
-	if (!IcingaApplication::GetInstance()->GetEnablePerfdata() || !service->GetEnablePerfdata())
+	if (!IcingaApplication::GetInstance()->GetEnablePerfdata() || !checkable->GetEnablePerfdata())
 		return;
 
-	/* TODO: sanitize host and service names */
-	String hostName = service->GetHost()->GetName();
-	String serviceName = service->GetShortName();   
+	Service::Ptr service = dynamic_pointer_cast<Service>(checkable);
+	Host::Ptr host;
 
+	if (service)
+		host = service->GetHost();
+	else
+		host = static_pointer_cast<Host>(checkable);
+
+	String hostName = host->GetName();
 	SanitizeMetric(hostName);
-	SanitizeMetric(serviceName);
 
-	String prefix = "icinga." + hostName + "." + serviceName;
+	String prefix;
 
-	/* basic metrics */
-	SendMetric(prefix, "current_attempt", service->GetCheckAttempt());
-	SendMetric(prefix, "max_check_attempts", service->GetMaxCheckAttempts());
-	SendMetric(prefix, "state_type", service->GetStateType());
-	SendMetric(prefix, "state", service->GetState());
+	if (service) {
+		String serviceName = service->GetShortName();
+		SanitizeMetric(serviceName);
+		prefix = "icinga." + hostName + "." + serviceName;
+
+		SendMetric(prefix, "state", service->GetState());
+	} else {
+		prefix = "icinga." + hostName;
+
+		SendMetric(prefix, "state", host->GetState());
+	}
+
+	SendMetric(prefix, "current_attempt", checkable->GetCheckAttempt());
+	SendMetric(prefix, "max_check_attempts", checkable->GetMaxCheckAttempts());
+	SendMetric(prefix, "state_type", checkable->GetStateType());
+	SendMetric(prefix, "reachable", checkable->IsReachable());
 	SendMetric(prefix, "latency", Service::CalculateLatency(cr));
 	SendMetric(prefix, "execution_time", Service::CalculateExecutionTime(cr));
+	SendPerfdata(prefix, cr);
+}
 
+void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& cr)
+{
 	Value pdv = cr->GetPerformanceData();
 
 	if (!pdv.IsObjectType<Dictionary>())
@@ -130,7 +169,7 @@ void GraphiteWriter::SendMetric(const String& prefix, const String& name, double
 	msgbuf << prefix << "." << name << " " << value << " " << static_cast<long>(Utility::GetTime()) << "\n";
 
 	String metric = msgbuf.str();
-	Log(LogDebug, "perfdata", "GraphiteWriter: Add to metric list:'" + metric + "'.");
+	Log(LogDebug, "GraphiteWriter", "GraphiteWriter: Add to metric list:'" + metric + "'.");
 
 	ObjectLock olock(this);
 
@@ -140,11 +179,7 @@ void GraphiteWriter::SendMetric(const String& prefix, const String& name, double
 	try {
 		m_Stream->Write(metric.CStr(), metric.GetLength());
 	} catch (const std::exception& ex) {
-		std::ostringstream msgbuf;
-		msgbuf << "Exception thrown while writing to the Graphite socket: " << std::endl
-		       << DiagnosticInformation(ex);
-
-		Log(LogCritical, "base", msgbuf.str());
+		Log(LogCritical, "GraphiteWriter", "Cannot write to tcp socket on host '" + GetHost() + "' port '" + GetPort() + "'.");
 
 		m_Stream.reset();
 	}
