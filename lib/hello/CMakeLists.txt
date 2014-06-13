@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -15,12 +15,12 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(hello.ti hello.th)
+mkclass_target(hello.ti hello.thpp)
 
 mkembedconfig_target(hello-type.conf hello-type.cpp)
 
 add_library(hello SHARED
-  hello.cpp hello.th hello-type.cpp
+  hello.cpp hello.thpp hello-type.cpp
 )
 
 target_link_libraries(hello ${Boost_LIBRARIES} base config)

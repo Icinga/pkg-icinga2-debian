@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,12 +17,13 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "db_ido/commanddbobject.h"
-#include "db_ido/dbtype.h"
-#include "db_ido/dbvalue.h"
-#include "icinga/command.h"
-#include "icinga/compatutility.h"
-#include "base/objectlock.h"
+#include "db_ido/commanddbobject.hpp"
+#include "db_ido/dbtype.hpp"
+#include "db_ido/dbvalue.hpp"
+#include "icinga/command.hpp"
+#include "icinga/compatutility.hpp"
+#include "base/objectlock.hpp"
+#include "base/convert.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -48,4 +49,9 @@ Dictionary::Ptr CommandDbObject::GetConfigFields(void) const
 Dictionary::Ptr CommandDbObject::GetStatusFields(void) const
 {
 	return Empty;
+}
+
+void CommandDbObject::OnConfigUpdate(void)
+{
+	return;
 }

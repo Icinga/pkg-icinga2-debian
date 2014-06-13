@@ -1,8 +1,8 @@
 class icinga-web {
   include icinga-rpm-snapshot
-  include icinga2-ido-mysql
-  include icinga2-ido-pgsql
+  include php
   include mysql
+  include pgsql
 
   php::extension { ['php-mysql']:
     require => [ Class['mysql'] ]
@@ -13,13 +13,13 @@ class icinga-web {
   }
 
   package { 'icinga-web':
-    ensure => installed,
+    ensure => latest,
     require => Class['icinga-rpm-snapshot'],
     notify => Service['apache']
   }
 
   package { 'icinga-web-mysql':
-    ensure => installed,
+    ensure => latest,
     require => Class['icinga-rpm-snapshot'],
     notify => Service['apache']
   }
@@ -37,17 +37,4 @@ class icinga-web {
     command => 'mysql -uicinga_web -picinga_web icinga_web < /usr/share/icinga-web/etc/schema/mysql.sql',
     require => [ Package['icinga-web'], Exec['create-mysql-icinga-web-db'] ]
   }
-
-  exec { 'set-icinga2-cmd-pipe-path':
-    path => '/bin:/usr/bin:/sbin:/usr/sbin',
-    command => 'sed -i \'s/\/var\/spool\/icinga\/cmd\/icinga.cmd/\/var\/run\/icinga2\/cmd\/icinga2.cmd/g\' /etc/icinga-web/conf.d/access.xml',
-    require => Package['icinga-web']
-  }
-
-  exec { 'clear-config-cache':
-    path => '/bin:/usr/bin:/sbin:/usr/sbin',
-    command => '/usr/bin/icinga-web-clearcache',
-    require => Exec['set-icinga2-cmd-pipe-path']
-  }
-
 }

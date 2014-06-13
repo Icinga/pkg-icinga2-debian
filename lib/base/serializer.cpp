@@ -1,26 +1,26 @@
 /******************************************************************************
-* Icinga 2                                                                   *
-* Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
-*                                                                            *
-* This program is free software; you can redistribute it and/or              *
-* modify it under the terms of the GNU General Public License                *
-* as published by the Free Software Foundation; either version 2             *
-* of the License, or (at your option) any later version.                     *
-*                                                                            *
-* This program is distributed in the hope that it will be useful,            *
-* but WITHOUT ANY WARRANTY; without even the implied warranty of             *
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              *
-* GNU General Public License for more details.                               *
-*                                                                            *
-* You should have received a copy of the GNU General Public License          *
-* along with this program; if not, write to the Free Software Foundation     *
-* Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
-******************************************************************************/
+ * Icinga 2                                                                   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ *                                                                            *
+ * This program is free software; you can redistribute it and/or              *
+ * modify it under the terms of the GNU General Public License                *
+ * as published by the Free Software Foundation; either version 2             *
+ * of the License, or (at your option) any later version.                     *
+ *                                                                            *
+ * This program is distributed in the hope that it will be useful,            *
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of             *
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              *
+ * GNU General Public License for more details.                               *
+ *                                                                            *
+ * You should have received a copy of the GNU General Public License          *
+ * along with this program; if not, write to the Free Software Foundation     *
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
+ ******************************************************************************/
 
-#include "base/serializer.h"
-#include "base/type.h"
-#include "base/application.h"
-#include "base/objectlock.h"
+#include "base/serializer.hpp"
+#include "base/type.hpp"
+#include "base/application.hpp"
+#include "base/objectlock.hpp"
 #include <boost/foreach.hpp>
 #include <cJSON.h>
 
@@ -37,10 +37,11 @@ String icinga::JsonSerialize(const Value& value)
 
 	char *jsonString;
 
-	if (Application::IsDebugging())
-		jsonString = cJSON_Print(json);
-	else
-		jsonString = cJSON_PrintUnformatted(json);
+#ifdef _DEBUG
+	jsonString = cJSON_Print(json);
+#else /* _DEBUG */
+	jsonString = cJSON_PrintUnformatted(json);
+#endif /* _DEBUG */
 
 	cJSON_Delete(json);
 
@@ -113,7 +114,7 @@ static Object::Ptr SerializeObject(const Object::Ptr& input, int attributeTypes)
 		fields->Set(field.Name, Serialize(input->GetField(i), attributeTypes));
 	}
 
-	fields->Set("__type", type->GetName());
+	fields->Set("type", type->GetName());
 
 	return fields;
 }
@@ -138,7 +139,7 @@ static Dictionary::Ptr DeserializeDictionary(const Dictionary::Ptr& input, bool 
 	ObjectLock olock(input);
 
 	BOOST_FOREACH(const Dictionary::Pair& kv, input) {
-		result->Set(kv.first, Deserialize(kv.second, attributeTypes));
+		result->Set(kv.first, Deserialize(kv.second, safe_mode, attributeTypes));
 	}
 
 	return result;
@@ -151,7 +152,7 @@ static Object::Ptr DeserializeObject(const Object::Ptr& object, const Dictionary
 	if (object)
 		type = object->GetReflectionType();
 	else
-		type = Type::GetByName(input->Get("__type"));
+		type = Type::GetByName(input->Get("type"));
 
 	if (!type)
 		return object;
@@ -165,6 +166,7 @@ static Object::Ptr DeserializeObject(const Object::Ptr& object, const Dictionary
 		instance = type->Instantiate();
 	}
 
+	ObjectLock olock(input);
 	BOOST_FOREACH(const Dictionary::Pair& kv, input) {
 		if (kv.first.IsEmpty())
 			continue;
@@ -230,7 +232,7 @@ Value icinga::Deserialize(const Object::Ptr& object, const Value& value, bool sa
 
 	ASSERT(dict != NULL);
 
-	if (!dict->Contains("__type"))
+	if (!dict->Contains("type"))
 		return DeserializeDictionary(dict, safe_mode, attributeTypes);
 
 	return DeserializeObject(object, dict, safe_mode, attributeTypes);

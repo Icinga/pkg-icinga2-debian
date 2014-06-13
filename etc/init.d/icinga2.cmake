@@ -7,6 +7,8 @@
 # Provides:          icinga2
 # Required-Start:    $remote_fs $syslog
 # Required-Stop:     $remote_fs $syslog
+# Should-Start:      mysql postgresql
+# Should-Stop:       mysql postgresql
 # Default-Start:     2 3 5
 # Default-Stop:      0 1 6
 # Short-Description: icinga2 host/service/network monitoring and management system
@@ -18,6 +20,7 @@ ICINGA2_CONFIG_FILE=@CMAKE_INSTALL_FULL_SYSCONFDIR@/icinga2/icinga2.conf
 ICINGA2_STATE_DIR=@CMAKE_INSTALL_FULL_LOCALSTATEDIR@
 ICINGA2_PID_FILE=$ICINGA2_STATE_DIR/run/icinga2/icinga2.pid
 ICINGA2_ERROR_LOG=$ICINGA2_STATE_DIR/log/icinga2/error.log
+ICINGA2_LOG=$ICINGA2_STATE_DIR/log/icinga2/icinga2.log
 ICINGA2_USER=@ICINGA2_USER@
 ICINGA2_GROUP=@ICINGA2_GROUP@
 ICINGA2_COMMAND_USER=@ICINGA2_COMMAND_USER@
@@ -49,26 +52,24 @@ fi
 start() {
 	mkdir -p $(dirname -- $ICINGA2_PID_FILE)
 	chown $ICINGA2_USER:$ICINGA2_GROUP $(dirname -- $ICINGA2_PID_FILE)
+	chown $ICINGA2_USER:$ICINGA2_GROUP $ICINGA2_PID_FILE
 
 	mkdir -p $(dirname -- $ICINGA2_ERROR_LOG)
 	chown $ICINGA2_USER:$ICINGA2_COMMAND_GROUP $(dirname -- $ICINGA2_ERROR_LOG)
 	chmod 750 $(dirname -- $ICINGA2_ERROR_LOG)
+	chown $ICINGA2_USER:$ICINGA2_COMMAND_GROUP $ICINGA2_ERROR_LOG $ICINGA2_LOG
 
 	mkdir -p $ICINGA2_STATE_DIR/run/icinga2/cmd
 	chown $ICINGA2_USER:$ICINGA2_COMMAND_GROUP $ICINGA2_STATE_DIR/run/icinga2/cmd
 	chmod 2755 $ICINGA2_STATE_DIR/run/icinga2/cmd
 
-        echo "Validating the configuration file:"
-        if ! $DAEMON -c $ICINGA2_CONFIG_FILE -C; then
-                echo "Not starting Icinga 2 due to configuration errors."
-                exit 1
-        fi
-
-        echo "Starting Icinga 2: "
-        $DAEMON -c $ICINGA2_CONFIG_FILE -d -e $ICINGA2_ERROR_LOG -u $ICINGA2_USER -g $ICINGA2_GROUP
-
-        echo "Done"
-        echo
+	echo "Starting Icinga 2: "
+	if ! $DAEMON -c $ICINGA2_CONFIG_FILE -d -e $ICINGA2_ERROR_LOG -u $ICINGA2_USER -g $ICINGA2_GROUP; then
+		echo "Error starting Icinga."
+		exit 1
+	else
+		echo "Done"
+	fi
 }
 
 # Restart Icinga 2
@@ -93,7 +94,7 @@ stop() {
 		
 			printf '.'
 			
-			sleep 1
+			sleep 3
 		done
 	fi
 
@@ -107,17 +108,13 @@ stop() {
 # Reload Icinga 2
 reload() {
 	printf "Reloading Icinga 2: "
-	if [ ! -e $ICINGA2_PID_FILE ]; then
-		echo "The PID file '$ICINGA2_PID_FILE' does not exist."
-		exit 1
-	fi
 
 	pid=`cat $ICINGA2_PID_FILE`
-
-	if ! kill -HUP $pid >/dev/null 2>&1; then
-		echo "Failed - Icinga 2 is not running."
-	else
+	if kill -HUP $pid >/dev/null 2>&1; then
 		echo "Done"
+	else
+		echo "Error: Icinga not running"
+		exit 3
 	fi
 }
 
@@ -125,8 +122,18 @@ reload() {
 checkconfig() {
 	printf "Checking configuration:"
 
-	echo "Validating the configuration file:"
-	exec $DAEMON -c $ICINGA2_CONFIG_FILE -C
+        echo "Validating the configuration file:"
+        if ! $DAEMON -c $ICINGA2_CONFIG_FILE -C -u $ICINGA2_USER -g $ICINGA2_GROUP; then
+                if [ "x$1" = "x" ]; then
+                        echo "Icinga 2 detected configuration errors."
+                        exit 1
+                else
+                        echo "Not "$1"ing Icinga 2 due to configuration errors."
+                        if [ "x$2" = "xfail" ]; then
+                                exit 1
+                        fi
+                fi
+        fi
 }
 
 # Print status for Icinga 2
@@ -138,12 +145,14 @@ status() {
 		echo "Running"
 	else
 		echo "Not running"
+		exit 3
 	fi
 }
 
 ### main logic ###
 case "$1" in
   start)
+	checkconfig start fail
         start
         ;;
   stop)
@@ -153,6 +162,7 @@ case "$1" in
         status
         ;;
   restart|condrestart)
+	checkconfig restart fail
         stop nofail
         start
         ;;

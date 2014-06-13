@@ -1,7 +1,7 @@
 %{
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -18,9 +18,9 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
- #include "classcompiler.h"
- #include <iostream>
- #include <vector>
+#include "classcompiler.hpp"
+#include <iostream>
+#include <vector>
 
 using namespace icinga;
 
@@ -66,6 +66,7 @@ using namespace icinga;
 %type <text> identifier
 %type <text> alternative_name_specifier
 %type <text> inherits_specifier
+%type <text> type_base_specifier
 %type <text> include
 %type <text> angle_include
 %type <text> code
@@ -91,6 +92,7 @@ void yyerror(YYLTYPE *locp, ClassCompiler *, const char *err)
 	std::cerr << "in " << locp->path << " at " << locp->first_line << ":" << locp->first_column << "-" << locp->last_line << ":" << locp->last_column << ": "
 			  << err
 			  << std::endl;
+	exit(1);
 }
 
 int yyparse(ClassCompiler *context);
@@ -166,7 +168,7 @@ code: T_CODE T_STRING
 	}
 	;
 
-class: class_attribute_list T_CLASS T_IDENTIFIER inherits_specifier '{' class_fields '}' ';'
+class: class_attribute_list T_CLASS T_IDENTIFIER inherits_specifier type_base_specifier '{' class_fields '}' ';'
 	{
 		$$ = new Klass();
 
@@ -178,10 +180,15 @@ class: class_attribute_list T_CLASS T_IDENTIFIER inherits_specifier '{' class_fi
 			free($4);
 		}
 
+		if ($5) {
+			$$->TypeBase = $5;
+			free($5);
+		}
+
 		$$->Attributes = $1;
 
-		$$->Fields = *$6;
-		delete $6;
+		$$->Fields = *$7;
+		delete $7;
 	}
 	;
 
@@ -203,6 +210,16 @@ inherits_specifier: /* empty */
 		$$ = NULL;
 	}
 	| ':' identifier
+	{
+		$$ = $2;
+	}
+	;
+
+type_base_specifier: /* empty */
+	{
+		$$ = NULL;
+	}
+	| '<' identifier
 	{
 		$$ = $2;
 	}

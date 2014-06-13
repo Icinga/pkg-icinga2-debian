@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,80 +17,117 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "perfdata/perfdatawriter.h"
-#include "icinga/service.h"
-#include "icinga/macroprocessor.h"
-#include "icinga/icingaapplication.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
-#include "base/convert.h"
-#include "base/utility.h"
-#include "base/context.h"
-#include "base/application.h"
+#include "perfdata/perfdatawriter.hpp"
+#include "icinga/service.hpp"
+#include "icinga/macroprocessor.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "base/dynamictype.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/convert.hpp"
+#include "base/utility.hpp"
+#include "base/context.hpp"
+#include "base/application.hpp"
+#include "base/statsfunction.hpp"
 
 using namespace icinga;
 
 REGISTER_TYPE(PerfdataWriter);
 
+REGISTER_STATSFUNCTION(PerfdataWriterStats, &PerfdataWriter::StatsFunc);
+
+Value PerfdataWriter::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+{
+	Dictionary::Ptr nodes = make_shared<Dictionary>();
+
+	BOOST_FOREACH(const PerfdataWriter::Ptr& perfdatawriter, DynamicType::GetObjects<PerfdataWriter>()) {
+		nodes->Set(perfdatawriter->GetName(), 1); //add more stats
+	}
+
+	status->Set("perfdatawriter", nodes);
+
+	return 0;
+}
+
 void PerfdataWriter::Start(void)
 {
 	DynamicObject::Start();
 
-	Service::OnNewCheckResult.connect(boost::bind(&PerfdataWriter::CheckResultHandler, this, _1, _2));
+	Checkable::OnNewCheckResult.connect(boost::bind(&PerfdataWriter::CheckResultHandler, this, _1, _2));
 
 	m_RotationTimer = make_shared<Timer>();
 	m_RotationTimer->OnTimerExpired.connect(boost::bind(&PerfdataWriter::RotationTimerHandler, this));
 	m_RotationTimer->SetInterval(GetRotationInterval());
 	m_RotationTimer->Start();
 
-	RotateFile();
+	RotateFile(m_ServiceOutputFile, GetServiceTempPath(), GetServicePerfdataPath());
+	RotateFile(m_HostOutputFile, GetHostTempPath(), GetHostPerfdataPath());
 }
 
-void PerfdataWriter::CheckResultHandler(const Service::Ptr& service, const CheckResult::Ptr& cr)
+void PerfdataWriter::CheckResultHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
 {
-	CONTEXT("Writing performance data for service '" + service->GetShortName() + "' on host '" + service->GetHost()->GetName() + "'");
+	CONTEXT("Writing performance data for object '" + checkable->GetName() + "'");
 
-	if (!IcingaApplication::GetInstance()->GetEnablePerfdata() || !service->GetEnablePerfdata())
+	if (!IcingaApplication::GetInstance()->GetEnablePerfdata() || !checkable->GetEnablePerfdata())
 		return;
 
-	Host::Ptr host = service->GetHost();
+	Service::Ptr service = dynamic_pointer_cast<Service>(checkable);
+	Host::Ptr host;
 
-	std::vector<MacroResolver::Ptr> resolvers;
-	resolvers.push_back(service);
-	resolvers.push_back(host);
-	resolvers.push_back(IcingaApplication::GetInstance());
+	if (service)
+		host = service->GetHost();
+	else
+		host = static_pointer_cast<Host>(checkable);
 
-	String line = MacroProcessor::ResolveMacros(GetFormatTemplate(), resolvers, cr);
+	MacroProcessor::ResolverList resolvers;
+	if (service)
+		resolvers.push_back(std::make_pair("service", service));
+	resolvers.push_back(std::make_pair("host", host));
+	resolvers.push_back(std::make_pair("icinga", IcingaApplication::GetInstance()));
 
-	ObjectLock olock(this);
-	if (!m_OutputFile.good())
-		return;
+	if (service) {
+		String line = MacroProcessor::ResolveMacros(GetServiceFormatTemplate(), resolvers, cr);
 
-	m_OutputFile << line << "\n";
+		{
+			ObjectLock olock(this);
+			if (!m_ServiceOutputFile.good())
+				return;
+
+			m_ServiceOutputFile << line << "\n";
+		}
+	} else {
+		String line = MacroProcessor::ResolveMacros(GetHostFormatTemplate(), resolvers, cr);
+
+		{
+			ObjectLock olock(this);
+			if (!m_HostOutputFile.good())
+				return;
+
+			m_HostOutputFile << line << "\n";
+		}
+	}
 }
 
-void PerfdataWriter::RotateFile(void)
+void PerfdataWriter::RotateFile(std::ofstream& output, const String& temp_path, const String& perfdata_path)
 {
 	ObjectLock olock(this);
 
-	String tempFile = GetTempPath();
+	if (output.good()) {
+		output.close();
 
-	if (m_OutputFile.good()) {
-		m_OutputFile.close();
-
-		String finalFile = GetPerfdataPath() + "." + Convert::ToString((long)Utility::GetTime());
-		(void) rename(tempFile.CStr(), finalFile.CStr());
+		String finalFile = perfdata_path + "." + Convert::ToString((long)Utility::GetTime());
+		(void) rename(temp_path.CStr(), finalFile.CStr());
 	}
 
-	m_OutputFile.open(tempFile.CStr());
+	output.open(temp_path.CStr());
 
-	if (!m_OutputFile.good())
-		Log(LogWarning, "icinga", "Could not open perfdata file '" + tempFile + "' for writing. Perfdata will be lost.");
+	if (!output.good())
+		Log(LogWarning, "PerfdataWriter", "Could not open perfdata file '" + temp_path + "' for writing. Perfdata will be lost.");
 }
 
 void PerfdataWriter::RotationTimerHandler(void)
 {
-	RotateFile();
+	RotateFile(m_ServiceOutputFile, GetServiceTempPath(), GetServicePerfdataPath());
+	RotateFile(m_HostOutputFile, GetHostTempPath(), GetHostPerfdataPath());
 }
 

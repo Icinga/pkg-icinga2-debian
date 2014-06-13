@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,10 +17,10 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/dynamictype.h"
-#include "base/serializer.h"
-#include "base/debug.h"
-#include "base/objectlock.h"
+#include "base/dynamictype.hpp"
+#include "base/serializer.hpp"
+#include "base/debug.hpp"
+#include "base/objectlock.hpp"
 
 using namespace icinga;
 
@@ -73,17 +73,12 @@ DynamicType::TypeVector DynamicType::GetTypes(void)
 	return InternalGetTypeVector(); /* Making a copy of the vector here. */
 }
 
-std::vector<DynamicObject::Ptr> DynamicType::GetObjects(const String& type)
+std::pair<DynamicTypeIterator<DynamicObject>, DynamicTypeIterator<DynamicObject> > DynamicType::GetObjects(void)
 {
-	DynamicType::Ptr dt = GetByName(type);
-	return dt->GetObjects();
-}
-
-std::vector<DynamicObject::Ptr> DynamicType::GetObjects(void) const
-{
-	ObjectLock olock(this);
-
-	return m_ObjectVector; /* Making a copy of the vector here. */
+	return std::make_pair(
+	    DynamicTypeIterator<DynamicObject>(GetSelf(), 0),
+	    DynamicTypeIterator<DynamicObject>(GetSelf(), -1)
+	);
 }
 
 String DynamicType::GetName(void) const
@@ -142,3 +137,4 @@ boost::mutex& DynamicType::GetStaticMutex(void)
 	static boost::mutex mutex;
 	return mutex;
 }
+

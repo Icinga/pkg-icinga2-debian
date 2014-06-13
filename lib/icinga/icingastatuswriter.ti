@@ -1,0 +1,17 @@
+#include "icinga/customvarobject.hpp"
+#include "base/application.hpp"
+
+namespace icinga
+{
+
+class IcingaStatusWriter : CustomVarObject
+{
+	[config] String status_path {
+		default {{{ return Application::GetLocalStateDir() + "/cache/icinga2/status.json"; }}}
+	};
+	[config] double update_interval {
+		default {{{ return 15; }}}
+	};
+};
+
+}

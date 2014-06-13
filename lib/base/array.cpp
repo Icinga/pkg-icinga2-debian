@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,11 +17,10 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/array.h"
-#include "base/objectlock.h"
-#include "base/debug.h"
+#include "base/array.hpp"
+#include "base/objectlock.hpp"
+#include "base/debug.hpp"
 #include <cJSON.h>
-#include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -109,6 +108,20 @@ size_t Array::GetLength(void) const
 }
 
 /**
+ * Checks whether the array contains the specified value.
+ *
+ * @param value The value.
+ * @returns true if the array contains the value, false otherwise.
+ */
+bool Array::Contains(const String& value) const
+{
+	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
+
+	return (std::find(m_Data.begin(), m_Data.end(), value) != m_Data.end());
+}
+
+/**
  * Insert the given value at the specified index
  *
  * @param index The index
@@ -149,6 +162,31 @@ void Array::Remove(Array::Iterator it)
 	m_Data.erase(it);
 }
 
+void Array::Resize(size_t new_size)
+{
+	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
+
+	m_Data.resize(new_size);
+}
+
+void Array::Clear(void)
+{
+	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
+
+	m_Data.clear();
+}
+
+void Array::CopyTo(const Array::Ptr& dest) const
+{
+	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
+	ObjectLock xlock(dest);
+
+	std::copy(m_Data.begin(), m_Data.end(), std::back_inserter(dest->m_Data));
+}
+
 /**
  * Makes a shallow copy of an array.
  *
@@ -156,13 +194,8 @@ void Array::Remove(Array::Iterator it)
  */
 Array::Ptr Array::ShallowClone(void) const
 {
-	ASSERT(!OwnsLock());
-	ObjectLock olock(this);
-
 	Array::Ptr clone = make_shared<Array>();
-
-	std::copy(m_Data.begin(), m_Data.end(), std::back_inserter(clone->m_Data));
-
+	CopyTo(clone);
 	return clone;
 }
 

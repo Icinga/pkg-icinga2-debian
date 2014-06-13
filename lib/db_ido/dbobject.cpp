@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,15 +17,20 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "db_ido/dbobject.h"
-#include "db_ido/dbtype.h"
-#include "db_ido/dbvalue.h"
-#include "icinga/service.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/utility.h"
-#include "base/initialize.h"
-#include "base/logger_fwd.h"
+#include "db_ido/dbobject.hpp"
+#include "db_ido/dbtype.hpp"
+#include "db_ido/dbvalue.hpp"
+#include "icinga/customvarobject.hpp"
+#include "icinga/service.hpp"
+#include "icinga/compatutility.hpp"
+#include "remote/endpoint.hpp"
+#include "base/dynamicobject.hpp"
+#include "base/dynamictype.hpp"
+#include "base/convert.hpp"
+#include "base/objectlock.hpp"
+#include "base/utility.hpp"
+#include "base/initialize.hpp"
+#include "base/logger_fwd.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -40,7 +45,9 @@ DbObject::DbObject(const shared_ptr<DbType>& type, const String& name1, const St
 
 void DbObject::StaticInitialize(void)
 {
+	/* triggered in ProcessCheckResult(), requires UpdateNextCheck() to be called before */
 	DynamicObject::OnStateChanged.connect(boost::bind(&DbObject::StateChangedHandler, _1));
+	CustomVarObject::OnVarsChanged.connect(boost::bind(&DbObject::VarsChangedHandler, _1));
 }
 
 void DbObject::SetObject(const DynamicObject::Ptr& object)
@@ -70,6 +77,10 @@ DbType::Ptr DbObject::GetType(void) const
 
 void DbObject::SendConfigUpdate(void)
 {
+	/* update custom var config for all objects */
+	SendVarsConfigUpdate();
+
+	/* config objects */
 	Dictionary::Ptr fields = GetConfigFields();
 
 	if (!fields)
@@ -96,6 +107,10 @@ void DbObject::SendConfigUpdate(void)
 
 void DbObject::SendStatusUpdate(void)
 {
+	/* update custom var status for all objects */
+	SendVarsStatusUpdate();
+
+	/* status objects */
 	Dictionary::Ptr fields = GetStatusFields();
 
 	if (!fields)
@@ -107,7 +122,20 @@ void DbObject::SendStatusUpdate(void)
 	query.Category = DbCatState;
 	query.Fields = fields;
 	query.Fields->Set(GetType()->GetIDColumn(), GetObject());
+
+	/* do not override our own endpoint dbobject id */
+	if (GetType()->GetTable() != "endpoint") {
+		String node = IcingaApplication::GetInstance()->GetNodeName();
+
+		Log(LogDebug, "DbObject", "Endpoint node: '" + node + "' status update for '" + GetObject()->GetName() + "'");
+
+		Endpoint::Ptr endpoint = Endpoint::GetByName(node);
+		if (endpoint)
+			query.Fields->Set("endpoint_object_id", endpoint);
+	}
+
 	query.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+
 	query.Fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
 	query.WhereCriteria = make_shared<Dictionary>();
 	query.WhereCriteria->Set(GetType()->GetIDColumn(), GetObject());
@@ -118,6 +146,97 @@ void DbObject::SendStatusUpdate(void)
 	m_LastStatusUpdate = Utility::GetTime();
 
 	OnStatusUpdate();
+}
+
+void DbObject::SendVarsConfigUpdate(void)
+{
+	DynamicObject::Ptr obj = GetObject();
+
+	CustomVarObject::Ptr custom_var_object = dynamic_pointer_cast<CustomVarObject>(obj);
+
+	if (!custom_var_object)
+		return;
+
+	Dictionary::Ptr vars = CompatUtility::GetCustomAttributeConfig(custom_var_object);
+
+	if (vars) {
+		Log(LogDebug, "DbObject", "Updating object vars for '" + custom_var_object->GetName() + "'");
+
+		ObjectLock olock (vars);
+
+		BOOST_FOREACH(const Dictionary::Pair& kv, vars) {
+			if (!kv.first.IsEmpty()) {
+				int overridden = custom_var_object->IsVarOverridden(kv.first) ? 1 : 0;
+
+				Log(LogDebug, "DbObject", "object customvar key: '" + kv.first + "' value: '" + Convert::ToString(kv.second) +
+				    "' overridden: " + Convert::ToString(overridden));
+
+				Dictionary::Ptr fields = make_shared<Dictionary>();
+				fields->Set("varname", Convert::ToString(kv.first));
+				fields->Set("varvalue", Convert::ToString(kv.second));
+				fields->Set("config_type", 1);
+				fields->Set("has_been_modified", overridden);
+				fields->Set("object_id", obj);
+				fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+
+				DbQuery query;
+				query.Table = "customvariables";
+				query.Type = DbQueryInsert;
+				query.Category = DbCatConfig;
+				query.Fields = fields;
+				OnQuery(query);
+			}
+		}
+	}
+}
+
+void DbObject::SendVarsStatusUpdate(void)
+{
+	DynamicObject::Ptr obj = GetObject();
+
+	CustomVarObject::Ptr custom_var_object = dynamic_pointer_cast<CustomVarObject>(obj);
+
+	if (!custom_var_object)
+		return;
+
+	Dictionary::Ptr vars = CompatUtility::GetCustomAttributeConfig(custom_var_object);
+
+	if (vars) {
+		Log(LogDebug, "DbObject", "Updating object vars for '" + custom_var_object->GetName() + "'");
+
+		ObjectLock olock (vars);
+
+		BOOST_FOREACH(const Dictionary::Pair& kv, vars) {
+			if (!kv.first.IsEmpty()) {
+				int overridden = custom_var_object->IsVarOverridden(kv.first) ? 1 : 0;
+
+				Log(LogDebug, "DbObject", "object customvar key: '" + kv.first + "' value: '" + Convert::ToString(kv.second) +
+				    "' overridden: " + Convert::ToString(overridden));
+
+				Dictionary::Ptr fields = make_shared<Dictionary>();
+				fields->Set("varname", Convert::ToString(kv.first));
+				fields->Set("varvalue", Convert::ToString(kv.second));
+				fields->Set("has_been_modified", overridden);
+				fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
+				fields->Set("object_id", obj);
+				fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+
+				DbQuery query;
+				query.Table = "customvariablestatus";
+				query.Type = DbQueryInsert | DbQueryUpdate;
+				query.Category = DbCatState;
+				query.Fields = fields;
+
+				query.WhereCriteria = make_shared<Dictionary>();
+				query.WhereCriteria->Set("object_id", obj);
+				query.WhereCriteria->Set("varname", Convert::ToString(kv.first));
+				query.Object = GetSelf();
+
+				OnQuery(query);
+			}
+		}
+
+	}
 }
 
 double DbObject::GetLastConfigUpdate(void) const
@@ -168,7 +287,14 @@ DbObject::Ptr DbObject::GetOrCreateByObject(const DynamicObject::Ptr& object)
 		name1 = service->GetHost()->GetName();
 		name2 = service->GetShortName();
 	} else {
-		name1 = object->GetName();
+		if (object->GetType() == DynamicType::GetByName("CheckCommand") ||
+		    object->GetType() == DynamicType::GetByName("EventCommand") ||
+		    object->GetType() == DynamicType::GetByName("NotificationCommand")) {
+			Command::Ptr command = dynamic_pointer_cast<Command>(object);
+			name1 = CompatUtility::GetCommandName(command);
+		}
+		else
+			name1 = object->GetName();
 	}
 
 	dbobj = dbtype->GetOrCreateObjectByName(name1, name2);
@@ -190,4 +316,16 @@ void DbObject::StateChangedHandler(const DynamicObject::Ptr& object)
 		return;
 
 	dbobj->SendStatusUpdate();
+}
+
+void DbObject::VarsChangedHandler(const CustomVarObject::Ptr& object)
+{
+	DbObject::Ptr dbobj = GetOrCreateByObject(object);
+
+	Log(LogDebug, "DbObject", "Vars changed for object '" + object->GetName() + "'");
+
+	if (!dbobj)
+		return;
+
+	dbobj->SendVarsStatusUpdate();
 }

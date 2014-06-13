@@ -1,14 +1,35 @@
 include apache
-include icinga-classicui
-include icinga-web
+include icinga2
+include icinga2-classicui
+include icinga2-icinga-web
 include nagios-plugins
 include nsca-ng
 
-# icinga 2 docs at /icinga2-doc
-file { '/etc/httpd/conf.d/icinga2-doc.conf':
-  source => 'puppet:////vagrant/.vagrant-puppet/files/etc/httpd/conf.d/icinga2-doc.conf',
-  require => [ Package['apache'], Package['icinga2-doc'] ],
-  notify => Service['apache']
+
+####################################
+# Start page at http://localhost/
+####################################
+
+file { '/var/www/html/index.html':
+  source    => 'puppet:////vagrant/.vagrant-puppet/files/var/www/html/index.html',
+  owner     => 'apache',
+  group     => 'apache',
+  require   => Package['apache']
+}
+
+file { '/var/www/html/icinga_wall.png':
+  source    => 'puppet:////vagrant/.vagrant-puppet/files/var/www/html/icinga_wall.png',
+  owner     => 'apache',
+  group     => 'apache',
+  require   => Package['apache']
+}
+
+####################################
+# Misc
+####################################
+
+package { 'vim-enhanced':
+  ensure => 'installed'
 }
 
 file { '/etc/motd':
@@ -18,6 +39,6 @@ file { '/etc/motd':
 }
 
 user { 'vagrant':
-  groups  => 'icingacmd',
-  require => Group['icingacmd']
+  groups  => ['icinga', 'icingacmd'],
+  require => [User['icinga'], Group['icingacmd']]
 }

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,14 +17,14 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/legacytimeperiod.h"
-#include "base/scriptfunction.h"
-#include "base/convert.h"
-#include "base/exception.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
-#include "base/debug.h"
-#include "base/utility.h"
+#include "icinga/legacytimeperiod.hpp"
+#include "base/scriptfunction.hpp"
+#include "base/convert.hpp"
+#include "base/exception.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/debug.hpp"
+#include "base/utility.hpp"
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/foreach.hpp>
@@ -323,7 +323,7 @@ bool LegacyTimePeriod::IsInDayDefinition(const String& daydef, tm *reference)
 
 	ParseTimeRange(daydef, &begin, &end, &stride, reference);
 
-	Log(LogDebug, "icinga", "ParseTimeRange: '" + daydef + "' => " + Convert::ToString(static_cast<long>(mktime(&begin))) + " -> " + Convert::ToString(static_cast<long>(mktime(&end))) + ", stride: " + Convert::ToString(stride));
+	Log(LogDebug, "LegacyTimePeriod", "ParseTimeRange: '" + daydef + "' => " + Convert::ToString(static_cast<long>(mktime(&begin))) + " -> " + Convert::ToString(static_cast<long>(mktime(&end))) + ", stride: " + Convert::ToString(stride));
 
 	return IsInTimeRange(&begin, &end, stride, reference);
 }
@@ -402,7 +402,6 @@ Dictionary::Ptr LegacyTimePeriod::FindNextSegment(const String& daydef, const St
 		iter = begin;
 
 		tsend = mktime(&end);
-		tsiter = mktime(&iter);
 
 		do {
 			if (IsInTimeRange(&begin, &end, stride, &iter)) {
@@ -412,6 +411,7 @@ Dictionary::Ptr LegacyTimePeriod::FindNextSegment(const String& daydef, const St
 				Dictionary::Ptr bestSegment;
 				double bestBegin;
 
+				ObjectLock olock(segments);
 				BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
 					double begin = segment->Get("begin");
 
@@ -451,20 +451,20 @@ Array::Ptr LegacyTimePeriod::ScriptFunc(const TimePeriod::Ptr& tp, double begin,
 			tm reference = Utility::LocalTime(refts);
 
 #ifdef _DEBUG
-			Log(LogDebug, "icinga", "Checking reference time " + Convert::ToString(static_cast<long>(refts)));
+			Log(LogDebug, "LegacyTimePeriod", "Checking reference time " + Convert::ToString(static_cast<long>(refts)));
 #endif /* _DEBUG */
 
 			ObjectLock olock(ranges);
 			BOOST_FOREACH(const Dictionary::Pair& kv, ranges) {
 				if (!IsInDayDefinition(kv.first, &reference)) {
 #ifdef _DEBUG
-					Log(LogDebug, "icinga", "Not in day definition '" + kv.first + "'.");
+					Log(LogDebug, "LegacyTimePeriod", "Not in day definition '" + kv.first + "'.");
 #endif /* _DEBUG */
 					continue;
 				}
 
 #ifdef _DEBUG
-				Log(LogDebug, "icinga", "In day definition '" + kv.first + "'.");
+				Log(LogDebug, "LegacyTimePeriod", "In day definition '" + kv.first + "'.");
 #endif /* _DEBUG */
 
 				ProcessTimeRanges(kv.second, &reference, segments);
@@ -472,7 +472,7 @@ Array::Ptr LegacyTimePeriod::ScriptFunc(const TimePeriod::Ptr& tp, double begin,
 		}
 	}
 
-	Log(LogDebug, "icinga", "Legacy timeperiod update returned " + Convert::ToString(static_cast<long>(segments->GetLength())) + " segments.");
+	Log(LogDebug, "LegacyTimePeriod", "Legacy timeperiod update returned " + Convert::ToString(static_cast<long>(segments->GetLength())) + " segments.");
 
 	return segments;
 }

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,29 +17,243 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/cib.h"
+#include "icinga/cib.hpp"
+#include "icinga/host.hpp"
+#include "icinga/service.hpp"
+#include "base/objectlock.hpp"
+#include "base/utility.hpp"
+#include "base/dynamictype.hpp"
+#include "base/statsfunction.hpp"
+#include <boost/foreach.hpp>
 
 using namespace icinga;
 
-RingBuffer CIB::m_ActiveChecksStatistics(15 * 60);
-RingBuffer CIB::m_PassiveChecksStatistics(15 * 60);
+RingBuffer CIB::m_ActiveHostChecksStatistics(15 * 60);
+RingBuffer CIB::m_ActiveServiceChecksStatistics(15 * 60);
+RingBuffer CIB::m_PassiveHostChecksStatistics(15 * 60);
+RingBuffer CIB::m_PassiveServiceChecksStatistics(15 * 60);
 
-void CIB::UpdateActiveChecksStatistics(long tv, int num)
+void CIB::UpdateActiveHostChecksStatistics(long tv, int num)
 {
-	m_ActiveChecksStatistics.InsertValue(tv, num);
+	m_ActiveHostChecksStatistics.InsertValue(tv, num);
 }
 
-int CIB::GetActiveChecksStatistics(long timespan)
+void CIB::UpdateActiveServiceChecksStatistics(long tv, int num)
 {
-	return m_ActiveChecksStatistics.GetValues(timespan);
+	m_ActiveServiceChecksStatistics.InsertValue(tv, num);
 }
 
-void CIB::UpdatePassiveChecksStatistics(long tv, int num)
+int CIB::GetActiveHostChecksStatistics(long timespan)
 {
-	m_PassiveChecksStatistics.InsertValue(tv, num);
+	return m_ActiveHostChecksStatistics.GetValues(timespan);
 }
 
-int CIB::GetPassiveChecksStatistics(long timespan)
+int CIB::GetActiveServiceChecksStatistics(long timespan)
 {
-	return m_PassiveChecksStatistics.GetValues(timespan);
+	return m_ActiveServiceChecksStatistics.GetValues(timespan);
 }
+
+void CIB::UpdatePassiveHostChecksStatistics(long tv, int num)
+{
+	m_PassiveServiceChecksStatistics.InsertValue(tv, num);
+}
+
+void CIB::UpdatePassiveServiceChecksStatistics(long tv, int num)
+{
+	m_PassiveServiceChecksStatistics.InsertValue(tv, num);
+}
+
+int CIB::GetPassiveHostChecksStatistics(long timespan)
+{
+	return m_PassiveHostChecksStatistics.GetValues(timespan);
+}
+
+int CIB::GetPassiveServiceChecksStatistics(long timespan)
+{
+	return m_PassiveServiceChecksStatistics.GetValues(timespan);
+}
+
+CheckableCheckStatistics CIB::CalculateHostCheckStats(void)
+{
+	double min_latency = -1, max_latency = 0, sum_latency = 0;
+	int count_latency = 0;
+	double min_execution_time = -1, max_execution_time = 0, sum_execution_time = 0;
+	int count_execution_time = 0;
+
+	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjects<Host>()) {
+		ObjectLock olock(host);
+
+		CheckResult::Ptr cr = host->GetLastCheckResult();
+
+		/* latency */
+		double latency = Host::CalculateLatency(cr);
+
+		if (min_latency == -1 || latency < min_latency)
+			min_latency = latency;
+
+		if (latency > max_latency)
+			max_latency = latency;
+
+		sum_latency += latency;
+		count_latency++;
+
+		/* execution_time */
+		double execution_time = Host::CalculateExecutionTime(cr);
+
+		if (min_execution_time == -1 || execution_time < min_execution_time)
+			min_execution_time = execution_time;
+
+		if (execution_time > max_execution_time)
+			max_execution_time = execution_time;
+
+		sum_execution_time += execution_time;
+		count_execution_time++;
+	}
+
+	CheckableCheckStatistics ccs;
+
+	ccs.min_latency = min_latency;
+	ccs.max_latency = max_latency;
+	ccs.avg_latency = sum_latency / count_latency;
+	ccs.min_execution_time = min_execution_time;
+	ccs.max_execution_time = max_execution_time;
+	ccs.avg_execution_time = sum_execution_time / count_execution_time;
+
+	return ccs;
+}
+
+CheckableCheckStatistics CIB::CalculateServiceCheckStats(void)
+{
+	double min_latency = -1, max_latency = 0, sum_latency = 0;
+	int count_latency = 0;
+	double min_execution_time = -1, max_execution_time = 0, sum_execution_time = 0;
+	int count_execution_time = 0;
+
+	BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjects<Service>()) {
+		ObjectLock olock(service);
+
+		CheckResult::Ptr cr = service->GetLastCheckResult();
+
+		/* latency */
+		double latency = Service::CalculateLatency(cr);
+
+		if (min_latency == -1 || latency < min_latency)
+			min_latency = latency;
+
+		if (latency > max_latency)
+			max_latency = latency;
+
+		sum_latency += latency;
+		count_latency++;
+
+		/* execution_time */
+		double execution_time = Service::CalculateExecutionTime(cr);
+
+		if (min_execution_time == -1 || execution_time < min_execution_time)
+			min_execution_time = execution_time;
+
+		if (execution_time > max_execution_time)
+			max_execution_time = execution_time;
+
+		sum_execution_time += execution_time;
+		count_execution_time++;
+	}
+
+	CheckableCheckStatistics ccs;
+
+	ccs.min_latency = min_latency;
+	ccs.max_latency = max_latency;
+	ccs.avg_latency = sum_latency / count_latency;
+	ccs.min_execution_time = min_execution_time;
+	ccs.max_execution_time = max_execution_time;
+	ccs.avg_execution_time = sum_execution_time / count_execution_time;
+
+	return ccs;
+}
+
+ServiceStatistics CIB::CalculateServiceStats(void)
+{
+	ServiceStatistics ss = {0};
+
+	BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjects<Service>()) {
+		ObjectLock olock(service);
+
+		CheckResult::Ptr cr = service->GetLastCheckResult();
+
+		if (service->GetState() == ServiceOK)
+			ss.services_ok++;
+		if (service->GetState() == ServiceWarning)
+			ss.services_warning++;
+		if (service->GetState() == ServiceCritical)
+			ss.services_critical++;
+		if (service->GetState() == ServiceUnknown)
+			ss.services_unknown++;
+
+		if (!cr)
+			ss.services_pending++;
+		if (!service->IsReachable())
+			ss.services_unreachable++;
+
+		if (service->IsFlapping())
+			ss.services_flapping++;
+		if (service->IsInDowntime())
+			ss.services_in_downtime++;
+		if (service->IsAcknowledged())
+			ss.services_acknowledged++;
+	}
+
+	return ss;
+}
+
+HostStatistics CIB::CalculateHostStats(void)
+{
+	HostStatistics hs = {0};
+
+	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjects<Host>()) {
+		ObjectLock olock(host);
+
+		if (host->IsReachable()) {
+			if (host->GetState() == HostUp)
+				hs.hosts_up++;
+			if (host->GetState() == HostDown)
+				hs.hosts_down++;
+		} else
+			hs.hosts_unreachable++;
+
+		if (!host->GetLastCheckResult())
+			hs.hosts_pending++;
+
+		if (host->IsFlapping())
+			hs.hosts_flapping++;
+		if (host->IsInDowntime())
+			hs.hosts_in_downtime++;
+		if (host->IsAcknowledged())
+			hs.hosts_acknowledged++;
+	}
+
+	return hs;
+}
+
+/*
+ * 'perfdata' must be a flat dictionary with double values
+ * 'status' dictionary can contain multiple levels of dictionaries
+ */
+std::pair<Dictionary::Ptr, Dictionary::Ptr> CIB::GetFeatureStats(void)
+{
+	Dictionary::Ptr status = make_shared<Dictionary>();
+	Dictionary::Ptr perfdata = make_shared<Dictionary>();
+
+	String name;
+	Value ret;
+	BOOST_FOREACH(tie(name, boost::tuples::ignore), StatsFunctionRegistry::GetInstance()->GetItems()) {
+		StatsFunction::Ptr func = StatsFunctionRegistry::GetInstance()->GetItem(name);
+
+		if (!func)
+			BOOST_THROW_EXCEPTION(std::invalid_argument("Function '" + name + "' does not exist."));
+
+		ret = func->Invoke(status, perfdata);
+	}
+
+	return std::make_pair(status, perfdata);
+}
+

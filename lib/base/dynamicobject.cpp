@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,21 +17,20 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/dynamicobject.h"
-#include "base/dynamictype.h"
-#include "base/serializer.h"
-#include "base/netstring.h"
-#include "base/registry.h"
-#include "base/stdiostream.h"
-#include "base/debug.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
-#include "base/exception.h"
-#include "base/scriptfunction.h"
-#include "base/initialize.h"
-#include "base/scriptvariable.h"
+#include "base/dynamicobject.hpp"
+#include "base/dynamictype.hpp"
+#include "base/serializer.hpp"
+#include "base/netstring.hpp"
+#include "base/stdiostream.hpp"
+#include "base/debug.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/exception.hpp"
+#include "base/scriptfunction.hpp"
+#include "base/initialize.hpp"
+#include "base/scriptvariable.hpp"
+#include "base/workqueue.hpp"
 #include <fstream>
-#include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/errinfo_errno.hpp>
@@ -40,22 +39,12 @@
 using namespace icinga;
 
 REGISTER_TYPE(DynamicObject);
-INITIALIZE_ONCE(&DynamicObject::StaticInitialize);
 
 boost::signals2::signal<void (const DynamicObject::Ptr&)> DynamicObject::OnStarted;
 boost::signals2::signal<void (const DynamicObject::Ptr&)> DynamicObject::OnStopped;
+boost::signals2::signal<void (const DynamicObject::Ptr&)> DynamicObject::OnPaused;
+boost::signals2::signal<void (const DynamicObject::Ptr&)> DynamicObject::OnResumed;
 boost::signals2::signal<void (const DynamicObject::Ptr&)> DynamicObject::OnStateChanged;
-boost::signals2::signal<void (const DynamicObject::Ptr&, const String&, bool)> DynamicObject::OnAuthorityChanged;
-
-void DynamicObject::StaticInitialize(void)
-{
-	ScriptVariable::Set("DomainPrivRead", DomainPrivRead, true, true);
-	ScriptVariable::Set("DomainPrivCheckResult", DomainPrivCheckResult, true, true);
-	ScriptVariable::Set("DomainPrivCommand", DomainPrivCommand, true, true);
-
-	ScriptVariable::Set("DomainPrevReadOnly", DomainPrivRead, true, true);
-	ScriptVariable::Set("DomainPrivReadWrite", DomainPrivRead | DomainPrivCheckResult | DomainPrivCommand, true, true);
-}
 
 DynamicObject::DynamicObject(void)
 { }
@@ -70,54 +59,9 @@ bool DynamicObject::IsActive(void) const
 	return GetActive();
 }
 
-void DynamicObject::SetAuthority(const String& type, bool value)
+bool DynamicObject::IsPaused(void) const
 {
-	ASSERT(!OwnsLock());
-
-	{
-		ObjectLock olock(this);
-
-		bool old_value = HasAuthority(type);
-
-		if (old_value == value)
-			return;
-
-		if (GetAuthorityInfo() == NULL)
-			SetAuthorityInfo(make_shared<Dictionary>());
-
-		GetAuthorityInfo()->Set(type, value);
-	}
-
-	OnAuthorityChanged(GetSelf(), type, value);
-}
-
-bool DynamicObject::HasAuthority(const String& type) const
-{
-	Dictionary::Ptr authorityInfo = GetAuthorityInfo();
-
-	if (!authorityInfo || !authorityInfo->Contains(type))
-		return true;
-
-	return authorityInfo->Get(type);
-}
-
-void DynamicObject::SetPrivileges(const String& instance, int privs)
-{
-	m_Privileges[instance] = privs;
-}
-
-bool DynamicObject::HasPrivileges(const String& instance, int privs) const
-{
-	if (privs == 0)
-		return true;
-
-	std::map<String, int>::const_iterator it;
-	it = m_Privileges.find(instance);
-
-	if (it == m_Privileges.end())
-		return false;
-
-	return (it->second & privs) == privs;
+	return GetPaused();
 }
 
 void DynamicObject::SetExtension(const String& key, const Object::Ptr& object)
@@ -183,6 +127,8 @@ void DynamicObject::Activate(void)
 	}
 
 	OnStarted(GetSelf());
+
+	SetAuthority(true);
 }
 
 void DynamicObject::Stop(void)
@@ -196,6 +142,8 @@ void DynamicObject::Stop(void)
 void DynamicObject::Deactivate(void)
 {
 	ASSERT(!OwnsLock());
+
+	SetAuthority(false);
 
 	{
 		ObjectLock olock(this);
@@ -223,6 +171,33 @@ void DynamicObject::OnStateLoaded(void)
 	/* Nothing to do here. */
 }
 
+void DynamicObject::Pause(void)
+{
+	SetPauseCalled(true);
+}
+
+void DynamicObject::Resume(void)
+{
+	SetResumeCalled(true);
+}
+
+void DynamicObject::SetAuthority(bool authority)
+{
+	if (authority && GetPaused()) {
+		SetResumeCalled(false);
+		Resume();
+		ASSERT(GetResumeCalled());
+		SetPaused(false);
+		OnResumed(GetSelf());
+	} else if (!authority && !GetPaused()) {
+		SetPauseCalled(false);
+		Pause();
+		ASSERT(GetPauseCalled());
+		SetPaused(true);
+		OnPaused(GetSelf());
+	}
+}
+
 Value DynamicObject::InvokeMethod(const String& method,
     const std::vector<Value>& arguments)
 {
@@ -233,22 +208,28 @@ Value DynamicObject::InvokeMethod(const String& method,
 	if (!methods)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Method '" + method + "' does not exist."));
 
-	String funcName = methods->Get(method);
+	Value funcName = methods->Get(method);
 
 	if (funcName.IsEmpty())
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Method '" + method + "' does not exist."));
 
-	ScriptFunction::Ptr func = ScriptFunctionRegistry::GetInstance()->GetItem(funcName);
+	ScriptFunction::Ptr func;
 
-	if (!func)
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Function '" + funcName + "' does not exist."));
+	if (funcName.IsObjectType<ScriptFunction>()) {
+		func = funcName;
+	} else {
+		func = ScriptFunction::GetByName(funcName);
+
+		if (!func)
+			BOOST_THROW_EXCEPTION(std::invalid_argument("Function '" + String(funcName) + "' does not exist."));
+	}
 
 	return func->Invoke(arguments);
 }
 
 void DynamicObject::DumpObjects(const String& filename, int attributeTypes)
 {
-	Log(LogInformation, "base", "Dumping program state to file '" + filename + "'");
+	Log(LogInformation, "DynamicObject", "Dumping program state to file '" + filename + "'");
 
 	String tempFilename = filename + ".tmp";
 
@@ -296,9 +277,36 @@ void DynamicObject::DumpObjects(const String& filename, int attributeTypes)
 	}
 }
 
+void DynamicObject::RestoreObject(const String& message, int attributeTypes)
+{
+	Dictionary::Ptr persistentObject = JsonDeserialize(message);
+
+	String type = persistentObject->Get("type");
+
+	DynamicType::Ptr dt = DynamicType::GetByName(type);
+
+	if (!dt)
+		return;
+
+	String name = persistentObject->Get("name");
+
+	DynamicObject::Ptr object = dt->GetObject(name);
+
+	if (!object)
+		return;
+
+	ASSERT(!object->IsActive());
+#ifdef _DEBUG
+	Log(LogDebug, "DynamicObject", "Restoring object '" + name + "' of type '" + type + "'.");
+#endif /* _DEBUG */
+	Dictionary::Ptr update = persistentObject->Get("update");
+	Deserialize(object, update, false, attributeTypes);
+	object->OnStateLoaded();
+}
+
 void DynamicObject::RestoreObjects(const String& filename, int attributeTypes)
 {
-	Log(LogInformation, "base", "Restoring program state from file '" + filename + "'");
+	Log(LogInformation, "DynamicObject", "Restoring program state from file '" + filename + "'");
 
 	std::fstream fp;
 	fp.open(filename.CStr(), std::ios_base::in);
@@ -307,38 +315,21 @@ void DynamicObject::RestoreObjects(const String& filename, int attributeTypes)
 
 	unsigned long restored = 0;
 
+	ParallelWorkQueue upq;
+
 	String message;
 	while (NetString::ReadStringFromStream(sfp, &message)) {
-		Dictionary::Ptr persistentObject = JsonDeserialize(message);
-
-		String type = persistentObject->Get("type");
-		String name = persistentObject->Get("name");
-		Dictionary::Ptr update = persistentObject->Get("update");
-
-		DynamicType::Ptr dt = DynamicType::GetByName(type);
-
-		if (!dt)
-			continue;
-
-		DynamicObject::Ptr object = dt->GetObject(name);
-
-		if (object) {
-			ASSERT(!object->IsActive());
-#ifdef _DEBUG
-			Log(LogDebug, "base", "Restoring object '" + name + "' of type '" + type + "'.");
-#endif /* _DEBUG */
-			Deserialize(object, update, false, attributeTypes);
-			object->OnStateLoaded();
-		}
-
+		upq.Enqueue(boost::bind(&DynamicObject::RestoreObject, message, attributeTypes));
 		restored++;
 	}
 
 	sfp->Close();
 
+	upq.Join();
+
 	std::ostringstream msgbuf;
 	msgbuf << "Restored " << restored << " objects";
-	Log(LogInformation, "base", msgbuf.str());
+	Log(LogInformation, "DynamicObject", msgbuf.str());
 }
 
 void DynamicObject::StopObjects(void)

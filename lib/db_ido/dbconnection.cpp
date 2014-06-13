@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,16 +17,17 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "db_ido/dbconnection.h"
-#include "db_ido/dbvalue.h"
-#include "icinga/icingaapplication.h"
-#include "icinga/host.h"
-#include "icinga/service.h"
-#include "base/dynamictype.h"
-#include "base/convert.h"
-#include "base/utility.h"
-#include "base/initialize.h"
-#include "base/logger_fwd.h"
+#include "db_ido/dbconnection.hpp"
+#include "db_ido/dbvalue.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "icinga/host.hpp"
+#include "icinga/service.hpp"
+#include "base/dynamictype.hpp"
+#include "base/convert.hpp"
+#include "base/objectlock.hpp"
+#include "base/utility.hpp"
+#include "base/initialize.hpp"
+#include "base/logger_fwd.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -42,11 +43,29 @@ void DbConnection::Start(void)
 	DynamicObject::Start();
 
 	DbObject::OnQuery.connect(boost::bind(&DbConnection::ExecuteQuery, this, _1));
+}
+
+void DbConnection::Resume(void)
+{
+	DynamicObject::Resume();
+
+	Log(LogInformation, "DbConnection", "Resuming IDO connection: " + GetName());
 
 	m_CleanUpTimer = make_shared<Timer>();
 	m_CleanUpTimer->SetInterval(60);
 	m_CleanUpTimer->OnTimerExpired.connect(boost::bind(&DbConnection::CleanUpHandler, this));
 	m_CleanUpTimer->Start();
+}
+
+void DbConnection::Pause(void)
+{
+	DynamicObject::Pause();
+
+	Log(LogInformation, "DbConnection", "Pausing IDO connection: " + GetName());
+
+	m_CleanUpTimer.reset();
+
+	ClearIDCache();
 }
 
 void DbConnection::StaticInitialize(void)
@@ -94,13 +113,14 @@ void DbConnection::ProgramStatusHandler(void)
 	query2.Fields->Set("process_id", Utility::GetPid());
 	query2.Fields->Set("daemon_mode", 1);
 	query2.Fields->Set("last_command_check", DbValue::FromTimestamp(Utility::GetTime()));
-	query2.Fields->Set("notifications_enabled", 1);
-	query2.Fields->Set("active_service_checks_enabled", 1);
+	query2.Fields->Set("notifications_enabled", (IcingaApplication::GetInstance()->GetEnableNotifications() ? 1 : 0));
+	query2.Fields->Set("active_host_checks_enabled", (IcingaApplication::GetInstance()->GetEnableHostChecks() ? 1 : 0));
+	query2.Fields->Set("passive_host_checks_enabled", 1);
+	query2.Fields->Set("active_service_checks_enabled", (IcingaApplication::GetInstance()->GetEnableServiceChecks() ? 1 : 0));
 	query2.Fields->Set("passive_service_checks_enabled", 1);
-	query2.Fields->Set("event_handlers_enabled", 1);
-	query2.Fields->Set("flap_detection_enabled", 1);
-	query2.Fields->Set("failure_prediction_enabled", 1);
-	query2.Fields->Set("process_performance_data", 1);
+	query2.Fields->Set("event_handlers_enabled", (IcingaApplication::GetInstance()->GetEnableEventHandlers() ? 1 : 0));
+	query2.Fields->Set("flap_detection_enabled", (IcingaApplication::GetInstance()->GetEnableFlapping() ? 1 : 0));
+	query2.Fields->Set("process_performance_data", (IcingaApplication::GetInstance()->GetEnablePerfdata() ? 1 : 0));
 	DbObject::OnQuery(query2);
 
 	DbQuery query3;
@@ -111,10 +131,39 @@ void DbConnection::ProgramStatusHandler(void)
 	query3.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
 	DbObject::OnQuery(query3);
 
-	InsertRuntimeVariable("total_services", static_cast<long>(DynamicType::GetObjects<Service>().size()));
-	InsertRuntimeVariable("total_scheduled_services", static_cast<long>(DynamicType::GetObjects<Service>().size()));
-	InsertRuntimeVariable("total_hosts", static_cast<long>(DynamicType::GetObjects<Host>().size()));
-	InsertRuntimeVariable("total_scheduled_hosts", static_cast<long>(DynamicType::GetObjects<Host>().size()));
+	InsertRuntimeVariable("total_services", std::distance(DynamicType::GetObjects<Service>().first, DynamicType::GetObjects<Service>().second));
+	InsertRuntimeVariable("total_scheduled_services", std::distance(DynamicType::GetObjects<Service>().first, DynamicType::GetObjects<Service>().second));
+	InsertRuntimeVariable("total_hosts", std::distance(DynamicType::GetObjects<Host>().first, DynamicType::GetObjects<Host>().second));
+	InsertRuntimeVariable("total_scheduled_hosts", std::distance(DynamicType::GetObjects<Host>().first, DynamicType::GetObjects<Host>().second));
+
+	Dictionary::Ptr vars = IcingaApplication::GetInstance()->GetVars();
+
+	if (!vars)
+		return;
+
+	Log(LogDebug, "DbConnection", "Dumping global vars for icinga application");
+
+	ObjectLock olock(vars);
+
+	BOOST_FOREACH(const Dictionary::Pair& kv, vars) {
+		if (!kv.first.IsEmpty()) {
+			Log(LogDebug, "DbConnection", "icinga application customvar key: '" + kv.first + "' value: '" + Convert::ToString(kv.second) + "'");
+
+			Dictionary::Ptr fields4 = make_shared<Dictionary>();
+			fields4->Set("varname", Convert::ToString(kv.first));
+			fields4->Set("varvalue", Convert::ToString(kv.second));
+			fields4->Set("config_type", 1);
+			fields4->Set("has_been_modified", 0);
+			fields4->Set("instance_id", 0); /* DbConnection class fills in real ID */
+
+			DbQuery query4;
+			query4.Table = "customvariables";
+			query4.Type = DbQueryInsert;
+			query4.Category = DbCatConfig;
+			query4.Fields = fields4;
+			DbObject::OnQuery(query4);
+		}
+	}
 }
 
 void DbConnection::CleanUpHandler(void)
@@ -142,21 +191,21 @@ void DbConnection::CleanUpHandler(void)
 		{ "systemcommands", "start_time" }
 	};
 
-	for (int i = 0; i < sizeof(tables) / sizeof(tables[0]); i++) {
+	for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++) {
 		double max_age = GetCleanup()->Get(tables[i].name + "_age");
 
 		if (max_age == 0)
 			continue;
 
 		CleanUpExecuteQuery(tables[i].name, tables[i].time_column, now - max_age);
-		Log(LogDebug, "db_ido", "Cleanup (" + tables[i].name + "): " + Convert::ToString(max_age) +
+		Log(LogNotice, "DbConnection", "Cleanup (" + tables[i].name + "): " + Convert::ToString(max_age) +
 		    " now: " + Convert::ToString(now) +
 		    " old: " + Convert::ToString(now - max_age));
 	}
 
 }
 
-void DbConnection::CleanUpExecuteQuery(const String& table, const String& time_column, double max_age)
+void DbConnection::CleanUpExecuteQuery(const String&, const String&, double)
 {
 	/* Default handler does nothing. */
 }
@@ -183,19 +232,55 @@ DbReference DbConnection::GetObjectID(const DbObject::Ptr& dbobj) const
 
 void DbConnection::SetInsertID(const DbObject::Ptr& dbobj, const DbReference& dbref)
 {
+	SetInsertID(dbobj->GetType(), GetObjectID(dbobj), dbref);
+}
+
+void DbConnection::SetInsertID(const DbType::Ptr& type, const DbReference& objid, const DbReference& dbref)
+{
+	if (!objid.IsValid())
+		return;
+
 	if (dbref.IsValid())
-		m_InsertIDs[dbobj] = dbref;
+		m_InsertIDs[std::make_pair(type, objid)] = dbref;
 	else
-		m_InsertIDs.erase(dbobj);
+		m_InsertIDs.erase(std::make_pair(type, objid));
 }
 
 DbReference DbConnection::GetInsertID(const DbObject::Ptr& dbobj) const
 {
-	std::map<DbObject::Ptr, DbReference>::const_iterator it;
+	return GetInsertID(dbobj->GetType(), GetObjectID(dbobj));
+}
 
-	it = m_InsertIDs.find(dbobj);
+DbReference DbConnection::GetInsertID(const DbType::Ptr& type, const DbReference& objid) const
+{
+	if (!objid.IsValid())
+		return DbReference();
+
+	std::map<std::pair<DbType::Ptr, DbReference>, DbReference>::const_iterator it;
+
+	it = m_InsertIDs.find(std::make_pair(type, objid));
 
 	if (it == m_InsertIDs.end())
+		return DbReference();
+
+	return it->second;
+}
+
+void DbConnection::SetNotificationInsertID(const CustomVarObject::Ptr& obj, const DbReference& dbref)
+{
+	if (dbref.IsValid())
+		m_NotificationInsertIDs[obj] = dbref;
+	else
+		m_NotificationInsertIDs.erase(obj);
+}
+
+DbReference DbConnection::GetNotificationInsertID(const CustomVarObject::Ptr& obj) const
+{
+	std::map<CustomVarObject::Ptr, DbReference>::const_iterator it;
+
+	it = m_NotificationInsertIDs.find(obj);
+
+	if (it == m_NotificationInsertIDs.end())
 		return DbReference();
 
 	return it->second;
@@ -218,6 +303,7 @@ void DbConnection::ClearIDCache(void)
 {
 	m_ObjectIDs.clear();
 	m_InsertIDs.clear();
+	m_NotificationInsertIDs.clear();
 	m_ActiveObjects.clear();
 	m_ConfigUpdates.clear();
 	m_StatusUpdates.clear();
@@ -269,5 +355,50 @@ void DbConnection::UpdateAllObjects(void)
 				dbobj->SendStatusUpdate();
 			}
 		}
+	}
+}
+
+void DbConnection::PrepareDatabase(void)
+{
+	/* 
+	 * only clear tables on reconnect which
+	 * cannot be updated by their existing ids
+	 * for details check https://dev.icinga.org/issues/5565
+	 */
+
+	//ClearConfigTable("commands");
+	ClearConfigTable("comments");
+	ClearConfigTable("contact_addresses");
+	ClearConfigTable("contact_notificationcommands");
+	ClearConfigTable("contactgroup_members");
+	//ClearConfigTable("contactgroups");
+	//ClearConfigTable("contacts");
+	//ClearConfigTable("contactstatus");
+	ClearConfigTable("customvariables");
+	ClearConfigTable("customvariablestatus");
+	ClearConfigTable("endpoints");
+	ClearConfigTable("endpointstatus");
+	ClearConfigTable("host_contactgroups");
+	ClearConfigTable("host_contacts");
+	ClearConfigTable("host_parenthosts");
+	ClearConfigTable("hostdependencies");
+	ClearConfigTable("hostgroup_members");
+	//ClearConfigTable("hostgroups");
+	//ClearConfigTable("hosts");
+	//ClearConfigTable("hoststatus");
+	ClearConfigTable("programstatus");
+	ClearConfigTable("scheduleddowntime");
+	ClearConfigTable("service_contactgroups");
+	ClearConfigTable("service_contacts");
+	ClearConfigTable("servicedependencies");
+	ClearConfigTable("servicegroup_members");
+	//ClearConfigTable("servicegroups");
+	//ClearConfigTable("services");
+	//ClearConfigTable("servicestatus");
+	ClearConfigTable("timeperiod_timeranges");
+	//ClearConfigTable("timeperiods");
+
+	BOOST_FOREACH(const DbType::Ptr& type, DbType::GetAllTypes()) {
+		FillIDCache(type);
 	}
 }

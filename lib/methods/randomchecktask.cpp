@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -20,34 +20,29 @@
 #ifndef _WIN32
 #	include <stdlib.h>
 #endif /* _WIN32 */
-#include "methods/randomchecktask.h"
-#include "base/utility.h"
-#include "base/convert.h"
-#include "base/scriptfunction.h"
-#include "base/logger_fwd.h"
+#include "icinga/icingaapplication.hpp"
+#include "methods/randomchecktask.hpp"
+#include "base/utility.hpp"
+#include "base/convert.hpp"
+#include "base/scriptfunction.hpp"
+#include "base/logger_fwd.hpp"
 
 using namespace icinga;
 
 REGISTER_SCRIPTFUNCTION(RandomCheck, &RandomCheckTask::ScriptFunc);
 
-CheckResult::Ptr RandomCheckTask::ScriptFunc(const Service::Ptr&)
+void RandomCheckTask::ScriptFunc(const Checkable::Ptr& service, const CheckResult::Ptr& cr)
 {
-	char name[255];
-
-	if (gethostname(name, sizeof(name)) < 0)
-		strcpy(name, "<unknown host>");
-
 	String output = "Hello from ";
-	output += name;
+	output += Utility::GetFQDN();
 
 	Dictionary::Ptr perfdata = make_shared<Dictionary>();
-	perfdata->Set("time", Utility::GetTime());
+	perfdata->Set("time", Convert::ToDouble(Utility::GetTime()));
 
-	CheckResult::Ptr cr = make_shared<CheckResult>();
 	cr->SetOutput(output);
 	cr->SetPerformanceData(perfdata);
 	cr->SetState(static_cast<ServiceState>(Utility::Random() % 4));
 
-	return cr;
+	service->ProcessCheckResult(cr);
 }
 

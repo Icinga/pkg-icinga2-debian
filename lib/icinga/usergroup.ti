@@ -1,9 +1,9 @@
-#include "base/dynamicobject.h"
+#include "icinga/customvarobject.hpp"
 
 namespace icinga
 {
 
-class UserGroup : DynamicObject
+class UserGroup : CustomVarObject
 {
 	[config] String display_name {
 		get {{{
@@ -13,6 +13,8 @@ class UserGroup : DynamicObject
 				return m_DisplayName;
 		}}}
 	};
+
+	[config] Array::Ptr groups;
 };
 
 }

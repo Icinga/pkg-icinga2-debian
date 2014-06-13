@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,22 +17,39 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "compat/checkresultreader.h"
-#include "icinga/service.h"
-#include "icinga/pluginutility.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
-#include "base/convert.h"
-#include "base/application.h"
-#include "base/utility.h"
-#include "base/exception.h"
-#include "base/context.h"
+#include "compat/checkresultreader.hpp"
+#include "icinga/service.hpp"
+#include "icinga/pluginutility.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "base/dynamictype.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/convert.hpp"
+#include "base/application.hpp"
+#include "base/utility.hpp"
+#include "base/exception.hpp"
+#include "base/context.hpp"
+#include "base/statsfunction.hpp"
 #include <fstream>
 
 using namespace icinga;
 
 REGISTER_TYPE(CheckResultReader);
+
+REGISTER_STATSFUNCTION(CheckResultReaderStats, &CheckResultReader::StatsFunc);
+
+Value CheckResultReader::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+{
+	Dictionary::Ptr nodes = make_shared<Dictionary>();
+
+	BOOST_FOREACH(const CheckResultReader::Ptr& checkresultreader, DynamicType::GetObjects<CheckResultReader>()) {
+		nodes->Set(checkresultreader->GetName(), 1); //add more stats
+	}
+
+	status->Set("checkresultreader", nodes);
+
+	return 0;
+}
 
 /**
  * @threadsafety Always.
@@ -101,7 +118,7 @@ void CheckResultReader::ProcessCheckResultFile(const String& path) const
 	Host::Ptr host = Host::GetByName(attrs["host_name"]);
 
 	if (!host) {
-		Log(LogWarning, "compat", "Ignoring checkresult file for host '" + attrs["host_name"] +
+		Log(LogWarning, "CheckResultReader", "Ignoring checkresult file for host '" + attrs["host_name"] +
 		    "': Host does not exist.");
 
 		return;
@@ -110,20 +127,23 @@ void CheckResultReader::ProcessCheckResultFile(const String& path) const
 	Service::Ptr service = host->GetServiceByShortName(attrs["service_description"]);
 
 	if (!service) {
-		Log(LogWarning, "compat", "Ignoring checkresult file for host '" + attrs["host_name"] +
+		Log(LogWarning, "CheckResultReader", "Ignoring checkresult file for host '" + attrs["host_name"] +
 		    "', service '" + attrs["service_description"] + "': Service does not exist.");
 
 		return;
 	}
 
-	CheckResult::Ptr result = PluginUtility::ParseCheckOutput(attrs["output"]);
+	CheckResult::Ptr result = make_shared<CheckResult>();
+	std::pair<String, Value> co = PluginUtility::ParseCheckOutput(attrs["output"]);
+	result->SetOutput(co.first);
+	result->SetPerformanceData(co.second);
 	result->SetState(PluginUtility::ExitStatusToState(Convert::ToLong(attrs["return_code"])));
 	result->SetExecutionStart(Convert::ToDouble(attrs["start_time"]));
 	result->SetExecutionEnd(Convert::ToDouble(attrs["finish_time"]));
 
 	service->ProcessCheckResult(result);
 
-	Log(LogDebug, "compat", "Processed checkresult file for host '" + attrs["host_name"] +
+	Log(LogDebug, "CheckResultReader", "Processed checkresult file for host '" + attrs["host_name"] +
 		    "', service '" + attrs["service_description"] + "'");
 
 	{

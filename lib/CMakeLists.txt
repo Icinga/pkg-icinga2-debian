@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -21,3 +21,4 @@ add_subdirectory(icinga)
 add_subdirectory(db_ido)
 add_subdirectory(methods)
 add_subdirectory(hello)
+add_subdirectory(remote)

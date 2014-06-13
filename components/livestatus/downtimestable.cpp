@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,11 +17,11 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "livestatus/downtimestable.h"
-#include "livestatus/servicestable.h"
-#include "icinga/service.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
+#include "livestatus/downtimestable.hpp"
+#include "livestatus/servicestable.hpp"
+#include "icinga/service.hpp"
+#include "base/dynamictype.hpp"
+#include "base/objectlock.hpp"
 #include <boost/tuple/tuple.hpp>
 #include <boost/foreach.hpp>
 
@@ -71,7 +71,7 @@ void DowntimesTable::FetchRows(const AddRowFunction& addRowFn)
 	}
 }
 
-Object::Ptr DowntimesTable::ServiceAccessor(const Value& row, const Column::ObjectAccessor& parentObjectAccessor)
+Object::Ptr DowntimesTable::ServiceAccessor(const Value& row, const Column::ObjectAccessor&)
 {
 	Downtime::Ptr downtime = static_cast<Downtime::Ptr>(row);
 	return Service::GetOwnerByDowntimeID(downtime->GetId());
@@ -115,9 +115,9 @@ Value DowntimesTable::TypeAccessor(const Value& row)
 Value DowntimesTable::IsServiceAccessor(const Value& row)
 {
 	Downtime::Ptr downtime = static_cast<Downtime::Ptr>(row);
-	Service::Ptr svc = Service::GetOwnerByDowntimeID(downtime->GetId());
+	Checkable::Ptr checkable = Checkable::GetOwnerByDowntimeID(downtime->GetId());
 
-	return (svc->IsHostCheck() ? 0 : 1);
+	return (dynamic_pointer_cast<Host>(checkable) ? 0 : 1);
 }
 
 Value DowntimesTable::StartTimeAccessor(const Value& row)

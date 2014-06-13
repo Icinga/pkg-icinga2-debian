@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -15,29 +15,31 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(application.ti application.th)
-mkclass_target(dynamicobject.ti dynamicobject.th)
-mkclass_target(filelogger.ti filelogger.th)
-mkclass_target(logger.ti logger.th)
-mkclass_target(script.ti script.th)
-mkclass_target(streamlogger.ti streamlogger.th)
-mkclass_target(sysloglogger.ti sysloglogger.th)
+mkclass_target(application.ti application.thpp)
+mkclass_target(dynamicobject.ti dynamicobject.thpp)
+mkclass_target(filelogger.ti filelogger.thpp)
+mkclass_target(logger.ti logger.thpp)
+mkclass_target(streamlogger.ti streamlogger.thpp)
+mkclass_target(sysloglogger.ti sysloglogger.thpp)
 
 add_library(base SHARED
-  application.cpp application.th array.cpp bufferedstream.cpp context.cpp
-  convert.cpp dictionary.cpp dynamicobject.cpp dynamicobject.th dynamictype.cpp
-  exception.cpp fifo.cpp filelogger.cpp filelogger.th logger.cpp logger.th
+  application.cpp application.thpp array.cpp context.cpp
+  convert.cpp dictionary.cpp dynamicobject.cpp dynamicobject.thpp dynamictype.cpp
+  exception.cpp fifo.cpp filelogger.cpp filelogger.thpp logger.cpp logger.thpp
   netstring.cpp networkstream.cpp object.cpp objectlock.cpp process.cpp
-  process-unix.cpp process-windows.cpp qstring.cpp ringbuffer.cpp script.cpp
-  script.th scriptfunction.cpp scriptfunctionwrapper.cpp scriptinterpreter.cpp
-  scriptlanguage.cpp scriptvariable.cpp serializer.cpp socket.cpp stacktrace.cpp
-  stdiostream.cpp stream_bio.cpp stream.cpp streamlogger.cpp streamlogger.th
-  sysloglogger.cpp sysloglogger.th tcpsocket.cpp threadpool.cpp timer.cpp
+  qstring.cpp ringbuffer.cpp scriptfunction.cpp scriptfunctionwrapper.cpp
+  scriptutils.cpp scriptvariable.cpp serializer.cpp socket.cpp stacktrace.cpp
+  statsfunction.cpp stdiostream.cpp stream.cpp streamlogger.cpp streamlogger.thpp
+  sysloglogger.cpp sysloglogger.thpp tcpsocket.cpp threadpool.cpp timer.cpp
   tlsstream.cpp tlsutility.cpp type.cpp unixsocket.cpp utility.cpp value.cpp
-  workqueue.cpp zlibstream.cpp
+  value-operators.cpp workqueue.cpp
 )
 
 target_link_libraries(base ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} cJSON mmatch)
+
+if(HAVE_LIBEXECINFO)
+  target_link_libraries(base execinfo)
+endif()
 
 include_directories(${icinga2_SOURCE_DIR}/third-party/cJSON)
 link_directories(${icinga2_BINARY_DIR}/third-party/cJSON)

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,9 +17,10 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/stacktrace.h"
-#include "base/qstring.h"
-#include "base/utility.h"
+#include "base/stacktrace.hpp"
+#include "base/qstring.hpp"
+#include "base/utility.hpp"
+#include "base/initialize.hpp"
 
 #ifdef HAVE_BACKTRACE_SYMBOLS
 #	include <execinfo.h>
@@ -27,7 +28,7 @@
 
 using namespace icinga;
 
-boost::once_flag StackTrace::m_OnceFlag = BOOST_ONCE_INIT;
+INITIALIZE_ONCE(&StackTrace::StaticInitialize);
 
 #ifdef _MSC_VER
 #	pragma optimize("", off)
@@ -35,8 +36,6 @@ boost::once_flag StackTrace::m_OnceFlag = BOOST_ONCE_INIT;
 
 StackTrace::StackTrace(void)
 {
-	boost::call_once(m_OnceFlag, &StackTrace::Initialize);
-
 #ifdef HAVE_BACKTRACE_SYMBOLS
 	m_Count = backtrace(m_Frames, sizeof(m_Frames) / sizeof(m_Frames[0]));
 #else /* HAVE_BACKTRACE_SYMBOLS */
@@ -55,8 +54,6 @@ StackTrace::StackTrace(void)
 #ifdef _WIN32
 StackTrace::StackTrace(PEXCEPTION_POINTERS exi)
 {
-	boost::call_once(m_OnceFlag, &StackTrace::Initialize);
-
 	STACKFRAME64 frame;
 	int architecture;
 
@@ -89,7 +86,7 @@ StackTrace::StackTrace(PEXCEPTION_POINTERS exi)
 }
 #endif /* _WIN32 */
 
-void StackTrace::Initialize(void)
+void StackTrace::StaticInitialize(void)
 {
 #ifdef _WIN32
 	(void) SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
@@ -118,7 +115,7 @@ void StackTrace::Print(std::ostream& fp, int ignoreFrames) const
 
 		char *sym_begin = strchr(messages[i], '(');
 
-		if (sym_begin != NULL) {
+		if (sym_begin) {
 			char *sym_end = strchr(sym_begin, '+');
 
 			if (sym_end != NULL) {
@@ -128,7 +125,15 @@ void StackTrace::Print(std::ostream& fp, int ignoreFrames) const
 				if (sym_demangled.IsEmpty())
 					sym_demangled = "<unknown function>";
 
-				message = String(messages[i], sym_begin) + ": " + sym_demangled + " (" + String(sym_end);
+				String path = String(messages[i], sym_begin);
+
+				size_t slashp = path.RFind("/");
+
+				if (slashp != String::NPos)
+					path = path.SubStr(slashp + 1);
+
+				message = path + ": " + sym_demangled + " (" + String(sym_end);
+				message += " (" + Utility::GetSymbolSource(m_Frames[i]) + ")";
 			}
 		}
 
@@ -143,33 +148,11 @@ void StackTrace::Print(std::ostream& fp, int ignoreFrames) const
 #	endif /* HAVE_BACKTRACE_SYMBOLS */
 #else /* _WIN32 */
 	for (int i = ignoreFrames + 1; i < m_Count; i++) {
-		char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
-		PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
-		pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-		pSymbol->MaxNameLen = MAX_SYM_NAME;
-
-		DWORD64 dwAddress = (DWORD64)m_Frames[i];
-		DWORD dwDisplacement;
-		DWORD64 dwDisplacement64;
-
-		IMAGEHLP_LINE64 line;
-		line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
-
-		fp << "\t(" << i - ignoreFrames - 1 << ") ";
-
-		if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &line))
-			fp << line.FileName << ":" << line.LineNumber;
-		else
-			fp << "(unknown file/line)";
-
-		fp << ": ";
-
-		if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol))
-			fp << pSymbol->Name << "+" << dwDisplacement64;
-		else
-			fp << "(unknown function)";
-
-		 fp << std::endl;
+		fp << "\t(" << i - ignoreFrames - 1 << ") "
+		   << Utility::GetSymbolSource(m_Frames[i])
+		   << ": "
+		   << Utility::GetSymbolName(m_Frames[i])
+		   << std::endl;
 	}
 #endif /* _WIN32 */
 }

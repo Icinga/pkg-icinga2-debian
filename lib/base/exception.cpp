@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,55 +17,98 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/exception.h"
+#include "base/exception.hpp"
+#include <boost/thread/tss.hpp>
+
+#ifndef _MSC_VER
+#	include <cxxabi.h>
+#endif /* _MSC_VER */
 
 using namespace icinga;
 
 static boost::thread_specific_ptr<StackTrace> l_LastExceptionStack;
 static boost::thread_specific_ptr<ContextTrace> l_LastExceptionContext;
 
-#ifndef _WIN32
-extern "C"
-void __cxa_throw(void *obj, void *pvtinfo, void (*dest)(void *))
+#ifndef _MSC_VER
+#	if __clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ > 3)
+#		define TYPEINFO_TYPE std::type_info
+#	else
+#		define TYPEINFO_TYPE void
+#	endif
+#endif /* _MSC_VER */
+
+#if !defined(__GLIBCXX__) && !defined(_WIN32)
+static boost::thread_specific_ptr<void *> l_LastExceptionObj;
+static boost::thread_specific_ptr<TYPEINFO_TYPE *> l_LastExceptionPvtInfo;
+
+typedef void (*DestCallback)(void *);
+static boost::thread_specific_ptr<DestCallback> l_LastExceptionDest;
+
+extern "C" void __cxa_throw(void *obj, TYPEINFO_TYPE *pvtinfo, void (*dest)(void *));
+extern "C" void __cxa_rethrow_primary_exception(void* thrown_object);
+#endif /* !__GLIBCXX__ && !_WIN32 */
+
+void icinga::RethrowUncaughtException(void)
 {
-	typedef void (*cxa_throw_fn)(void *, void *, void (*) (void *)) __attribute__((noreturn));
+#if defined(__GLIBCXX__) || defined(_WIN32)
+	throw;
+#else /* __GLIBCXX__ || _WIN32 */
+	__cxa_throw(*l_LastExceptionObj.get(), *l_LastExceptionPvtInfo.get(), *l_LastExceptionDest.get());
+#endif /* __GLIBCXX__ || _WIN32 */
+}
+
+#ifndef _MSC_VER
+extern "C"
+void __cxa_throw(void *obj, TYPEINFO_TYPE *pvtinfo, void (*dest)(void *))
+{
+	std::type_info *tinfo = static_cast<std::type_info *>(pvtinfo);
+
+	typedef void (*cxa_throw_fn)(void *, std::type_info *, void (*)(void *)) __attribute__((noreturn));
 	static cxa_throw_fn real_cxa_throw;
+
+#ifndef __GLIBCXX__
+	l_LastExceptionObj.reset(new void *(obj));
+	l_LastExceptionPvtInfo.reset(new TYPEINFO_TYPE *(pvtinfo));
+	l_LastExceptionDest.reset(new DestCallback(dest));
+#endif /* __GLIBCXX__ */
 
 	if (real_cxa_throw == 0)
 		real_cxa_throw = (cxa_throw_fn)dlsym(RTLD_NEXT, "__cxa_throw");
 
-#ifndef __APPLE__
+#ifdef __GLIBCXX__
 	void *thrown_ptr = obj;
-	const std::type_info *tinfo = static_cast<std::type_info *>(pvtinfo);
 	const std::type_info *boost_exc = &typeid(boost::exception);
+	const std::type_info *user_exc = &typeid(user_error);
 
 	/* Check if the exception is a pointer type. */
 	if (tinfo->__is_pointer_p())
 		thrown_ptr = *(void **)thrown_ptr;
-#endif /* __APPLE__ */
 
-	StackTrace stack;
-	SetLastExceptionStack(stack);
+	if (!user_exc->__do_catch(tinfo, &thrown_ptr, 1)) {
+#endif /* __GLIBCXX__ */
+		StackTrace stack;
+		SetLastExceptionStack(stack);
 
-	ContextTrace context;
-	SetLastExceptionContext(context);
+		ContextTrace context;
+		SetLastExceptionContext(context);
 
-#ifndef __APPLE__
-	/* Check if thrown_ptr inherits from boost::exception. */
-	if (boost_exc->__do_catch(tinfo, &thrown_ptr, 1)) {
-		boost::exception *ex = (boost::exception *)thrown_ptr;
+#ifdef __GLIBCXX__
+		/* Check if thrown_ptr inherits from boost::exception. */
+		if (boost_exc->__do_catch(tinfo, &thrown_ptr, 1)) {
+			boost::exception *ex = (boost::exception *)thrown_ptr;
 
-		if (boost::get_error_info<StackTraceErrorInfo>(*ex) == NULL)
-			*ex << StackTraceErrorInfo(stack);
+			if (boost::get_error_info<StackTraceErrorInfo>(*ex) == NULL)
+				*ex << StackTraceErrorInfo(stack);
 
-		if (boost::get_error_info<ContextTraceErrorInfo>(*ex) == NULL)
-			*ex << ContextTraceErrorInfo(context);
+			if (boost::get_error_info<ContextTraceErrorInfo>(*ex) == NULL)
+				*ex << ContextTraceErrorInfo(context);
+		}
 	}
-#endif /* __APPLE__ */
+#endif /* __GLIBCXX__ */
 
-	real_cxa_throw(obj, pvtinfo, dest);
+	real_cxa_throw(obj, tinfo, dest);
 }
-#endif /* _WIN32 */
+#endif /* _MSC_VER */
 
 StackTrace *icinga::GetLastExceptionStack(void)
 {
@@ -109,3 +152,4 @@ String icinga::DiagnosticInformation(boost::exception_ptr eptr)
 
 	return boost::diagnostic_information(eptr);
 }
+

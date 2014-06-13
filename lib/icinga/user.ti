@@ -1,9 +1,10 @@
-#include "base/dynamicobject.h"
+#include "icinga/customvarobject.hpp"
+#include "base/array.hpp"
 
 namespace icinga
 {
 
-class User : DynamicObject
+class User : CustomVarObject
 {
 	[config] String display_name {
 		get {{{
@@ -13,15 +14,18 @@ class User : DynamicObject
 				return m_DisplayName;
 		}}}
 	};
-	[config] Dictionary::Ptr macros;
-	[config] Array::Ptr groups;
-	[config] String notification_period (NotificationPeriodRaw);
-	[config] int notification_type_filter {
-		default {{{ return ~(int)0; }}}
+	[config] Array::Ptr groups {
+		default {{{ return make_shared<Array>(); }}}
 	};
-	[config] int notification_state_filter {
-		default {{{ return ~(int)0; }}}
-	};
+	[config] String period (PeriodRaw);
+	[config] Array::Ptr types;
+	int type_filter_real (TypeFilter);
+	[config] Array::Ptr states;
+	int state_filter_real (StateFilter);
+
+	[config] String email;
+	[config] String pager;
+
 	[state] bool enable_notifications;
 	[state] double last_notification;
 };

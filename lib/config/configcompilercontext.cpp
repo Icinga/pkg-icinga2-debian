@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,26 +17,30 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "config/configcompilercontext.h"
-#include "base/utility.h"
-#include "base/logger_fwd.h"
-#include "base/singleton.h"
+#include "config/configcompilercontext.hpp"
+#include "base/singleton.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
-void ConfigCompilerContext::AddMessage(bool error, const String& message)
+void ConfigCompilerContext::AddMessage(bool error, const String& message, const DebugInfo& di)
 {
-	m_Messages.push_back(ConfigCompilerMessage(error, message));
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	m_Messages.push_back(ConfigCompilerMessage(error, message, di));
 }
 
 std::vector<ConfigCompilerMessage> ConfigCompilerContext::GetMessages(void) const
 {
+	boost::mutex::scoped_lock lock(m_Mutex);
+
 	return m_Messages;
 }
 
 bool ConfigCompilerContext::HasErrors(void) const
 {
+	boost::mutex::scoped_lock lock(m_Mutex);
+
 	BOOST_FOREACH(const ConfigCompilerMessage& message, m_Messages) {
 		if (message.Error)
 			return true;
@@ -47,6 +51,8 @@ bool ConfigCompilerContext::HasErrors(void) const
 
 void ConfigCompilerContext::Reset(void)
 {
+	boost::mutex::scoped_lock lock(m_Mutex);
+
 	m_Messages.clear();
 }
 

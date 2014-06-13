@@ -1,7 +1,7 @@
 %{
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -18,10 +18,10 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "config/configcompiler.h"
-#include "config/expression.h"
-#include "config/typerule.h"
-#include "config/configcompilercontext.h"
+#include "config/configcompiler.hpp"
+#include "config/typerule.hpp"
+#include "config/configcompilercontext.hpp"
+#include "config/aexpression.hpp"
 
 using namespace icinga;
 
@@ -46,6 +46,8 @@ do {							\
 	result = yyextra->ReadInput(buf, max_size);	\
 } while (0)
 
+extern int ignore_newlines;
+
 struct lex_buf {
 	char *buf;
 	size_t size;
@@ -57,10 +59,10 @@ static void lb_init(lex_buf *lb)
 	lb->size = 0;
 }
 
-static void lb_cleanup(lex_buf *lb)
+/*static void lb_cleanup(lex_buf *lb)
 {
 	free(lb->buf);
-}
+}*/
 
 static void lb_append_char(lex_buf *lb, char new_char)
 {
@@ -195,36 +197,54 @@ static char *lb_steal(lex_buf *lb)
 
 
 \/\/[^\n]*			/* ignore C++-style comments */
-[ \t\r\n]			/* ignore whitespace */
+#[^\n]*				/* ignore shell-style comments */
+[ \t]				/* ignore whitespace */
 
 <INITIAL>{
-type				return T_TYPE;
-dictionary			{ yylval->type = TypeDictionary; return T_TYPE_DICTIONARY; }
-array				{ yylval->type = TypeArray; return T_TYPE_ARRAY; }
-number				{ yylval->type = TypeNumber; return T_TYPE_NUMBER; }
-string				{ yylval->type = TypeString; return T_TYPE_STRING; }
-scalar				{ yylval->type = TypeScalar; return T_TYPE_SCALAR; }
-any				{ yylval->type = TypeAny; return T_TYPE_ANY; }
-name				{ yylval->type = TypeName; return T_TYPE_NAME; }
+%type				return T_TYPE;
+%dictionary			{ yylval->type = TypeDictionary; return T_TYPE_DICTIONARY; }
+%array				{ yylval->type = TypeArray; return T_TYPE_ARRAY; }
+%number				{ yylval->type = TypeNumber; return T_TYPE_NUMBER; }
+%string				{ yylval->type = TypeString; return T_TYPE_STRING; }
+%scalar				{ yylval->type = TypeScalar; return T_TYPE_SCALAR; }
+%any				{ yylval->type = TypeAny; return T_TYPE_ANY; }
+%name				{ yylval->type = TypeName; return T_TYPE_NAME; }
 %validator			{ return T_VALIDATOR; }
 %require			{ return T_REQUIRE; }
 %attribute			{ return T_ATTRIBUTE; }
+%inherits			return T_INHERITS;
 object				return T_OBJECT;
 template			return T_TEMPLATE;
 include				return T_INCLUDE;
 include_recursive		return T_INCLUDE_RECURSIVE;
 library				return T_LIBRARY;
-inherits			return T_INHERITS;
 null				return T_NULL;
 partial				return T_PARTIAL;
 true				{ yylval->num = 1; return T_NUMBER; }
 false				{ yylval->num = 0; return T_NUMBER; }
-set				return T_VAR;
-var				return T_VAR;
 const				return T_CONST;
-\<\<				return T_SHIFT_LEFT;
-\>\>				return T_SHIFT_RIGHT;
-[a-zA-Z_][:a-zA-Z0-9\-_]*	{ yylval->text = strdup(yytext); return T_IDENTIFIER; }
+apply				return T_APPLY;
+to				return T_TO;
+where				return T_WHERE;
+import				return T_IMPORT;
+assign				return T_ASSIGN;
+ignore				return T_IGNORE;
+__function			return T_FUNCTION;
+__return			return T_RETURN;
+zone				return T_ZONE;
+__for				return T_FOR;
+\<\<				{ yylval->op = &AExpression::OpShiftLeft; return T_SHIFT_LEFT; }
+\>\>				{ yylval->op = &AExpression::OpShiftRight; return T_SHIFT_RIGHT; }
+\<=				{ yylval->op = &AExpression::OpLessThanOrEqual; return T_LESS_THAN_OR_EQUAL; }
+\>=				{ yylval->op = &AExpression::OpGreaterThanOrEqual; return T_GREATER_THAN_OR_EQUAL; }
+==				{ yylval->op = &AExpression::OpEqual; return T_EQUAL; }
+!=				{ yylval->op = &AExpression::OpNotEqual; return T_NOT_EQUAL; }
+!in				{ yylval->op = &AExpression::OpNotIn; return T_NOT_IN; }
+in				{ yylval->op = &AExpression::OpIn; return T_IN; }
+&&				{ yylval->op = &AExpression::OpLogicalAnd; return T_LOGICAL_AND; }
+\|\|				{ yylval->op = &AExpression::OpLogicalOr; return T_LOGICAL_OR; }
+[a-zA-Z_][a-zA-Z0-9\-_]*	{ yylval->text = strdup(yytext); return T_IDENTIFIER; }
+@[a-zA-Z_][a-zA-Z0-9\-_]*	{ yylval->text = strdup(yytext + 1); return T_IDENTIFIER; }
 \<[^\>]*\>			{ yytext[yyleng-1] = '\0'; yylval->text = strdup(yytext + 1); return T_STRING_ANGLE; }
 -?[0-9]+(\.[0-9]+)?ms		{ yylval->num = strtod(yytext, NULL) / 1000; return T_NUMBER; }
 -?[0-9]+(\.[0-9]+)?d		{ yylval->num = strtod(yytext, NULL) * 60 * 60 * 24; return T_NUMBER; }
@@ -232,13 +252,22 @@ const				return T_CONST;
 -?[0-9]+(\.[0-9]+)?m		{ yylval->num = strtod(yytext, NULL) * 60; return T_NUMBER; }
 -?[0-9]+(\.[0-9]+)?s		{ yylval->num = strtod(yytext, NULL); return T_NUMBER; }
 -?[0-9]+(\.[0-9]+)?		{ yylval->num = strtod(yytext, NULL); return T_NUMBER; }
-=				{ yylval->op = OperatorSet; return T_EQUAL; }
-\+=				{ yylval->op = OperatorPlus; return T_PLUS_EQUAL; }
--=				{ yylval->op = OperatorMinus; return T_MINUS_EQUAL; }
-\*=				{ yylval->op = OperatorMultiply; return T_MULTIPLY_EQUAL; }
-\/=				{ yylval->op = OperatorDivide; return T_DIVIDE_EQUAL; }
+=				{ yylval->op = &AExpression::OpSet; return T_SET; }
+\+=				{ yylval->op = &AExpression::OpSetPlus; return T_SET_PLUS; }
+-=				{ yylval->op = &AExpression::OpSetMinus; return T_SET_MINUS; }
+\*=				{ yylval->op = &AExpression::OpSetMultiply; return T_SET_MULTIPLY; }
+\/=				{ yylval->op = &AExpression::OpSetDivide; return T_SET_DIVIDE; }
+\+				{ yylval->op = &AExpression::OpAdd; return T_PLUS; }
+\-				{ yylval->op = &AExpression::OpSubtract; return T_MINUS; }
+\*				{ yylval->op = &AExpression::OpMultiply; return T_MULTIPLY; }
+\/				{ yylval->op = &AExpression::OpMultiply; return T_DIVIDE_OP; }
+\&				{ yylval->op = &AExpression::OpBinaryAnd; return T_BINARY_AND; }
+\|				{ yylval->op = &AExpression::OpBinaryOr; return T_BINARY_OR; }
+\<				{ yylval->op = &AExpression::OpLessThan; return T_LESS_THAN; }
+\>				{ yylval->op = &AExpression::OpLessThan; return T_GREATER_THAN; }
 }
 
+[\r\n]+				{ yycolumn -= strlen(yytext) - 1; if (!ignore_newlines) return T_NEWLINE; }
 .				return yytext[0];
 
 %%

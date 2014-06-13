@@ -1,0 +1,22 @@
+#include "base/dynamicobject.hpp"
+
+namespace icinga
+{
+
+class Endpoint : DynamicObject
+{
+	[config] String host;
+	[config] String port {
+		default {{{ return "5665"; }}}
+	};
+	[config] double log_duration {
+		default {{{ return 86400; }}}
+	};
+
+	[state] double local_log_position;
+	[state] double remote_log_position;
+
+	bool syncing;
+};
+
+}

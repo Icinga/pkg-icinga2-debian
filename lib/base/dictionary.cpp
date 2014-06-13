@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,11 +17,10 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/dictionary.h"
-#include "base/objectlock.h"
-#include "base/debug.h"
+#include "base/dictionary.hpp"
+#include "base/objectlock.hpp"
+#include "base/debug.hpp"
 #include <cJSON.h>
-#include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -59,7 +58,7 @@ struct DictionaryKeyLessComparer
 };
 
 /**
- * Restrieves a value from a dictionary.
+ * Retrieves a value from a dictionary.
  *
  * @param key The key whose value should be retrieved.
  * @returns The value of an empty value if the key was not found.
@@ -98,11 +97,6 @@ Value Dictionary::Get(const String& key) const
  */
 void Dictionary::Set(const String& key, const Value& value)
 {
-	if (value.IsEmpty()) {
-		Remove(key);
-		return;
-	}
-
 	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
@@ -198,6 +192,16 @@ void Dictionary::Remove(Dictionary::Iterator it)
 	m_Data.erase(it);
 }
 
+void Dictionary::CopyTo(const Dictionary::Ptr& dest) const
+{
+	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
+
+	BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
+		dest->Set(kv.first, kv.second);
+	}
+}
+
 /**
  * Makes a shallow copy of a dictionary.
  *
@@ -205,15 +209,8 @@ void Dictionary::Remove(Dictionary::Iterator it)
  */
 Dictionary::Ptr Dictionary::ShallowClone(void) const
 {
-	ASSERT(!OwnsLock());
-	ObjectLock olock(this);
-
 	Dictionary::Ptr clone = make_shared<Dictionary>();
-
-	BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
-		clone->Set(kv.first, kv.second);
-	}
-
+	CopyTo(clone);
 	return clone;
 }
 

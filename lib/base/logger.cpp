@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,25 +17,35 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/application.h"
-#include "base/streamlogger.h"
-#include "base/logger.h"
-#include "base/dynamictype.h"
-#include "base/utility.h"
-#include "base/objectlock.h"
-#include "base/context.h"
-#include "base/convert.h"
-#include <boost/make_shared.hpp>
+#include "base/application.hpp"
+#include "base/streamlogger.hpp"
+#include "base/logger.hpp"
+#include "base/dynamictype.hpp"
+#include "base/utility.hpp"
+#include "base/objectlock.hpp"
+#include "base/context.hpp"
+#include "base/scriptvariable.hpp"
 #include <boost/foreach.hpp>
 #include <iostream>
 
 using namespace icinga;
 
 REGISTER_TYPE(Logger);
+INITIALIZE_ONCE(&Logger::StaticInitialize);
 
 std::set<Logger::Ptr> Logger::m_Loggers;
 boost::mutex Logger::m_Mutex;
 bool Logger::m_ConsoleLogEnabled = true;
+LogSeverity Logger::m_ConsoleLogSeverity = LogInformation;
+
+void Logger::StaticInitialize(void)
+{
+	ScriptVariable::Set("LogDebug", LogDebug, true, true);
+	ScriptVariable::Set("LogNotice", LogNotice, true, true);
+	ScriptVariable::Set("LogInformation", LogInformation, true, true);
+	ScriptVariable::Set("LogWarning", LogWarning, true, true);
+	ScriptVariable::Set("LogCritical", LogCritical, true, true);
+}
 
 /**
  * Constructor for the Logger class.
@@ -96,14 +106,7 @@ void icinga::Log(LogSeverity severity, const String& facility,
 			logger->ProcessLogEntry(entry);
 	}
 
-	LogSeverity defaultLogLevel;
-
-	if (Application::IsDebugging())
-		defaultLogLevel = LogDebug;
-	else
-		defaultLogLevel = LogInformation;
-
-	if (Logger::IsConsoleLogEnabled() && entry.Severity >= defaultLogLevel) {
+	if (Logger::IsConsoleLogEnabled() && entry.Severity >= Logger::GetConsoleLogSeverity()) {
 		static bool tty = StreamLogger::IsTty(std::cout);
 
 		StreamLogger::ProcessLogEntry(std::cout, tty, entry);
@@ -120,8 +123,15 @@ LogSeverity Logger::GetMinSeverity(void) const
 	String severity = GetSeverity();
 	if (severity.IsEmpty())
 		return LogInformation;
-	else
-		return Logger::StringToSeverity(severity);
+	else {
+		LogSeverity ls = LogInformation;
+
+		try {
+			ls = Logger::StringToSeverity(severity);
+		} catch (std::exception&) { /* use the default level */ }
+
+		return ls;
+	}
 }
 
 /**
@@ -134,6 +144,8 @@ String Logger::SeverityToString(LogSeverity severity)
 	switch (severity) {
 		case LogDebug:
 			return "debug";
+		case LogNotice:
+			return "notice";
 		case LogInformation:
 			return "information";
 		case LogWarning:
@@ -141,6 +153,7 @@ String Logger::SeverityToString(LogSeverity severity)
 		case LogCritical:
 			return "critical";
 		default:
+			Log(LogCritical, "Logger", "Invalid severity.");
 			BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid severity."));
 	}
 }
@@ -154,14 +167,18 @@ LogSeverity Logger::StringToSeverity(const String& severity)
 {
 	if (severity == "debug")
 		return LogDebug;
+	else if (severity == "notice")
+		return LogNotice;
 	else if (severity == "information")
 		return LogInformation;
 	else if (severity == "warning")
 		return LogWarning;
 	else if (severity == "critical")
 		return LogCritical;
-	else
+	else {
+		Log(LogCritical, "Logger", "Invalid severity: '" + severity + "'.");
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid severity: " + severity));
+	}
 }
 
 void Logger::DisableConsoleLog(void)
@@ -174,3 +191,12 @@ bool Logger::IsConsoleLogEnabled(void)
 	return m_ConsoleLogEnabled;
 }
 
+void Logger::SetConsoleLogSeverity(LogSeverity logSeverity)
+{
+	m_ConsoleLogSeverity = logSeverity;
+}
+
+LogSeverity Logger::GetConsoleLogSeverity(void)
+{
+	return m_ConsoleLogSeverity;
+}

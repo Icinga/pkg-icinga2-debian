@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,16 +17,18 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/scheduleddowntime.h"
-#include "icinga/legacytimeperiod.h"
-#include "base/timer.h"
-#include "base/dynamictype.h"
-#include "base/initialize.h"
-#include "base/utility.h"
-#include "base/objectlock.h"
-#include "base/convert.h"
-#include "base/logger_fwd.h"
-#include "base/exception.h"
+#include "icinga/scheduleddowntime.hpp"
+#include "icinga/legacytimeperiod.hpp"
+#include "icinga/downtime.hpp"
+#include "icinga/service.hpp"
+#include "base/timer.hpp"
+#include "base/dynamictype.hpp"
+#include "base/initialize.hpp"
+#include "base/utility.hpp"
+#include "base/objectlock.hpp"
+#include "base/convert.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -36,6 +38,21 @@ REGISTER_TYPE(ScheduledDowntime);
 INITIALIZE_ONCE(&ScheduledDowntime::StaticInitialize);
 
 static Timer::Ptr l_Timer;
+
+String ScheduledDowntimeNameComposer::MakeName(const String& shortName, const Dictionary::Ptr props) const
+{
+	if (!props)
+		return "";
+
+	String name = props->Get("host_name");
+
+	if (props->Contains("service_name"))
+		name += "!" + props->Get("service_name");
+
+	name += "!" + shortName;
+
+	return name;
+}
 
 void ScheduledDowntime::StaticInitialize(void)
 {
@@ -59,14 +76,14 @@ void ScheduledDowntime::TimerProc(void)
 	}
 }
 
-Service::Ptr ScheduledDowntime::GetService(void) const
+Checkable::Ptr ScheduledDowntime::GetCheckable(void) const
 {
-	Host::Ptr host = Host::GetByName(GetHostRaw());
+	Host::Ptr host = Host::GetByName(GetHostName());
 
-	if (GetServiceRaw().IsEmpty())
-		return host->GetCheckService();
+	if (GetServiceName().IsEmpty())
+		return host;
 	else
-		return host->GetServiceByShortName(GetServiceRaw());
+		return host->GetServiceByShortName(GetServiceName());
 }
 
 std::pair<double, double> ScheduledDowntime::FindNextSegment(void)
@@ -74,7 +91,7 @@ std::pair<double, double> ScheduledDowntime::FindNextSegment(void)
 	time_t refts = Utility::GetTime();
 	tm reference = Utility::LocalTime(refts);
 
-	Log(LogDebug, "icinga", "Finding next scheduled downtime segment for time " + Convert::ToString(static_cast<long>(refts)));
+	Log(LogDebug, "ScheduledDowntime", "Finding next scheduled downtime segment for time " + Convert::ToString(static_cast<long>(refts)));
 
 	Dictionary::Ptr ranges = GetRanges();
 
@@ -110,7 +127,7 @@ std::pair<double, double> ScheduledDowntime::FindNextSegment(void)
 
 void ScheduledDowntime::CreateNextDowntime(void)
 {
-	Dictionary::Ptr downtimes = GetService()->GetDowntimes();
+	Dictionary::Ptr downtimes = GetCheckable()->GetDowntimes();
 
 	{
 		ObjectLock dlock(downtimes);
@@ -138,7 +155,10 @@ void ScheduledDowntime::CreateNextDowntime(void)
 		return;
 	}
 
-	GetService()->AddDowntime(GetAuthor(), GetComment(),
+	String uid = GetCheckable()->AddDowntime(GetAuthor(), GetComment(),
 	    segment.first, segment.second,
 	    GetFixed(), String(), GetDuration(), GetName());
+
+	Downtime::Ptr downtime = Checkable::GetDowntimeByID(uid);
+	downtime->SetConfigOwner(GetName());
 }

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,12 +17,12 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "config/configcompiler.h"
-#include "config/configitem.h"
-#include "base/logger_fwd.h"
-#include "base/utility.h"
-#include "base/context.h"
-#include <sstream>
+#include "config/configcompiler.hpp"
+#include "config/configitem.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/utility.hpp"
+#include "base/context.hpp"
+#include "base/exception.hpp"
 #include <fstream>
 #include <boost/foreach.hpp>
 
@@ -38,9 +38,10 @@ std::vector<String> ConfigCompiler::m_IncludeSearchDirs;
  * @param path The path of the configuration file (or another name that
  *	       identifies the source of the configuration text).
  * @param input Input stream for the configuration file.
+ * @param zone The zone.
  */
-ConfigCompiler::ConfigCompiler(const String& path, std::istream *input)
-	: m_Path(path), m_Input(input)
+ConfigCompiler::ConfigCompiler(const String& path, std::istream *input, const String& zone)
+	: m_Path(path), m_Input(input), m_Zone(zone)
 {
 	InitializeScanner();
 }
@@ -86,6 +87,16 @@ String ConfigCompiler::GetPath(void) const
 	return m_Path;
 }
 
+void ConfigCompiler::SetZone(const String& zone)
+{
+	m_Zone = zone;
+}
+
+String ConfigCompiler::GetZone(void) const
+{
+	return m_Zone;
+}
+
 /**
  * Handles an include directive.
  *
@@ -108,13 +119,7 @@ void ConfigCompiler::HandleInclude(const String& include, bool search, const Deb
 		BOOST_FOREACH(const String& dir, m_IncludeSearchDirs) {
 			String spath = dir + "/" + include;
 
-#ifndef _WIN32
-			struct stat statbuf;
-			if (lstat(spath.CStr(), &statbuf) >= 0) {
-#else /* _WIN32 */
-			struct _stat statbuf;
-			if (_stat(spath.CStr(), &statbuf) >= 0) {
-#endif /* _WIN32 */
+			if (Utility::PathExists(spath)) {
 				includePath = spath;
 				break;
 			}
@@ -123,7 +128,7 @@ void ConfigCompiler::HandleInclude(const String& include, bool search, const Deb
 
 	std::vector<ConfigItem::Ptr> items;
 
-	if (!Utility::Glob(includePath, boost::bind(&ConfigCompiler::CompileFile, _1), GlobFile) && includePath.FindFirstOf("*?") == String::NPos) {
+	if (!Utility::Glob(includePath, boost::bind(&ConfigCompiler::CompileFile, _1, m_Zone), GlobFile) && includePath.FindFirstOf("*?") == String::NPos) {
 		std::ostringstream msgbuf;
 		msgbuf << "Include file '" + include + "' does not exist: " << debuginfo;
 		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
@@ -137,7 +142,7 @@ void ConfigCompiler::HandleInclude(const String& include, bool search, const Deb
  * @param pattern The file pattern.
  * @param debuginfo Debug information.
  */
-void ConfigCompiler::HandleIncludeRecursive(const String& include, const String& pattern, const DebugInfo& debuginfo)
+void ConfigCompiler::HandleIncludeRecursive(const String& include, const String& pattern, const DebugInfo&)
 {
 	String path;
 
@@ -146,7 +151,7 @@ void ConfigCompiler::HandleIncludeRecursive(const String& include, const String&
 	else
 		path = Utility::DirName(GetPath()) + "/" + include;
 
-	Utility::GlobRecursive(path, pattern, boost::bind(&ConfigCompiler::CompileFile, _1), GlobFile);
+	Utility::GlobRecursive(path, pattern, boost::bind(&ConfigCompiler::CompileFile, _1, m_Zone), GlobFile);
 }
 
 /**
@@ -166,13 +171,13 @@ void ConfigCompiler::HandleLibrary(const String& library)
  * @param stream The input stream.
  * @returns Configuration items.
  */
-void ConfigCompiler::CompileStream(const String& path, std::istream *stream)
+void ConfigCompiler::CompileStream(const String& path, std::istream *stream, const String& zone)
 {
 	CONTEXT("Compiling configuration stream with name '" + path + "'");
 
 	stream->exceptions(std::istream::badbit);
 
-	ConfigCompiler ctx(path, stream);
+	ConfigCompiler ctx(path, stream, zone);
 	ctx.Compile();
 }
 
@@ -182,7 +187,7 @@ void ConfigCompiler::CompileStream(const String& path, std::istream *stream)
  * @param path The path.
  * @returns Configuration items.
  */
-void ConfigCompiler::CompileFile(const String& path)
+void ConfigCompiler::CompileFile(const String& path, const String& zone)
 {
 	CONTEXT("Compiling configuration file '" + path + "'");
 
@@ -190,11 +195,14 @@ void ConfigCompiler::CompileFile(const String& path)
 	stream.open(path.CStr(), std::ifstream::in);
 
 	if (!stream)
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Could not open config file: " + path));
+		BOOST_THROW_EXCEPTION(posix_error()
+			<< boost::errinfo_api_function("std::ifstream::open")
+			<< boost::errinfo_errno(errno)
+			<< boost::errinfo_file_name(path));
 
-	Log(LogInformation, "config", "Compiling config file: " + path);
+	Log(LogInformation, "ConfigCompiler", "Compiling config file: " + path);
 
-	return CompileStream(path, &stream);
+	return CompileStream(path, &stream, zone);
 }
 
 /**
@@ -204,10 +212,10 @@ void ConfigCompiler::CompileFile(const String& path)
  * @param text The text.
  * @returns Configuration items.
  */
-void ConfigCompiler::CompileText(const String& path, const String& text)
+void ConfigCompiler::CompileText(const String& path, const String& text, const String& zone)
 {
 	std::stringstream stream(text);
-	return CompileStream(path, &stream);
+	return CompileStream(path, &stream, zone);
 }
 
 /**
@@ -217,7 +225,7 @@ void ConfigCompiler::CompileText(const String& path, const String& text)
  */
 void ConfigCompiler::AddIncludeSearchDir(const String& dir)
 {
-	Log(LogInformation, "config", "Adding include search dir: " + dir);
+	Log(LogInformation, "ConfigCompiler", "Adding include search dir: " + dir);
 
 	m_IncludeSearchDirs.push_back(dir);
 }

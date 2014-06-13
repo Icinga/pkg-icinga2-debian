@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,13 +17,12 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "config/typerule.h"
-#include "config/configitem.h"
-#include "config/configcompilercontext.h"
-#include "base/convert.h"
-#include "base/utility.h"
-#include "base/dictionary.h"
-#include "base/array.h"
+#include "config/typerule.hpp"
+#include "config/configitem.hpp"
+#include "base/convert.hpp"
+#include "base/utility.hpp"
+#include "base/dictionary.hpp"
+#include "base/array.hpp"
 
 using namespace icinga;
 
@@ -45,6 +44,8 @@ bool TypeRule::MatchName(const String& name) const
 
 bool TypeRule::MatchValue(const Value& value, String *hint) const
 {
+	ConfigItem::Ptr item;
+
 	if (value.IsEmpty())
 		return true;
 
@@ -76,8 +77,15 @@ bool TypeRule::MatchValue(const Value& value, String *hint) const
 			if (!value.IsScalar())
 				return false;
 
-			if (!ConfigItem::HasObject(m_NameType, value)) {
+			item = ConfigItem::GetObject(m_NameType, value);
+
+			if (!item) {
 				*hint = "Object '" + value + "' of type '" + m_NameType + "' does not exist.";
+				return false;
+			}
+
+			if (item->IsAbstract()) {
+				*hint = "Object '" + value + "' of type '" + m_NameType + "' must not be a template.";
 				return false;
 			}
 

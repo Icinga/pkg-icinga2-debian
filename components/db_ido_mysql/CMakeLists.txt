@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -18,11 +18,11 @@
 find_package(MYSQL)
 
 if(MYSQL_FOUND)
-    mkclass_target(idomysqlconnection.ti idomysqlconnection.th)
+    mkclass_target(idomysqlconnection.ti idomysqlconnection.thpp)
 
     mkembedconfig_target(db_ido_mysql-type.conf db_ido_mysql-type.cpp)
 
-    add_library(db_ido_mysql SHARED idomysqlconnection.cpp idomysqlconnection.th db_ido_mysql-type.cpp)
+    add_library(db_ido_mysql SHARED idomysqlconnection.cpp idomysqlconnection.thpp db_ido_mysql-type.cpp)
 
     include_directories(${MYSQL_INCLUDE_DIR})
     target_link_libraries(db_ido_mysql ${Boost_LIBRARIES} ${MYSQL_LIBRARIES} base config icinga db_ido)

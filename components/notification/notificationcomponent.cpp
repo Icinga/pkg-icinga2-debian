@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,18 +17,34 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "notification/notificationcomponent.h"
-#include "icinga/service.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/logger_fwd.h"
-#include "base/utility.h"
-#include "base/exception.h"
+#include "notification/notificationcomponent.hpp"
+#include "icinga/service.hpp"
+#include "base/dynamictype.hpp"
+#include "base/objectlock.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/utility.hpp"
+#include "base/exception.hpp"
+#include "base/statsfunction.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(NotificationComponent);
+
+REGISTER_STATSFUNCTION(NotificationComponentStats, &NotificationComponent::StatsFunc);
+
+Value NotificationComponent::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+{
+	Dictionary::Ptr nodes = make_shared<Dictionary>();
+
+	BOOST_FOREACH(const NotificationComponent::Ptr& notification_component, DynamicType::GetObjects<NotificationComponent>()) {
+		nodes->Set(notification_component->GetName(), 1); //add more stats
+	}
+
+	status->Set("notificationcomponent", nodes);
+
+	return 0;
+}
 
 /**
  * Starts the component.
@@ -37,7 +53,7 @@ void NotificationComponent::Start(void)
 {
 	DynamicObject::Start();
 
-	Service::OnNotificationsRequested.connect(boost::bind(&NotificationComponent::SendNotificationsHandler, this, _1,
+	Checkable::OnNotificationsRequested.connect(boost::bind(&NotificationComponent::SendNotificationsHandler, this, _1,
 	    _2, _3, _4, _5));
 
 	m_NotificationTimer = make_shared<Timer>();
@@ -56,44 +72,48 @@ void NotificationComponent::NotificationTimerHandler(void)
 	double now = Utility::GetTime();
 
 	BOOST_FOREACH(const Notification::Ptr& notification, DynamicType::GetObjects<Notification>()) {
-		Service::Ptr service = notification->GetService();
+		Checkable::Ptr checkable = notification->GetCheckable();
 
-		if (notification->GetNotificationInterval() <= 0 && notification->GetLastProblemNotification() < service->GetLastHardStateChange())
+		if (notification->GetInterval() <= 0 && notification->GetLastProblemNotification() > checkable->GetLastHardStateChange())
 			continue;
 
 		if (notification->GetNextNotification() > now)
 			continue;
 
-		bool reachable = service->IsReachable();
+		bool reachable = checkable->IsReachable(DependencyNotification);
 
 		{
 			ObjectLock olock(notification);
-			notification->SetNextNotification(Utility::GetTime() + notification->GetNotificationInterval());
+			notification->SetNextNotification(Utility::GetTime() + notification->GetInterval());
 		}
 
 		{
-			ObjectLock olock(service);
+			Host::Ptr host;
+			Service::Ptr service;
+			tie(host, service) = GetHostService(checkable);
 
-			if (service->GetStateType() == StateTypeSoft)
+			ObjectLock olock(checkable);
+
+			if (checkable->GetStateType() == StateTypeSoft)
 				continue;
 
-			if (service->GetState() == StateOK)
+			if ((service && service->GetState() == ServiceOK) || (!service && host->GetState() == HostUp))
 				continue;
 
-			if (!reachable || service->IsInDowntime() || service->IsAcknowledged())
+			if (!reachable || checkable->IsInDowntime() || checkable->IsAcknowledged())
 				continue;
 		}
 
 		try {
-			Log(LogInformation, "notification", "Sending reminder notification for service '" + service->GetName() + "'");
-			notification->BeginExecuteNotification(NotificationProblem, service->GetLastCheckResult(), false);
+			Log(LogInformation, "NotificationComponent", "Sending reminder notification for object '" + checkable->GetName() + "'");
+			notification->BeginExecuteNotification(NotificationProblem, checkable->GetLastCheckResult(), false);
 		} catch (const std::exception& ex) {
 			std::ostringstream msgbuf;
-			msgbuf << "Exception occured during notification for service '"
+			msgbuf << "Exception occured during notification for object '"
 			       << GetName() << "': " << DiagnosticInformation(ex);
 			String message = msgbuf.str();
 
-			Log(LogWarning, "icinga", message);
+			Log(LogWarning, "NotificationComponent", message);
 		}
 	}
 }
@@ -101,8 +121,8 @@ void NotificationComponent::NotificationTimerHandler(void)
 /**
  * Processes icinga::SendNotifications messages.
  */
-void NotificationComponent::SendNotificationsHandler(const Service::Ptr& service, NotificationType type,
+void NotificationComponent::SendNotificationsHandler(const Checkable::Ptr& checkable, NotificationType type,
     const CheckResult::Ptr& cr, const String& author, const String& text)
 {
-	service->SendNotifications(type, cr, author, text);
+	checkable->SendNotifications(type, cr, author, text);
 }

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,16 +17,17 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/checkcommand.h"
-#include "base/dynamictype.h"
+#include "icinga/checkcommand.hpp"
+#include "base/dynamictype.hpp"
 
 using namespace icinga;
 
 REGISTER_TYPE(CheckCommand);
 
-CheckResult::Ptr CheckCommand::Execute(const Service::Ptr& service)
+void CheckCommand::Execute(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
 {
 	std::vector<Value> arguments;
-	arguments.push_back(service);
-	return InvokeMethod("execute", arguments);
+	arguments.push_back(checkable);
+	arguments.push_back(cr);
+	InvokeMethod("execute", arguments);
 }

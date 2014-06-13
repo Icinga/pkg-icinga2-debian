@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,7 +17,7 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/scriptfunctionwrapper.h"
+#include "base/scriptfunctionwrapper.hpp"
 
 using namespace icinga;
 
@@ -28,12 +28,14 @@ Value icinga::ScriptFunctionWrapperVV(void (*function)(void), const std::vector<
 	return Empty;
 }
 
+Value icinga::ScriptFunctionWrapperVA(void (*function)(const std::vector<Value>&), const std::vector<Value>& arguments)
+{
+	function(arguments);
+
+	return Empty;
+}
+
 boost::function<Value (const std::vector<Value>& arguments)> icinga::WrapScriptFunction(void (*function)(void))
 {
 	return boost::bind(&ScriptFunctionWrapperVV, function, _1);
-}
-
-boost::function<Value (const std::vector<Value>& arguments)> icinga::WrapScriptFunction(Value (*function)(const std::vector<Value>&))
-{
-	return boost::bind(function, _1);
 }

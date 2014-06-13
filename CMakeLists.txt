@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -34,26 +34,32 @@ set(ICINGA2_USER "icinga" CACHE STRING "Icinga 2 user")
 set(ICINGA2_GROUP "icinga" CACHE STRING "Icinga 2 group")
 set(ICINGA2_COMMAND_USER "icinga" CACHE STRING "Icinga 2 command user")
 set(ICINGA2_COMMAND_GROUP "icingacmd" CACHE STRING "Icinga 2 command group")
+set(ICINGA2_GIT_VERSION_INFO ON CACHE BOOL "Whether to use git describe")
 
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/COPYING" ICINGA2_LICENSE_GPL)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/COPYING.Exceptions" ICINGA2_LICENSE_ADDITIONS)
 set(ICINGA2_LICENSE "${ICINGA2_LICENSE_GPL}\n\n---\n\n${ICINGA2_LICENSE_ADDITIONS}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt" ${ICINGA2_LICENSE})
 
-set(CPACK_PACKAGE_CONTACT "Icinga Development Team")
-set(CPACK_PACKAGE_VERSION ${ICINGA2_VERSION})
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
-set(CPACK_WIX_UPGRADE_GUID "68C75073-7CEF-4FC9-8DA5-581758729696")
-set(CPACK_SOURCE_IGNORE_FILES "/.git/")
-include(CPack)
-
 include(GetGitRevisionDescription)
 git_describe(GIT_VERSION --tags)
-if(GIT_VERSION MATCHES "-NOTFOUND$")
-  configure_file(icinga-version.h.fallback ${CMAKE_CURRENT_BINARY_DIR}/icinga-version.h COPYONLY)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/icinga-version.h.force)
+  configure_file(icinga-version.h.force ${CMAKE_CURRENT_BINARY_DIR}/icinga-version.h COPYONLY)
 else()
+  if(NOT ICINGA2_GIT_VERSION_INFO OR GIT_VERSION MATCHES "-NOTFOUND$")
+    file(STRINGS icinga2.spec SPEC_VERSION REGEX "^Version:")
+    string(LENGTH "${SPEC_VERSION}" SPEC_VERSION_LENGTH)
+    math(EXPR SPEC_VERSION_LENGTH "${SPEC_VERSION_LENGTH} - 9")
+    string(SUBSTRING ${SPEC_VERSION} 9 ${SPEC_VERSION_LENGTH} SPEC_VERSION)
+
+    file(STRINGS icinga2.spec SPEC_REVISION REGEX "^%define revision ")
+    string(LENGTH "${SPEC_REVISION}" SPEC_REVISION_LENGTH)
+    math(EXPR SPEC_REVISION_LENGTH "${SPEC_REVISION_LENGTH} - 17")
+    string(SUBSTRING ${SPEC_REVISION} 17 ${SPEC_REVISION_LENGTH} SPEC_REVISION)
+
+    set(GIT_VERSION "r${SPEC_VERSION}-${SPEC_REVISION}")
+  endif()
   configure_file(icinga-version.h.cmake icinga-version.h)
-  configure_file(${CMAKE_CURRENT_BINARY_DIR}/icinga-version.h ${CMAKE_CURRENT_SOURCE_DIR}/icinga-version.h.fallback COPYONLY)
 endif()
 
 if(WIN32)
@@ -87,13 +93,15 @@ endif()
 
 if("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+  if(${CMAKE_SYSTEM_NAME} MATCHES AIX)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -lpthread")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+  endif()
 endif()
 
 if(MSVC)
   add_definitions(-D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -D_SCL_SECURE_NO_WARNINGS)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/Bin/${CMAKE_BUILD_TYPE} CACHE PATH "Library output path")
@@ -104,7 +112,12 @@ include(CheckLibraryExists)
 check_function_exists(vfork HAVE_VFORK)
 check_function_exists(backtrace_symbols HAVE_BACKTRACE_SYMBOLS)
 check_function_exists(pipe2 HAVE_PIPE2)
-check_library_exists(crypto BIO_f_zlib "" HAVE_BIOZLIB)
+check_library_exists(dl dladdr "dlfcn.h" HAVE_DLADDR)
+check_library_exists(execinfo backtrace_symbols "" HAVE_LIBEXECINFO)
+
+if(HAVE_LIBEXECINFO)
+  set(HAVE_BACKTRACE_SYMBOLS TRUE)
+endif()
 
 include(GNUInstallDirs)
 configure_file(config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h ESCAPE_QUOTES)
@@ -129,3 +142,32 @@ add_subdirectory(itl)
 add_subdirectory(doc)
 add_subdirectory(test)
 add_subdirectory(pki)
+
+set(CPACK_PACKAGE_NAME "Icinga2")
+set(CPACK_PACKAGE_VENDOR "Icinga Development Team")
+set(CPACK_PACKAGE_VERSION ${ICINGA2_VERSION})
+set(CPACK_NSIS_DISPLAY_NAME "Icinga 2")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "ICINGA2")
+set(CPACK_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/icinga-app\\\\icinga.ico")
+set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/icinga-app\\\\icinga.ico")
+set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/icinga-app\\\\icinga.ico")
+set(CPACK_NSIS_INSTALLED_ICON_NAME "sbin\\\\icinga2.exe")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
+
+set(CPACK_NSIS_EXECUTABLES_DIRECTORY "sbin")
+set(CPACK_PACKAGE_EXECUTABLES "Icinga2SetupAgent;Icinga 2 Agent Wizard")
+set(CPACK_NSIS_MUI_FINISHPAGE_RUN "Icinga2SetupAgent")
+set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "nsExec::Exec '\\\"$INSTDIR\\\\sbin\\\\icinga2\\\" --scm-uninstall'")
+
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+include(InstallRequiredSystemLibraries)
+
+if(WIN32)
+  install(
+    PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+      C:\\\\openssl\\\\bin\\\\libeay32.dll C:\\\\openssl\\\\bin\\\\ssleay32.dll
+    DESTINATION ${CMAKE_INSTALL_SBINDIR}
+  )
+endif()
+
+include(CPack)

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,8 +17,8 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/object.h"
-#include "base/value.h"
+#include "base/object.hpp"
+#include "base/value.hpp"
 
 using namespace icinga;
 
@@ -75,12 +75,13 @@ const Type *Object::GetReflectionType(void) const
 	return NULL;
 }
 
-void Object::SetField(int id, const Value& value)
+void Object::SetField(int, const Value&)
 {
-	throw std::runtime_error("Invalid field ID.");
+	BOOST_THROW_EXCEPTION(std::runtime_error("Invalid field ID."));
 }
 
-Value Object::GetField(int id) const
+Value Object::GetField(int) const
 {
-	throw std::runtime_error("Invalid field ID.");
+	BOOST_THROW_EXCEPTION(std::runtime_error("Invalid field ID."));
 }
+

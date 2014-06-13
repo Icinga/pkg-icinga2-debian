@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,7 +17,7 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/value.h"
+#include "base/value.hpp"
 #include <boost/test/unit_test.hpp>
 
 using namespace icinga;
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(format)
 	std::istringstream ibuf("3");
 	ibuf >> v;
 
-	BOOST_CHECK(v == 3);
+	BOOST_CHECK(v != 3);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

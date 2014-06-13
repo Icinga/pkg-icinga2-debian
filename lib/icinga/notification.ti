@@ -1,27 +1,33 @@
-#include "base/dynamicobject.h"
+#include "icinga/customvarobject.hpp"
 
 namespace icinga
 {
 
-class Notification : DynamicObject
+code {{{
+class I2_ICINGA_API NotificationNameComposer : public NameComposer
 {
-	[config, protected] String notification_command (NotificationCommandRaw);
-	[config] double notification_interval {
-		default {{{ return 300; }}}
+public:
+	virtual String MakeName(const String& shortName, const Dictionary::Ptr props) const;
+};
+}}}
+
+class Notification : CustomVarObject < NotificationNameComposer
+{
+	[config, protected] String command (CommandRaw);
+	[config] double interval {
+		default {{{ return 1800; }}}
 	};
-	[config] String notification_period (NotificationPeriodRaw);
+	[config] String period (PeriodRaw);
 	[config] Dictionary::Ptr macros;
 	[config, protected] Array::Ptr users (UsersRaw);
 	[config, protected] Array::Ptr user_groups (UserGroupsRaw);
 	[config] Dictionary::Ptr times;
-	[config] int notification_type_filter {
-		default {{{ return ~(int)0; }}}
-	};
-	[config] int notification_state_filter {
-		default {{{ return ~(int)0; }}}
-	};
-	[config, protected] String host (HostRaw);
-	[config, protected] String service (ServiceRaw);
+	[config] Array::Ptr types;
+	int type_filter_real (TypeFilter);
+	[config] Array::Ptr states;
+	int state_filter_real (StateFilter);
+	[config, protected] String host_name;
+	[config, protected] String service_name;
 
 	[state] double last_notification;
 	[state, set_protected] double next_notification (NextNotificationRaw);

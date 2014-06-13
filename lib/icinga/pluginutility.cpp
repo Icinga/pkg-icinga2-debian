@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,17 +17,14 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/pluginutility.h"
-#include "icinga/checkcommand.h"
-#include "icinga/macroprocessor.h"
-#include "icinga/icingaapplication.h"
-#include "icinga/perfdatavalue.h"
-#include "base/dynamictype.h"
-#include "base/logger_fwd.h"
-#include "base/scriptfunction.h"
-#include "base/utility.h"
-#include "base/process.h"
-#include "base/objectlock.h"
+#include "icinga/pluginutility.hpp"
+#include "icinga/macroprocessor.hpp"
+#include "icinga/perfdatavalue.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/utility.hpp"
+#include "base/convert.hpp"
+#include "base/process.hpp"
+#include "base/objectlock.hpp"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -35,24 +32,163 @@
 
 using namespace icinga;
 
+struct CommandArgument
+{
+	int Order;
+	bool SkipKey;
+	bool SkipValue;
+	String Key;
+	String Value;
+
+	CommandArgument(void)
+		: Order(0), SkipKey(false), SkipValue(false)
+	{ }
+
+	bool operator<(const CommandArgument& rhs) const
+	{
+		return GetNormalizedOrder() < rhs.GetNormalizedOrder();
+	}
+
+private:
+	int GetNormalizedOrder(void) const
+	{
+		if (Order == 0)
+			return 0;
+		else
+			return -(1 / Order);
+	}
+};
+
+void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkable::Ptr& checkable,
+    const CheckResult::Ptr& cr, const MacroProcessor::ResolverList& macroResolvers,
+    const boost::function<void(const Value& commandLine, const ProcessResult&)>& callback)
+{
+	Value raw_command = commandObj->GetCommandLine();
+	Dictionary::Ptr raw_arguments = commandObj->GetArguments();
+
+	Value command;
+	if (!raw_arguments || raw_command.IsObjectType<Array>())
+		command = MacroProcessor::ResolveMacros(raw_command, macroResolvers, cr, NULL, Utility::EscapeShellArg);
+	else {
+		Array::Ptr arr = make_shared<Array>();
+		arr->Add(raw_command);
+		command = arr;
+	}
+
+	if (raw_arguments) {
+		std::vector<CommandArgument> args;
+
+		ObjectLock olock(raw_arguments);
+		BOOST_FOREACH(const Dictionary::Pair& kv, raw_arguments) {
+			const Value& arginfo = kv.second;
+
+			CommandArgument arg;
+			arg.Key = kv.first;
+
+			bool required = false;
+			String argval;
+
+			if (arginfo.IsObjectType<Dictionary>()) {
+				Dictionary::Ptr argdict = arginfo;
+				argval = argdict->Get("value");
+				if (argdict->Contains("required"))
+					required = argdict->Get("required");
+				arg.SkipKey = argdict->Get("skip_key");
+				arg.Order = argdict->Get("order");
+
+				String set_if = argdict->Get("set_if");
+
+				if (!set_if.IsEmpty()) {
+					String missingMacro;
+					String set_if_resolved = MacroProcessor::ResolveMacros(set_if, macroResolvers,
+						cr, &missingMacro);
+
+					if (!missingMacro.IsEmpty() || !Convert::ToLong(set_if_resolved))
+						continue;
+				}
+			}
+			else
+				argval = arginfo;
+
+			if (argval.IsEmpty())
+				arg.SkipValue = true;
+
+			String missingMacro;
+			arg.Value = MacroProcessor::ResolveMacros(argval, macroResolvers,
+			    cr, &missingMacro);
+
+			if (!missingMacro.IsEmpty()) {
+				if (required) {
+					String message = "Non-optional macro '" + missingMacro + "' used in argument '" +
+					    arg.Key + "' is missing while executing command '" + commandObj->GetName() +
+					    "' for object '" + checkable->GetName() + "'";
+					Log(LogWarning, "PluginUtility", message);
+
+					if (callback) {
+						ProcessResult pr;
+						pr.ExecutionStart = Utility::GetTime();
+						pr.ExecutionStart = pr.ExecutionStart;
+						pr.Output = message;
+						callback(Empty, pr);
+					}
+
+					return;
+				}
+
+				continue;
+			}
+
+			args.push_back(arg);
+		}
+
+		std::sort(args.begin(), args.end());
+
+		Array::Ptr command_arr = command;
+		BOOST_FOREACH(const CommandArgument& arg, args) {
+			if (!arg.SkipKey)
+				command_arr->Add(arg.Key);
+
+			if (!arg.SkipValue)
+				command_arr->Add(arg.Value);
+		}
+	}
+
+	Dictionary::Ptr envMacros = make_shared<Dictionary>();
+
+	Dictionary::Ptr env = commandObj->GetEnv();
+
+	if (env) {
+		ObjectLock olock(env);
+		BOOST_FOREACH(const Dictionary::Pair& kv, env) {
+			String name = kv.second;
+
+			Value value = MacroProcessor::ResolveMacros(name, macroResolvers, cr);
+
+			envMacros->Set(kv.first, value);
+		}
+	}
+
+	Process::Ptr process = make_shared<Process>(Process::PrepareCommand(command), envMacros);
+	process->SetTimeout(commandObj->GetTimeout());
+	process->Run(boost::bind(callback, command, _1));
+}
+
 ServiceState PluginUtility::ExitStatusToState(int exitStatus)
 {
 	switch (exitStatus) {
 		case 0:
-			return StateOK;
+			return ServiceOK;
 		case 1:
-			return StateWarning;
+			return ServiceWarning;
 		case 2:
-			return StateCritical;
+			return ServiceCritical;
 		default:
-			return StateUnknown;
+			return ServiceUnknown;
 	}
 }
 
-CheckResult::Ptr PluginUtility::ParseCheckOutput(const String& output)
+std::pair<String, Value> PluginUtility::ParseCheckOutput(const String& output)
 {
-	CheckResult::Ptr result = make_shared<CheckResult>();
-
 	String text;
 	String perfdata;
 
@@ -79,10 +215,7 @@ CheckResult::Ptr PluginUtility::ParseCheckOutput(const String& output)
 
 	boost::algorithm::trim(perfdata);
 
-	result->SetOutput(text);
-	result->SetPerformanceData(ParsePerfdata(perfdata));
-
-	return result;
+	return std::make_pair(text, ParsePerfdata(perfdata));
 }
 
 Value PluginUtility::ParsePerfdata(const String& perfdata)
@@ -146,12 +279,18 @@ String PluginUtility::FormatPerfdata(const Value& perfdata)
 
 	bool first = true;
 	BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+		String key;
+		if (kv.first.FindFirstOf(" ") != String::NPos)
+			key = "'" + kv.first + "'";
+		else
+			key = kv.first;
+
 		if (!first)
 			result << " ";
 		else
 			first = false;
 
-		result << kv.first << "=" << PerfdataValue::Format(kv.second);
+		result << key << "=" << PerfdataValue::Format(kv.second);
 	}
 
 	return result.str();

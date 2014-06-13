@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,11 +17,12 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "config/configtype.h"
-#include "config/configcompilercontext.h"
-#include "base/objectlock.h"
-#include "base/convert.h"
-#include "base/scriptfunction.h"
+#include "config/configtype.hpp"
+#include "config/configcompilercontext.hpp"
+#include "base/objectlock.hpp"
+#include "base/convert.hpp"
+#include "base/singleton.hpp"
+#include "base/scriptfunction.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -138,7 +139,7 @@ void ConfigType::ValidateDictionary(const Dictionary::Ptr& dictionary,
 		String validator = ruleList->GetValidator();
 
 		if (!validator.IsEmpty()) {
-			ScriptFunction::Ptr func = ScriptFunctionRegistry::GetInstance()->GetItem(validator);
+			ScriptFunction::Ptr func = ScriptFunction::GetByName(validator);
 
 			if (!func)
 				BOOST_THROW_EXCEPTION(std::invalid_argument("Validator function '" + validator + "' does not exist."));
@@ -180,7 +181,7 @@ void ConfigType::ValidateDictionary(const Dictionary::Ptr& dictionary,
 		}
 
 		if (overallResult == ValidationUnknownField)
-			ConfigCompilerContext::GetInstance()->AddMessage(false, "Unknown attribute: " + LocationToString(locations));
+			ConfigCompilerContext::GetInstance()->AddMessage(true, "Unknown attribute: " + LocationToString(locations));
 		else if (overallResult == ValidationInvalidType) {
 			String message = "Invalid value for attribute: " + LocationToString(locations);
 
@@ -219,7 +220,7 @@ void ConfigType::ValidateArray(const Array::Ptr& array,
 		String validator = ruleList->GetValidator();
 
 		if (!validator.IsEmpty()) {
-			ScriptFunction::Ptr func = ScriptFunctionRegistry::GetInstance()->GetItem(validator);
+			ScriptFunction::Ptr func = ScriptFunction::GetByName(validator);
 
 			if (!func)
 				BOOST_THROW_EXCEPTION(std::invalid_argument("Validator function '" + validator + "' does not exist."));

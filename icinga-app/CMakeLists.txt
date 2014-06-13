@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -15,7 +15,13 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-add_executable(icinga-app icinga.cpp)
+if(MSVC)
+  set(WindowsSources icinga.rc)
+else()
+  set(WindowsSources "")
+endif()
+
+add_executable(icinga-app icinga.cpp ${WindowsSources})
 
 include_directories(${Boost_INCLUDE_DIRS})
 target_link_libraries(icinga-app ${Boost_LIBRARIES} base config)

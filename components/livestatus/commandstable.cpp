@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,14 +17,15 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "livestatus/commandstable.h"
-#include "icinga/icingaapplication.h"
-#include "icinga/checkcommand.h"
-#include "icinga/eventcommand.h"
-#include "icinga/notificationcommand.h"
-#include "base/dynamictype.h"
-#include "base/objectlock.h"
-#include "base/convert.h"
+#include "livestatus/commandstable.hpp"
+#include "icinga/icingaapplication.hpp"
+#include "icinga/checkcommand.hpp"
+#include "icinga/eventcommand.hpp"
+#include "icinga/notificationcommand.hpp"
+#include "icinga/compatutility.hpp"
+#include "base/dynamictype.hpp"
+#include "base/objectlock.hpp"
+#include "base/convert.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/replace.hpp>
 
@@ -40,6 +41,11 @@ void CommandsTable::AddColumns(Table *table, const String& prefix,
 {
 	table->AddColumn(prefix + "name", Column(&CommandsTable::NameAccessor, objectAccessor));
 	table->AddColumn(prefix + "line", Column(&CommandsTable::LineAccessor, objectAccessor));
+	table->AddColumn(prefix + "custom_variable_names", Column(&CommandsTable::CustomVariableNamesAccessor, objectAccessor));
+	table->AddColumn(prefix + "custom_variable_values", Column(&CommandsTable::CustomVariableValuesAccessor, objectAccessor));
+	table->AddColumn(prefix + "custom_variables", Column(&CommandsTable::CustomVariablesAccessor, objectAccessor));
+	table->AddColumn(prefix + "modified_attributes", Column(&CommandsTable::ModifiedAttributesAccessor, objectAccessor));
+	table->AddColumn(prefix + "modified_attributes_list", Column(&CommandsTable::ModifiedAttributesListAccessor, objectAccessor));
 }
 
 String CommandsTable::GetName(void) const
@@ -62,52 +68,125 @@ void CommandsTable::FetchRows(const AddRowFunction& addRowFn)
 
 Value CommandsTable::NameAccessor(const Value& row)
 {
-	String buf;
 	Command::Ptr command = static_cast<Command::Ptr>(row);
 	
-	if (!command)
-		return Empty;
-
-	if (command->GetType() == DynamicType::GetByName("CheckCommand"))
-		buf += "check_";
-	if (command->GetType() == DynamicType::GetByName("NotificationCommand"))
-		buf += "notification_";
-	if (command->GetType() == DynamicType::GetByName("EventCommand"))
-		buf += "event_";
-
-	buf += command->GetName();
-
-	return buf;
+	return CompatUtility::GetCommandName(command);
 }
 
 Value CommandsTable::LineAccessor(const Value& row)
 {
-	String buf;
 	Command::Ptr command = static_cast<Command::Ptr>(row);
 	
 	if (!command)
 		return Empty;
 
-	Value commandLine = command->GetCommandLine();
+	return CompatUtility::GetCommandLine(command);
+}
 
-	if (commandLine.IsObjectType<Array>()) {
-		Array::Ptr args = commandLine;
+Value CommandsTable::CustomVariableNamesAccessor(const Value& row)
+{
+	Command::Ptr command = static_cast<Command::Ptr>(row);
 
-		ObjectLock olock(args);
-		String arg;
-		BOOST_FOREACH(arg, args) {
-			// This is obviously incorrect for non-trivial cases.
-			String argitem = " \"" + arg + "\"";
-			boost::algorithm::replace_all(argitem, "\n", "\\n");
-			buf += argitem;
-		}
-	} else if (!commandLine.IsEmpty()) {
-		String args = Convert::ToString(commandLine);
-		boost::algorithm::replace_all(args, "\n", "\\n");
-		buf += args;
-	} else {
-		buf += "<internal>";
+	if (!command)
+		return Empty;
+
+	Dictionary::Ptr vars;
+
+	{
+		ObjectLock olock(command);
+		vars = CompatUtility::GetCustomAttributeConfig(command);
 	}
 
-	return buf;
+	if (!vars)
+		return Empty;
+
+	Array::Ptr cv = make_shared<Array>();
+
+	String key;
+	Value value;
+	BOOST_FOREACH(tie(key, value), vars) {
+		cv->Add(key);
+	}
+
+	return cv;
+}
+
+Value CommandsTable::CustomVariableValuesAccessor(const Value& row)
+{
+	Command::Ptr command = static_cast<Command::Ptr>(row);
+
+	if (!command)
+		return Empty;
+
+	Dictionary::Ptr vars;
+
+	{
+		ObjectLock olock(command);
+		vars = CompatUtility::GetCustomAttributeConfig(command);
+	}
+
+	if (!vars)
+		return Empty;
+
+	Array::Ptr cv = make_shared<Array>();
+
+	String key;
+	Value value;
+	BOOST_FOREACH(tie(key, value), vars) {
+		cv->Add(value);
+	}
+
+	return cv;
+}
+
+Value CommandsTable::CustomVariablesAccessor(const Value& row)
+{
+	Command::Ptr command = static_cast<Command::Ptr>(row);
+
+	if (!command)
+		return Empty;
+
+	Dictionary::Ptr vars;
+
+	{
+		ObjectLock olock(command);
+		vars = CompatUtility::GetCustomAttributeConfig(command);
+	}
+
+	if (!vars)
+		return Empty;
+
+	Array::Ptr cv = make_shared<Array>();
+
+	String key;
+	Value value;
+	BOOST_FOREACH(tie(key, value), vars) {
+		Array::Ptr key_val = make_shared<Array>();
+		key_val->Add(key);
+		key_val->Add(value);
+		cv->Add(key_val);
+	}
+
+	return cv;
+}
+
+Value CommandsTable::ModifiedAttributesAccessor(const Value& row)
+{
+	Command::Ptr command = static_cast<Command::Ptr>(row);
+
+	if (!command)
+		return Empty;
+
+	/* not supported */
+	return command->GetModifiedAttributes();
+}
+
+Value CommandsTable::ModifiedAttributesListAccessor(const Value& row)
+{
+	Command::Ptr command = static_cast<Command::Ptr>(row);
+
+	if (!command)
+		return Empty;
+
+	return CompatUtility::GetModifiedAttributesList(command);
 }

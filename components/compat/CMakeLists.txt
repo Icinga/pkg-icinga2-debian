@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)
+# Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -15,14 +15,14 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(checkresultreader.ti checkresultreader.th)
-mkclass_target(compatlogger.ti compatlogger.th)
-mkclass_target(externalcommandlistener.ti externalcommandlistener.th)
-mkclass_target(statusdatawriter.ti statusdatawriter.th)
+mkclass_target(checkresultreader.ti checkresultreader.thpp)
+mkclass_target(compatlogger.ti compatlogger.thpp)
+mkclass_target(externalcommandlistener.ti externalcommandlistener.thpp)
+mkclass_target(statusdatawriter.ti statusdatawriter.thpp)
 
 mkembedconfig_target(compat-type.conf compat-type.cpp)
 
-add_library(compat SHARED checkresultreader.cpp checkresultreader.th compatlogger.cpp compatlogger.th externalcommandlistener.cpp externalcommandlistener.th statusdatawriter.cpp statusdatawriter.th compat-type.cpp)
+add_library(compat SHARED checkresultreader.cpp checkresultreader.thpp compatlogger.cpp compatlogger.thpp externalcommandlistener.cpp externalcommandlistener.thpp statusdatawriter.cpp statusdatawriter.thpp compat-type.cpp)
 
 target_link_libraries(compat ${Boost_LIBRARIES} base config icinga)
 

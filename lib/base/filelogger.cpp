@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,27 +17,51 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/filelogger.h"
-#include "base/dynamictype.h"
+#include "base/filelogger.hpp"
+#include "base/dynamictype.hpp"
+#include "base/statsfunction.hpp"
+#include "base/application.hpp"
 #include <fstream>
 
 using namespace icinga;
 
 REGISTER_TYPE(FileLogger);
 
+REGISTER_STATSFUNCTION(FileLoggerStats, &FileLogger::StatsFunc);
+
+Value FileLogger::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+{
+	Dictionary::Ptr nodes = make_shared<Dictionary>();
+
+	BOOST_FOREACH(const FileLogger::Ptr& filelogger, DynamicType::GetObjects<FileLogger>()) {
+		nodes->Set(filelogger->GetName(), 1); //add more stats
+	}
+
+	status->Set("filelogger", nodes);
+
+	return 0;
+}
+
 /**
  * Constructor for the FileLogger class.
  */
-void FileLogger::Start()
+void FileLogger::Start(void)
 {
 	StreamLogger::Start();
 
+	ReopenLogFile();
+
+	Application::OnReopenLogs.connect(boost::bind(&FileLogger::ReopenLogFile, this));
+}
+
+void FileLogger::ReopenLogFile(void)
+{
 	std::ofstream *stream = new std::ofstream();
 
 	String path = GetPath();
 
 	try {
-		stream->open(path.CStr(), std::fstream::out | std::fstream::trunc);
+		stream->open(path.CStr(), std::fstream::app | std::fstream::out);
 
 		if (!stream->good())
 			BOOST_THROW_EXCEPTION(std::runtime_error("Could not open logfile '" + path + "'"));

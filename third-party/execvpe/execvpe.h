@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -20,7 +20,7 @@
 #ifndef EXECVPE_H
 #define EXECVPE_H
 
-#include "base/visibility.h"
+#include "base/visibility.hpp"
 
 #ifdef __cplusplus
 extern "C" {

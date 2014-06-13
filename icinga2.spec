@@ -1,6 +1,6 @@
 #/******************************************************************************
 # * Icinga 2                                                                   *
-# * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+# * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
 # *                                                                            *
 # * This program is free software; you can redistribute it and/or              *
 # * modify it under the terms of the GNU General Public License                *
@@ -17,7 +17,7 @@
 # * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
 # ******************************************************************************/
 
-%define revision 1
+%define revision 2.beta2
 
 %if "%{_vendor}" == "redhat"
 %define el5_boost_version 141
@@ -29,7 +29,12 @@
 %define apachegroup apache
 %endif
 %if "%{_vendor}" == "suse"
+# opensuse 13
+%if 0%{?suse_version} >= 1310
+%define opensuse_boost_version 1_53_0
+%else
 %define opensuse_boost_version 1_49_0
+%endif
 %define sles_boost_version 1_54_0
 %define apachename apache2
 %define apacheconfdir  %{_sysconfdir}/apache2/conf.d
@@ -40,6 +45,8 @@
 %define icinga_user icinga
 %define icinga_group icinga
 %define icingacmd_group icingacmd
+%define icingaweb2name icingaweb2
+%define icingaweb2version 2.0.0
 
 %define icingaclassicconfdir %{_sysconfdir}/icinga
 
@@ -47,7 +54,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 0.0.6
+Version: 2.0.0
 Release: %{revision}%{?dist}
 License: GPLv2+
 Group: Applications/System
@@ -55,14 +62,24 @@ Source: %{name}-%{version}.tar.gz
 URL: http://www.icinga.org/
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
-BuildRequires: doxygen
+Requires: %{name}-bin = %{version}
+#Requires: %{name}-ido-mysql = %{version}
+#Requires: %{icingaweb2name} >= %{icingaweb2version}
+
+%description
+Meta package for Icinga 2 Core, DB IDO and Web.
+
+%package bin
+Summary:      Icinga 2 binaries and libraries
+Group:        Applications/System
+
 BuildRequires: openssl-devel
 BuildRequires: gcc-c++
 BuildRequires: libstdc++-devel
 BuildRequires: cmake
 BuildRequires: flex >= 2.5.35
 BuildRequires: bison
-BuildRequires: %{apachename}
+BuildRequires: make
 
 # redhat
 %if "%{_vendor}" == "redhat"
@@ -117,8 +134,9 @@ Requires: libboost_regex%{opensuse_boost_version}
 
 Requires: %{name}-common = %{version}
 
-%description
-Icinga is a general-purpose network monitoring application.
+%description bin
+Icinga 2 is a general-purpose network monitoring application.
+Provides binaries and libraries for Icinga 2 Core.
 
 %package common
 Summary:      Common Icinga 2 configuration
@@ -177,12 +195,6 @@ Group:        Applications/System
 %if "%{_vendor}" == "suse"
 BuildRequires: postgresql-libs
 %endif
-%if "%{_vendor}" == "redhat"
-# el5 only provides mysql package
-%if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5"
-BuildRequires: postgresql84
-%endif
-%endif
 BuildRequires: postgresql-devel
 Requires: postgresql-libs
 Requires: %{name} = %{version}-%{release}
@@ -195,6 +207,7 @@ IDOUtils schema >= 1.10
 %package classicui-config
 Summary:      Icinga 2 Classic UI Standalone configuration
 Group:        Applications/System
+BuildRequires: %{apachename}
 Requires:     %{apachename}
 Requires:     %{name} = %{version}-%{release}
 Provides:     icinga-classicui-config
@@ -246,7 +259,7 @@ install -D -m 0644 etc/icinga/icinga-classic-apache.conf %{buildroot}%{apachecon
 
 # fix plugin path on x64
 %if "%{_vendor}" != "suse"
-sed -i 's@plugindir = .*@plugindir = "%{_libdir}/nagios/plugins"@' %{buildroot}/%{_sysconfdir}/%{name}/conf.d/macros.conf
+sed -i 's@PluginDir = .*@PluginDir = "%{_libdir}/nagios/plugins"@' %{buildroot}/%{_sysconfdir}/%{name}/constants.conf
 %endif
 
 # remove features-enabled symlinks
@@ -269,9 +282,7 @@ exit 0
 if [ ${1:-0} -eq 1 ]
 then
 	# initial installation, enable default features
-	%{_sbindir}/icinga2-enable-feature checker
-	%{_sbindir}/icinga2-enable-feature notification
-	%{_sbindir}/icinga2-enable-feature mainlog
+	%{_sbindir}/icinga2-enable-feature checker notification mainlog
 fi
 
 exit 0
@@ -298,9 +309,7 @@ exit 0
 if [ ${1:-0} -eq 1 ]
 then
 	# initial installation, enable default features
-	%{_sbindir}/icinga2-enable-feature checker
-	%{_sbindir}/icinga2-enable-feature notification
-	%{_sbindir}/icinga2-enable-feature mainlog
+	%{_sbindir}/icinga2-enable-feature checker notification mainlog
 fi
 
 exit 0
@@ -363,9 +372,7 @@ exit 0
 if [ ${1:-0} -eq 1 ]
 then
         # initial installation, enable features
-        %{_sbindir}/icinga2-enable-feature statusdata
-        %{_sbindir}/icinga2-enable-feature compatlog
-        %{_sbindir}/icinga2-enable-feature command
+        %{_sbindir}/icinga2-enable-feature statusdata compatlog command
 fi
 
 exit 0
@@ -381,29 +388,43 @@ fi
 exit 0
 
 %files
+
+%files bin
 %defattr(-,root,root,-)
 %doc COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog
 %attr(755,-,-) %{_sysconfdir}/init.d/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d/hosts
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d/hosts/localhost
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/features-available
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/features-enabled
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/scripts
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/zones.d
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/%{name}.conf
+%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/constants.conf
+%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/zones.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/conf.d/*.conf
+%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/conf.d/hosts/*.conf
+%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/conf.d/hosts/localhost/*.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/features-available/*.conf
+%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/zones.d/*
 %config(noreplace) %{_sysconfdir}/%{name}/scripts/*
 %{_sbindir}/%{name}
-%{_bindir}/%{name}-migrate-config
 %{_bindir}/%{name}-build-ca
 %{_bindir}/%{name}-build-key
+%{_bindir}/%{name}-sign-key
 %{_sbindir}/%{name}-enable-feature
 %{_sbindir}/%{name}-disable-feature
+%{_sbindir}/%{name}-setup-agent
+%{_sbindir}/%{name}-discover-agent
+%{_sbindir}/%{name}-forget-agent
+%{_sbindir}/%{name}-list-agents
 %exclude %{_libdir}/%{name}/libdb_ido_mysql*
 %exclude %{_libdir}/%{name}/libdb_ido_pgsql*
 %{_libdir}/%{name}
 %{_datadir}/%{name}
-%exclude %{_datadir}/%{name}/itl
+%exclude %{_datadir}/%{name}/include
 %{_mandir}/man8/%{name}.8.gz
 
 %attr(0755,%{icinga_user},%{icinga_group}) %{_localstatedir}/cache/%{name}
@@ -417,16 +438,16 @@ exit 0
 
 %files common
 %defattr(-,root,root,-)
-%doc COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog
+%doc COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog tools/syntax
+%attr(755,-,-) %{_sysconfdir}/logrotate.d/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/perfdata
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/tmp
-%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_datadir}/%{name}/itl
-%{_datadir}/%{name}/itl
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_datadir}/%{name}/include
+%{_datadir}/%{name}/include
 
 %files doc
 %defattr(-,root,root,-)
-%doc COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog
 %{_datadir}/doc/%{name}
 %docdir %{_datadir}/doc/%{name}
 

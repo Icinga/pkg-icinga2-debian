@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,26 +17,8 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "icinga/checkresult.h"
-#include "base/dynamictype.h"
-#include "base/initialize.h"
-#include "base/scriptvariable.h"
+#include "icinga/checkresult.hpp"
 
 using namespace icinga;
 
 REGISTER_TYPE(CheckResult);
-INITIALIZE_ONCE(&CheckResult::StaticInitialize);
-
-void CheckResult::StaticInitialize(void)
-{
-	ScriptVariable::Set("StateOK", StateOK, true, true);
-	ScriptVariable::Set("StateWarning", StateWarning, true, true);
-	ScriptVariable::Set("StateCritical", StateCritical, true, true);
-	ScriptVariable::Set("StateUnknown", StateUnknown, true, true);
-
-	ScriptVariable::Set("StateFilterOK", 1 << StateOK, true, true);
-	ScriptVariable::Set("StateFilterWarning", 1 << StateWarning, true, true);
-	ScriptVariable::Set("StateFilterCritical", 1 << StateCritical, true, true);
-	ScriptVariable::Set("StateFilterUnknown", 1 << StateUnknown, true, true);
-}
-

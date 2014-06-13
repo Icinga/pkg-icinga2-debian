@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,15 +17,15 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/unixsocket.h"
-#include "base/exception.h"
+#include "base/unixsocket.hpp"
+#include "base/exception.hpp"
 
 #ifndef _WIN32
 using namespace icinga;
 
 UnixSocket::UnixSocket(void)
 {
-	int fd = socket(AF_UNIX, SOCK_STREAM, PF_UNIX);
+	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
 	if (fd < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()

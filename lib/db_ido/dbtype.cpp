@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2013 Icinga Development Team (http://www.icinga.org/)   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -17,22 +17,23 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "db_ido/dbtype.h"
-#include "db_ido/dbconnection.h"
-#include "base/objectlock.h"
-#include "base/debug.h"
+#include "db_ido/dbtype.hpp"
+#include "db_ido/dbconnection.hpp"
+#include "base/objectlock.hpp"
+#include "base/debug.hpp"
 #include <boost/thread/once.hpp>
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
-DbType::DbType(const String& name, const String& table, long tid, const String& idcolumn, const DbType::ObjectFactory& factory)
-	: m_Name(name), m_Table(table), m_TypeID(tid), m_IDColumn(idcolumn), m_ObjectFactory(factory)
+DbType::DbType(const String& table, long tid, const String& idcolumn, const DbType::ObjectFactory& factory)
+	: m_Table(table), m_TypeID(tid), m_IDColumn(idcolumn), m_ObjectFactory(factory)
 { }
 
-String DbType::GetName(void) const
+std::vector<String> DbType::GetNames(void) const
 {
-	return m_Name;
+	boost::mutex::scoped_lock lock(GetStaticMutex());
+	return m_Names;
 }
 
 String DbType::GetTable(void) const
@@ -50,10 +51,11 @@ String DbType::GetIDColumn(void) const
 	return m_IDColumn;
 }
 
-void DbType::RegisterType(const DbType::Ptr& type)
+void DbType::RegisterType(const String& name, const DbType::Ptr& type)
 {
 	boost::mutex::scoped_lock lock(GetStaticMutex());
-	GetTypes()[type->GetName()] = type;
+	type->m_Names.push_back(name);
+	GetTypes()[name] = type;
 }
 
 DbType::Ptr DbType::GetByName(const String& name)
@@ -109,4 +111,17 @@ DbType::TypeMap& DbType::GetTypes(void)
 {
 	static DbType::TypeMap tm;
 	return tm;
+}
+
+std::set<DbType::Ptr> DbType::GetAllTypes(void)
+{
+	std::set<DbType::Ptr> result;
+
+	boost::mutex::scoped_lock lock(GetStaticMutex());
+	std::pair<String, DbType::Ptr> kv;
+	BOOST_FOREACH(kv, GetTypes()) {
+		result.insert(kv.second);
+	}
+
+	return result;
 }

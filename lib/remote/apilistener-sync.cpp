@@ -1,0 +1,220 @@
+/******************************************************************************
+ * Icinga 2                                                                   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ *                                                                            *
+ * This program is free software; you can redistribute it and/or              *
+ * modify it under the terms of the GNU General Public License                *
+ * as published by the Free Software Foundation; either version 2             *
+ * of the License, or (at your option) any later version.                     *
+ *                                                                            *
+ * This program is distributed in the hope that it will be useful,            *
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of             *
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              *
+ * GNU General Public License for more details.                               *
+ *                                                                            *
+ * You should have received a copy of the GNU General Public License          *
+ * along with this program; if not, write to the Free Software Foundation     *
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
+ ******************************************************************************/
+
+#include "remote/apilistener.hpp"
+#include "remote/apifunction.hpp"
+#include "base/dynamictype.hpp"
+#include "base/logger_fwd.hpp"
+#include "base/convert.hpp"
+#include <boost/foreach.hpp>
+#include <fstream>
+
+using namespace icinga;
+
+REGISTER_APIFUNCTION(Update, config, &ApiListener::ConfigUpdateHandler);
+
+bool ApiListener::IsConfigMaster(const Zone::Ptr& zone) const
+{
+	String path = Application::GetZonesDir() + "/" + zone->GetName();
+	return Utility::PathExists(path);
+}
+
+void ApiListener::ConfigGlobHandler(const Dictionary::Ptr& config, const String& path, const String& file)
+{
+	CONTEXT("Creating config update for file '" + file + "'");
+
+	std::ifstream fp(file.CStr());
+	if (!fp)
+		return;
+
+	String content((std::istreambuf_iterator<char>(fp)), std::istreambuf_iterator<char>());
+	config->Set(file.SubStr(path.GetLength()), content);
+}
+
+Dictionary::Ptr ApiListener::LoadConfigDir(const String& dir)
+{
+	Dictionary::Ptr config = make_shared<Dictionary>();
+	Utility::GlobRecursive(dir, "*.conf", boost::bind(&ApiListener::ConfigGlobHandler, config, dir, _1), GlobFile);
+	return config;
+}
+
+bool ApiListener::UpdateConfigDir(const Dictionary::Ptr& oldConfig, const Dictionary::Ptr& newConfig, const String& configDir)
+{
+	bool configChange = false;
+
+	if (oldConfig->Contains(".timestamp") && newConfig->Contains(".timestamp")) {
+		double oldTS = Convert::ToDouble(oldConfig->Get(".timestamp"));
+		double newTS = Convert::ToDouble(newConfig->Get(".timestamp"));
+
+		/* skip update if our config is newer */
+		if (oldTS <= newTS)
+			return false;
+	}
+
+	BOOST_FOREACH(const Dictionary::Pair& kv, newConfig) {
+		if (oldConfig->Get(kv.first) != kv.second) {
+			configChange = true;
+
+			String path = configDir + "/" + kv.first;
+			Log(LogInformation, "ApiListener", "Updating configuration file: " + path);
+
+			std::ofstream fp(path.CStr(), std::ofstream::out | std::ostream::trunc);
+			fp << kv.second;
+			fp.close();
+		}
+	}
+
+	BOOST_FOREACH(const Dictionary::Pair& kv, oldConfig) {
+		if (!newConfig->Contains(kv.first)) {
+			configChange = true;
+
+			String path = configDir + "/" + kv.first;
+			(void) unlink(path.CStr());
+		}
+	}
+
+	String tsPath = configDir + "/.timestamp";
+	if (!Utility::PathExists(tsPath)) {
+		std::ofstream fp(tsPath.CStr(), std::ofstream::out | std::ostream::trunc);
+		fp << Utility::GetTime();
+		fp.close();
+	}
+
+	return configChange;
+}
+
+void ApiListener::SyncZoneDir(const Zone::Ptr& zone) const
+{
+	Log(LogInformation, "ApiListener", "Syncing zone: " + zone->GetName());
+
+	String newDir = Application::GetZonesDir() + "/" + zone->GetName();
+	String oldDir = Application::GetLocalStateDir() + "/lib/icinga2/api/zones/" + zone->GetName();
+
+#ifndef _WIN32
+	if (mkdir(oldDir.CStr(), 0700) < 0 && errno != EEXIST) {
+#else /*_ WIN32 */
+	if (mkdir(oldDir.CStr()) < 0 && errno != EEXIST) {
+#endif /* _WIN32 */
+		BOOST_THROW_EXCEPTION(posix_error()
+			<< boost::errinfo_api_function("mkdir")
+			<< boost::errinfo_errno(errno)
+			<< boost::errinfo_file_name(oldDir));
+	}
+
+	Dictionary::Ptr newConfig = LoadConfigDir(newDir);
+	Dictionary::Ptr oldConfig = LoadConfigDir(oldDir);
+
+	UpdateConfigDir(oldConfig, newConfig, oldDir);
+}
+
+void ApiListener::SyncZoneDirs(void) const
+{
+	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjects<Zone>()) {
+		if (!IsConfigMaster(zone))
+			continue;
+
+		SyncZoneDir(zone);
+	}
+}
+
+void ApiListener::SendConfigUpdate(const ApiClient::Ptr& aclient)
+{
+	Endpoint::Ptr endpoint = aclient->GetEndpoint();
+	ASSERT(endpoint);
+
+	Zone::Ptr azone = endpoint->GetZone();
+	Zone::Ptr lzone = Zone::GetLocalZone();
+
+	/* don't try to send config updates to our master */
+	if (!azone->IsChildOf(lzone))
+		return;
+
+	Dictionary::Ptr configUpdate = make_shared<Dictionary>();
+
+	String zonesDir = Application::GetLocalStateDir() + "/lib/icinga2/api/zones";
+
+	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjects<Zone>()) {
+		String zoneDir = zonesDir + "/" + zone->GetName();
+
+		if (!zone->IsChildOf(azone) || !Utility::PathExists(zoneDir))
+			continue;
+
+		configUpdate->Set(zone->GetName(), LoadConfigDir(zonesDir + "/" + zone->GetName()));
+	}
+
+	Dictionary::Ptr params = make_shared<Dictionary>();
+	params->Set("update", configUpdate);
+
+	Dictionary::Ptr message = make_shared<Dictionary>();
+	message->Set("jsonrpc", "2.0");
+	message->Set("method", "config::Update");
+	message->Set("params", params);
+
+	aclient->SendMessage(message);
+}
+
+Value ApiListener::ConfigUpdateHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
+{
+	if (!origin.FromClient->GetEndpoint() || (origin.FromZone && !Zone::GetLocalZone()->IsChildOf(origin.FromZone)))
+		return Empty;
+
+	ApiListener::Ptr listener = ApiListener::GetInstance();
+
+	if (!listener || !listener->GetAcceptConfig())
+		return Empty;
+
+	Dictionary::Ptr update = params->Get("update");
+
+	bool configChange = false;
+
+	BOOST_FOREACH(const Dictionary::Pair& kv, update) {
+		Zone::Ptr zone = Zone::GetByName(kv.first);
+
+		if (!zone) {
+			Log(LogWarning, "ApiListener", "Ignoring config update for unknown zone: " + kv.first);
+			continue;
+		}
+
+		String oldDir = Application::GetLocalStateDir() + "/lib/icinga2/api/zones/" + zone->GetName();
+
+#ifndef _WIN32
+		if (mkdir(oldDir.CStr(), 0700) < 0 && errno != EEXIST) {
+#else /*_ WIN32 */
+		if (mkdir(oldDir.CStr()) < 0 && errno != EEXIST) {
+#endif /* _WIN32 */
+			BOOST_THROW_EXCEPTION(posix_error()
+				<< boost::errinfo_api_function("mkdir")
+				<< boost::errinfo_errno(errno)
+				<< boost::errinfo_file_name(oldDir));
+		}
+
+		Dictionary::Ptr newConfig = kv.second;
+		Dictionary::Ptr oldConfig = LoadConfigDir(oldDir);
+
+		if (UpdateConfigDir(oldConfig, newConfig, oldDir))
+			configChange = true;
+	}
+
+	if (configChange) {
+		Log(LogInformation, "ApiListener", "Restarting after configuration change.");
+		Application::RequestRestart();
+	}
+
+	return Empty;
+}
