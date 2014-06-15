@@ -155,7 +155,8 @@ Description: host and network monitoring system - classic ui integration
 Package: icinga2-ido-mysql
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
-Depends: icinga2-common (= ${source:Version}),
+Depends: dbconfig-common,
+         icinga2-common (= ${source:Version}),
          icinga2-bin (= ${binary:Version}),
          ${shlibs:Depends}, ${misc:Depends}
 Recommends: mysql-client
