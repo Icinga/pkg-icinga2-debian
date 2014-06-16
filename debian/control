@@ -22,9 +22,6 @@ Build-Depends:
     libpq-dev,
     libssl-dev,
     po-debconf,
-    python-dev,
-    pandoc,
-    python-sphinx
 Standards-Version: 3.9.5
 Homepage: http://www.icinga.org
 
