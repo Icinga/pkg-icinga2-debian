@@ -15,16 +15,18 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-file(GLOB DOCSRCS "*.md")
-
 if(UNIX OR CYGWIN)
-  install(
-    FILES icinga2.8 icinga2-enable-feature.8 icinga2-disable-feature.8 icinga2-build-ca.8 icinga2-build-key.8 icinga2-sign-key.8 icinga2-prepare-dirs.8
-    DESTINATION ${CMAKE_INSTALL_MANDIR}/man8
-  )
+  configure_file(icinga2-discover-agent.cmake ${CMAKE_CURRENT_BINARY_DIR}/icinga2-discover-agent @ONLY)
+  configure_file(icinga2-forget-agent.cmake ${CMAKE_CURRENT_BINARY_DIR}/icinga2-forget-agent @ONLY)
+  configure_file(icinga2-list-agents.cmake ${CMAKE_CURRENT_BINARY_DIR}/icinga2-list-agents @ONLY)
+  configure_file(icinga2-setup-agent.cmake ${CMAKE_CURRENT_BINARY_DIR}/icinga2-setup-agent @ONLY)
 endif()
 
-install(
-  FILES ${DOCSRCS}
-  DESTINATION ${CMAKE_INSTALL_DOCDIR}/markdown
-)
+if(MSVC)
+  include_external_msproject(
+    icinga2setupagent
+    ${CMAKE_CURRENT_SOURCE_DIR}/icinga2-setup-agent/Icinga2SetupAgent.csproj
+    TYPE FAE04EC0-301F-11D3-BF4B-00C04F79EFBC
+  )
+
+endif()

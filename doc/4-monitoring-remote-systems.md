@@ -68,25 +68,18 @@ remote client.
 The NRPE daemon uses its own configuration format in nrpe.cfg while `check_nrpe`
 can be embedded into the Icinga 2 `CheckCommand` configuration syntax.
 
+You can use the `check_nrpe` plugin from the NRPE project to query the NRPE daemon.
+Icinga 2 provides the [nrpe check command](#plugin-check-command-nrpe) for this:
+
 Example:
-
-    object CheckCommand "check_nrpe" {
-      import "plugin-check-command"
-
-      command = [
-        PluginDir + "/check_nrpe",
-        "-H", "$address$",
-        "-c", "$remote_nrpe_command$",
-      ]
-    }
 
     object Service "users" {
       import "generic-service"
   
       host_name = "remote-nrpe-host"
 
-      check_command = "check_nrpe"
-      vars.remote_nrpe_command = "check_users"
+      check_command = "nrpe"
+      vars.nrpe_command = "check_users"
     }
 
 nrpe.cfg:
@@ -145,10 +138,6 @@ passing the check results to Icinga 2.
 [NSCA-ng](http://www.nsca-ng.org) provides a client-server pair that allows the
 remote sender to push check results into the Icinga 2 `ExternalCommandListener`
 feature.
-
-The [Icinga 2 Vagrant Demo VM](#vagrant) ships a demo integration and further samples.
-
-
 
 ## <a id="distributed-monitoring-high-availability"></a> Distributed Monitoring and High Availability
 
@@ -350,6 +339,40 @@ process.
 > `zones.d` must not be included in [icinga2.conf](#icinga2-conf). Icinga 2 automatically
 > determines the required include directory. This can be overridden using the
 > [global constant](#global-constants) `ZonesDir`.
+
+#### <a id="zone-synchronisation-permissions"></a> Global configuration zone
+
+If your zone configuration setup shares the same templates, groups, commands, timeperiods, etc.
+you would have to duplicate quite a lot of configuration objects making the merged configuration
+on your configuration master unique.
+
+That is not necessary by defining a global zone shipping all those templates. By settting
+`global = true` you ensure that this zone configuration template will be synchronized to all
+involved nodes (only if they accept configuration though).
+
+    /etc/icinga2/zones.d
+      global-templates/
+        templates.conf
+        groups.conf
+      master
+        health.conf
+      checker
+        health.conf
+        demo.conf
+
+In this example, the global zone is called `global-templates` and must be defined in
+your zone configuration visible to all nodes.
+
+    object Zone "global-templates" {
+      global = true
+    }
+
+> **Note**
+>
+> If the remote node does not have this zone configured, it will ignore the configuration
+> update, if it accepts configuration.
+
+If you don't require any global configuration, skip this setting.
 
 #### <a id="zone-synchronisation-permissions"></a> Zone Configuration Permissions
 
