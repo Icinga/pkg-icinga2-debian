@@ -1,5 +1,14 @@
-icinga2 (2.0.0~beta2-1) UNRELEASED; urgency=low
+icinga2 (2.0.0-1) unstable; urgency=low
 
+  [ Markus Frosch ]
   * Initial Debian packaging for the Icinga 2 betas (Closes: #751509)
 
- -- Markus Frosch <markus@lazyfrosch.de>  Fri, 13 Jun 2014 14:39:39 +0200
+  [ Alexander Wirt ]
+  * [f4e1a77] Run check_run only in do_start()
+  * [d4bc561] Add support for dbconfig-common and enabling ido* via debconf
+  * [b5829a8] Don't install static configuration file
+  * [edd86d2] Remove enabled symlink on package purge
+  * [4c69aaa] Let those ido modules conflict for now
+  * [a6ccd18] Imported Upstream version 2.0.0
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 12:22:43 +0200
