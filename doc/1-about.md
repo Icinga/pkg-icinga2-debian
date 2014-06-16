@@ -17,7 +17,7 @@ LICENSE file included in the source package.
 ## <a id="support"></a> Support
 
 Support for Icinga 2 is available in a number of ways. Please have a look at
-the support overview page at [https://support.icinga.org].
+the support overview page at https://support.icinga.org.
 
 ## <a id="contribute"></a> Contribute
 
@@ -25,20 +25,20 @@ There are many ways to contribute to Icinga - whether it be sending patches, tes
 reporting bugs, or reviewing and updating the documentation. Every contribution
 is appreciated!
 
-Please get in touch with the Icinga team at [https://www.icinga.org/ecosystem/].
+Please get in touch with the Icinga team at https://www.icinga.org/community/.
 
 ## <a id="development"></a> Icinga 2 Development
 
 You can follow Icinga 2's development closely by checking
 out these resources:
 
-* Development Bug Tracker: [https://dev.icinga.org/projects/i2?jump=issues] ([http://www.icinga.org/faq/how-to-report-a-bug/])
-* Git Repositories: [https://git.icinga.org/?p=icinga2.git;a=summary] (mirror at [https://github.com/Icinga/icinga2])
-* Git Checkins Mailinglist: [https://lists.icinga.org/mailman/listinfo/icinga-checkins]
-* Development Mailinglist: [https://lists.icinga.org/mailman/listinfo/icinga-devel]
-* \#icinga-devel on irc.freenode.net [http://webchat.freenode.net/?channels=icinga-devel] including a Git Commit Bot
+* [Development Bug Tracker](https://dev.icinga.org/projects/i2): [How to report a bug?](http://www.icinga.org/faq/how-to-report-a-bug/)
+* Git Repositories: [main mirror on icinga.org](https://git.icinga.org/?p=icinga2.git;a=summary) [release mirror at github.com](https://github.com/Icinga/icinga2)
+* [Git Checkins Mailinglist](https://lists.icinga.org/mailman/listinfo/icinga-checkins)
+* [Development](https://lists.icinga.org/mailman/listinfo/icinga-devel) and [Users](https://lists.icinga.org/mailman/listinfo/icinga-users) Mailinglists
+* [#icinga-devel on irc.freenode.net](http://webchat.freenode.net/?channels=icinga-devel) including a Git Commit Bot
 
-For general support questions, please refer to [https://www.icinga.org/support/].
+For general support questions, please refer to the [community support channels](https://support.icinga.org).
 
 ## <a id="demo-vm"></a> Demo VM
 
@@ -46,13 +46,11 @@ Icinga 2 is available as [Vagrant Demo VM](#vagrant).
 
 ## <a id="whats-new"></a> What's new
 
-### What's New in Version 2.0.0 Beta 2
+### What's New in Version 2.0.0
 
 Lots of things. Please read [Icinga 2 in a nutshell](#icinga2-in-a-nutshell).
 
 #### Changes
-
-* Updated sample configuration for final release.
 
 ### Archive
 
@@ -62,18 +60,26 @@ Please check the `ChangeLog` file.
 
 * Use [Packages](#getting-started)
 
-Look for available packages on [http://packages.icinga.org] or ask your distribution's maintainer.
+Look for available packages on http://packages.icinga.org or ask your distribution's maintainer.
 Compiling from source is not recommended.
 
 * Real Distributed Architecture
 
 [Cluster](#distributed-monitoring-high-availability) model for distributed setups, load balancing
-and High-Availability installations. Secured by SSL x509 certificates, supporting IPv4 and IPv6.
+and High-Availability installations (or a combination of them). On-demand configuration
+synchronisation between zones is available, but not mandatory (for example when config management
+tools such as Puppet are used). Secured by SSL x509 certificates, supporting IPv4 and IPv6.
+High Availability for DB IDO: Only active on the current zone master, failover happens automatically.
 
 * High Performance
 
 Multithreaded and scalable for small embedded systems as well as large scale environments.
-Running checks every second is no longer a problem.
+Running checks every second is no longer a problem and enables real-time monitoring capabilities.
+Unlike Icinga 1.x the [daemon reload](#differences-1x-2-real-reload) happens asynchronously.
+A child daemon validates the new configuration, the parent process is still doing checks, replicating cluster events, triggering alert notifications, etc. If the configuration validation is ok, all remaining events are synchronized and the child process continues as normal.
+The DB IDO configuration dump and status/historical event updates also runs asynchronously in a queue not blocking the core anymore. The configuration validation itself runs in paralell allowing fast verification checks.
+That way you are not blind (anymore) during a configuration reload and benefit from a real scalable architecture.
+
 
 * Modular & flexible [features](#features)
 
@@ -101,12 +107,13 @@ Sample configuration for common plugins is shipped with Icinga 2 as part of the 
 
 * Revamped Commands
 
-One command to rule them all - supporting optional and conditional [command arguments](#commands-arguments).
+One command to rule them all - supporting optional and conditional [command arguments](#command-arguments).
 [Environment variables](#command-environment-variables) exported on-demand populated with
 runtime evaluated macros.
 Three types of commands used for different actions: checks, notifications and events.
 Check timeout for commands instead of a global option. Commands also have custom attributes allowing
 you to specify default values.
+There is no plugin output or performance data length restriction anymore compared to Icinga 1.x.
 
 * Custom Runtime Macros
 
@@ -133,7 +140,7 @@ required for network reachability calculations.
 
 * [Recurring Downtimes](#recurring-downtimes)
 
-Forget using cronjobs to set up recurring downtime - you can configure them as Icinga2 configuration
+Forget using cronjobs to set up recurring downtime - you can configure them as Icinga 2 configuration
 objects and specify their active time window.
 
 * Embedded Health Checks
@@ -143,7 +150,7 @@ check providing direct statistics as performance data for your graphing addon, f
 
 * Compatibility with Icinga 1.x
 
-All known interfaces are optional available: [status files](#status-data), [logs](#compat-logging),
+All known interfaces are optionally available: [status files](#status-data), [logs](#compat-logging),
 [DB IDO](#configuring-ido) MySQL/PostgreSQL, [performance data](#performance-data),
 [external command pipe](#external-commands) and for migration reasons a
 [checkresult file reader](#check-result-files) too.
@@ -160,10 +167,12 @@ Additional information on the differences is documented in the [migration](#diff
 Icinga 2 ships [syntax highlighting](#configuration-syntax-highlighting) for `vim` and `nano` to help
 edit your configuration.
 
+* Puppet modules, Chef Cookbooks, Ansible Playbooks, Salt Formulas, etc
+
+This is a constant work-in-progress. For details checkout https://dev.icinga.org/projects/icinga-tools
+If you want to contribute to these projects, do not hesitate to contact us at https://support.icinga.org
+
 * [Vagrant Demo VM](#vagrant)
 
 Used for demo cases and development tests. Get Icinga 2 running within minutes and spread the #monitoringlove
 to your friends and colleagues.
-
-
-
