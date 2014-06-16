@@ -28,7 +28,7 @@ Architecture: any
 Depends: icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
-Recommends: icinga2-doc
+Recommends: icinga2-doc, nagios-plugins-basic
 Description: host and network monitoring system
  Icinga 2 is a general-purpose monitoring application and the next generation
  after Icinga 1.x - which was a Nagios fork. It should fit the needs of a small
