@@ -13,6 +13,7 @@ fi
 
 if [ "$1" = "purge" ]; then
     rm -f /etc/icinga2/features-available/ido-mysql.conf
+    rm -f /etc/icinga2/features-enabled/ido-mysql.conf
     if which ucf >/dev/null; then
         ucf --purge /etc/icinga2/features-available/ido-mysql.conf 
     fi
