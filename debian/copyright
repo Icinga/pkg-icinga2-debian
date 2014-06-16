@@ -104,11 +104,11 @@ License: GPL-1+
  On Debian systems, the complete text of the GNU General
  Public License version 2 can be found in "/usr/share/common-licenses/GPL-1".
 
-Files: third-party/cmake/BoostTestTargets.* 
-       third-party/cmake/CopyResourcesToBuildTree.cmake 
+Files: third-party/cmake/BoostTestTargets.*
+       third-party/cmake/CopyResourcesToBuildTree.cmake
        third-party/cmake/GetForceIncludeDefinitions.cmake
        third-party/cmake/GetGitRevisionDescription.cmake.in
-        
+
 Copyright: 2009-2010 Ryan Pavlik <rpavlik@iastate.edu> <abiryan@ryand.net>
            2009-2010 Iowa State University
 License: Boost Software License 1.0
@@ -169,7 +169,7 @@ License: BSD-3-clause
  .
  This software is distributed WITHOUT ANY WARRANTY; without even the
  implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- See the License for more information. 
+ See the License for more information.
 
 Files: third-party/cmake/FindGit.cmake
 Copyright: 2010 Kitware, Inc.
@@ -205,7 +205,7 @@ License: BSD-3-clause
  .
  This software is distributed WITHOUT ANY WARRANTY; without even the
  implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- See the License for more information. 
+ See the License for more information.
 
 Files: third-party/cmake/FindPostgreSQL.cmake
 Copyright:  2004-2009 Kitware, Inc.
@@ -240,5 +240,4 @@ License: BSD-3-clause
  .
  This software is distributed WITHOUT ANY WARRANTY; without even the
  implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- See the License for more information. 
-
+ See the License for more information.
