@@ -40,6 +40,7 @@
 #include "base/serializer.hpp"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
 
 using namespace icinga;
@@ -106,8 +107,11 @@ LivestatusQuery::LivestatusQuery(const std::vector<String>& lines, const String&
 		String header = line.SubStr(0, col_index);
 		String params;
 
-		if (line.GetLength() > col_index + 2)
-			params = line.SubStr(col_index + 2);
+		//OutputFormat:json or OutputFormat: json
+		if (line.GetLength() > col_index + 1)
+			params = line.SubStr(col_index + 1);
+
+		params.Trim();
 
 		if (header == "ResponseHeader")
 			m_ResponseHeader = params;
@@ -290,9 +294,14 @@ Filter::Ptr LivestatusQuery::ParseFilter(const String& params, unsigned long& fr
 	for (int i = 0; i < 2; i++) {
 		sp_index = temp_buffer.FindFirstOf(" ");
 
-		/* 'attr op' or 'attr op val' is valid */
-		if (i < 1 && sp_index == String::NPos)
-			BOOST_THROW_EXCEPTION(std::runtime_error("Livestatus filter '" + params + "' does not contain all required fields."));
+		/* check if this is the last argument */
+		if (sp_index == String::NPos) {
+			/* 'attr op' or 'attr op val' is valid */
+			if (i < 1)
+				BOOST_THROW_EXCEPTION(std::runtime_error("Livestatus filter '" + params + "' does not contain all required fields."));
+
+			break;
+		}
 
 		tokens.push_back(temp_buffer.SubStr(0, sp_index));
 		temp_buffer = temp_buffer.SubStr(sp_index + 1);
@@ -345,7 +354,7 @@ Filter::Ptr LivestatusQuery::ParseFilter(const String& params, unsigned long& fr
 	return filter;
 }
 
-void LivestatusQuery::PrintResultSet(std::ostream& fp, const Array::Ptr& rs)
+void LivestatusQuery::PrintResultSet(std::ostream& fp, const Array::Ptr& rs) const
 {
 	if (m_OutputFormat == "csv") {
 		ObjectLock olock(rs);
@@ -370,10 +379,12 @@ void LivestatusQuery::PrintResultSet(std::ostream& fp, const Array::Ptr& rs)
 		}
 	} else if (m_OutputFormat == "json") {
 		fp << JsonSerialize(rs);
+	} else if (m_OutputFormat == "python") {
+		PrintPythonArray(fp, rs);
 	}
 }
 
-void LivestatusQuery::PrintCsvArray(std::ostream& fp, const Array::Ptr& array, int level)
+void LivestatusQuery::PrintCsvArray(std::ostream& fp, const Array::Ptr& array, int level) const
 {
 	bool first = true;
 
@@ -389,6 +400,35 @@ void LivestatusQuery::PrintCsvArray(std::ostream& fp, const Array::Ptr& array, i
 		else
 			fp << value;
 	}
+}
+
+void LivestatusQuery::PrintPythonArray(std::ostream& fp, const Array::Ptr& rs) const
+{
+	fp << "[ ";
+
+	bool first = true;
+
+	BOOST_FOREACH(const Value& value, rs) {
+		if (first)
+			first = false;
+		else
+			fp << ", ";
+
+		if (value.IsObjectType<Array>())
+			PrintPythonArray(fp, value);
+		else if (value.IsNumber())
+			fp << value;
+		else
+			fp << QuoteStringPython(value);
+	}
+
+	fp << " ]";
+}
+
+String LivestatusQuery::QuoteStringPython(const String& str) {
+	String result = str;
+	boost::algorithm::replace_all(result, "\"", "\\\"");
+	return "r\"" + result + "\"";
 }
 
 void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)

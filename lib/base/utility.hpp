@@ -60,9 +60,7 @@ class I2_BASE_API Utility
 public:
 	static String DemangleSymbolName(const String& sym);
 	static String GetTypeName(const std::type_info& ti);
-	static String Addr2Line(const String& exe, uintptr_t rva);
 	static String GetSymbolName(const void *addr);
-	static String GetSymbolSource(const void *addr);
 
 	static bool Match(const String& pattern, const String& text);
 
@@ -81,6 +79,8 @@ public:
 
 	static bool Glob(const String& pathSpec, const boost::function<void (const String&)>& callback, int type = GlobFile | GlobDirectory);
 	static bool GlobRecursive(const String& path, const String& pattern, const boost::function<void (const String&)>& callback, int type = GlobFile | GlobDirectory);
+	static bool MkDir(const String& path, int flags);
+	static bool MkDirP(const String& path, int flags);
 
 	static void QueueAsyncCallback(const boost::function<void (void)>& callback);
 

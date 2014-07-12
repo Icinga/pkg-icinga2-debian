@@ -80,7 +80,7 @@ private:
 	void ApiTimerHandler(void);
 
 	void AddListener(const String& service);
-	void AddConnection(const String& node, const String& service);
+	void AddConnection(const Endpoint::Ptr& endpoint);
 
 	void NewClientHandler(const Socket::Ptr& client, ConnectionRole role);
 	void ListenerThreadProc(const Socket::Ptr& server);
@@ -105,10 +105,12 @@ private:
 
 	static Dictionary::Ptr LoadConfigDir(const String& dir);
 	static bool UpdateConfigDir(const Dictionary::Ptr& oldConfig, const Dictionary::Ptr& newConfig, const String& configDir);
+
 	void SyncZoneDirs(void) const;
 	void SyncZoneDir(const Zone::Ptr& zone) const;
+
 	bool IsConfigMaster(const Zone::Ptr& zone) const;
-	static void ConfigGlobHandler(const Dictionary::Ptr& config, const String& path, const String& file);
+	static void ConfigGlobHandler(Dictionary::Ptr& config, const String& path, const String& file);
 	void SendConfigUpdate(const ApiClient::Ptr& aclient);
 };
 
