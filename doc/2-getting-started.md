@@ -38,8 +38,8 @@ Some parts of Icinga 2's functionality are available as separate packages:
 
   Name                    | Description
   ------------------------|--------------------------------
-  icinga2-ido-mysql       | IDO provider module for MySQL
-  icinga2-ido-pgsql       | IDO provider module for PostgreSQL
+  icinga2-ido-mysql       | DB IDO provider module for MySQL
+  icinga2-ido-pgsql       | DB IDO provider module for PostgreSQL
 
 If you're running a distribution for which Icinga 2 packages are
 not yet available you will need to use the release tarball which you
@@ -364,7 +364,7 @@ Further details on the monitoring configuration can be found in the
 
 ## <a id="setting-up-check-plugins"></a> Setting up Check Plugins
 
-Without plugins 
+Without plugins
 Icinga 2 does not know how to check external services. The
 [Monitoring Plugins Project](https://www.monitoring-plugins.org/) provides
 an extensive set of plugins which can be used with Icinga 2 to check whether
@@ -440,19 +440,18 @@ For further information on your monitoring configuration read the
 [monitoring basics](#monitoring-basics).
 
 
-## <a id="configuring-ido"></a> Configuring IDO
+## <a id="configuring-db-ido"></a> Configuring DB IDO
 
-The IDO (Icinga Data Output) modules for Icinga 2 take care of exporting all
-configuration and status information into a database. The IDO database is used
-by a number of projects including Icinga Web.
+The DB IDO (Database Icinga Data Output) modules for Icinga 2 take care of exporting
+all configuration and status information into a database. The IDO database is used
+by a number of projects including Icinga Web 1.x, Reporting or Icinga Web 2.
 
 There is a separate module for each database back-end. At present support for
 both MySQL and PostgreSQL is implemented.
 
 Icinga 2 uses the Icinga 1.x IDOUtils database schema starting with version
-`1.11.0`. Icinga 2 may require additional features not yet released with
-Icinga 1.x and therefore require manual upgrade steps during pre-final
-milestone releases.
+`1.11.3`. Icinga 2 requires additional features not yet released with older
+Icinga 1.x versions.
 
 > **Tip**
 >
@@ -460,19 +459,13 @@ milestone releases.
 > you to do so (for example, [Icinga Web](#setting-up-icinga-web) or [Icinga Web 2](#setting-up-icingaweb2)).
 > [Icinga Classic UI](#setting-up-icinga-classic-ui) does not use IDO as backend.
 
-### <a id="configuring-ido-mysql"></a> Configuring IDO MySQL
+### <a id="configuring-db-ido-mysql"></a> Configuring DB IDO MySQL
 
 #### <a id="setting-up-mysql-db"></a> Setting up the MySQL database
 
 First of all you have to install the `icinga2-ido-mysql` package using your
 distribution's package manager. Once you have done that you can proceed with
 setting up a MySQL database for Icinga 2:
-
-> **Note**
->
-> The Debian packages can optionally create and maintain the database for you
-> using Debian's `dbconfig` framework. This is the recommended way of setting up
-> the database.
 
     # mysql -u root -p
 
@@ -492,7 +485,7 @@ The schema file location differs by the distribution used:
 
   Distribution  | Schema Files
   --------------|---------------------
-  RHEL          | `/usr/share/doc/icinga2-ido-mysql-*/schema` (`*` means package version).
+  RHEL          | `/usr/share/doc/icinga2-ido-mysql-*/schema` (* means package version).
   SUSE          | `/usr/share/doc/packages/icinga2-ido-mysql/schema`
   Debian/Ubuntu | `/usr/share/icinga2-ido-mysql/schema`
 
@@ -501,16 +494,11 @@ The schema file location differs by the distribution used:
 Check the `schema/upgrade` directory for an incremental schema upgrade file.
 If there isn't an upgrade file available there's nothing to do.
 
-> **Note**
->
-> During pre release status (0.x.y releases) small snippets called for example
-> `0.0.10.sql` will ship the required schema updates.
-
 Apply all database schema upgrade files incrementially.
 
-    # mysql -u root -p icinga < /usr/share/doc/icinga2-ido-mysql-*/schema/upgrade/0.0.10.sql
+    # mysql -u root -p icinga < /usr/share/doc/icinga2-ido-mysql-*/schema/upgrade/<version>.sql
 
-The Icinga 2 IDO module will check for the required database schema version on startup
+The Icinga 2 DB IDO module will check for the required database schema version on startup
 and generate an error message if not satisfied.
 
 #### <a id="installing-ido-mysql"></a> Installing the IDO MySQL module
@@ -530,19 +518,13 @@ After enabling the ido-mysql feature you have to restart Icinga 2:
     # /etc/init.d/icinga2 restart
 
 
-### <a id="configuring-ido-postgresql"></a> Configuring IDO PostgreSQL
+### <a id="configuring-db-ido-postgresql"></a> Configuring DB IDO PostgreSQL
 
 #### Setting up the PostgreSQL database
 
 First of all you have to install the `icinga2-ido-pgsql` package using your
 distribution's package manager. Once you have done that you can proceed with
 setting up a PostgreSQL database for Icinga 2:
-
-> **Note**
->
-> The Debian packages can optionally create and maintain the database for you
-> using Debian's `dbconfig` framework. This is the recommended way of setting up
-> the database.
 
     # cd /tmp
     # sudo -u postgres psql -c "CREATE ROLE icinga WITH LOGIN PASSWORD 'icinga'";
@@ -584,7 +566,7 @@ The schema file location differs by the distribution used:
 
   Distribution  | Schema Files
   --------------|---------------------
-  RHEL          | `/usr/share/doc/icinga2-ido-pgsql-*/schema` (`*` means package version).
+  RHEL          | `/usr/share/doc/icinga2-ido-pgsql-*/schema` (* means package version).
   SUSE          | `/usr/share/doc/packages/icinga2-ido-pgsql/schema`
   Debian/Ubuntu | `/usr/share/icinga2-ido-pgsql/schema`
 
@@ -594,17 +576,12 @@ The schema file location differs by the distribution used:
 Check the `schema/upgrade` directory for an incremental schema upgrade file.
 If there isn't an upgrade file available there's nothing to do.
 
-> **Note**
->
-> During pre release status (0.x.y releases) small snippets called for example
-> `0.0.10.sql` will ship the required schema updates.
-
 Apply all database schema upgrade files incrementially.
 
     # export PGPASSWORD=icinga
-    # psql -U icinga -d icinga < /usr/share/doc/icinga2-ido-pgsql-*/schema/upgrade/0.0.10.sql
+    # psql -U icinga -d icinga < /usr/share/doc/icinga2-ido-pgsql-*/schema/upgrade/<version>.sql
 
-The Icinga 2 IDO module will check for the required database schema version on startup
+The Icinga 2 DB IDO module will check for the required database schema version on startup
 and generate an error message if not satisfied.
 
 #### <a id="installing-ido-postgresql"></a> Installing the IDO PostgreSQL module
@@ -666,7 +643,7 @@ Change "www-data" to the user you're using to run queries.
 
 In order to use the historical tables provided by the livestatus feature (for example, the
 `log` table) you need to have the `CompatLogger` feature enabled. By default these logs
-are expected to be in `/var/log/icinga2/compat`. A different path can be set using the 
+are expected to be in `/var/log/icinga2/compat`. A different path can be set using the
 `compat_log_path` configuration attribute.
 
     # icinga2-enable-feature compatlog
@@ -709,7 +686,16 @@ the Classic UI using the following packages:
   all others    | icinga2-classicui-config icinga-gui
 
 The Debian packages require additional packages which are provided by the
-[Debian Monitoring Project](http://www.debmon.org) repository.
+[Debian Monitoring Project](http://www.debmon.org) (`DebMon`) repository.
+
+`libjs-jquery-ui` requires at least version `1.10.*` which is not available
+in Debian Wheezy and Ubuntu 12.04 LTS (Precise). Add the following repositories
+to satisfy this dependency:
+
+  Distribution  		| Package Repositories
+  ------------------------------|------------------------------
+  Debian Wheezy 		| [wheezy-backports](http://backports.debian.org/Instructions/) or [DebMon](http://www.debmon.org)
+  Ubuntu 12.04 LTS (Precise)    | [Icinga PPA](https://launchpad.net/~formorer/+archive/icinga)
 
 On all distributions other than Debian you may have to restart both your web
 server as well as Icinga 2 after installing the Classic UI package.
@@ -1002,7 +988,7 @@ or manually passing the `-C` argument:
 
     # /usr/sbin/icinga2 -c /etc/icinga2/icinga2.conf -C
 
-    [2014-05-22 17:07:25 +0200] <Main Thread> critical/config: Location:
+    [2014-05-22 17:07:25 +0200] critical/ConfigItem: Location:
     /etc/icinga2/conf.d/tests/5872.conf(5): }
     /etc/icinga2/conf.d/tests/5872.conf(6):
     /etc/icinga2/conf.d/tests/5872.conf(7): apply Service "5872-ping4" {
@@ -1011,7 +997,7 @@ or manually passing the `-C` argument:
     /etc/icinga2/conf.d/tests/5872.conf(9):   check_command = "ping4"
 
     Config error: 'apply' is missing 'assign'
-    [2014-05-22 17:07:25 +0200] <Main Thread> critical/config: 1 errors, 0 warnings.
+    [2014-05-22 17:07:25 +0200] critical/ConfigItem: 1 errors, 0 warnings.
     Icinga 2 detected configuration errors.
 
 
@@ -1028,50 +1014,37 @@ safely reload the Icinga 2 daemon.
 > The `reload` action will send the `SIGHUP` signal to the Icinga 2 daemon
 > which will validate the configuration in a separate process and not stop
 > the other events like check execution, notifications, etc.
+>
+> Details can be found [here](#differences-1x-2-real-reload).
 
 
 ## <a id="vagrant"></a> Vagrant Demo VM
 
-The Icinga 2 Git repository contains support for [Vagrant](http://docs.vagrantup.com/v2/)
+The Icinga Vagrant Git repository contains support for [Vagrant](http://docs.vagrantup.com/v2/)
 with VirtualBox. Please note that Vagrant version `1.0.x` is not supported. At least
 version `1.2.x` is required.
 
 In order to build the Vagrant VM first you will have to check out
 the Git repository:
 
-    $ git clone git://git.icinga.org/icinga2.git
+    $ git clone git://git.icinga.org/icinga-vagrant.git
 
-Once you have checked out the Git repository you can build the VM using the
-following command:
+For Icinga 2 there are currently two scenarios available:
+
+* `icinga2x` bringing up a standalone box with Icinga 2
+* `icinga2x-cluster` setting up two virtual machines in a master/slave cluster
+
+> **Note**
+>
+> Please consult the `README` file for each project for further installation
+> details at [https://github.com/Icinga/icinga-vagrant]
+
+Once you have checked out the Git repository navigate to your required
+vagrant box and build the VM using the following command:
 
     $ vagrant up
 
-The Vagrant VM is based on CentOS 6.x and uses the official Icinga 2 RPM
-packages from `packages.icinga.org`. The check plugins are installed from
-EPEL providing RPMs with sources from the Monitoring Plugins project.
-
-### <a id="vagrant-demo-guis"></a> Demo GUIs
-
-In addition to installing Icinga 2 the Vagrant puppet modules also install the
-Icinga 1.x Classic UI and Icinga Web.
-
-  GUI             | Url                                                                  | Credentials
-  ----------------|----------------------------------------------------------------------|------------------------
-  Classic UI      | [http://localhost:8080/icinga](http://localhost:8080/icinga)         | icingaadmin / icingaadmin
-  Icinga Web      | [http://localhost:8080/icinga-web](http://localhost:8080/icinga-web) | root / password
-
-
-### <a id="vagrant-ssh"></a> SSH Access
-
-You can access the Vagrant VM using SSH:
-
-    $ vagrant ssh
-
-Alternatively you can use your favorite SSH client:
-
-  Name            | Value
-  ----------------|----------------
-  Host            | 127.0.0.1
-  Port            | 2222
-  Username        | vagrant
-  Password        | vagrant
+The Vagrant VMs are based on CentOS 6.x and are using the official
+Icinga 2 RPM snapshot packages from `packages.icinga.org`. The check
+plugins are installed from EPEL providing RPMs with sources from the
+Monitoring Plugins project.
