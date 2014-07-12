@@ -55,11 +55,6 @@ String CommentsTable::GetName(void) const
 	return "comments";
 }
 
-String CommentsTable::GetPrefix(void) const
-{
-	return "comment";
-}
-
 void CommentsTable::FetchRows(const AddRowFunction& addRowFn)
 {
 	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjects<Host>()) {

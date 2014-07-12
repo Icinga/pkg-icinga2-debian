@@ -19,10 +19,7 @@ SSH_OPTIONS="-o PasswordAuthentication=no"
 SSH="ssh $SSH_OPTIONS $user@$host"
 
 $SSH "mkdir /vagrant"
-# TODO clone git and use the icinga2x puppet modules
-git clone git://git.icinga.org/icinga-vagrant.git
-scp -qr icinga-vagrant/icinga2x/.vagrant-puppet $user@$host:/vagrant
-rm -rf icinga-vagrant
+scp -qr ../../.vagrant-puppet $user@$host:/vagrant
 
 $SSH "useradd vagrant"
 $SSH "su -c 'mkdir -p -m 0700 ~/.ssh' vagrant"

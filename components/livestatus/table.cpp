@@ -35,7 +35,6 @@
 #include "livestatus/filter.hpp"
 #include "base/array.hpp"
 #include "base/dictionary.hpp"
-#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <boost/foreach.hpp>
 #include <boost/bind.hpp>
@@ -91,16 +90,10 @@ void Table::AddColumn(const String& name, const Column& column)
 
 Column Table::GetColumn(const String& name) const
 {
-	String dname = name;
-	String prefix = GetPrefix() + "_";
-
-	if (dname.Find(prefix) == 0)
-		dname = dname.SubStr(prefix.GetLength());
-
-	std::map<String, Column>::const_iterator it = m_Columns.find(dname);
+	std::map<String, Column>::const_iterator it = m_Columns.find(name);
 
 	if (it == m_Columns.end())
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Column '" + dname + "' does not exist in table '" + GetName() + "'."));
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Column '" + name + "' does not exist in table '" + GetName() + "'."));
 
 	return it->second;
 }

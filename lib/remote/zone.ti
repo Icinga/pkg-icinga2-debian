@@ -7,7 +7,6 @@ class Zone : DynamicObject
 {
 	[config] String parent (ParentRaw);
 	[config] Array::Ptr endpoints (EndpointsRaw);
-	[config] bool global;
 };
 
 }

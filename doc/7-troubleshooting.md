@@ -104,11 +104,7 @@ The Icinga 2 packages provide a debug package which must be
 installed separately for all involved binaries, like `icinga2-bin`
 or `icinga2-ido-mysql`.
 
-    # yum install icinga2-debuginfo
-
-    # zypper install icinga2-bin-debuginfo icinga2-ido-mysql-debuginfo
-
-    # apt-get install icinga2-dbg
+    # yum install icinga2-bin-debuginfo icinga2-ido-mysql-debuginfo
 
 Compiled binaries require the `-DCMAKE_BUILD_TYPE=RelWithDebInfo` or
 `-DCMAKE_BUILD_TYPE=Debug` cmake build flags.

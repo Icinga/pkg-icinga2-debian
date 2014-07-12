@@ -2,7 +2,7 @@
 
 ## <a id="global-constants"></a> Global Constants
 
-Icinga 2 provides a number of special global constants. Some of them can be overridden using the `--define` command line parameter:
+Icinga 2 provides a number of special global constants. Some of them can be overriden using the `--define` command line parameter:
 
 Variable            |Description
 --------------------|-------------------
@@ -43,7 +43,7 @@ In general you need to write each statement on a new line. Expressions started
 with `{`, `(` and `[` extend until the matching closing character and can be broken
 up into multiple lines.
 
-Alternatively you can write multiple statements on a single line by separating
+Alternatively you can write multiple statements in a single line by separating
 them with a semicolon:
 
     object Host "host1.example.org" {
@@ -65,7 +65,7 @@ The following data types are available for property values:
 
 ### Expressions
 
-The following expressions can be used on the right-hand side of dictionary
+The following expressions can be used in the right-hand side of dictionary
 values.
 
 #### <a id="numeric-literals"></a> Numeric Literals
@@ -190,8 +190,6 @@ Operator | Examples (Result)                             | Description
 /        | 5m / 5 (60)                                   | Divides two numbers
 &        | 7 & 3 (3)                                     | Binary AND
 &#124;   | 2 &#124; 3 (3)                                | Binary OR
-&&       | true && false (false)                         | Logical AND
-&#124;&#124; | true &#124;&#124; false (true)            | Logical OR
 <        | 3 < 5 (true)                                  | Less than
 >        | 3 > 5 (false)                                 | Greater than
 <=       | 3 <= 3 (true)                                 | Less than or equal
@@ -255,7 +253,7 @@ Example:
       a = 7
     }
 
-In this example `a` has the value `7` after both instructions are executed.
+In this example a has the value 7 after both instructions are executed.
 
 #### <a id="operator-additive-assignment"></a> Operator +=
 
@@ -352,13 +350,13 @@ Objects can import attributes from other objects.
 Example:
 
     template Host "default-host" {
-      vars.colour = "red"
+      vars.color = "red"
     }
 
     template Host "test-host" {
       import "default-host"
 
-      vars.colour = "blue"
+      vars.color = "blue"
     }
 
     object Host "localhost" {
@@ -374,7 +372,7 @@ instantiated at run-time. Parent objects do not necessarily have to be
 templates, however in general they are.
 
 The `vars` dictionary for the `localhost` object contains all three
-custom attributes and the custom attribute `colour` has the value `"blue"`.
+custom attributes and the custom attribute `color` has the value `"blue"`.
 
 Parent objects are resolved in the order they're specified using the
 `import` keyword.
@@ -575,7 +573,7 @@ Attributes:
   enable\_event\_handler|**Optional.** Enables event handlers for this host. Defaults to true.
   enable\_flap\_detection|**Optional.** Whether flap detection is enabled. Defaults to true.
   enable\_perfdata|**Optional.** Whether performance data processing is enabled. Defaults to true.
-  event\_command  |**Optional.** The name of an event command that should be executed every time the host's state changes or the host is in a `SOFT` state.
+  event\_command  |**Optional.** The name of an event command that should be executed every time the host's state changes and when the host is in a `SOFT` state.
   flapping\_threshold|**Optional.** The flapping threshold in percent when a host is considered to be flapping.
   volatile        |**Optional.** The volatile setting enables always `HARD` state types if `NOT-OK` state changes occur.
   notes           |**Optional.** Notes for the host.
@@ -661,7 +659,7 @@ Attributes:
   enable\_event\_handler|**Optional.** Enables event handlers for this host. Defaults to true.
   enable\_flap\_detection|**Optional.** Whether flap detection is enabled. Defaults to true.
   enable\_perfdata|**Optional.** Whether performance data processing is enabled. Defaults to true.
-  event\_command  |**Optional.** The name of an event command that should be executed every time the service's state changes or the service is in a `SOFT` state.
+  event\_command  |**Optional.** The name of an event command that should be executed every time the service's state changes.
   flapping\_threshold|**Optional.** The flapping threshold in percent when a service is considered to be flapping.
   volatile        |**Optional.** The volatile setting enables always `HARD` state types if `NOT-OK` state changes occur.
   notes           |**Optional.** Notes for the service.
@@ -795,24 +793,12 @@ Example:
         "-S" = {
           set_if = "$http_ssl$"
         }
-        "--sni" = {
-          set_if = "$http_sni$"
-        }
-        "-a" = {
-          value = "$http_auth_pair$"
-          description = "Username:password on sites with basic authentication"
-        }
-        "--no-body" = {
-          set_if = "$http_ignore_body$"
-        }
-        "-r" = "$http_expect_body_regex$"
         "-w" = "$http_warn_time$"
         "-c" = "$http_critical_time$"
       }
 
       vars.http_address = "$address$"
       vars.http_ssl = false
-      vars.http_sni = false
     }
 
 
@@ -998,7 +984,7 @@ Available notification type filters:
 
 ### <a id="objecttype-timeperiod"></a> TimePeriod
 
-Time periods can be used to specify when hosts/services should be checked or to limit
+Time periods can be used to specify when services should be checked or to limit
 when notifications should be sent out.
 
 Example:
@@ -1033,7 +1019,7 @@ timeperiods including this one.
 
 ### <a id="objecttype-scheduleddowntime"></a> ScheduledDowntime
 
-ScheduledDowntime objects can be used to set up recurring downtimes for hosts/services.
+ScheduledDowntime objects can be used to set up recurring downtimes for services.
 
 > **Best Practice**
 >
@@ -1153,7 +1139,7 @@ Service-to-Host Dependency Example:
       assign where host.name != "dsl-router"
     }
 
-This example sets all service objects matching the assign condition into a dependency relation to
+This examples sets all service objects matching the assign condition into a dependency relation to
 the parent host object `dsl-router` as implicit child services.
 
 Service-to-Service-on-the-same-Host Dependency Example:
@@ -1165,7 +1151,7 @@ Service-to-Service-on-the-same-Host Dependency Example:
       ignore where service.name == "nrpe-health"
     }
 
-This example omits the `parent_host_name` attribute and Icinga 2 automatically sets its value to the name of the
+This examples omits the `parent_host_name` attribute and Icinga 2 automatically sets its value to the name of the
 host object matched by the apply rule condition. All services where apply matches are made implicit child services
 in this dependency relation.
 
@@ -1205,10 +1191,10 @@ Attributes:
   service_temp\_path      |**Optional.** Path to the temporary service file. Defaults to LocalStateDir + "/spool/icinga2/tmp/service-perfdata".
   host_format\_template   |**Optional.** Host Format template for the performance data file. Defaults to a template that's suitable for use with PNP4Nagios.
   service_format\_template|**Optional.** Service Format template for the performance data file. Defaults to a template that's suitable for use with PNP4Nagios.
-  rotation\_interval      |**Optional.** Rotation interval for the files specified in `{host,service}_perfdata_path`. Defaults to 30 seconds.
+  rotation\_interval      |**Optional.** Rotation interval for the files specified in `{host,service}\_perfdata\_path`. Defaults to 30 seconds.
 
 When rotating the performance data file the current UNIX timestamp is appended to the path specified
-in `host_perfdata_path` and `service_perfdata_path` to generate a unique filename.
+in `host_perfdata\_path` and `service_perfdata\_path` to generate a unique filename.
 
 
 ### <a id="objecttype-graphitewriter"></a> GraphiteWriter
@@ -1433,8 +1419,8 @@ Attributes:
   ----------------|----------------
   socket\_type      |**Optional.** Specifies the socket type. Can be either "tcp" or "unix". Defaults to "unix".
   bind\_host        |**Optional.** Only valid when socket\_type is "tcp". Host address to listen on for connections. Defaults to "127.0.0.1".
-  bind\_port        |**Optional.** Only valid when `socket_type` is "tcp". Port to listen on for connections. Defaults to 6558.
-  socket\_path      |**Optional.** Only valid when `socket_type` is "unix". Specifies the path to the UNIX socket file. Defaults to LocalStateDir + "/run/icinga2/cmd/livestatus".
+  bind\_port        |**Optional.** Only valid when `socket\_type` is "tcp". Port to listen on for connections. Defaults to 6558.
+  socket\_path      |**Optional.** Only valid when `socket\_type` is "unix". Specifies the path to the UNIX socket file. Defaults to LocalStateDir + "/run/icinga2/cmd/livestatus".
   compat\_log\_path |**Optional.** Required for historical table queries. Requires `CompatLogger` feature enabled. Defaults to LocalStateDir + "/log/icinga2/compat"
 
 > **Note**
@@ -1450,9 +1436,9 @@ Example:
     library "compat"
 
     object StatusDataWriter "status" {
-        status_path = "/var/cache/icinga2/status.dat"
-        objects_path = "/var/cache/icinga2/objects.path"
-        update_interval = 30s
+        status\_path = "/var/cache/icinga2/status.dat"
+        objects\_path = "/var/cache/icinga2/objects.path"
+        update\_interval = 30s
     }
 
 Attributes:
@@ -1473,7 +1459,7 @@ Example:
     library "compat"
 
     object ExternalCommandListener "external" {
-        command_path = "/var/run/icinga2/cmd/icinga2.cmd"
+        command\_path = "/var/run/icinga2/cmd/icinga2.cmd"
     }
 
 Attributes:
@@ -1491,8 +1477,8 @@ Example:
     library "compat"
 
     object CompatLogger "my-log" {
-      log_dir = "/var/log/icinga2/compat"
-      rotation_method = "HOURLY"
+      log\_dir = "/var/log/icinga2/compat"
+      rotation\_method = "HOURLY"
     }
 
 Attributes:
@@ -1815,47 +1801,6 @@ ping_cpl        | **Optional.** The packet loss critical threshold in %. Default
 ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
-#### <a id="plugin-check-command-fping4"></a> fping4
-
-Check command object for the `check_fping` plugin.
-
-Custom Attributes:
-
-Name            | Description
-----------------|--------------
-fping_address   | **Optional.** The host's IPv4 address. Defaults to "$address$".
-fping_wrta      | **Optional.** The RTA warning threshold in milliseconds. Defaults to 100.
-fping_wpl       | **Optional.** The packet loss warning threshold in %. Defaults to 5.
-fping_crta      | **Optional.** The RTA critical threshold in milliseconds. Defaults to 200.
-fping_cpl       | **Optional.** The packet loss critical threshold in %. Defaults to 15.
-fping_number    | **Optional.** The number of packets to send. Defaults to 5.
-fping_interval  | **Optional.** The interval between packets in milli-seconds. Defaults to 500.
-fping_bytes	| **Optional.** The size of ICMP packet.
-fping_target_timeout | **Optional.** The target timeout in milli-seconds.
-fping_source_ip | **Optional.** The name or ip address of the source ip.
-fping_source_interface | **Optional.** The source interface name.
-
-#### <a id="plugin-check-command-fping6"></a> fping6
-
-Check command object for the `check_fping` plugin.
-
-Custom Attributes:
-
-Name            | Description
-----------------|--------------
-fping_address   | **Optional.** The host's IPv6 address. Defaults to "$address6$".
-fping_wrta      | **Optional.** The RTA warning threshold in milliseconds. Defaults to 100.
-fping_wpl       | **Optional.** The packet loss warning threshold in %. Defaults to 5.
-fping_crta      | **Optional.** The RTA critical threshold in milliseconds. Defaults to 200.
-fping_cpl       | **Optional.** The packet loss critical threshold in %. Defaults to 15.
-fping_number    | **Optional.** The number of packets to send. Defaults to 5.
-fping_interval  | **Optional.** The interval between packets in milli-seconds. Defaults to 500.
-fping_bytes	| **Optional.** The size of ICMP packet.
-fping_target_timeout | **Optional.** The target timeout in milli-seconds.
-fping_source_ip | **Optional.** The name or ip address of the source ip.
-fping_source_interface | **Optional.** The source interface name.
-
-
 #### <a id="plugin-check-command-dummy"></a> dummy
 
 Check command object for the `check_dummy` plugin.
@@ -1889,20 +1834,6 @@ Name            | Description
 tcp_address     | **Optional.** The host's address. Defaults to "$address$".
 tcp_port        | **Required.** The port that should be checked.
 
-#### <a id="plugin-check-command-ssl"></a> ssl
-
-Check command object for the `check_tcp` plugin, using ssl-related options.
-
-Custom Attributes:
-
-Name                          | Description
-------------------------------|--------------
-ssl_address                   | **Optional.** The host's address. Defaults to "$address$".
-ssl_port                      | **Required.** The port that should be checked.
-ssl_timeout                   | **Optional.** Timeout in seconds for the connect and handshake. The plugin default is 10 seconds.
-ssl_cert_valid_days_warn      | **Optional.** Warning threshold for days before the certificate will expire. When used, ssl_cert_valid_days_critical must also be set.
-ssl_cert_valid_days_critical  | **Optional.** Critical threshold for days before the certificate will expire. When used, ssl_cert_valid_days_warn must also be set.
-
 #### <a id="plugin-check-command-udp"></a> udp
 
 Check command object for the `check_udp` plugin.
@@ -1920,19 +1851,16 @@ Check command object for the `check_http` plugin.
 
 Custom Attributes:
 
-Name                     | Description
--------------------------|--------------
-http_address             | **Optional.** The host's address. Defaults to "$address".
-http_vhost               | **Optional.** The virtual host that should be sent in the "Host" header.
-http_uri                 | **Optional.** The request URI.
-http_port                | **Optional.** The TCP port. Defaults to 80 when not using SSL, 443 otherwise.
-http_ssl                 | **Optional.** Whether to use SSL. Defaults to false.
-http_sni                 | **Optional.** Whether to use SNI. Defaults to false.
-http_auth_pair           | **Optional.** Add 'username:password' authorization pair.
-http_ignore_body         | **Optional.** Don't download the body, just the headers.
-http_expect_body_regex   | **Optional.** A regular expression which the body must match against. Incompatible with http_ignore_body.
-http_warn_time           | **Optional.** The warning threshold.
-http_critical_time       | **Optional.** The critical threshold.
+Name               | Description
+-------------------|--------------
+http_address       | **Optional.** The host's address. Defaults to "$address".
+http_vhost         | **Optional.** The virtual host that should be sent in the "Host" header.
+http_uri           | **Optional.** The request URI.
+http_port          | **Optional.** The TCP port. Defaults to 80 when not using SSL, 443 otherwise.
+http_ssl           | **Optional.** Whether to use SSL. Defaults to false.
+http_auth_pair	   | **Optional.** Add 'username:password' authorization pair.
+http_warn_time     | **Optional.** The warning threshold.
+http_critical_time | **Optional.** The critical threshold.
 
 #### <a id="plugin-check-command-ftp"></a> ftp
 
@@ -1953,8 +1881,6 @@ Custom Attributes:
 Name                 | Description
 ---------------------|--------------
 smtp_address         | **Optional.** The host's address. Defaults to "$address$".
-smtp_port            | **Optional.** The port that should be checked. Defaults to 25.
-smtp_mail_from       | **Optional.** Test a MAIL FROM command with the given email address.
 
 #### <a id="plugin-check-command-ssmtp"></a> ssmtp
 
@@ -1966,7 +1892,6 @@ Name            | Description
 ----------------|--------------
 ssmtp_address   | **Required.** The host's address. Defaults to "$address$".
 ssmtp_port      | **Optional.** The port that should be checked. Defaults to 465.
-ssmtp_mail_from | **Optional.** Test a MAIL FROM command with the given email address.
 
 #### <a id="plugin-check-command-imap"></a> imap
 
@@ -1977,7 +1902,6 @@ Custom Attributes:
 Name            | Description
 ----------------|--------------
 imap_address    | **Optional.** The host's address. Defaults to "$address$".
-imap_port       | **Optional.** The port that should be checked. Defaults to 143.
 
 #### <a id="plugin-check-command-simap"></a> simap
 
@@ -1999,7 +1923,6 @@ Custom Attributes:
 Name            | Description
 ----------------|--------------
 pop_address     | **Optional.** The host's address. Defaults to "$address$".
-pop_port        | **Optional.** The port that should be checked. Defaults to 110.
 
 #### <a id="plugin-check-command-spop"></a> spop 
 
@@ -2098,37 +2021,11 @@ Check command object for the `check_snmp` plugin.
 
 Custom Attributes:
 
-Name                | Description
---------------------|--------------
-snmp_address        | **Optional.** The host's address. Defaults to "$address$".
-snmp_oid            | **Required.** The SNMP OID.
-snmp_community      | **Optional.** The SNMP community. Defaults to "public".
-snmp_warn           | **Optional.** The warning threshold.
-snmp_crit           | **Optional.** The critical threshold.
-snmp_string         | **Optional.** Return OK state if the string exact match with the output value
-snmp_ereg           | **Optional.** Return OK state if extended regular expression REGEX matches with the output value
-snmp_eregi          | **Optional.** Return OK state if case-insensitive extended REGEX matches with the output value
-snmp_label          | **Optional.** Prefix label for output value
-snmp_invert_search  | **Optional.** Invert search result and return CRITICAL state if found
-snmp_units          | **Optional.** Units label(s) for output value (e.g., 'sec.').
-
-#### <a id="plugin-check-command-snmp"></a> snmpv3
-
-Check command object for the `check_snmp` plugin, using SNMPv3 authentication and encryption options.
-
-Custom Attributes:
-
-Name              | Description
-------------------|--------------
-snmpv3_address    | **Optional.** The host's address. Defaults to "$address$".
-snmpv3_user       | **Required.** The username to log in with.
-snmpv3_auth_alg   | **Optional.** The authentication algorithm. Defaults to SHA.
-snmpv3_auth_key   | **Required.** The authentication key.
-snmpv3_priv_alg   | **Optional.** The encryption algorithm. Defaults to AES.
-snmpv3_priv_key   | **Required.** The encryption key.
-snmpv3_oid        | **Required.** The SNMP OID.
-snmpv3_warn       | **Optional.** The warning threshold.
-snmpv3_crit       | **Optional.** The critical threshold.
+Name            | Description
+----------------|--------------
+snmp_address    | **Optional.** The host's address. Defaults to "$address$".
+snmp_oid        | **Required.** The SNMP OID.
+snmp_community  | **Optional.** The SNMP community. Defaults to "public".
 
 #### <a id="plugin-check-command-snmp-uptime"></a> snmp-uptime
 
@@ -2141,30 +2038,6 @@ Name            | Description
 snmp_address    | **Optional.** The host's address. Defaults to "$address$".
 snmp_oid        | **Optional.** The SNMP OID. Defaults to "1.3.6.1.2.1.1.3.0".
 snmp_community  | **Optional.** The SNMP community. Defaults to "public".
-
-#### <a id="plugin-check-command-dns"></a> dns
-
-Check command object for the `check_dns` plugin.
-
-Custom Attributes:
-
-Name                 | Description
----------------------|--------------
-dns_lookup           | **Optional.** The hostname or IP to query the dns for. Defaults to $host_name$.
-dns_server           | **Optional.** The DNS server to query. Defaults to the server configured in the OS.
-dns_expected_answer  | **Optional.** The answer to look for. A hostname must end with a dot.
-dns_authoritative    | **Optional.** Expect the server to send an authoritative answer.
-
-#### <a id="plugin-check-command-dig"></a> dig
-
-Check command object for the `check_dig` plugin.
-
-Custom Attributes:
-
-Name                 | Description
----------------------|--------------
-dig_server           | **Optional.** The DNS server to query. Defaults to "127.0.0.1".
-dig_lookup           | **Optional.** The address that should be looked up.
 
 #### <a id="plugin-check-command-dhcp"></a> dhcp
 

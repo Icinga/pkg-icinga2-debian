@@ -23,7 +23,6 @@
 #include "base/logger_fwd.hpp"
 #include "base/exception.hpp"
 #include "base/socket.hpp"
-#include "base/utility.hpp"
 #include <mmatch.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/foreach.hpp>
@@ -85,6 +84,43 @@ String Utility::GetTypeName(const std::type_info& ti)
 	return DemangleSymbolName(ti.name());
 }
 
+/**
+ * Looks up source file name and line number information for the specified
+ * ELF executable and RVA.
+ *
+ * @param exe The ELF file.
+ * @param rva The RVA.
+ * @returns Source file and line number.
+ */
+String Utility::Addr2Line(const String& exe, uintptr_t rva)
+{
+#ifndef _WIN32
+	std::ostringstream msgbuf;
+	msgbuf << "addr2line -s -e " << Application::GetExePath(exe) << " " << std::hex << rva << " 2>/dev/null";
+
+	String args = msgbuf.str();
+
+	FILE *fp = popen(args.CStr(), "r");
+
+	if (!fp)
+		return "RVA: " + Convert::ToString(rva);
+
+	char buffer[512] = {};
+	fgets(buffer, sizeof(buffer), fp);
+	fclose(fp);
+
+	String line = buffer;
+	boost::algorithm::trim_right(line);
+
+	if (line.GetLength() == 0)
+		return "RVA: " + Convert::ToString(rva);
+
+	return line;
+#else /* _WIN32 */
+	return String();
+#endif /* _WIN32 */
+}
+
 String Utility::GetSymbolName(const void *addr)
 {
 #ifdef HAVE_DLADDR
@@ -116,6 +152,36 @@ String Utility::GetSymbolName(const void *addr)
 #endif /* _WIN32 */
 
 	return "(unknown function)";
+}
+
+String Utility::GetSymbolSource(const void *addr)
+{
+#ifdef HAVE_DLADDR
+	Dl_info dli;
+
+	if (dladdr(addr, &dli) > 0) {
+		uintptr_t rva = reinterpret_cast<uintptr_t>(addr) - reinterpret_cast<uintptr_t>(dli.dli_fbase);
+		return Addr2Line(dli.dli_fname, rva);
+	}
+#endif /* HAVE_DLADDR */
+
+#ifdef _WIN32
+	char buffer[sizeof(SYMBOL_INFO)+MAX_SYM_NAME * sizeof(TCHAR)];
+	PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+	pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+	pSymbol->MaxNameLen = MAX_SYM_NAME;
+
+	DWORD64 dwAddress = (DWORD64)addr;
+	DWORD dwDisplacement;
+
+	IMAGEHLP_LINE64 line;
+	line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+
+	if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &line))
+		return String(line.FileName) + ":" + Convert::ToString(line.LineNumber);
+#endif /* _WIN32 */
+
+	return "(unknown file/line)";
 }
 
 /**
@@ -603,36 +669,6 @@ bool Utility::GlobRecursive(const String& path, const String& pattern, const boo
 
 	return true;
 }
-
-
-bool Utility::MkDir(const String& path, int flags)
-{
-#ifndef _WIN32
-	if (mkdir(path.CStr(), flags) < 0 && errno != EEXIST) {
-#else /*_ WIN32 */
-	if (mkdir(path.CStr()) < 0 && errno != EEXIST) {
-#endif /* _WIN32 */
-		//TODO handle missing dirs properly
-		return false;
-	}
-
-	return true;
-}
-
-bool Utility::MkDirP(const String& path, int flags)
-{
-	size_t pos = 0;
-
-	bool ret = true;
-
-	while (ret && pos != String::NPos) {
-		pos = path.Find("/", pos + 1);
-		ret = MkDir(path.SubStr(0, pos), flags);
-	}
-
-	return ret;
-}
-
 
 #ifndef _WIN32
 void Utility::SetNonBlocking(int fd)

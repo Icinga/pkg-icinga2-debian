@@ -46,7 +46,6 @@ void ServicesTable::AddColumns(Table *table, const String& prefix,
     const Column::ObjectAccessor& objectAccessor)
 {
 	table->AddColumn(prefix + "description", Column(&ServicesTable::ShortNameAccessor, objectAccessor));
-	table->AddColumn(prefix + "service_description", Column(&ServicesTable::ShortNameAccessor, objectAccessor)); //ugly compatibility hack
 	table->AddColumn(prefix + "display_name", Column(&ServicesTable::DisplayNameAccessor, objectAccessor));
 	table->AddColumn(prefix + "check_command", Column(&ServicesTable::CheckCommandAccessor, objectAccessor));
 	table->AddColumn(prefix + "check_command_expanded", Column(&ServicesTable::CheckCommandExpandedAccessor, objectAccessor));
@@ -136,11 +135,6 @@ void ServicesTable::AddColumns(Table *table, const String& prefix,
 String ServicesTable::GetName(void) const
 {
 	return "services";
-}
-
-String ServicesTable::GetPrefix(void) const
-{
-	return "service";
 }
 
 void ServicesTable::FetchRows(const AddRowFunction& addRowFn)

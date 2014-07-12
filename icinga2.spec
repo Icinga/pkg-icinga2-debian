@@ -17,7 +17,7 @@
 # * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
 # ******************************************************************************/
 
-%define revision 1
+%define revision 2.beta2
 
 %if "%{_vendor}" == "redhat"
 %define el5_boost_version 141
@@ -27,14 +27,7 @@
 %define apacheconfdir %{_sysconfdir}/httpd/conf.d
 %define apacheuser apache
 %define apachegroup apache
-%if 0%{?el5}%{?el6}
-%define use_systemd 0
-%else
-# fedora and el>=7
-%define use_systemd 1
 %endif
-%endif
-
 %if "%{_vendor}" == "suse"
 # opensuse 13
 %if 0%{?suse_version} >= 1310
@@ -47,7 +40,6 @@
 %define apacheconfdir  %{_sysconfdir}/apache2/conf.d
 %define apacheuser wwwrun
 %define apachegroup www
-%define use_systemd 0
 %endif
 
 %define icinga_user icinga
@@ -62,7 +54,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.0.1
+Version: 2.0.0
 Release: %{revision}%{?dist}
 License: GPLv2+
 Group: Applications/System
@@ -139,11 +131,6 @@ Requires: libboost_regex%{opensuse_boost_version}
 %endif
 %endif
 # suse
-
-%if 0%{?use_systemd}
-BuildRequires: systemd
-Requires: systemd
-%endif
 
 Requires: %{name}-common = %{version}
 
@@ -256,10 +243,6 @@ CMAKE_OPTS="$CMAKE_OPTS -DBOOST_LIBRARYDIR=/usr/lib/boost141 \
 %endif
 %endif
 
-%if 0%{?use_systemd}
-CMAKE_OPTS="$CMAKE_OPTS -DUSE_SYSTEMD=ON"
-%endif
-
 cmake $CMAKE_OPTS .
 
 make %{?_smp_mflags}
@@ -291,26 +274,10 @@ getent group %{icingacmd_group} >/dev/null || %{_sbindir}/groupadd -r %{icingacm
 getent passwd %{icinga_user} >/dev/null || %{_sbindir}/useradd -c "icinga" -s /sbin/nologin -r -d %{_localstatedir}/spool/%{name} -G %{icingacmd_group} -g %{icinga_group} %{icinga_user}
 exit 0
 
-# all restart/feature actions belong to icinga2-bin
-%post bin
 # suse
 %if 0%{?suse_version}
-
-%fillup_and_insserv %{name}
-
-# initial installation, enable default features
-%{_sbindir}/icinga2-enable-feature checker notification mainlog
-
-exit 0
-
-%else
-# rhel
-
-%if 0%{?use_systemd}
-%systemd_post %{name}.service
-%else
-/sbin/chkconfig --add %{name}
-%endif
+%post
+%{fillup_and_insserv icinga2}
 
 if [ ${1:-0} -eq 1 ]
 then
@@ -319,15 +286,8 @@ then
 fi
 
 exit 0
-
-%endif
-# suse/rhel
-
-%postun bin
-# suse
-%if 0%{?suse_version}
-
-%restart_on_update %{name}
+%postun
+%restart_on_update icinga2
 %insserv_cleanup
 
 if [ "$1" = "0" ]; then
@@ -337,16 +297,27 @@ fi
 
 exit 0
 
-%else
-# rhel
+%preun
+%stop_on_removal icinga2
 
-%if 0%{?use_systemd}
-%systemd_postun_with_restart %{name}.service
+# rhel
 %else
-if [ "$1" -ge  "1" ]; then
-	/sbin/service %{name} condrestart >/dev/null 2>&1 || :
+
+%post
+/sbin/chkconfig --add icinga2
+
+if [ ${1:-0} -eq 1 ]
+then
+	# initial installation, enable default features
+	%{_sbindir}/icinga2-enable-feature checker notification mainlog
 fi
-%endif
+
+exit 0
+
+%postun
+if [ "$1" -ge  "1" ]; then
+	/sbin/service icinga2 condrestart >/dev/null 2>&1 || :
+fi
 
 if [ "$1" = "0" ]; then
 	# deinstallation of the package - remove enabled features
@@ -354,35 +325,14 @@ if [ "$1" = "0" ]; then
 fi
 
 exit 0
-%endif
-# suse / rhel
-
-%preun bin
-# suse
-%if 0%{?suse_version}
-
+%preun
 if [ "$1" = "0" ]; then
-	%stop_on_removal %{name}
+	/sbin/service icinga2 stop > /dev/null 2>&1
+	/sbin/chkconfig --del icinga2
 fi
 
-exit 0
-
-%else
-# rhel
-
-%if 0%{?use_systemd}
-%systemd_preun %{name}.service
-%else
-if [ "$1" = "0" ]; then
-	/sbin/service %{name} stop > /dev/null 2>&1 || :
-	/sbin/chkconfig --del %{name} || :
-fi
 %endif
-
-exit 0
-
-%endif
-# suse / rhel
+# suse/rhel
 
 %post ido-mysql
 if [ ${1:-0} -eq 1 ]
@@ -442,11 +392,7 @@ exit 0
 %files bin
 %defattr(-,root,root,-)
 %doc COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog
-%if 0%{?use_systemd}
-%attr(644,-,0) %{_unitdir}/%{name}.service
-%else
 %attr(755,-,-) %{_sysconfdir}/init.d/%{name}
-%endif
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d/hosts
@@ -464,26 +410,22 @@ exit 0
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/features-available/*.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/zones.d/*
 %config(noreplace) %{_sysconfdir}/%{name}/scripts/*
-%config(noreplace) %{_sysconfdir}/sysconfig/%{name}
 %{_sbindir}/%{name}
 %{_bindir}/%{name}-build-ca
 %{_bindir}/%{name}-build-key
 %{_bindir}/%{name}-sign-key
 %{_sbindir}/%{name}-enable-feature
 %{_sbindir}/%{name}-disable-feature
-%{_sbindir}/%{name}-prepare-dirs
+%{_sbindir}/%{name}-setup-agent
+%{_sbindir}/%{name}-discover-agent
+%{_sbindir}/%{name}-forget-agent
+%{_sbindir}/%{name}-list-agents
 %exclude %{_libdir}/%{name}/libdb_ido_mysql*
 %exclude %{_libdir}/%{name}/libdb_ido_pgsql*
 %{_libdir}/%{name}
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/include
 %{_mandir}/man8/%{name}.8.gz
-%{_mandir}/man8/%{name}-enable-feature.8.gz
-%{_mandir}/man8/%{name}-disable-feature.8.gz
-%{_mandir}/man8/%{name}-build-ca.8.gz
-%{_mandir}/man8/%{name}-build-key.8.gz
-%{_mandir}/man8/%{name}-sign-key.8.gz
-%{_mandir}/man8/%{name}-prepare-dirs.8.gz
 
 %attr(0755,%{icinga_user},%{icinga_group}) %{_localstatedir}/cache/%{name}
 %attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}
@@ -497,7 +439,7 @@ exit 0
 %files common
 %defattr(-,root,root,-)
 %doc COPYING COPYING.Exceptions README NEWS AUTHORS ChangeLog tools/syntax
-%config(noreplace) %attr(755,-,-) %{_sysconfdir}/logrotate.d/%{name}
+%attr(755,-,-) %{_sysconfdir}/logrotate.d/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/perfdata
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/tmp

@@ -47,7 +47,6 @@ void HostsTable::AddColumns(Table *table, const String& prefix,
     const Column::ObjectAccessor& objectAccessor)
 {
 	table->AddColumn(prefix + "name", Column(&HostsTable::NameAccessor, objectAccessor));
-	table->AddColumn(prefix + "host_name", Column(&HostsTable::NameAccessor, objectAccessor)); //ugly compatibility hack
 	table->AddColumn(prefix + "display_name", Column(&HostsTable::DisplayNameAccessor, objectAccessor));
 	table->AddColumn(prefix + "alias", Column(&HostsTable::DisplayNameAccessor, objectAccessor));
 	table->AddColumn(prefix + "address", Column(&HostsTable::AddressAccessor, objectAccessor));
@@ -165,11 +164,6 @@ void HostsTable::AddColumns(Table *table, const String& prefix,
 String HostsTable::GetName(void) const
 {
 	return "hosts";
-}
-
-String HostsTable::GetPrefix(void) const
-{
-	return "host";
 }
 
 void HostsTable::FetchRows(const AddRowFunction& addRowFn)

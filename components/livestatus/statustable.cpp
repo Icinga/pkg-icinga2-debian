@@ -108,11 +108,6 @@ String StatusTable::GetName(void) const
 	return "status";
 }
 
-String StatusTable::GetPrefix(void) const
-{
-	return "status";
-}
-
 void StatusTable::FetchRows(const AddRowFunction& addRowFn)
 {
 	Object::Ptr obj = make_shared<Object>();

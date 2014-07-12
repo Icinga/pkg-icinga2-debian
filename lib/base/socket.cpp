@@ -358,10 +358,8 @@ Socket::Ptr Socket::Accept(void)
 	return make_shared<Socket>(fd);
 }
 
-bool Socket::Poll(bool read, bool write)
+void Socket::Poll(bool read, bool write)
 {
-	int rc;
-
 #ifdef _WIN32
 	fd_set readfds, writefds, exceptfds;
 
@@ -376,9 +374,7 @@ bool Socket::Poll(bool read, bool write)
 	FD_ZERO(&exceptfds);
 	FD_SET(GetFD(), &exceptfds);
 
-	rc = select(GetFD() + 1, &readfds, &writefds, &exceptfds, NULL);
-
-	if (rc < 0) {
+	if (select(GetFD() + 1, &readfds, &writefds, &exceptfds, NULL) < 0) {
 		std::ostringstream msgbuf;
 		msgbuf << "select() failed with return code " << WSAGetLastError() << ", \"" << Utility::FormatErrorNumber(WSAGetLastError()) << "\"";
 		Log(LogCritical, "Socket",  msgbuf.str());
@@ -393,9 +389,7 @@ bool Socket::Poll(bool read, bool write)
 	pfd.events = (read ? POLLIN : 0) | (write ? POLLOUT : 0);
 	pfd.revents = 0;
 
-	rc = poll(&pfd, 1, -1);
-
-	if (rc < 0) {
+	if (poll(&pfd, 1, -1) < 0) {
 		std::ostringstream msgbuf;
 		msgbuf << "poll() failed with return code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
 		Log(LogCritical, "Socket",  msgbuf.str());
@@ -405,8 +399,6 @@ bool Socket::Poll(bool read, bool write)
 		    << boost::errinfo_errno(errno));
 	}
 #endif /* _WIN32 */
-
-	return (rc != 0);
 }
 
 void Socket::MakeNonBlocking(void)

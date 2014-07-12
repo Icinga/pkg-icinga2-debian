@@ -1,4 +1,3 @@
 .vagrant
+icinga-version.h.fallback
 *.komodoproject
-.*.swp
-.*.swo

@@ -301,7 +301,7 @@ Details on the `assign where` syntax can be found [here](#apply)
       assign where host.vars.mssql_port
     }
 
-In this inherited example from above all hosts with the `vars` attribute `mssql_port`
+In this inherited example from above all hosts with the `var` `mssql_port`
 set will be added as members to the host group `mssql`.
 
 ## <a id="notifications"></a> Notifications
@@ -386,7 +386,7 @@ send notifications to all group members.
 
 When a problem notification is sent and a problem still exists at the time of re-notification
 you may want to escalate the problem to the next support level. A different approach
-is to configure the default notification by email, and escalate the problem via SMS
+is to configure the default notification by email, and escalate the problem via sms
 if not already solved.
 
 You can define notification start and end times as additional configuration
@@ -394,7 +394,7 @@ attributes making the `Notification` object a so-called `notification escalation
 Using templates you can share the basic notification attributes such as users or the
 `interval` (and override them for the escalation then).
 
-Using the example from above, you can define additional users being escalated for SMS
+Using the example from above, you can define additional users being escalated for sms
 notifications between start and end time.
 
     object User "icinga-oncall-2nd-level" {
@@ -433,7 +433,7 @@ command) after `30m` until `1h`.
 >
 > The `interval` was set to 15m in the `generic-notification`
 > template example. Lower that value in your escalations by using a secondary
-> template or by overriding the attribute directly in the `notifications` array
+> template or overriding the attribute directly in the `notifications` array
 > position for `escalation-sms-2nd-level`.
 
 If the problem does not get resolved nor acknowledged preventing further notifications
@@ -477,13 +477,13 @@ notified, but only for one hour (`2h` as `end` key for the `times` dictionary).
       assign where service.name == "ping4"
     }
 
-### <a id="notification-delay"></a> Notification Delay
+### <a id="first-notification-delay"></a> First Notification Delay
 
 Sometimes the problem in question should not be notified when the notification is due
-(the object reaching the `HARD` state) but a defined time duration afterwards. In Icinga 2
-you can use the `times` dictionary and set `begin = 15m` as key and value if you want to
-postpone the first notification for 15 minutes. Leave out the `end` key - if not set,
-Icinga 2 will not check against any end time for this notification.
+(the object reaching the `HARD` state) but a defined time duration afterwards. In Icinga 2 you can use the `times`
+dictionary and set `begin = 15m` as key and value if you want to suppress notifications
+in the first 15 minutes. Leave out the `end` key - if not set, Icinga 2 will not check against any
+end time for this notification.
 
     apply Notification "mail" to Service {
       import "generic-notification"
@@ -511,7 +511,7 @@ Available state and type filters for notifications are:
     }
 
 If you are familiar with Icinga 1.x `notification_options` please note that they have been split
-into type and state to allow more fine granular filtering for example on downtimes and flapping.
+into type and state, and allow more fine granular filtering for example on downtimes and flapping.
 You can filter for acknowledgements and custom notifications too.
 
 
@@ -643,45 +643,37 @@ partition defined (`-p`) it will check all local partitions.
     [-t timeout] [-u unit] [-v] [-X type] [-N type]
     ...
 
-> **Note**
->
-> Don't execute plugins as `root` and always use the absolute path to the plugin! Trust us.
-
 Next step is to understand how command parameters are being passed from
 a host or service object, and add a `CheckCommand` definition based on these
 required parameters and/or default values.
 
 #### <a id="command-passing-parameters"></a> Passing Check Command Parameters from Host or Service
 
-Unlike Icinga 1.x check command parameters are defined as custom attributes
+Unline Icinga 1.x check command parameters are defined as custom attributes
 which can be accessed as runtime macros by the executed check command.
 
 Define the default check command custom attribute `disk_wfree` and `disk_cfree`
 (freely definable naming schema) and their default threshold values. You can
-then use these custom attributes as runtime macros for [command arguments](#command-arguments)
-on the command line.
+then use these custom attributes as runtime macros on the command line.
 
 The default custom attributes can be overridden by the custom attributes
-defined in the service using the check command `my-disk`. The custom attributes
+defined in the service using the check command `disk`. The custom attributes
 can also be inherited from a parent template using additive inheritance (`+=`).
 
-
-    object CheckCommand "my-disk" {
+    object CheckCommand "disk" {
       import "plugin-check-command"
 
-      command = PluginDir + "/check_disk"
-
-      arguments = {
-        "-w" = "$disk_wfree$%"
-        "-c" = "$disk_cfree$%"
-      }
+      command = [
+        PluginDir + "/check_disk",
+        "-w", "$disk_wfree$%",
+        "-c", "$disk_cfree$%"
+      ],
 
       vars.disk_wfree = 20
       vars.disk_cfree = 10
     }
 
-
-The host `localhost` with the service `my-disk` checks all disks with modified
+The host `localhost` with the service `disk` checks all disks with modified
 custom attributes (warning thresholds at `10%`, critical thresholds at `5%`
 free disk space).
 
@@ -692,17 +684,17 @@ free disk space).
       address6 = "::1"
     }
 
-    object Service "my-disk" {
+    object Service "disk" {
       import "generic-service"
 
       host_name = "localhost"
-      check_command = "my-disk"
+      check_command = "disk"
 
       vars.disk_wfree = 10
       vars.disk_cfree = 5
     }
 
-#### <a id="command-arguments"></a> Command Arguments
+#### <a id="commands-arguments"></a> Command Arguments
 
 By defining a check command line using the `command` attribute Icinga 2
 will resolve all macros in the static string or array. Sometimes it is
@@ -723,24 +715,12 @@ macro value can be resolved by Icinga 2.
         "-S" = {
           set_if = "$http_ssl$"
         }
-        "--sni" = {
-          set_if = "$http_sni$"
-        }
-        "-a" = {
-          value = "$http_auth_pair$"
-          description = "Username:password on sites with basic authentication"
-        }
-        "--no-body" = {
-          set_if = "$http_ignore_body$"
-        }
-        "-r" = "$http_expect_body_regex$"
         "-w" = "$http_warn_time$"
         "-c" = "$http_critical_time$"
       }
 
       vars.http_address = "$address$"
       vars.http_ssl = false
-      vars.http_sni = false
     }
 
 The example shows the `check_http` check command defining the most common
@@ -776,7 +756,7 @@ the `my-host2` host requires a different port on 2222. Both hosts are in the hos
 
     /* this one listens on a different ssh port */
     object Host "my-host2" {
-      import "generic-host"
+      import "generic-host" 
       address = "129.168.2.50"
       vars.os = "Linux"
       vars.custom_ssh_port = 2222
@@ -787,26 +767,26 @@ All hosts in the `my-linux-servers` hostgroup should get the `my-ssh` service ap
 the service is applied to. If not set, the check command `my-ssh` will omit the argument.
 
     object CheckCommand "my-ssh" {
-      import "plugin-check-command"
+            import "plugin-check-command"
 
-      command = PluginDir + "/check_ssh"
+            command = PluginDir + "/check_ssh"
 
-      arguments = {
-        "-p" = "$ssh_port$"
-        "host" = {
-          value = "$ssh_address$"
-          skip_key = true
-          order = -1
-        }
-      }
+            arguments = {
+                    "-p" = "$ssh_port$"
+                    "host" = {
+                            value = "$ssh_address$"
+                            skip_key = true
+                            order = -1
+                    }
+            }
 
-      vars.ssh_address = "$address$"
+            vars.ssh_address = "$address$"
     }
 
     /* apply ssh service */
     apply Service "my-ssh" {
       import "generic-service"
-      check_command = "my-ssh"
+      check_command = "ssh"
 
       //set the command argument for ssh port with a custom host attribute, if set
       vars.ssh_port = "$host.vars.custom_ssh_port$"
@@ -816,11 +796,11 @@ the service is applied to. If not set, the check command `my-ssh` will omit the 
 
 The `my-host1` will get the `my-ssh` service checking on the default port:
 
-    [2014-05-26 21:52:23 +0200] notice/Process: Running command '/usr/lib/nagios/plugins/check_ssh', '129.168.1.50': PID 27281
+    [2014-05-26 21:52:23 +0200] <Q #0x7f8bdd5f4a48 W #0x7f8bdd5f4b88> notice/base: Running command '/usr/lib/nagios/plugins/check_ssh', '129.168.1.50': PID 27281
 
 The `my-host2` will inherit the `custom_ssh_port` variable to the service and execute a different command:
 
-    [2014-05-26 21:51:32 +0200] notice/Process: Running command '/usr/lib/nagios/plugins/check_ssh', '-p', '2222', '129.168.2.50': PID 26956
+    [2014-05-26 21:51:32 +0200] <Q #0x7f8bdd5f4708 W #0x7f8bdd5f4848> notice/base: Running command '/usr/lib/nagios/plugins/check_ssh', '-p', '2222', '129.168.2.50': PID 26956
 
 
 ### <a id="notification-commands"></a> Notification Commands
@@ -889,11 +869,6 @@ as environment variables and can be used in the notification script:
 
     /usr/bin/printf "%b" $template | mail -s "$NOTIFICATIONTYPE - $HOSTDISPLAYNAME - $SERVICEDISPLAYNAME is $SERVICESTATE" $USEREMAIL
 
-> **Note**
->
-> This example is for `exim` only. Requires changes for `sendmail` and
-> other MTAs.
-
 While it's possible to specify the entire notification command right
 in the NotificationCommand object it is generally advisable to create a
 shell script in the `/etc/icinga2/scripts` directory and have the
@@ -901,17 +876,11 @@ NotificationCommand object refer to that.
 
 ### <a id="event-commands"></a> Event Commands
 
-Unlike notifications event commands are called on every host/service execution
-if one of these conditions match:
-
-* The host/service is in a [soft state](#hard-soft-states)
-* The host/service state changes into a [hard state](#hard-soft-states)
-* The host/service state recovers from a [soft or hard state](#hard-soft-states) to [OK](#service-states)/[Up](#host-states)
-
-Therefore the `EventCommand` object should define a command line
+Unlike notifications event commands are called on every service state change
+if defined. Therefore the `EventCommand` object should define a command line
 evaluating the current service state and other service runtime attributes
-available through runtime vars. Runtime macros such as `$service.state_type$`
-and `$service.state$` will be processed by Icinga 2 helping on fine-granular
+available through runtime vars. Runtime macros such as `$SERVICESTATETYPE$`
+and `$SERVICESTATE$` will be processed by Icinga 2 helping on fine-granular
 events being triggered.
 
 Common use case scenarios are a failing HTTP check requiring an immediate
@@ -948,7 +917,7 @@ The `parent_host_name` and `parent_service_name` attributes are mandatory for
 service dependencies, `parent_host_name` is required for host dependencies.
 
 A service can depend on a host, and vice versa. A service has an implicit
-dependency (parent) to its host. A host to host dependency acts implicitly
+dependency (parent) to its host. A host to host dependency acts implicit
 as host parent relation.
 When dependencies are calculated, not only the immediate parent is taken into
 account but all parents are inherited.
@@ -960,7 +929,7 @@ Notifications are suppressed if a host or service becomes unreachable.
 A common scenario is the Icinga 2 server behind a router. Checking internet
 access by pinging the Google DNS server `google-dns` is a common method, but
 will fail in case the `dsl-router` host is down. Therefore the example below
-defines a host dependency which acts implicitly as parent relation too.
+defines a host dependency which acts implicit as parent relation too.
 
 Furthermore the host may be reachable but ping probes are dropped by the
 router's firewall. In case the `dsl-router``ping4` service check fails, all
@@ -983,22 +952,12 @@ be suppressed. This is achieved by setting the `disable_checks` attribute to `tr
       assign where host.address
     }
 
-    apply Dependency "internet" to Host {
-      parent_host_name = "dsl-router"
-      disable_checks = true
-      disable_notifications = true
-
-      assign where host.name != "dsl-router"
-    }
-
     apply Dependency "internet" to Service {
       parent_host_name = "dsl-router"
-      parent_service_name = "ping4"
       disable_checks = true
 
       assign where host.name != "dsl-router"
     }
-
 
 ### <a id="dependencies-agent-checks"></a> Dependencies for Agent Checks
 
@@ -1155,7 +1114,7 @@ pass the comment id in case of manipulating an existing comment.
 ## <a id="acknowledgements"></a> Acknowledgements
 
 If a problem is alerted and notified you may signal the other notification
-recipients that you are aware of the problem and will handle it.
+receipients that you are aware of the problem and will handle it.
 
 By sending an acknowledgement to Icinga 2 (using the external command pipe
 provided with `ExternalCommandListener` configuration) all future notifications
@@ -1197,27 +1156,21 @@ Custom attributes in command definitions or performance data templates are evalu
 runtime when executing a command. These custom attributes cannot be used elsewhere
 (e.g. in other configuration attributes).
 
-Custom attribute values must be either a string, a number or a boolean value. Arrays
-and dictionaries cannot be used.
-
 Here is an example of a command definition which uses user-defined custom attributes:
 
     object CheckCommand "my-ping" {
       import "plugin-check-command"
 
       command = [
-        PluginDir + "/check_ping", "-4"
+        PluginDir + "/check_ping",
+        "-4",
+        "-H", "$address$",
+        "-w", "$ping_wrta$,$ping_wpl$%",
+        "-c", "$ping_crta$,$ping_cpl$%",
+        "-p", "$ping_packets$",
+        "-t", "$ping_timeout$"
       ]
 
-      arguments = {
-        "-H" = "$ping_address$"
-        "-w" = "$ping_wrta$,$ping_wpl$%"
-        "-c" = "$ping_crta$,$ping_cpl$%"
-        "-p" = "$ping_packets$"
-        "-t" = "$ping_timeout$"
-      }
-
-      vars.ping_address = "$address$"
       vars.ping_wrta = 100
       vars.ping_wpl = 5
       vars.ping_crta = 200
@@ -1228,9 +1181,7 @@ Here is an example of a command definition which uses user-defined custom attrib
 
 Custom attribute names used at runtime must be enclosed in two `$` signs, e.g.
 `$address$`. When using the `$` sign as single character, you need to escape
-it with an additional dollar sign (`$$`). This example also makes use of the
-[command arguments](#command-arguments) passed to the command line. `-4` must
-be added as additional array key.
+it with an additional dollar sign (`$$`).
 
 ### <a id="runtime-custom-attributes-evaluation-order"></a> Runtime Custom Attributes Evaluation Order
 
@@ -1241,13 +1192,13 @@ up custom attributes and their respective values:
 2. Service object
 3. Host object
 4. Command object
-5. Global custom attributes in the `vars` constant
+5. Global custom attributes in the Vars constant
 
 This execution order allows you to define default values for custom attributes
 in your command objects. The `my-ping` command shown above uses this to set
 default values for some of the latency thresholds and timeouts.
 
-When using the `my-ping` command you can override some or all of the custom
+When using the `my-ping` command you can override all or some of the custom
 attributes in the service definition like this:
 
     object Service "ping" {
@@ -1275,23 +1226,14 @@ This is useful for example for hiding sensitive information on the command line 
 when passing credentials to database checks:
 
     object CheckCommand "mysql-health" {
-      import "plugin-check-command"
+      import "plugin-check-command",
 
-      command = [
-        PluginDir + "/check_mysql"
-      ]
+      command = PluginDir + "/check_mysql -H $address$ -d $db$",
 
-      arguments = {
-        "-H" = "$mysql_address$"
-        "-d" = "$mysql_database$"
-      }
-
-      vars.mysql_address = "$address$"
-      vars.mysql_database = "icinga"
-      vars.mysql_user = "icinga_check"
+      vars.mysql_user = "icinga_check",
       vars.mysql_pass = "password"
 
-      env.MYSQLUSER = "$mysql_user$"
+      env.MYSQLUSER = "$mysql_user$",
       env.MYSQLPASS = "$mysql_pass$"
     }
 
@@ -1610,6 +1552,22 @@ Detailed information on the commands and their required parameters can be found
 on the [Icinga 1.x documentation](http://docs.icinga.org/latest/en/extcommands2.html).
 
 
+## <a id="event-handlers"></a> Event Handlers
+
+Event handlers are defined as `EventCommand` objects in Icinga 2.
+
+Unlike notifications event commands are called on every host/service execution
+if defined. Therefore the `EventCommand` object should define a command line
+evaluating the current service state and other service runtime attributes
+available through runtime macros. Runtime macros such as `$service.state_type$`
+and `$service.state$` will be processed by Icinga 2 helping on fine-granular
+events being triggered.
+
+Common use case scenarios are a failing HTTP check requiring an immediate
+restart via event command, or if an application is locked and requires
+a restart upon detection.
+
+
 ## <a id="logging"></a> Logging
 
 Icinga 2 supports three different types of logging:
@@ -1801,7 +1759,7 @@ Example for PostgreSQL:
       WHERE ((SELECT extract(epoch from status_update_time) FROM icinga_programstatus) > (SELECT extract(epoch from now())-60))
       AND i.instance_name='default'";
 
-    status_update_time
+    status_update_time   
     ------------------------
      2014-05-29 15:11:38+02
     (1 Zeile)
@@ -1834,7 +1792,7 @@ object configuration.
 > **Note**
 >
 > All Livestatus queries require an additional empty line as query end identifier.
-> The `unixcat` tool is either available by the MK Livestatus project or as separate
+> The `unixcat` tool is either available by the MK Livestatus project or as seperate
 > binary.
 
 There also is a Perl module available in CPAN for accessing the Livestatus socket
@@ -1874,10 +1832,10 @@ and, or, negate
    ~        | !~       | Regex match
    =~       | !=~      | Equality ignoring case
    ~~       | !~~      | Regex ignoring case
-   <        |          | Less than
-   >        |          | Greater than
-   <=       |          | Less than or equal
-   >=       |          | Greater than or equal
+   >        |          | Less than
+   <        |          | Greater than
+   >=       |          | Less than or equal
+   <=       |          | Greater than or equal
 
 
 ### <a id="livestatus-stats"></a> Livestatus Stats
@@ -1920,7 +1878,7 @@ CSV Output uses two levels of array separators: The members array separator
 is a comma (1st level) while extra info and host|service relation separator
 is a pipe (2nd level).
 
-Separators can be set using ASCII codes like:
+Seperators can be set using ASCII codes like:
 
     Separators: 10 59 44 124
 
@@ -1962,9 +1920,9 @@ A detailed list on the available table attributes can be found in the [Livestatu
 
 ## <a id="check-result-files"></a> Check Result Files
 
-Icinga 1.x writes its check result files to a temporary spool directory
-where they are processed in a regular interval.
-While this is extremely inefficient in performance regards it has been
+Icinga 1.x writes its check result files into a temporary spool directory
+where it reads these check result files in a regular interval from.
+While this is extremly inefficient in performance regards it has been
 rendered useful for passing passive check results directly into Icinga 1.x
 skipping the external command pipe.
 

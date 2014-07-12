@@ -47,11 +47,6 @@ String TimePeriodsTable::GetName(void) const
 	return "timeperiod";
 }
 
-String TimePeriodsTable::GetPrefix(void) const
-{
-	return "timeperiod";
-}
-
 void TimePeriodsTable::FetchRows(const AddRowFunction& addRowFn)
 {
 	BOOST_FOREACH(const TimePeriod::Ptr& tp, DynamicType::GetObjects<TimePeriod>()) {

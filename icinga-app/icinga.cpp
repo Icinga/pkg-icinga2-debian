@@ -185,7 +185,7 @@ static bool Daemonize(void)
 		} while (readpid != pid && ret == 0);
 
 		if (ret == pid) {
-			Log(LogCritical, "icinga-app", "The daemon could not be started. See log output for details.");
+			Log(LogCritical, "icinga-app", "The daemon could not be started. See logfile for details.");
 			exit(EXIT_FAILURE);
 		} else if (ret == -1) {
 			std::ostringstream msgbuf;
@@ -546,21 +546,19 @@ int Main(void)
 				return EXIT_FAILURE;
 			}
 		}
-	}
 
-	// activate config only after daemonization: it starts threads and that is not compatible with fork()
-	if (!ConfigItem::ActivateItems()) {
-		Log(LogCritical, "icinga-app", "Error activating configuration.");
-		return EXIT_FAILURE;
-	}
-
-	if (g_AppParams.count("daemonize")) {
 		String errorLog;
 		if (g_AppParams.count("errorlog"))
 			errorLog = g_AppParams["errorlog"].as<std::string>();
 
 		SetDaemonIO(errorLog);
 		Logger::DisableConsoleLog();
+	}
+
+	// activate config only after daemonization: it starts threads and that is not compatible with fork()
+	if (!ConfigItem::ActivateItems()) {
+		Log(LogCritical, "icinga-app", "Error activating configuration.");
+		return EXIT_FAILURE;
 	}
 	
 #ifndef _WIN32

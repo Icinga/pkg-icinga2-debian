@@ -83,7 +83,7 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 	if (!fifo_ok && mkfifo(commandPath.CStr(), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) < 0) {
 		std::ostringstream msgbuf;
 		msgbuf << "mkfifo() for fifo path '" << commandPath << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-		Log(LogCritical, "ExternalCommandListener",  msgbuf.str());
+		Log(LogCritical, "LivestatusListener",  msgbuf.str());
 		return;
 	}
 
@@ -92,7 +92,7 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 	if (chmod(commandPath.CStr(), mode) < 0) {
 		std::ostringstream msgbuf;
 		msgbuf << "chmod() on fifo '" << commandPath << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-		Log(LogCritical, "ExternalCommandListener",  msgbuf.str());
+		Log(LogCritical, "LivestatusListener",  msgbuf.str());
 		return;
 	}
 
@@ -106,7 +106,7 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 		if (fd < 0) {
 			std::ostringstream msgbuf;
 			msgbuf << "open() for fifo path '" << commandPath << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-			Log(LogCritical, "ExternalCommandListener",  msgbuf.str());
+			Log(LogCritical, "LivestatusListener",  msgbuf.str());
 			return;
 		}
 
@@ -115,14 +115,13 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 		if (fp == NULL) {
 			std::ostringstream msgbuf;
 			msgbuf << "fdopen() for fifo path '" << commandPath << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-			Log(LogCritical, "ExternalCommandListener",  msgbuf.str());
+			Log(LogCritical, "LivestatusListener",  msgbuf.str());
 			return;
 		}
 
-		const int linesize = 128 * 1024;
-		char *line = new char[linesize];
+		char line[2048];
 
-		while (fgets(line, linesize, fp) != NULL) {
+		while (fgets(line, sizeof(line), fp) != NULL) {
 			// remove trailing new-line
 			while (strlen(line) > 0 &&
 			    (line[strlen(line) - 1] == '\r' || line[strlen(line) - 1] == '\n'))
@@ -141,7 +140,6 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 			}
 		}
 
-		delete line;
 		fclose(fp);
 	}
 }

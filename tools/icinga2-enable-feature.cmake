@@ -63,7 +63,7 @@ do
 				echo "Enabling '$FEATURE' failed. Check permissions for $ICINGA2CONFDIR/features-enabled/"
 					exit 1
 				else
-					echo "Module '$FEATURE' has been enabled."
+					echo "Module '$FEATURE' was enabled."
 					RELOAD="YES"
 				fi
 			fi
@@ -78,7 +78,7 @@ do
 				echo "Disabling '$FEATURE' failed. Check permissions for $ICINGA2CONFDIR/features-enabled/$FEATURE.conf"
 					exit 1
 				else
-					echo "Feature '$FEATURE' has been disabled."
+					echo "Feature '$FEATURE' was disabled."
 					RELOAD="YES"
 				fi
 			fi

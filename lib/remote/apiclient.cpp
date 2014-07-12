@@ -66,17 +66,6 @@ ConnectionRole ApiClient::GetRole(void) const
 
 void ApiClient::SendMessage(const Dictionary::Ptr& message)
 {
-	if (m_WriteQueue.GetLength() > 5000) {
-		Log(LogWarning, "remote", "Closing connection for API identity '" + m_Identity + "': Too many queued messages.");
-		Disconnect();
-		return;
-	}
-
-	m_WriteQueue.Enqueue(boost::bind(&ApiClient::SendMessageSync, static_cast<ApiClient::Ptr>(GetSelf()), message));
-}
-
-void ApiClient::SendMessageSync(const Dictionary::Ptr& message)
-{
 	try {
 		ObjectLock olock(m_Stream);
 		JsonRpc::SendMessage(m_Stream, message);
@@ -96,6 +85,7 @@ void ApiClient::SendMessageSync(const Dictionary::Ptr& message)
 void ApiClient::Disconnect(void)
 {
 	Log(LogWarning, "ApiClient", "API client disconnected for identity '" + m_Identity + "'");
+	m_Stream->Close();
 
 	if (m_Endpoint)
 		m_Endpoint->RemoveClient(GetSelf());
@@ -103,8 +93,6 @@ void ApiClient::Disconnect(void)
 		ApiListener::Ptr listener = ApiListener::GetInstance();
 		listener->RemoveAnonymousClient(GetSelf());
 	}
-
-	m_Stream->Close();
 }
 
 bool ApiClient::ProcessMessage(void)
