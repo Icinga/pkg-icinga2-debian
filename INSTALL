@@ -72,7 +72,7 @@ Here's a short check-list for releases:
 * Bump the version in icinga2.spec.
 * Update the ChangeLog and doc/1-about.md files.
 * Commit these changes to the "next" branch and create a signed tag (tags/v<VERSION>).
-    $ git commit -v -a -m "Release version <VERSION>."
+    $ git commit -v -a -m "Release version <VERSION>"
     $ git tag -u EE8E0720 -m "Version <VERSION>" v<VERSION>
     $ git push --tags
 * Merge the "next" branch into the "master" branch (using --ff-only).
@@ -131,6 +131,10 @@ variables are supported:
 		defaults to CMAKE_INSTALL_PREFIX/etc/sysconfig/icinga2
 - CMAKE_INSTALL_LOCALSTATEDIR: The state directory; defaults to CMAKE_INSTALL_PREFIX/var
 - USE_SYSTEMD=ON|OFF: Use systemd or a classic SysV initscript; defaults to OFF
+- INSTALL_SYSTEMD_SERVICE_AND_INITSCRIPT=ON|OFF Force install both the systemd service definition file 
+		and the SysV initscript in parallel, regardless of how USE_SYSTEMD is set. 
+		Only use this for special packaging purposes and if you know what you are doing.
+		Defaults to OFF
 
 ### Building Icinga 2 RPMs
 
