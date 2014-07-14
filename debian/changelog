@@ -1,3 +1,9 @@
+icinga2 (2.0.1-1~debmon70+1) debmon-wheezy; urgency=medium
+
+  * Rebuild for debmon.
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 14 Jul 2014 21:19:46 +0200
+
 icinga2 (2.0.1-1) unstable; urgency=medium
 
   [ Alexander Wirt ]
