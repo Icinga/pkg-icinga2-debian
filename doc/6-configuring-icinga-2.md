@@ -190,6 +190,8 @@ Operator | Examples (Result)                             | Description
 /        | 5m / 5 (60)                                   | Divides two numbers
 &        | 7 & 3 (3)                                     | Binary AND
 &#124;   | 2 &#124; 3 (3)                                | Binary OR
+&&       | true && false (false)                         | Logical AND
+&#124;&#124; | true &#124;&#124; false (true)            | Logical OR
 <        | 3 < 5 (true)                                  | Less than
 >        | 3 > 5 (false)                                 | Greater than
 <=       | 3 <= 3 (true)                                 | Less than or equal
@@ -793,12 +795,24 @@ Example:
         "-S" = {
           set_if = "$http_ssl$"
         }
+        "--sni" = {
+          set_if = "$http_sni$"
+        }
+        "-a" = {
+          value = "$http_auth_pair$"
+          description = "Username:password on sites with basic authentication"
+        }
+        "--no-body" = {
+          set_if = "$http_ignore_body$"
+        }
+        "-r" = "$http_expect_body_regex$"
         "-w" = "$http_warn_time$"
         "-c" = "$http_critical_time$"
       }
 
       vars.http_address = "$address$"
       vars.http_ssl = false
+      vars.http_sni = false
     }
 
 
@@ -1801,6 +1815,47 @@ ping_cpl        | **Optional.** The packet loss critical threshold in %. Default
 ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
+#### <a id="plugin-check-command-fping4"></a> fping4
+
+Check command object for the `check_fping` plugin.
+
+Custom Attributes:
+
+Name            | Description
+----------------|--------------
+fping_address   | **Optional.** The host's IPv4 address. Defaults to "$address$".
+fping_wrta      | **Optional.** The RTA warning threshold in milliseconds. Defaults to 100.
+fping_wpl       | **Optional.** The packet loss warning threshold in %. Defaults to 5.
+fping_crta      | **Optional.** The RTA critical threshold in milliseconds. Defaults to 200.
+fping_cpl       | **Optional.** The packet loss critical threshold in %. Defaults to 15.
+fping_number    | **Optional.** The number of packets to send. Defaults to 5.
+fping_interval  | **Optional.** The interval between packets in milli-seconds. Defaults to 500.
+fping_bytes	| **Optional.** The size of ICMP packet.
+fping_target_timeout | **Optional.** The target timeout in milli-seconds.
+fping_source_ip | **Optional.** The name or ip address of the source ip.
+fping_source_interface | **Optional.** The source interface name.
+
+#### <a id="plugin-check-command-fping6"></a> fping6
+
+Check command object for the `check_fping` plugin.
+
+Custom Attributes:
+
+Name            | Description
+----------------|--------------
+fping_address   | **Optional.** The host's IPv6 address. Defaults to "$address6$".
+fping_wrta      | **Optional.** The RTA warning threshold in milliseconds. Defaults to 100.
+fping_wpl       | **Optional.** The packet loss warning threshold in %. Defaults to 5.
+fping_crta      | **Optional.** The RTA critical threshold in milliseconds. Defaults to 200.
+fping_cpl       | **Optional.** The packet loss critical threshold in %. Defaults to 15.
+fping_number    | **Optional.** The number of packets to send. Defaults to 5.
+fping_interval  | **Optional.** The interval between packets in milli-seconds. Defaults to 500.
+fping_bytes	| **Optional.** The size of ICMP packet.
+fping_target_timeout | **Optional.** The target timeout in milli-seconds.
+fping_source_ip | **Optional.** The name or ip address of the source ip.
+fping_source_interface | **Optional.** The source interface name.
+
+
 #### <a id="plugin-check-command-dummy"></a> dummy
 
 Check command object for the `check_dummy` plugin.
@@ -1872,6 +1927,7 @@ http_vhost               | **Optional.** The virtual host that should be sent in
 http_uri                 | **Optional.** The request URI.
 http_port                | **Optional.** The TCP port. Defaults to 80 when not using SSL, 443 otherwise.
 http_ssl                 | **Optional.** Whether to use SSL. Defaults to false.
+http_sni                 | **Optional.** Whether to use SNI. Defaults to false.
 http_auth_pair           | **Optional.** Add 'username:password' authorization pair.
 http_ignore_body         | **Optional.** Don't download the body, just the headers.
 http_expect_body_regex   | **Optional.** A regular expression which the body must match against. Incompatible with http_ignore_body.
@@ -1897,6 +1953,7 @@ Custom Attributes:
 Name                 | Description
 ---------------------|--------------
 smtp_address         | **Optional.** The host's address. Defaults to "$address$".
+smtp_port            | **Optional.** The port that should be checked. Defaults to 25.
 smtp_mail_from       | **Optional.** Test a MAIL FROM command with the given email address.
 
 #### <a id="plugin-check-command-ssmtp"></a> ssmtp
@@ -1920,6 +1977,7 @@ Custom Attributes:
 Name            | Description
 ----------------|--------------
 imap_address    | **Optional.** The host's address. Defaults to "$address$".
+imap_port       | **Optional.** The port that should be checked. Defaults to 143.
 
 #### <a id="plugin-check-command-simap"></a> simap
 
@@ -1941,6 +1999,7 @@ Custom Attributes:
 Name            | Description
 ----------------|--------------
 pop_address     | **Optional.** The host's address. Defaults to "$address$".
+pop_port        | **Optional.** The port that should be checked. Defaults to 110.
 
 #### <a id="plugin-check-command-spop"></a> spop 
 
@@ -2039,13 +2098,19 @@ Check command object for the `check_snmp` plugin.
 
 Custom Attributes:
 
-Name            | Description
-----------------|--------------
-snmp_address    | **Optional.** The host's address. Defaults to "$address$".
-snmp_oid        | **Required.** The SNMP OID.
-snmp_community  | **Optional.** The SNMP community. Defaults to "public".
-snmp_warn       | **Optional.** The warning threshold.
-snmp_crit       | **Optional.** The critical threshold.
+Name                | Description
+--------------------|--------------
+snmp_address        | **Optional.** The host's address. Defaults to "$address$".
+snmp_oid            | **Required.** The SNMP OID.
+snmp_community      | **Optional.** The SNMP community. Defaults to "public".
+snmp_warn           | **Optional.** The warning threshold.
+snmp_crit           | **Optional.** The critical threshold.
+snmp_string         | **Optional.** Return OK state if the string exact match with the output value
+snmp_ereg           | **Optional.** Return OK state if extended regular expression REGEX matches with the output value
+snmp_eregi          | **Optional.** Return OK state if case-insensitive extended REGEX matches with the output value
+snmp_label          | **Optional.** Prefix label for output value
+snmp_invert_search  | **Optional.** Invert search result and return CRITICAL state if found
+snmp_units          | **Optional.** Units label(s) for output value (e.g., 'sec.').
 
 #### <a id="plugin-check-command-snmp"></a> snmpv3
 
@@ -2089,6 +2154,17 @@ dns_lookup           | **Optional.** The hostname or IP to query the dns for. De
 dns_server           | **Optional.** The DNS server to query. Defaults to the server configured in the OS.
 dns_expected_answer  | **Optional.** The answer to look for. A hostname must end with a dot.
 dns_authoritative    | **Optional.** Expect the server to send an authoritative answer.
+
+#### <a id="plugin-check-command-dig"></a> dig
+
+Check command object for the `check_dig` plugin.
+
+Custom Attributes:
+
+Name                 | Description
+---------------------|--------------
+dig_server           | **Optional.** The DNS server to query. Defaults to "127.0.0.1".
+dig_lookup           | **Optional.** The address that should be looked up.
 
 #### <a id="plugin-check-command-dhcp"></a> dhcp
 

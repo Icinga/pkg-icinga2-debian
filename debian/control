@@ -155,6 +155,7 @@ Conflicts: icinga2-ido-pgsql
 Depends: dbconfig-common,
          icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
+         ucf,
          ${misc:Depends},
          ${shlibs:Depends}
 Recommends: mysql-client
@@ -183,8 +184,10 @@ Package: icinga2-ido-pgsql
 Architecture: any
 Conflicts: icinga2-ido-mysql
 Pre-Depends: ${misc:Pre-Depends}
-Depends: icinga2-bin (= ${binary:Version}),
+Depends: dbconfig-common,
+         icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
+         ucf,
          ${misc:Depends},
          ${shlibs:Depends}
 Recommends: postgresql-client

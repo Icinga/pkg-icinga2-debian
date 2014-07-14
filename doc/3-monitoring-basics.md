@@ -723,12 +723,24 @@ macro value can be resolved by Icinga 2.
         "-S" = {
           set_if = "$http_ssl$"
         }
+        "--sni" = {
+          set_if = "$http_sni$"
+        }
+        "-a" = {
+          value = "$http_auth_pair$"
+          description = "Username:password on sites with basic authentication"
+        }
+        "--no-body" = {
+          set_if = "$http_ignore_body$"
+        }
+        "-r" = "$http_expect_body_regex$"
         "-w" = "$http_warn_time$"
         "-c" = "$http_critical_time$"
       }
 
       vars.http_address = "$address$"
       vars.http_ssl = false
+      vars.http_sni = false
     }
 
 The example shows the `check_http` check command defining the most common
@@ -794,7 +806,7 @@ the service is applied to. If not set, the check command `my-ssh` will omit the 
     /* apply ssh service */
     apply Service "my-ssh" {
       import "generic-service"
-      check_command = "ssh"
+      check_command = "my-ssh"
 
       //set the command argument for ssh port with a custom host attribute, if set
       vars.ssh_port = "$host.vars.custom_ssh_port$"
@@ -889,11 +901,17 @@ NotificationCommand object refer to that.
 
 ### <a id="event-commands"></a> Event Commands
 
-Unlike notifications event commands are called on every service execution
-if defined. Therefore the `EventCommand` object should define a command line
+Unlike notifications event commands are called on every host/service execution
+if one of these conditions match:
+
+* The host/service is in a [soft state](#hard-soft-states)
+* The host/service state changes into a [hard state](#hard-soft-states)
+* The host/service state recovers from a [soft or hard state](#hard-soft-states) to [OK](#service-states)/[Up](#host-states)
+
+Therefore the `EventCommand` object should define a command line
 evaluating the current service state and other service runtime attributes
-available through runtime vars. Runtime macros such as `$SERVICESTATETYPE$`
-and `$SERVICESTATE$` will be processed by Icinga 2 helping on fine-granular
+available through runtime vars. Runtime macros such as `$service.state_type$`
+and `$service.state$` will be processed by Icinga 2 helping on fine-granular
 events being triggered.
 
 Common use case scenarios are a failing HTTP check requiring an immediate
@@ -1178,6 +1196,9 @@ which use custom attributes to format their output.
 Custom attributes in command definitions or performance data templates are evaluated at
 runtime when executing a command. These custom attributes cannot be used elsewhere
 (e.g. in other configuration attributes).
+
+Custom attribute values must be either a string, a number or a boolean value. Arrays
+and dictionaries cannot be used.
 
 Here is an example of a command definition which uses user-defined custom attributes:
 
@@ -1587,22 +1608,6 @@ A list of currently supported external commands can be found [here](#external-co
 
 Detailed information on the commands and their required parameters can be found
 on the [Icinga 1.x documentation](http://docs.icinga.org/latest/en/extcommands2.html).
-
-
-## <a id="event-handlers"></a> Event Handlers
-
-Event handlers are defined as `EventCommand` objects in Icinga 2.
-
-Unlike notifications event commands are called on every host/service execution
-if defined. Therefore the `EventCommand` object should define a command line
-evaluating the current service state and other service runtime attributes
-available through runtime macros. Runtime macros such as `$service.state_type$`
-and `$service.state$` will be processed by Icinga 2 helping on fine-granular
-events being triggered.
-
-Common use case scenarios are a failing HTTP check requiring an immediate
-restart via event command, or if an application is locked and requires
-a restart upon detection.
 
 
 ## <a id="logging"></a> Logging
