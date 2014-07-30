@@ -1,3 +1,13 @@
+icinga2 (2.0.1-2) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [93ca878] Fix dependency on apache2-utils and take care cgi is loaded
+
+  [ Jan Wagner ]
+  * [63fb799] Adding Vcs-headers
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 30 Jul 2014 19:36:09 +0200
+
 icinga2 (2.0.1-1) unstable; urgency=medium
 
   [ Alexander Wirt ]
