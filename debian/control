@@ -3,6 +3,7 @@ Section: admin
 Priority: extra
 Maintainer: Debian Nagios Maintainer Group <pkg-nagios-devel@lists.alioth.debian.org>
 Uploaders: Markus Frosch <markus@lazyfrosch.de>,
+           Jan Wagner <waja@cyconet.org>,
            Alexander Wirt <formorer@debian.org>
 Build-Depends: bison,
                cmake (>= 2.8.7),
