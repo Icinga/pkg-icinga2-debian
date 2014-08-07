@@ -250,7 +250,7 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 	ServiceState old_state = GetStateRaw();
 	StateType old_stateType = GetStateType();
 	long old_attempt = GetCheckAttempt();
-	bool recovery;
+	bool recovery = false;
 
 	if (old_cr && cr->GetExecutionStart() < old_cr->GetExecutionStart())
 		return;
@@ -266,10 +266,14 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 	if (!old_cr) {
 		SetStateType(StateTypeHard);
 	} else if (cr->GetState() == ServiceOK) {
-		if (old_state == ServiceOK && old_stateType == StateTypeSoft)
+		if (old_state == ServiceOK && old_stateType == StateTypeSoft) {
 			SetStateType(StateTypeHard); // SOFT OK -> HARD OK
+			recovery = true;
+		}
 
-		recovery = true;
+		if (old_state != ServiceOK)
+			recovery = true; // NOT OK -> SOFT/HARD OK
+
 		ResetNotificationNumbers();
 		SetLastStateOK(Utility::GetTime());
 	} else {
@@ -281,8 +285,6 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 		} else {
 			attempt = old_attempt;
 		}
-
-		recovery = false;
 
 		switch (cr->GetState()) {
 			case ServiceOK:

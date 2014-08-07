@@ -10,9 +10,10 @@ PrefixDir           |**Read-only.** Contains the installation prefix that was sp
 SysconfDir          |**Read-only.** Contains the path of the sysconf directory. Defaults to PrefixDir + "/etc".
 ZonesDir            |**Read-only.** Contains the path of the zones.d directory. Defaults to SysconfDir + "/zones.d".
 LocalStateDir       |**Read-only.** Contains the path of the local state directory. Defaults to PrefixDir + "/var".
+RunDir              |**Read-only.** Contains the path of the run directory. Defaults to LocalStateDir + "/run".
 PkgDataDir          |**Read-only.** Contains the path of the package data directory. Defaults to PrefixDir + "/share/icinga2".
 StatePath           |**Read-write.** Contains the path of the Icinga 2 state file. Defaults to LocalStateDir + "/lib/icinga2/icinga2.state".
-PidPath             |**Read-write.** Contains the path of the Icinga 2 PID file. Defaults to LocalStateDir + "/run/icinga2/icinga2.pid".
+PidPath             |**Read-write.** Contains the path of the Icinga 2 PID file. Defaults to RunDir + "/icinga2/icinga2.pid".
 Vars                |**Read-write.** Contains a dictionary with global custom attributes. Not set by default.
 NodeName            |**Read-write.** Contains the cluster node name. Set to the local hostname by default.
 ApplicationType     |**Read-write.** Contains the name of the Application type. Defaults to "icinga/IcingaApplication".
@@ -251,7 +252,7 @@ Sets a dictionary element to the specified value.
 Example:
 
     {
-      a = 5,
+      a = 5
       a = 7
     }
 
@@ -398,9 +399,9 @@ another group of objects.
 
     apply Service "ping" to Host {
       import "generic-service"
- 
+
       check_command = "ping4"
-  
+
       assign where host.name == "localhost"
     }
 
@@ -672,7 +673,7 @@ Attributes:
 
 
 Service objects have composite names, i.e. their names are based on the host_name attribute and the name you specified. This means
-you can define more than one object with the same (short) name as long as the `host_name` attribute has a different value. 
+you can define more than one object with the same (short) name as long as the `host_name` attribute has a different value.
 
 ### <a id="objecttype-servicegroup"></a> ServiceGroup
 
@@ -785,7 +786,7 @@ Example:
     object CheckCommand "check_http" {
       import "plugin-check-command"
 
-      command = PluginDir + "/check_http"
+      command = [ PluginDir + "/check_http" ]
 
       arguments = {
         "-H" = "$http_vhost$"
@@ -808,6 +809,7 @@ Example:
         "-r" = "$http_expect_body_regex$"
         "-w" = "$http_warn_time$"
         "-c" = "$http_critical_time$"
+        "-e" = "$http_expect$"
       }
 
       vars.http_address = "$address$"
@@ -821,7 +823,7 @@ Attributes:
   Name            |Description
   ----------------|----------------
   methods         |**Required.** The "execute" script method takes care of executing the check. In virtually all cases you should import the "plugin-check-command" template to take care of this setting.
-  command         |**Required.** The command. This can either be an array of individual command arguments. Alternatively a string can be specified in which case the shell interpreter (usually /bin/sh) takes care of parsing the command.
+  command         |**Required.** The command. This can either be an array of individual command arguments. Alternatively a string can be specified in which case the shell interpreter (usually /bin/sh) takes care of parsing the command. When using the "arguments" attribute this must be an array.
   env             |**Optional.** A dictionary of macros which should be exported as environment variables prior to executing the command.
   vars            |**Optional.** A dictionary containing custom attributes that are specific to this command.
   timeout         |**Optional.** The command timeout in seconds. Defaults to 5 minutes.
@@ -875,18 +877,18 @@ Example:
       ]
 
       env = {
-        "NOTIFICATIONTYPE" = "$notification.type$"
-        "SERVICEDESC" = "$service.name$"
-        "HOSTALIAS" = "$host.display_name$",
-        "HOSTADDRESS" = "$address$",
-        "SERVICESTATE" = "$service.state$",
-        "LONGDATETIME" = "$icinga.long_date_time$",
-        "SERVICEOUTPUT" = "$service.output$",
-        "NOTIFICATIONAUTHORNAME" = "$notification.author$",
-        "NOTIFICATIONCOMMENT" = "$notification.comment$",
-        "HOSTDISPLAYNAME" = "$host.display_name$",
-        "SERVICEDISPLAYNAME" = "$service.display_name$",
-        "USEREMAIL" = "$user.email$"
+        NOTIFICATIONTYPE = "$notification.type$"
+        SERVICEDESC = "$service.name$"
+        HOSTALIAS = "$host.display_name$"
+        HOSTADDRESS = "$address$"
+        SERVICESTATE = "$service.state$"
+        LONGDATETIME = "$icinga.long_date_time$"
+        SERVICEOUTPUT = "$service.output$"
+        NOTIFICATIONAUTHORNAME = "$notification.author$"
+        NOTIFICATIONCOMMENT = "$notification.comment$"
+        HOSTDISPLAYNAME = "$host.display_name$"
+        SERVICEDISPLAYNAME = "$service.display_name$"
+        USEREMAIL = "$user.email$"
       }
     }
 
@@ -1434,7 +1436,7 @@ Attributes:
   socket\_type      |**Optional.** Specifies the socket type. Can be either "tcp" or "unix". Defaults to "unix".
   bind\_host        |**Optional.** Only valid when socket\_type is "tcp". Host address to listen on for connections. Defaults to "127.0.0.1".
   bind\_port        |**Optional.** Only valid when `socket_type` is "tcp". Port to listen on for connections. Defaults to 6558.
-  socket\_path      |**Optional.** Only valid when `socket_type` is "unix". Specifies the path to the UNIX socket file. Defaults to LocalStateDir + "/run/icinga2/cmd/livestatus".
+  socket\_path      |**Optional.** Only valid when `socket_type` is "unix". Specifies the path to the UNIX socket file. Defaults to RunDir + "/icinga2/cmd/livestatus".
   compat\_log\_path |**Optional.** Required for historical table queries. Requires `CompatLogger` feature enabled. Defaults to LocalStateDir + "/log/icinga2/compat"
 
 > **Note**
@@ -1480,7 +1482,7 @@ Attributes:
 
   Name            |Description
   ----------------|----------------
-  command\_path   |**Optional.** Path to the command pipe. Defaults to LocalStateDir + "/run/icinga2/cmd/icinga2.cmd".
+  command\_path   |**Optional.** Path to the command pipe. Defaults to RunDir + "/icinga2/cmd/icinga2.cmd".
 
 ### <a id="objecttype-compatlogger"></a> CompatLogger
 
@@ -1933,6 +1935,7 @@ http_ignore_body         | **Optional.** Don't download the body, just the heade
 http_expect_body_regex   | **Optional.** A regular expression which the body must match against. Incompatible with http_ignore_body.
 http_warn_time           | **Optional.** The warning threshold.
 http_critical_time       | **Optional.** The critical threshold.
+http_expect              | **Optional.** Comma-delimited list of strings, at least one of them is expected in the first (status) line of the server response. Default: HTTP/1.
 
 #### <a id="plugin-check-command-ftp"></a> ftp
 
@@ -2001,7 +2004,7 @@ Name            | Description
 pop_address     | **Optional.** The host's address. Defaults to "$address$".
 pop_port        | **Optional.** The port that should be checked. Defaults to 110.
 
-#### <a id="plugin-check-command-spop"></a> spop 
+#### <a id="plugin-check-command-spop"></a> spop
 
 Check command object for the `check_spop` plugin.
 
@@ -2032,6 +2035,7 @@ Name            | Description
 ----------------|--------------
 ssh_address     | **Optional.** The host's address. Defaults to "$address$".
 ssh_port        | **Optional.** The port that should be checked. Defaults to 22.
+ssh_timeout     | **Optional.** Seconds before connection times out. Defaults to 10.
 
 #### <a id="plugin-check-command-disk"></a> disk
 
