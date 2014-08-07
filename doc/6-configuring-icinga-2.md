@@ -10,9 +10,10 @@ PrefixDir           |**Read-only.** Contains the installation prefix that was sp
 SysconfDir          |**Read-only.** Contains the path of the sysconf directory. Defaults to PrefixDir + "/etc".
 ZonesDir            |**Read-only.** Contains the path of the zones.d directory. Defaults to SysconfDir + "/zones.d".
 LocalStateDir       |**Read-only.** Contains the path of the local state directory. Defaults to PrefixDir + "/var".
+RunDir              |**Read-only.** Contains the path of the run directory. Defaults to LocalStateDir + "/run".
 PkgDataDir          |**Read-only.** Contains the path of the package data directory. Defaults to PrefixDir + "/share/icinga2".
 StatePath           |**Read-write.** Contains the path of the Icinga 2 state file. Defaults to LocalStateDir + "/lib/icinga2/icinga2.state".
-PidPath             |**Read-write.** Contains the path of the Icinga 2 PID file. Defaults to LocalStateDir + "/run/icinga2/icinga2.pid".
+PidPath             |**Read-write.** Contains the path of the Icinga 2 PID file. Defaults to RunDir + "/icinga2/icinga2.pid".
 Vars                |**Read-write.** Contains a dictionary with global custom attributes. Not set by default.
 NodeName            |**Read-write.** Contains the cluster node name. Set to the local hostname by default.
 ApplicationType     |**Read-write.** Contains the name of the Application type. Defaults to "icinga/IcingaApplication".
@@ -190,6 +191,8 @@ Operator | Examples (Result)                             | Description
 /        | 5m / 5 (60)                                   | Divides two numbers
 &        | 7 & 3 (3)                                     | Binary AND
 &#124;   | 2 &#124; 3 (3)                                | Binary OR
+&&       | true && false (false)                         | Logical AND
+&#124;&#124; | true &#124;&#124; false (true)            | Logical OR
 <        | 3 < 5 (true)                                  | Less than
 >        | 3 > 5 (false)                                 | Greater than
 <=       | 3 <= 3 (true)                                 | Less than or equal
@@ -249,7 +252,7 @@ Sets a dictionary element to the specified value.
 Example:
 
     {
-      a = 5,
+      a = 5
       a = 7
     }
 
@@ -396,9 +399,9 @@ another group of objects.
 
     apply Service "ping" to Host {
       import "generic-service"
- 
+
       check_command = "ping4"
-  
+
       assign where host.name == "localhost"
     }
 
@@ -670,7 +673,7 @@ Attributes:
 
 
 Service objects have composite names, i.e. their names are based on the host_name attribute and the name you specified. This means
-you can define more than one object with the same (short) name as long as the `host_name` attribute has a different value. 
+you can define more than one object with the same (short) name as long as the `host_name` attribute has a different value.
 
 ### <a id="objecttype-servicegroup"></a> ServiceGroup
 
@@ -783,7 +786,7 @@ Example:
     object CheckCommand "check_http" {
       import "plugin-check-command"
 
-      command = PluginDir + "/check_http"
+      command = [ PluginDir + "/check_http" ]
 
       arguments = {
         "-H" = "$http_vhost$"
@@ -793,12 +796,25 @@ Example:
         "-S" = {
           set_if = "$http_ssl$"
         }
+        "--sni" = {
+          set_if = "$http_sni$"
+        }
+        "-a" = {
+          value = "$http_auth_pair$"
+          description = "Username:password on sites with basic authentication"
+        }
+        "--no-body" = {
+          set_if = "$http_ignore_body$"
+        }
+        "-r" = "$http_expect_body_regex$"
         "-w" = "$http_warn_time$"
         "-c" = "$http_critical_time$"
+        "-e" = "$http_expect$"
       }
 
       vars.http_address = "$address$"
       vars.http_ssl = false
+      vars.http_sni = false
     }
 
 
@@ -807,7 +823,7 @@ Attributes:
   Name            |Description
   ----------------|----------------
   methods         |**Required.** The "execute" script method takes care of executing the check. In virtually all cases you should import the "plugin-check-command" template to take care of this setting.
-  command         |**Required.** The command. This can either be an array of individual command arguments. Alternatively a string can be specified in which case the shell interpreter (usually /bin/sh) takes care of parsing the command.
+  command         |**Required.** The command. This can either be an array of individual command arguments. Alternatively a string can be specified in which case the shell interpreter (usually /bin/sh) takes care of parsing the command. When using the "arguments" attribute this must be an array.
   env             |**Optional.** A dictionary of macros which should be exported as environment variables prior to executing the command.
   vars            |**Optional.** A dictionary containing custom attributes that are specific to this command.
   timeout         |**Optional.** The command timeout in seconds. Defaults to 5 minutes.
@@ -861,18 +877,18 @@ Example:
       ]
 
       env = {
-        "NOTIFICATIONTYPE" = "$notification.type$"
-        "SERVICEDESC" = "$service.name$"
-        "HOSTALIAS" = "$host.display_name$",
-        "HOSTADDRESS" = "$address$",
-        "SERVICESTATE" = "$service.state$",
-        "LONGDATETIME" = "$icinga.long_date_time$",
-        "SERVICEOUTPUT" = "$service.output$",
-        "NOTIFICATIONAUTHORNAME" = "$notification.author$",
-        "NOTIFICATIONCOMMENT" = "$notification.comment$",
-        "HOSTDISPLAYNAME" = "$host.display_name$",
-        "SERVICEDISPLAYNAME" = "$service.display_name$",
-        "USEREMAIL" = "$user.email$"
+        NOTIFICATIONTYPE = "$notification.type$"
+        SERVICEDESC = "$service.name$"
+        HOSTALIAS = "$host.display_name$"
+        HOSTADDRESS = "$address$"
+        SERVICESTATE = "$service.state$"
+        LONGDATETIME = "$icinga.long_date_time$"
+        SERVICEOUTPUT = "$service.output$"
+        NOTIFICATIONAUTHORNAME = "$notification.author$"
+        NOTIFICATIONCOMMENT = "$notification.comment$"
+        HOSTDISPLAYNAME = "$host.display_name$"
+        SERVICEDISPLAYNAME = "$service.display_name$"
+        USEREMAIL = "$user.email$"
       }
     }
 
@@ -1420,7 +1436,7 @@ Attributes:
   socket\_type      |**Optional.** Specifies the socket type. Can be either "tcp" or "unix". Defaults to "unix".
   bind\_host        |**Optional.** Only valid when socket\_type is "tcp". Host address to listen on for connections. Defaults to "127.0.0.1".
   bind\_port        |**Optional.** Only valid when `socket_type` is "tcp". Port to listen on for connections. Defaults to 6558.
-  socket\_path      |**Optional.** Only valid when `socket_type` is "unix". Specifies the path to the UNIX socket file. Defaults to LocalStateDir + "/run/icinga2/cmd/livestatus".
+  socket\_path      |**Optional.** Only valid when `socket_type` is "unix". Specifies the path to the UNIX socket file. Defaults to RunDir + "/icinga2/cmd/livestatus".
   compat\_log\_path |**Optional.** Required for historical table queries. Requires `CompatLogger` feature enabled. Defaults to LocalStateDir + "/log/icinga2/compat"
 
 > **Note**
@@ -1466,7 +1482,7 @@ Attributes:
 
   Name            |Description
   ----------------|----------------
-  command\_path   |**Optional.** Path to the command pipe. Defaults to LocalStateDir + "/run/icinga2/cmd/icinga2.cmd".
+  command\_path   |**Optional.** Path to the command pipe. Defaults to RunDir + "/icinga2/cmd/icinga2.cmd".
 
 ### <a id="objecttype-compatlogger"></a> CompatLogger
 
@@ -1801,6 +1817,47 @@ ping_cpl        | **Optional.** The packet loss critical threshold in %. Default
 ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
+#### <a id="plugin-check-command-fping4"></a> fping4
+
+Check command object for the `check_fping` plugin.
+
+Custom Attributes:
+
+Name            | Description
+----------------|--------------
+fping_address   | **Optional.** The host's IPv4 address. Defaults to "$address$".
+fping_wrta      | **Optional.** The RTA warning threshold in milliseconds. Defaults to 100.
+fping_wpl       | **Optional.** The packet loss warning threshold in %. Defaults to 5.
+fping_crta      | **Optional.** The RTA critical threshold in milliseconds. Defaults to 200.
+fping_cpl       | **Optional.** The packet loss critical threshold in %. Defaults to 15.
+fping_number    | **Optional.** The number of packets to send. Defaults to 5.
+fping_interval  | **Optional.** The interval between packets in milli-seconds. Defaults to 500.
+fping_bytes	| **Optional.** The size of ICMP packet.
+fping_target_timeout | **Optional.** The target timeout in milli-seconds.
+fping_source_ip | **Optional.** The name or ip address of the source ip.
+fping_source_interface | **Optional.** The source interface name.
+
+#### <a id="plugin-check-command-fping6"></a> fping6
+
+Check command object for the `check_fping` plugin.
+
+Custom Attributes:
+
+Name            | Description
+----------------|--------------
+fping_address   | **Optional.** The host's IPv6 address. Defaults to "$address6$".
+fping_wrta      | **Optional.** The RTA warning threshold in milliseconds. Defaults to 100.
+fping_wpl       | **Optional.** The packet loss warning threshold in %. Defaults to 5.
+fping_crta      | **Optional.** The RTA critical threshold in milliseconds. Defaults to 200.
+fping_cpl       | **Optional.** The packet loss critical threshold in %. Defaults to 15.
+fping_number    | **Optional.** The number of packets to send. Defaults to 5.
+fping_interval  | **Optional.** The interval between packets in milli-seconds. Defaults to 500.
+fping_bytes	| **Optional.** The size of ICMP packet.
+fping_target_timeout | **Optional.** The target timeout in milli-seconds.
+fping_source_ip | **Optional.** The name or ip address of the source ip.
+fping_source_interface | **Optional.** The source interface name.
+
+
 #### <a id="plugin-check-command-dummy"></a> dummy
 
 Check command object for the `check_dummy` plugin.
@@ -1872,11 +1929,13 @@ http_vhost               | **Optional.** The virtual host that should be sent in
 http_uri                 | **Optional.** The request URI.
 http_port                | **Optional.** The TCP port. Defaults to 80 when not using SSL, 443 otherwise.
 http_ssl                 | **Optional.** Whether to use SSL. Defaults to false.
+http_sni                 | **Optional.** Whether to use SNI. Defaults to false.
 http_auth_pair           | **Optional.** Add 'username:password' authorization pair.
 http_ignore_body         | **Optional.** Don't download the body, just the headers.
 http_expect_body_regex   | **Optional.** A regular expression which the body must match against. Incompatible with http_ignore_body.
 http_warn_time           | **Optional.** The warning threshold.
 http_critical_time       | **Optional.** The critical threshold.
+http_expect              | **Optional.** Comma-delimited list of strings, at least one of them is expected in the first (status) line of the server response. Default: HTTP/1.
 
 #### <a id="plugin-check-command-ftp"></a> ftp
 
@@ -1897,6 +1956,7 @@ Custom Attributes:
 Name                 | Description
 ---------------------|--------------
 smtp_address         | **Optional.** The host's address. Defaults to "$address$".
+smtp_port            | **Optional.** The port that should be checked. Defaults to 25.
 smtp_mail_from       | **Optional.** Test a MAIL FROM command with the given email address.
 
 #### <a id="plugin-check-command-ssmtp"></a> ssmtp
@@ -1920,6 +1980,7 @@ Custom Attributes:
 Name            | Description
 ----------------|--------------
 imap_address    | **Optional.** The host's address. Defaults to "$address$".
+imap_port       | **Optional.** The port that should be checked. Defaults to 143.
 
 #### <a id="plugin-check-command-simap"></a> simap
 
@@ -1941,8 +2002,9 @@ Custom Attributes:
 Name            | Description
 ----------------|--------------
 pop_address     | **Optional.** The host's address. Defaults to "$address$".
+pop_port        | **Optional.** The port that should be checked. Defaults to 110.
 
-#### <a id="plugin-check-command-spop"></a> spop 
+#### <a id="plugin-check-command-spop"></a> spop
 
 Check command object for the `check_spop` plugin.
 
@@ -1973,6 +2035,7 @@ Name            | Description
 ----------------|--------------
 ssh_address     | **Optional.** The host's address. Defaults to "$address$".
 ssh_port        | **Optional.** The port that should be checked. Defaults to 22.
+ssh_timeout     | **Optional.** Seconds before connection times out. Defaults to 10.
 
 #### <a id="plugin-check-command-disk"></a> disk
 
@@ -2039,13 +2102,19 @@ Check command object for the `check_snmp` plugin.
 
 Custom Attributes:
 
-Name            | Description
-----------------|--------------
-snmp_address    | **Optional.** The host's address. Defaults to "$address$".
-snmp_oid        | **Required.** The SNMP OID.
-snmp_community  | **Optional.** The SNMP community. Defaults to "public".
-snmp_warn       | **Optional.** The warning threshold.
-snmp_crit       | **Optional.** The critical threshold.
+Name                | Description
+--------------------|--------------
+snmp_address        | **Optional.** The host's address. Defaults to "$address$".
+snmp_oid            | **Required.** The SNMP OID.
+snmp_community      | **Optional.** The SNMP community. Defaults to "public".
+snmp_warn           | **Optional.** The warning threshold.
+snmp_crit           | **Optional.** The critical threshold.
+snmp_string         | **Optional.** Return OK state if the string exact match with the output value
+snmp_ereg           | **Optional.** Return OK state if extended regular expression REGEX matches with the output value
+snmp_eregi          | **Optional.** Return OK state if case-insensitive extended REGEX matches with the output value
+snmp_label          | **Optional.** Prefix label for output value
+snmp_invert_search  | **Optional.** Invert search result and return CRITICAL state if found
+snmp_units          | **Optional.** Units label(s) for output value (e.g., 'sec.').
 
 #### <a id="plugin-check-command-snmp"></a> snmpv3
 
@@ -2089,6 +2158,17 @@ dns_lookup           | **Optional.** The hostname or IP to query the dns for. De
 dns_server           | **Optional.** The DNS server to query. Defaults to the server configured in the OS.
 dns_expected_answer  | **Optional.** The answer to look for. A hostname must end with a dot.
 dns_authoritative    | **Optional.** Expect the server to send an authoritative answer.
+
+#### <a id="plugin-check-command-dig"></a> dig
+
+Check command object for the `check_dig` plugin.
+
+Custom Attributes:
+
+Name                 | Description
+---------------------|--------------
+dig_server           | **Optional.** The DNS server to query. Defaults to "127.0.0.1".
+dig_lookup           | **Optional.** The address that should be looked up.
 
 #### <a id="plugin-check-command-dhcp"></a> dhcp
 

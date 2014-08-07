@@ -74,15 +74,8 @@ void GraphiteWriter::Start(void)
 
 void GraphiteWriter::ReconnectTimerHandler(void)
 {
-	try {
-		if (m_Stream) {
-			m_Stream->Write("\n", 1);
-			Log(LogNotice, "GraphiteWriter", "Already connected on socket on host '" + GetHost() + "' port '" + GetPort() + "'.");
-			return;
-		}
-	} catch (const std::exception&) {
-		Log(LogWarning, "GraphiteWriter", "Socket on host '" + GetHost() + "' port '" + GetPort() + "' gone. Attempting to reconnect.");
-	}
+	if (m_Stream)
+		return;
 
 	TcpSocket::Ptr socket = make_shared<TcpSocket>();
 
@@ -142,7 +135,10 @@ void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& 
 	Value pdv = cr->GetPerformanceData();
 
 	if (!pdv.IsObjectType<Dictionary>())
+	{
+		Log(LogWarning, "GraphiteWriter", "Could not send performance data: unparsed data.");
 		return;
+	}
 
 	Dictionary::Ptr perfdata = pdv;
 
@@ -166,10 +162,13 @@ void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& 
 void GraphiteWriter::SendMetric(const String& prefix, const String& name, double value)
 {
 	std::ostringstream msgbuf;
-	msgbuf << prefix << "." << name << " " << value << " " << static_cast<long>(Utility::GetTime()) << "\n";
+	msgbuf << prefix << "." << name << " " << Convert::ToString(value) << " " << static_cast<long>(Utility::GetTime());
 
+	Log(LogDebug, "GraphiteWriter", "Add to metric list:'" + msgbuf.str() + "'.");
+
+	// do not send \n to debug log
+	msgbuf << "\n";
 	String metric = msgbuf.str();
-	Log(LogDebug, "GraphiteWriter", "GraphiteWriter: Add to metric list:'" + metric + "'.");
 
 	ObjectLock olock(this);
 
@@ -179,7 +178,7 @@ void GraphiteWriter::SendMetric(const String& prefix, const String& name, double
 	try {
 		m_Stream->Write(metric.CStr(), metric.GetLength());
 	} catch (const std::exception& ex) {
-		Log(LogCritical, "GraphiteWriter", "Cannot write to tcp socket on host '" + GetHost() + "' port '" + GetPort() + "'.");
+		Log(LogCritical, "GraphiteWriter", "Cannot write to TCP socket on host '" + GetHost() + "' port '" + GetPort() + "'.");
 
 		m_Stream.reset();
 	}

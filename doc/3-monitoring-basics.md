@@ -669,7 +669,7 @@ can also be inherited from a parent template using additive inheritance (`+=`).
     object CheckCommand "my-disk" {
       import "plugin-check-command"
 
-      command = PluginDir + "/check_disk"
+      command = [ PluginDir + "/check_disk" ]
 
       arguments = {
         "-w" = "$disk_wfree$%"
@@ -713,7 +713,7 @@ macro value can be resolved by Icinga 2.
     object CheckCommand "check_http" {
       import "plugin-check-command"
 
-      command = PluginDir + "/check_http"
+      command = [ PluginDir + "/check_http" ]
 
       arguments = {
         "-H" = "$http_vhost$"
@@ -723,12 +723,25 @@ macro value can be resolved by Icinga 2.
         "-S" = {
           set_if = "$http_ssl$"
         }
+        "--sni" = {
+          set_if = "$http_sni$"
+        }
+        "-a" = {
+          value = "$http_auth_pair$"
+          description = "Username:password on sites with basic authentication"
+        }
+        "--no-body" = {
+          set_if = "$http_ignore_body$"
+        }
+        "-r" = "$http_expect_body_regex$"
         "-w" = "$http_warn_time$"
         "-c" = "$http_critical_time$"
+        "-e" = "$http_expect$"
       }
 
       vars.http_address = "$address$"
       vars.http_ssl = false
+      vars.http_sni = false
     }
 
 The example shows the `check_http` check command defining the most common
@@ -777,7 +790,7 @@ the service is applied to. If not set, the check command `my-ssh` will omit the 
     object CheckCommand "my-ssh" {
       import "plugin-check-command"
 
-      command = PluginDir + "/check_ssh"
+      command = [ PluginDir + "/check_ssh" ]
 
       arguments = {
         "-p" = "$ssh_port$"
@@ -794,7 +807,7 @@ the service is applied to. If not set, the check command `my-ssh` will omit the 
     /* apply ssh service */
     apply Service "my-ssh" {
       import "generic-service"
-      check_command = "ssh"
+      check_command = "my-ssh"
 
       //set the command argument for ssh port with a custom host attribute, if set
       vars.ssh_port = "$host.vars.custom_ssh_port$"
@@ -837,18 +850,18 @@ you can add a `vars` dictionary as shown for the `CheckCommand` object.
       command = [ SysconfDir + "/icinga2/scripts/mail-notification.sh" ]
 
       env = {
-        "NOTIFICATIONTYPE" = "$notification.type$"
-        "SERVICEDESC" = "$service.name$"
-        "HOSTALIAS" = "$host.display_name$",
-        "HOSTADDRESS" = "$address$",
-        "SERVICESTATE" = "$service.state$",
-        "LONGDATETIME" = "$icinga.long_date_time$",
-        "SERVICEOUTPUT" = "$service.output$",
-        "NOTIFICATIONAUTHORNAME" = "$notification.author$",
-        "NOTIFICATIONCOMMENT" = "$notification.comment$",
-    	"HOSTDISPLAYNAME" = "$host.display_name$",
-        "SERVICEDISPLAYNAME" = "$service.display_name$",
-        "USEREMAIL" = "$user.email$"
+        NOTIFICATIONTYPE = "$notification.type$"
+        SERVICEDESC = "$service.name$"
+        HOSTALIAS = "$host.display_name$"
+        HOSTADDRESS = "$address$"
+        SERVICESTATE = "$service.state$"
+        LONGDATETIME = "$icinga.long_date_time$"
+        SERVICEOUTPUT = "$service.output$"
+        NOTIFICATIONAUTHORNAME = "$notification.author$"
+        NOTIFICATIONCOMMENT = "$notification.comment$"
+    	HOSTDISPLAYNAME = "$host.display_name$"
+        SERVICEDISPLAYNAME = "$service.display_name$"
+        USEREMAIL = "$user.email$"
       }
     }
 
@@ -889,11 +902,17 @@ NotificationCommand object refer to that.
 
 ### <a id="event-commands"></a> Event Commands
 
-Unlike notifications event commands are called on every service execution
-if defined. Therefore the `EventCommand` object should define a command line
+Unlike notifications event commands are called on every host/service execution
+if one of these conditions match:
+
+* The host/service is in a [soft state](#hard-soft-states)
+* The host/service state changes into a [hard state](#hard-soft-states)
+* The host/service state recovers from a [soft or hard state](#hard-soft-states) to [OK](#service-states)/[Up](#host-states)
+
+Therefore the `EventCommand` object should define a command line
 evaluating the current service state and other service runtime attributes
-available through runtime vars. Runtime macros such as `$SERVICESTATETYPE$`
-and `$SERVICESTATE$` will be processed by Icinga 2 helping on fine-granular
+available through runtime vars. Runtime macros such as `$service.state_type$`
+and `$service.state$` will be processed by Icinga 2 helping on fine-granular
 events being triggered.
 
 Common use case scenarios are a failing HTTP check requiring an immediate
@@ -915,7 +934,7 @@ information in the check output (`-o`).
         PluginDir + "/process_check_result",
         "-H", "$host.name$",
         "-S", "$service.name$",
-        "-c", LocalStateDir + "/run/icinga2/cmd/icinga2.cmd",
+        "-c", RunDir + "/icinga2/cmd/icinga2.cmd",
         "-r", "0",
         "-o", "Event Handler triggered in state '$service.state$' with output '$service.output$'."
       ]
@@ -936,6 +955,22 @@ When dependencies are calculated, not only the immediate parent is taken into
 account but all parents are inherited.
 
 Notifications are suppressed if a host or service becomes unreachable.
+
+### <a id="dependencies-implicit-host-service"></a> Implicit Dependencies for Services on Host
+
+Icinga 2 automatically adds an implicit dependency for services on their host. That way
+service notifications are suppressed when a host is `DOWN` or `UNREACHABLE`. This dependency
+does not overwrite other dependencies and implicitely sets `disable_notifications = true` and
+`states = [ Up ]` for all service objects.
+
+Service checks are still executed. If you want to prevent them from happening, you can
+apply the following dependency to all services setting their host as `parent_host_name`
+and disabling the checks. `assign where true` matches on all `Service` objects.
+
+    apply Dependency "disable-host-service-checks" to Service {
+      disable_checks = true
+      assign where true
+    }
 
 ### <a id="dependencies-network-reachability"></a> Dependencies for Network Reachability
 
@@ -1014,7 +1049,7 @@ and `nrpe-disk` applied to the `nrpe-server`. The health check is defined as
 
     object Host "nrpe-server" {
       import "generic-host"
-      address = "192.168.1.5",
+      address = "192.168.1.5"
     }
 
     apply Dependency "disable-nrpe-checks" to Service {
@@ -1178,6 +1213,9 @@ which use custom attributes to format their output.
 Custom attributes in command definitions or performance data templates are evaluated at
 runtime when executing a command. These custom attributes cannot be used elsewhere
 (e.g. in other configuration attributes).
+
+Custom attribute values must be either a string, a number or a boolean value. Arrays
+and dictionaries cannot be used.
 
 Here is an example of a command definition which uses user-defined custom attributes:
 
@@ -1587,22 +1625,6 @@ A list of currently supported external commands can be found [here](#external-co
 
 Detailed information on the commands and their required parameters can be found
 on the [Icinga 1.x documentation](http://docs.icinga.org/latest/en/extcommands2.html).
-
-
-## <a id="event-handlers"></a> Event Handlers
-
-Event handlers are defined as `EventCommand` objects in Icinga 2.
-
-Unlike notifications event commands are called on every host/service execution
-if defined. Therefore the `EventCommand` object should define a command line
-evaluating the current service state and other service runtime attributes
-available through runtime macros. Runtime macros such as `$service.state_type$`
-and `$service.state$` will be processed by Icinga 2 helping on fine-granular
-events being triggered.
-
-Common use case scenarios are a failing HTTP check requiring an immediate
-restart via event command, or if an application is locked and requires
-a restart upon detection.
 
 
 ## <a id="logging"></a> Logging

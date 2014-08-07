@@ -19,6 +19,7 @@ cmake_minimum_required(VERSION 2.6)
 set(BOOST_MIN_VERSION "1.41.0")
 
 project(icinga2)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third-party/cmake")
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -30,10 +31,14 @@ endif()
 file(STRINGS icinga2.spec VERSION_LINE REGEX "^Version: ")
 string(REPLACE "Version: " "" ICINGA2_VERSION ${VERSION_LINE})
 
+include(GNUInstallDirs)
+
 set(ICINGA2_USER "icinga" CACHE STRING "Icinga 2 user")
 set(ICINGA2_GROUP "icinga" CACHE STRING "Icinga 2 group")
 set(ICINGA2_COMMAND_USER "icinga" CACHE STRING "Icinga 2 command user")
 set(ICINGA2_COMMAND_GROUP "icingacmd" CACHE STRING "Icinga 2 command group")
+set(ICINGA2_RUNDIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/run" CACHE STRING "/run directory")
+set(ICINGA2_PLUGINDIR "/usr/lib/nagios/plugins" CACHE STRING "Path for the check plugins")
 set(ICINGA2_GIT_VERSION_INFO ON CACHE BOOL "Whether to use git describe")
 
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/COPYING" ICINGA2_LICENSE_GPL)
@@ -119,11 +124,10 @@ if(HAVE_LIBEXECINFO)
   set(HAVE_BACKTRACE_SYMBOLS TRUE)
 endif()
 
-include(GNUInstallDirs)
 configure_file(config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h ESCAPE_QUOTES)
 
 install(
-  FILES README COPYING COPYING.Exceptions AUTHORS ChangeLog INSTALL NEWS
+  FILES README.md COPYING COPYING.Exceptions AUTHORS ChangeLog NEWS
   DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
 

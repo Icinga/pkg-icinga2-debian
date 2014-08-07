@@ -20,7 +20,7 @@
 #include "base/application.hpp"
 #include "base/stacktrace.hpp"
 #include "base/timer.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/exception.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
@@ -112,6 +112,17 @@ Application::~Application(void)
 	m_Instance = NULL;
 }
 
+void Application::Exit(int rc)
+{
+	std::cout.flush();
+
+	BOOST_FOREACH(const Logger::Ptr& logger, Logger::GetLoggers()) {
+		logger->Flush();
+	}
+
+	_exit(rc); // Yay, our static destructors are pretty much beyond repair at this point.
+}
+
 void Application::InitializeBase(void)
 {
 #ifndef _WIN32
@@ -182,37 +193,43 @@ void Application::SetResourceLimits(void)
 		}
 	}
 
-	if (set_stack_rlimit) {
+	if (getrlimit(RLIMIT_STACK, &rl) < 0) {
+		Log(LogWarning, "Application", "Could not determine resource limit for stack size (RLIMIT_STACK)");
+		rl.rlim_max = RLIM_INFINITY;
+	}
+
+	if (set_stack_rlimit)
 		rl.rlim_cur = 256 * 1024;
-		rl.rlim_max = rl.rlim_cur;
+	else
+		rl.rlim_cur = rl.rlim_max;
 
-		if (setrlimit(RLIMIT_STACK, &rl) < 0)
-			Log(LogNotice, "Application", "Could not adjust resource limit for stack size (RLIMIT_STACK)");
-		else {
-			char **new_argv = static_cast<char **>(malloc(sizeof(char *) * (argc + 2)));
+	if (setrlimit(RLIMIT_STACK, &rl) < 0)
+		Log(LogNotice, "Application", "Could not adjust resource limit for stack size (RLIMIT_STACK)");
+	else if (set_stack_rlimit) {
+		char **new_argv = static_cast<char **>(malloc(sizeof(char *) * (argc + 2)));
 
-			if (!new_argv) {
-				perror("malloc");
-				exit(1);
-			}
-
-			for (int i = 0; i < argc; i++)
-				new_argv[i] = argv[i];
-
-			new_argv[argc] = strdup("--no-stack-rlimit");
-
-			if (!new_argv[argc]) {
-				perror("strdup");
-				exit(1);
-			}
-
-			new_argv[argc + 1] = NULL;
-
-			if (execvp(new_argv[0], new_argv) < 0)
-				perror("execvp");
-
+		if (!new_argv) {
+			perror("malloc");
 			exit(1);
 		}
+
+		new_argv[0] = argv[0];
+		new_argv[1] = strdup("--no-stack-rlimit");
+
+		if (!new_argv[1]) {
+			perror("strdup");
+			exit(1);
+		}
+
+		for (int i = 1; i < argc; i++)
+			new_argv[i + 1] = argv[i];
+
+		new_argv[argc + 1] = NULL;
+
+		if (execvp(new_argv[0], new_argv) < 0)
+			perror("execvp");
+
+		exit(1);
 	}
 #	else /* RLIMIT_STACK */
 	Log(LogNotice, "Application", "System does not support adjusting the resource limit for stack size (RLIMIT_STACK)");
@@ -277,7 +294,7 @@ mainloop:
 
 		lastLoop = now;
 	}
-		
+
 	if (m_RequestRestart) {
 		m_RequestRestart = false;         // we are now handling the request, once is enough
 
@@ -290,7 +307,7 @@ mainloop:
 
 		goto mainloop;
 	}
-	
+
 	Log(LogInformation, "Application", "Shutting down Icinga...");
 	DynamicObject::StopObjects();
 	Application::GetInstance()->OnShutdown();
@@ -337,7 +354,7 @@ pid_t Application::StartReloadProcess(void)
 	Process::Ptr process = make_shared<Process>(Process::PrepareCommand(args));
 	process->SetTimeout(300);
 	process->Run(&ReloadProcessCallback);
- 
+
 	return process->GetPID();
 }
 
@@ -446,20 +463,23 @@ String Application::GetExePath(const String& argv0)
 }
 
 /**
- * Display version information.
+ * Display version and path information.
  */
-void Application::DisplayVersionMessage(void)
+void Application::DisplayInfoMessage(bool skipVersion)
 {
-	std::cerr << "***" << std::endl
-		  << "* Application version: " << GetVersion() << std::endl
-		  << "* Installation root: " << GetPrefixDir() << std::endl
-		  << "* Sysconf directory: " << GetSysconfDir() << std::endl
-		  << "* Local state directory: " << GetLocalStateDir() << std::endl
-		  << "* Package data directory: " << GetPkgDataDir() << std::endl
-		  << "* State path: " << GetStatePath() << std::endl
-		  << "* PID path: " << GetPidPath() << std::endl
-		  << "* Application type: " << GetApplicationType() << std::endl
-		  << "***" << std::endl;
+	std::cerr << "Application information:" << std::endl;
+
+	if (!skipVersion)
+		std::cerr << "  Application version: " << GetVersion() << std::endl;
+
+	std::cerr << "  Installation root: " << GetPrefixDir() << std::endl
+		  << "  Sysconf directory: " << GetSysconfDir() << std::endl
+		  << "  Run directory: " << GetRunDir() << std::endl
+		  << "  Local state directory: " << GetLocalStateDir() << std::endl
+		  << "  Package data directory: " << GetPkgDataDir() << std::endl
+		  << "  State path: " << GetStatePath() << std::endl
+		  << "  PID path: " << GetPidPath() << std::endl
+		  << "  Application type: " << GetApplicationType() << std::endl;
 }
 
 /**
@@ -525,7 +545,7 @@ void Application::SigAbrtHandler(int)
 		  << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << std::endl
 		  << std::endl;
 
-	DisplayVersionMessage();
+	DisplayInfoMessage();
 
 	StackTrace trace;
 	std::cerr << "Stacktrace:" << std::endl;
@@ -568,7 +588,7 @@ void Application::ExceptionHandler(void)
 		  << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << std::endl
 		  << std::endl;
 
-	DisplayVersionMessage();
+	DisplayInfoMessage();
 
 	try {
 		RethrowUncaughtException();
@@ -586,7 +606,7 @@ void Application::ExceptionHandler(void)
 #ifdef _WIN32
 LONG CALLBACK Application::SEHUnhandledExceptionFilter(PEXCEPTION_POINTERS exi)
 {
-	DisplayVersionMessage();
+	DisplayInfoMessage();
 
 	std::cerr << "Caught unhandled SEH exception." << std::endl
 		  << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << std::endl
@@ -698,7 +718,7 @@ void Application::UpdatePidFile(const String& filename, pid_t pid)
 	if (fcntl(fd, F_SETLK, &lock) < 0) {
 		Log(LogCritical, "Application", "Could not lock PID file. Make sure that only one instance of the application is running.");
 
-		_exit(EXIT_FAILURE);
+		Application::Exit(EXIT_FAILURE);
 	}
 
 	if (ftruncate(fd, 0) < 0) {
@@ -837,6 +857,26 @@ void Application::DeclareSysconfDir(const String& path)
 }
 
 /**
+ * Retrieves the path for the run dir.
+ *
+ * @returns The path.
+ */
+String Application::GetRunDir(void)
+{
+	return ScriptVariable::Get("RunDir");
+}
+
+/**
+ * Sets the path of the run dir.
+ *
+ * @param path The new path.
+ */
+void Application::DeclareRunDir(const String& path)
+{
+	ScriptVariable::Set("RunDir", path, false);
+}
+
+/**
  * Retrieves the path for the local state dir.
  *
  * @returns The path.
@@ -847,13 +887,13 @@ String Application::GetLocalStateDir(void)
 }
 
 /**
- * Sets the path of the zones dir.
+ * Sets the path for the local state dir.
  *
  * @param path The new path.
  */
-void Application::DeclareZonesDir(const String& path)
+void Application::DeclareLocalStateDir(const String& path)
 {
-	ScriptVariable::Set("ZonesDir", path, false);
+	ScriptVariable::Set("LocalStateDir", path, false);
 }
 
 /**
@@ -867,13 +907,13 @@ String Application::GetZonesDir(void)
 }
 
 /**
- * Sets the path for the local state dir.
+ * Sets the path of the zones dir.
  *
  * @param path The new path.
  */
-void Application::DeclareLocalStateDir(const String& path)
+void Application::DeclareZonesDir(const String& path)
 {
-	ScriptVariable::Set("LocalStateDir", path, false);
+	ScriptVariable::Set("ZonesDir", path, false);
 }
 
 /**
@@ -981,6 +1021,7 @@ void Application::MakeVariablesConstant(void)
 	ScriptVariable::GetByName("PrefixDir")->SetConstant(true);
 	ScriptVariable::GetByName("SysconfDir")->SetConstant(true);
 	ScriptVariable::GetByName("LocalStateDir")->SetConstant(true);
+	ScriptVariable::GetByName("RunDir")->SetConstant(true);
 	ScriptVariable::GetByName("PkgDataDir")->SetConstant(true);
 	ScriptVariable::GetByName("StatePath")->SetConstant(false);
 	ScriptVariable::GetByName("PidPath")->SetConstant(false);

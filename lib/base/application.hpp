@@ -46,6 +46,8 @@ public:
 
 	static Application::Ptr GetInstance(void);
 
+	static void Exit(int rc);
+
 	int Run(void);
 
 	/**
@@ -87,6 +89,9 @@ public:
 	static String GetZonesDir(void);
 	static void DeclareZonesDir(const String& path);
 
+	static String GetRunDir(void);
+	static void DeclareRunDir(const String& path);
+
 	static String GetLocalStateDir(void);
 	static void DeclareLocalStateDir(const String& path);
 
@@ -113,6 +118,8 @@ public:
 
 	static double GetStartTime(void);
 	static void SetStartTime(double ts);
+
+	static void DisplayInfoMessage(bool skipVersion = false);
 
 protected:
 	virtual void OnConfigLoaded(void);
@@ -148,7 +155,6 @@ private:
 	static LONG WINAPI SEHUnhandledExceptionFilter(PEXCEPTION_POINTERS exi);
 #endif /* _WIN32 */
 
-	static void DisplayVersionMessage(void);
 	static void DisplayBugMessage(void);
 
 	static void SigAbrtHandler(int signum);

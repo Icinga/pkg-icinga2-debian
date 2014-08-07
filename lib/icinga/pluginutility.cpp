@@ -46,16 +46,7 @@ struct CommandArgument
 
 	bool operator<(const CommandArgument& rhs) const
 	{
-		return GetNormalizedOrder() < rhs.GetNormalizedOrder();
-	}
-
-private:
-	int GetNormalizedOrder(void) const
-	{
-		if (Order == 0)
-			return 0;
-		else
-			return -(1 / Order);
+		return Order < rhs.Order;
 	}
 };
 
@@ -261,7 +252,8 @@ Value PluginUtility::ParsePerfdata(const String& perfdata)
 		}
 
 		return result;
-	} catch (const std::exception&) {
+	} catch (const std::exception& ex) {
+		Log(LogWarning, "PluginUtility", "Error parsing performance data '" + perfdata + "': " + ex.what());
 		return perfdata;
 	}
 }

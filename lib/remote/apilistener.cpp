@@ -47,14 +47,14 @@ void ApiListener::OnConfigLoaded(void)
 		cert = GetX509Certificate(GetCertPath());
 	} catch (std::exception&) {
 		Log(LogCritical, "ApiListener", "Cannot get certificate from cert path: '" + GetCertPath() + "'.");
-		return;
+		Application::Exit(EXIT_FAILURE);
 	}
 
 	try {
 		SetIdentity(GetCertificateCN(cert));
 	} catch (std::exception&) {
 		Log(LogCritical, "ApiListener", "Cannot get certificate common name from cert path: '" + GetCertPath() + "'.");
-		return;
+		Application::Exit(EXIT_FAILURE);
 	}
 
 	Log(LogInformation, "ApiListener", "My API identity: " + GetIdentity());
@@ -63,7 +63,7 @@ void ApiListener::OnConfigLoaded(void)
 		m_SSLContext = MakeSSLContext(GetCertPath(), GetKeyPath(), GetCaPath());
 	} catch (std::exception&) {
 		Log(LogCritical, "ApiListener", "Cannot make SSL context for cert path: '" + GetCertPath() + "' key path: '" + GetKeyPath() + "' ca path: '" + GetCaPath() + "'.");
-		return;
+		Application::Exit(EXIT_FAILURE);
 	}
 
 	if (!GetCrlPath().IsEmpty()) {
@@ -71,13 +71,13 @@ void ApiListener::OnConfigLoaded(void)
 			AddCRLToSSLContext(m_SSLContext, GetCrlPath());
 		} catch (std::exception&) {
 			Log(LogCritical, "ApiListener", "Cannot add certificate revocation list to SSL context for crl path: '" + GetCrlPath() + "'.");
-			return;
+			Application::Exit(EXIT_FAILURE);
 		}
 	}
 
 	if (!Endpoint::GetByName(GetIdentity())) {
 		Log(LogCritical, "ApiListener", "Endpoint object for '" + GetIdentity() + "' is missing.");
-		return;
+		Application::Exit(EXIT_FAILURE);
 	}
 
 	SyncZoneDirs();
@@ -102,7 +102,10 @@ void ApiListener::Start(void)
 	}
 
 	/* create the primary JSON-RPC listener */
-	AddListener(GetBindPort());
+	if (!AddListener(GetBindPort())) {
+		Log(LogCritical, "ApiListener", "Cannot add listener for port '" + Convert::ToString(GetBindPort()) + "'.");
+		Application::Exit(EXIT_FAILURE);
+	}
 
 	m_Timer = make_shared<Timer>();
 	m_Timer->OnTimerExpired.connect(boost::bind(&ApiListener::ApiTimerHandler, this));
@@ -129,6 +132,10 @@ shared_ptr<SSL_CTX> ApiListener::GetSSLContext(void) const
 Endpoint::Ptr ApiListener::GetMaster(void) const
 {
 	Zone::Ptr zone = Zone::GetLocalZone();
+
+	if (!zone)
+		return Endpoint::Ptr();
+
 	std::vector<String> names;
 
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints())
@@ -142,7 +149,12 @@ Endpoint::Ptr ApiListener::GetMaster(void) const
 
 bool ApiListener::IsMaster(void) const
 {
-	return GetMaster()->GetName() == GetIdentity();
+	Endpoint::Ptr master = GetMaster();
+
+	if (!master)
+		return false;
+
+	return master->GetName() == GetIdentity();
 }
 
 /**
@@ -150,7 +162,7 @@ bool ApiListener::IsMaster(void) const
  *
  * @param service The port to listen on.
  */
-void ApiListener::AddListener(const String& service)
+bool ApiListener::AddListener(const String& service)
 {
 	ObjectLock olock(this);
 
@@ -158,7 +170,7 @@ void ApiListener::AddListener(const String& service)
 
 	if (!sslContext) {
 		Log(LogCritical, "ApiListener", "SSL context is required for AddListener()");
-		return;
+		return false;
 	}
 
 	std::ostringstream s;
@@ -171,13 +183,15 @@ void ApiListener::AddListener(const String& service)
 		server->Bind(service, AF_UNSPEC);
 	} catch(std::exception&) {
 		Log(LogCritical, "ApiListener", "Cannot bind tcp socket on '" + service + "'.");
-		return;
+		return false;
 	}
 
 	boost::thread thread(boost::bind(&ApiListener::ListenerThreadProc, this, server));
 	thread.detach();
 
 	m_Servers.insert(server);
+
+	return true;
 }
 
 void ApiListener::ListenerThreadProc(const Socket::Ptr& server)
@@ -197,12 +211,11 @@ void ApiListener::ListenerThreadProc(const Socket::Ptr& server)
 }
 
 /**
- * Creates a new JSON-RPC client and connects to the specified host and port.
+ * Creates a new JSON-RPC client and connects to the specified endpoint.
  *
- * @param node The remote host.
- * @param service The remote port.
+ * @param endpoint The endpoint.
  */
-void ApiListener::AddConnection(const String& node, const String& service)
+void ApiListener::AddConnection(const Endpoint::Ptr& endpoint)
 {
 	{
 		ObjectLock olock(this);
@@ -210,19 +223,27 @@ void ApiListener::AddConnection(const String& node, const String& service)
 		shared_ptr<SSL_CTX> sslContext = m_SSLContext;
 
 		if (!sslContext) {
-			Log(LogCritical, "ApiListener", "SSL context is required for AddListener()");
+			Log(LogCritical, "ApiListener", "SSL context is required for AddConnection()");
 			return;
 		}
 	}
 
+	String host = endpoint->GetHost();
+	String port = endpoint->GetPort();
+
 	TcpSocket::Ptr client = make_shared<TcpSocket>();
 
 	try {
-		client->Connect(node, service);
-		Utility::QueueAsyncCallback(boost::bind(&ApiListener::NewClientHandler, this, client, RoleClient));
+		endpoint->SetConnecting(true);
+		client->Connect(host, port);
+		NewClientHandler(client, RoleClient);
+		endpoint->SetConnecting(false);
 	} catch (const std::exception& ex) {
+		endpoint->SetConnecting(false);
+		client->Close();
+
 		std::ostringstream info, debug;
-		info << "Cannot connect to host '" << node << "' on port '" << service << "'";
+		info << "Cannot connect to host '" << host << "' on port '" << port << "'";
 		debug << info.str() << std::endl << DiagnosticInformation(ex);
 		Log(LogCritical, "ApiListener", info.str());
 		Log(LogDebug, "ApiListener", debug.str());
@@ -280,6 +301,8 @@ void ApiListener::NewClientHandler(const Socket::Ptr& client, ConnectionRole rol
 	aclient->Start();
 
 	if (endpoint) {
+		endpoint->AddClient(aclient);
+
 		if (need_sync) {
 			{
 				ObjectLock olock(endpoint);
@@ -291,8 +314,6 @@ void ApiListener::NewClientHandler(const Socket::Ptr& client, ConnectionRole rol
 		}
 
 		SendConfigUpdate(aclient);
-
-		endpoint->AddClient(aclient);
 	} else
 		AddAnonymousClient(aclient);
 }
@@ -358,7 +379,11 @@ void ApiListener::ApiTimerHandler(void)
 				if (endpoint->GetHost().IsEmpty() || endpoint->GetPort().IsEmpty())
 					continue;
 
-				AddConnection(endpoint->GetHost(), endpoint->GetPort());
+				/* don't try to connect if there's already a connection attempt */
+				if (endpoint->GetConnecting())
+					continue;
+
+				Utility::QueueAsyncCallback(boost::bind(&ApiListener::AddConnection, this, endpoint));
 			}
 		}
 	}
@@ -387,7 +412,10 @@ void ApiListener::ApiTimerHandler(void)
 			Utility::FormatDateTime("%Y/%m/%d %H:%M:%S", ts));
 	}
 
-	Log(LogNotice, "ApiListener", "Current zone master: " + GetMaster()->GetName());
+	Endpoint::Ptr master = GetMaster();
+
+	if (master)
+		Log(LogNotice, "ApiListener", "Current zone master: " + master->GetName());
 
 	std::vector<String> names;
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjects<Endpoint>())

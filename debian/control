@@ -3,6 +3,7 @@ Section: admin
 Priority: extra
 Maintainer: Debian Nagios Maintainer Group <pkg-nagios-devel@lists.alioth.debian.org>
 Uploaders: Markus Frosch <markus@lazyfrosch.de>,
+           Jan Wagner <waja@cyconet.org>,
            Alexander Wirt <formorer@debian.org>
 Build-Depends: bison,
                cmake (>= 2.8.7),
@@ -22,6 +23,8 @@ Build-Depends: bison,
                po-debconf
 Standards-Version: 3.9.5
 Homepage: http://www.icinga.org
+Vcs-Browser: http://anonscm.debian.org/anonscm/git/pkg-nagios/pkg-icinga2.git
+Vcs-Git: git://anonscm.debian.org/pkg-nagios/pkg-icinga2.git
 
 Package: icinga2
 Architecture: any
@@ -124,7 +127,8 @@ Description: host and network monitoring system - documentation
 
 Package: icinga2-classicui
 Architecture: all
-Depends: icinga-cgi-bin | icinga-cgi (>= 1.9.0~),
+Depends: apache2-utils,
+         icinga-cgi-bin (>= 1.11.5~),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
 Recommends: apache2 | httpd
@@ -155,6 +159,7 @@ Conflicts: icinga2-ido-pgsql
 Depends: dbconfig-common,
          icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
+         ucf,
          ${misc:Depends},
          ${shlibs:Depends}
 Recommends: mysql-client
@@ -183,8 +188,10 @@ Package: icinga2-ido-pgsql
 Architecture: any
 Conflicts: icinga2-ido-mysql
 Pre-Depends: ${misc:Pre-Depends}
-Depends: icinga2-bin (= ${binary:Version}),
+Depends: dbconfig-common,
+         icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
+         ucf,
          ${misc:Depends},
          ${shlibs:Depends}
 Recommends: postgresql-client

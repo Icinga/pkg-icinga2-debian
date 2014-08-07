@@ -1,8 +1,48 @@
-icinga2 (2.0.0-1~ppa1~trusty1) trusty; urgency=medium
+icinga2 (2.0.2-1~ppa1~trusty1) trusty; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
+
+icinga2 (2.0.2-1) unstable; urgency=medium
+
+  [ Jan Wagner ]
+  * [e6fec86] Adding me to the Uploaders
+
+  [ Alexander Wirt ]
+  * [aef20e1] Imported Upstream version 2.0.2
+  * [2b1d87f] README is now README.md
+  * [ac7b2ba] Reenable Make snippet for installing upgrade files
+  * [f66aa0e] Fix dep on icinga-cgi-bin
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 07 Aug 2014 14:42:05 +0200
+
+icinga2 (2.0.1-2) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [93ca878] Fix dependency on apache2-utils and take care cgi is loaded
+
+  [ Jan Wagner ]
+  * [63fb799] Adding Vcs-headers
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 30 Jul 2014 19:36:09 +0200
+
+icinga2 (2.0.1-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [1fc2d37] Wrap and sort
+  * [37d2d90] Recommend nagios-plugins in meta package
+  * [5b33ec5] Adapt url_cgi_path in cgi.cfg, so that icinga2-classic 
+              doesn't trigger csrf protection
+  * [3639615] Add dbcconfig-common to ido-pg depends
+  * [2f7dcb6] Imported Upstream version 2.0.1
+  * [0842ae8] let the ido packages epend on ucf
+
+  [ Markus Frosch ]
+  * [5aaa17c] Fix some lintian warnings
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 14 Jul 2014 20:33:58 +0200
+>>>>>>> master
 
 icinga2 (2.0.0-1) unstable; urgency=low
 
