@@ -9,20 +9,22 @@ Details on troubleshooting problems can be found [here](#troubleshooting).
 ## <a id="setting-up-icinga2"></a> Setting up Icinga 2
 
 First off you will have to install Icinga 2. The preferred way of doing this
-is to use the official Debian or RPM package repositories depending on which
-operating system and distribution you are running.
+is to use the official package repositories depending on which operating system
+and distribution you are running.
 
-  Distribution            | Repository URL
+  Distribution            | Repository
   ------------------------|---------------------------
-  Debian                  | http://packages.icinga.org/debian/
-  Ubuntu                  | http://packages.icinga.org/ubuntu/
-  RHEL/CentOS             | http://packages.icinga.org/epel/
-  OpenSUSE                | http://packages.icinga.org/openSUSE/
-  SLES                    | http://packages.icinga.org/SUSE/
+  Debian                  | [Icinga Repository](http://packages.icinga.org/debian/), [Upstream](https://packages.debian.org/sid/icinga2), [DebMon](http://debmon.org/packages/debmon-wheezy/icinga2)
+  Ubuntu                  | [Icinga Repository](http://packages.icinga.org/ubuntu/), [Upstream](https://launchpad.net/ubuntu/+source/icinga2)
+  RHEL/CentOS             | [Icinga Repository](http://packages.icinga.org/epel/)
+  OpenSUSE                | [Icinga Repository](http://packages.icinga.org/openSUSE/), [Server Monitoring Repository](https://build.opensuse.org/package/show/server:monitoring/icinga2)
+  SLES                    | [Icinga Repository](http://packages.icinga.org/SUSE/)
+  Gentoo                  | [Upstream](http://packages.gentoo.org/package/net-analyzer/icinga2)
+  FreeBSD                 | [Upstream](http://www.freshports.org/net-mgmt/icinga2)
+  ArchLinux               | [Upstream](https://aur.archlinux.org/packages/icinga2)
 
 Packages for distributions other than the ones listed above may also be
-available. Please check http://packages.icinga.org/ to see if packages
-are available for your favourite distribution.
+available. Please contact your distribution packagers.
 
 The packages for RHEL/CentOS 5 depend on other packages which are distributed
 as part of the [EPEL repository](http://fedoraproject.org/wiki/EPEL). Please
@@ -33,6 +35,7 @@ to install the `icinga2` package.
 
 On RHEL/CentOS and SLES you will need to use `chkconfig` to enable the
 `icinga2` service. You can manually start Icinga 2 using `/etc/init.d/icinga2 start`.
+RHEL/CentOS 7 use [Systemd](#systemd-service) with `systemctl {enable,start} icinga2`.
 
 Some parts of Icinga 2's functionality are available as separate packages:
 
@@ -177,7 +180,7 @@ a local dummy zone is defined based on the `NodeName` constant defined in
 
 ### <a id="localhost-conf"></a> localhost.conf
 
-The `conf.d/localhost.conf` file contains our first host definition:
+The `conf.d/hosts/localhost.conf` file contains our first host definition:
 
     /**
      * A host definition. You can create your own configuration files
@@ -429,7 +432,7 @@ by trying to run it on the console using whichever user Icinga 2 is running as:
     $ /opt/plugins/check_snmp_int.pl --help
 
 Additional libraries may be required for some plugins. Please consult the plugin
-documentation and/or README for installation instructions.
+documentation and/or plugin provided README for installation instructions.
 
 Each plugin requires a [CheckCommand](#objecttype-checkcommand) object in your
 configuration which can be used in the [Service](#objecttype-service) or
@@ -449,9 +452,11 @@ by a number of projects including Icinga Web 1.x, Reporting or Icinga Web 2.
 There is a separate module for each database back-end. At present support for
 both MySQL and PostgreSQL is implemented.
 
-Icinga 2 uses the Icinga 1.x IDOUtils database schema starting with version
-`1.11.3`. Icinga 2 requires additional features not yet released with older
-Icinga 1.x versions.
+Icinga 2 uses the Icinga 1.x IDOUtils database schema. Icinga 2 requires additional
+features not yet released with older Icinga 1.x versions.
+
+* Current required schema version: `1.11.6`.
+
 
 > **Tip**
 >
@@ -654,8 +659,7 @@ are expected to be in `/var/log/icinga2/compat`. A different path can be set usi
 Icinga 2 is compatible with Icinga 1.x user interfaces by providing additional
 features required as backends.
 
-Furthermore these interfaces (and somewhere in the future an Icinga 2
-exclusive interface) can be used for the newly created `Icinga Web 2`
+Furthermore these interfaces can be used for the newly created `Icinga Web 2`
 user interface.
 
 Some interface features will only work in a limited manner due to
@@ -671,8 +675,8 @@ Special restrictions are noted specifically in the sections below.
 ### <a id="setting-up-icinga-classic-ui"></a> Setting up Icinga Classic UI
 
 Icinga 2 can write `status.dat` and `objects.cache` files in the format that
-is supported by the Icinga 1.x Classic UI. External commands (a.k.a. the
-"command pipe") are also supported. It also supports writing Icinga 1.x
+is supported by the Icinga 1.x Classic UI. [External commands](#external-commands)
+(a.k.a. the "command pipe") are also supported. It also supports writing Icinga 1.x
 log files which are required for the reporting functionality in the Classic UI.
 
 #### <a id="installing-icinga-classic-ui"></a> Installing Icinga Classic UI
@@ -700,6 +704,28 @@ to satisfy this dependency:
 On all distributions other than Debian you may have to restart both your web
 server as well as Icinga 2 after installing the Classic UI package.
 
+Icinga Classic UI requires the [StatusDataWriter](#status-data), [CompatLogger](#compat-logging)
+and [ExternalCommandListener](#external-commands) features.
+Enable these features and restart Icinga 2.
+
+    # icinga2-enable-feature statusdata compatlog command
+
+In order for commands to work you will need to add your webserver's user to the `icingacmd` group.
+
+> **Note**
+>
+> Packages will do that automatically. Verify that by running `id <your-webserver-user>` and skip this
+> step.
+
+    # usermod -a -G icingacmd www-data
+
+The Debian packages use `nagios` as the user and group name. Make sure to change `icingacmd` to
+`nagios` if you're using Debian.
+
+Change "www-data" to the user your webserver is running as.
+
+#### <a id="setting-up-icinga-classic-ui-summary"></a> Setting Up Icinga Classic UI Summary
+
 Verify that your Icinga 1.x Classic UI works by browsing to your Classic
 UI installation URL:
 
@@ -707,6 +733,9 @@ UI installation URL:
   --------------|--------------------------------------------------------------------------|--------------------------
   Debian        | [http://localhost/icinga2-classicui](http://localhost/icinga2-classicui) | asked during installation
   all others    | [http://localhost/icinga](http://localhost/icinga)                       | icingaadmin/icingaadmin
+
+For further information on configuration, troubleshooting and interface documentation
+please check the official [Icinga 1.x user interface documentation](http://docs.icinga.org/latest/en/ch06.html).
 
 ### <a id="setting-up-icinga-web"></a> Setting up Icinga Web
 
@@ -717,14 +746,15 @@ Therefore you need to setup the [DB IDO feature](#configuring-ido) remarked in t
 #### <a id="installing-icinga-web"></a> Installing Icinga Web
 
 The Icinga package repository has both Debian and RPM packages. You can install
-the Classic UI using the following packages:
+Icinga Web using the following packages (RPMs ship an additional configuration package):
 
   Distribution  | Packages
   --------------|-------------------------------------
   RHEL/SUSE     | icinga-web icinga-web-{mysql,pgsql}
   Debian        | icinga-web
 
-Additionally you need to setup the `icinga_web` database.
+Additionally you need to setup the `icinga_web` database and import the database schema.
+Details can be found in the package `README` files, for example [README.RHEL](https://github.com/Icinga/icinga-web/blob/master/doc/README.RHEL)
 
 The Icinga Web RPM packages install the schema files into
 `/usr/share/doc/icinga-web-*/schema` (`*` means package version).
@@ -732,6 +762,16 @@ The Icinga Web dist tarball ships the schema files in `etc/schema`.
 
 On SuSE-based distributions the schema files are installed in
 `/usr/share/doc/packages/icinga-web/schema`.
+
+Example for RHEL and MySQL:
+
+    # mysql -u root -p
+
+    mysql> CREATE DATABASE icinga_web;
+           GRANT SELECT, INSERT, UPDATE, DELETE, DROP, CREATE VIEW, INDEX, EXECUTE ON icinga_web.* TO 'icinga_web'@'localhost' IDENTIFIED BY 'icinga_web';
+           quit
+
+    # mysql -u root -p icinga_web <  /usr/share/doc/icinga-web-<version>/schema/mysql.sql
 
 Icinga Web requires the IDO feature as database backend using MySQL or PostgreSQL.
 Enable that feature, e.g. for MySQL.
@@ -747,7 +787,7 @@ found in the [Icinga Web documentation](http://docs.icinga.org/latest/en/icinga-
 
     # icinga-web-clearcache
 
-Additionally you need to enable the `command` feature:
+Additionally you need to enable the `command` feature for sending [external commands](#external-commands):
 
     # icinga2-enable-feature command
 
@@ -759,7 +799,7 @@ to the default used in Icinga 2. Make sure to clear the cache afterwards.
 
                 <write>
                     <files>
-                        <resource name="icinga_pipe">/var/run/icinga2/cmd/icinga.cmd</resource>
+                        <resource name="icinga_pipe">/var/run/icinga2/cmd/icinga2.cmd</resource>
                     </files>
                 </write>
 
@@ -770,6 +810,8 @@ to the default used in Icinga 2. Make sure to clear the cache afterwards.
 > The path to the Icinga Web `clearcache` script may differ. Please check the
 > [Icinga Web documentation](https://docs.icinga.org) for details.
 
+#### <a id="setting-up-icinga-web-summary"></a> Setting Up Icinga Web Summary
+
 Verify that your Icinga 1.x Web works by browsing to your Web installation URL:
 
   Distribution  | URL                                                         | Default Login
@@ -777,24 +819,45 @@ Verify that your Icinga 1.x Web works by browsing to your Web installation URL:
   Debian        | [http://localhost/icinga-web](http://localhost/icinga-web)  | asked during installation
   all others    | [http://localhost/icinga-web](http://localhost/icinga-web)  | root/password
 
+For further information on configuration, troubleshooting and interface documentation
+please check the official [Icinga 1.x user interface documentation](http://docs.icinga.org/latest/en/ch06.html).
+
 
 ### <a id="setting-up-icingaweb2"></a> Setting up Icinga Web 2
 
 Icinga Web 2 currently supports `status.dat`, `DB IDO`, or `Livestatus` as backends.
-Please consult the INSTALL documentation shipped with `Icinga Web 2` for
-further instructions.
 
-Icinga Web 2 is still under development. Rather than installing it
-yourself you should consider testing it using the available Vagrant
-demo VM.
+Using DB IDO as backend, you need to install and configure the [DB IDO backend](#configuring-db-ido).
+Once finished, you can enable the feature for DB IDO MySQL:
+
+    # icinga2-enable-feature ido-mysql
+
+furthermore [external commands](#external-commands) are supported through the external
+command pipe.
+
+    # icinga2-enable-feature command
+
+Please consult the INSTALL documentation shipped with `Icinga Web 2` for
+further instructions on how to install Icinga Web 2 and to configure
+backends, resources and instances.
+
+> **Note**
+>
+> Icinga Web 2 is still under heavy development. Rather than installing it
+> yourself you should consider testing it using the available Vagrant
+> demo VM in the [git repository](https://github.com/icinga/icingaweb2).
+
+Check the [Icinga website](https://www.icinga.org) for release schedules,
+blog updates and more.
 
 
 ### <a id="additional-visualization"></a> Additional visualization
 
 There are many visualization addons which can be used with Icinga 2.
 
-Some of the more popular ones are PNP, inGraph (graphing performance data),
-Graphite, and NagVis (network maps).
+Some of the more popular ones are [PNP](#addons-graphing-pnp), [inGraph](#addons-graphing-pnp)
+graphing performance data), [Graphite](#addons-graphing-pnp), and
+[NagVis](#addons-visualization-nagvis) (network maps).
 
 
 ## <a id="configuration-tools"></a> Configuration Tools
@@ -802,9 +865,18 @@ Graphite, and NagVis (network maps).
 Well known configuration tools for Icinga 1.x such as [LConf](http://www.netways.de/en/de/produkte/icinga/addons/lconf/),
 [NConf](http://www.nconf.org/) or [NagiosQL](http://www.nagiosql.org/)
 store their configuration in a custom format in their backends (LDAP or RDBMS).
-Currently only LConf 1.4.x supports Icinga 2 configuration export. If you require
-your favourite configuration tool to export Icinga 2 configuration, please get in
+Currently only LConf 1.4.x supports Icinga 2 configuration export as compatibility extension.
+It does not use advanced Icinga 2 features such as [apply](#using-apply) rules or
+easy [notifications](#using-apply-notifications) and [dependencies](#using-apply-dependencies)
+for example.
+
+If you require your favourite configuration tool to export Icinga 2 configuration, please get in
 touch with their developers.
+
+> **Tip**
+>
+> Get to know the new configuration format and the advanced [apply](#using-apply) rules and
+> use [syntax highlighting](#configuration-syntax-highlighting) in vim/nano.
 
 If you're looking for puppet manifests, chef cookbooks, ansible recipes, etc - we're happy
 to integrate them upstream, so please get in touch at [https://support.icinga.org](https://support.icinga.org).
@@ -873,6 +945,47 @@ Icinga 2's init script is installed in `/etc/init.d/icinga2` by default:
 By default the Icinga 2 daemon is running as `icinga` user and group
 using the init script. Using Debian packages the user and group are set to `nagios`
 for historical reasons.
+
+### <a id="systemd-service"></a> Systemd Service
+
+Modern distributions (Fedora, OpenSUSE, etc.) already use `Systemd` natively. Enterprise-grade
+distributions such as RHEL7 changed to `Systemd` recently. Icinga 2 Packages will install the
+service automatically.
+
+The Icinga 2 `Systemd` service can be (re)started, reloaded, stopped and also queried for its current status.
+
+    # systemctl status icinga2
+    icinga2.service - Icinga host/service/network monitoring system
+       Loaded: loaded (/usr/lib/systemd/system/icinga2.service; disabled)
+       Active: active (running) since Mi 2014-07-23 13:39:38 CEST; 15s ago
+      Process: 21692 ExecStart=/usr/sbin/icinga2 -c ${ICINGA2_CONFIG_FILE} -d -e ${ICINGA2_ERROR_LOG} -u ${ICINGA2_USER} -g ${ICINGA2_GROUP} (code=exited, status=0/SUCCESS)
+      Process: 21674 ExecStartPre=/usr/sbin/icinga2-prepare-dirs /etc/sysconfig/icinga2 (code=exited, status=0/SUCCESS)
+     Main PID: 21727 (icinga2)
+       CGroup: /system.slice/icinga2.service
+               └─21727 /usr/sbin/icinga2 -c /etc/icinga2/icinga2.conf -d -e /var/log/icinga2/error.log -u icinga -g icinga --no-stack-rlimit
+
+    Jul 23 13:39:38 nbmif icinga2[21692]: [2014-07-23 13:39:38 +0200] information/ConfigItem: Checked 309 Service(s).
+    Jul 23 13:39:38 nbmif icinga2[21692]: [2014-07-23 13:39:38 +0200] information/ConfigItem: Checked 1 User(s).
+    Jul 23 13:39:38 nbmif icinga2[21692]: [2014-07-23 13:39:38 +0200] information/ConfigItem: Checked 15 Notification(s).
+    Jul 23 13:39:38 nbmif icinga2[21692]: [2014-07-23 13:39:38 +0200] information/ConfigItem: Checked 4 ScheduledDowntime(s).
+    Jul 23 13:39:38 nbmif icinga2[21692]: [2014-07-23 13:39:38 +0200] information/ConfigItem: Checked 1 UserGroup(s).
+    Jul 23 13:39:38 nbmif icinga2[21692]: [2014-07-23 13:39:38 +0200] information/ConfigItem: Checked 1 IcingaApplication(s).
+    Jul 23 13:39:38 nbmif icinga2[21692]: [2014-07-23 13:39:38 +0200] information/ConfigItem: Checked 8 Dependency(s).
+    Jul 23 13:39:38 nbmif systemd[1]: Started Icinga host/service/network monitoring system.
+
+`Systemd` supports the following command actions:
+
+  Command             | Description
+  --------------------|------------------------
+  start               | The `start` action starts the Icinga 2 daemon.
+  stop                | The `stop` action stops the Icinga 2 daemon.
+  restart             | The `restart` action is a shortcut for running the `stop` action followed by `start`.
+  reload              | The `reload` action sends the `HUP` signal to Icinga 2 which causes it to restart. Unlike the `restart` action `reload` does not wait until Icinga 2 has restarted.
+  status              | The `status` action checks if Icinga 2 is running.
+
+If you're stuck with configuration errors, you can manually invoke the [configuration validation](#config-validation).
+
+
 
 ### <a id="cmdline"></a> Command-line Options
 
@@ -1036,7 +1149,7 @@ For Icinga 2 there are currently two scenarios available:
 
 > **Note**
 >
-> Please consult the `README` file for each project for further installation
+> Please consult the `README.md` file for each project for further installation
 > details at [https://github.com/Icinga/icinga-vagrant]
 
 Once you have checked out the Git repository navigate to your required

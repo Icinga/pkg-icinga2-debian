@@ -35,14 +35,16 @@ bool I2_EXPORT TlsStream::m_SSLIndexInitialized = false;
  * @param role The role of the client.
  * @param sslContext The SSL context for the client.
  */
-TlsStream::TlsStream(const Socket::Ptr& socket, ConnectionRole role, shared_ptr<SSL_CTX> sslContext)
+TlsStream::TlsStream(const Socket::Ptr& socket, ConnectionRole role, const shared_ptr<SSL_CTX>& sslContext)
 	: m_Socket(socket), m_Role(role)
 {
+	std::ostringstream msgbuf;
+	char errbuf[120];
+
 	m_SSL = shared_ptr<SSL>(SSL_new(sslContext.get()), SSL_free);
 
 	if (!m_SSL) {
-		std::ostringstream msgbuf;
-		msgbuf << "SSL_new() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), NULL) << "\"";
+		msgbuf << "SSL_new() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), errbuf) << "\"";
 		Log(LogCritical, "TlsStream", msgbuf.str());
 
 		BOOST_THROW_EXCEPTION(openssl_error()
@@ -61,9 +63,7 @@ TlsStream::TlsStream(const Socket::Ptr& socket, ConnectionRole role, shared_ptr<
 
 	socket->MakeNonBlocking();
 
-	m_BIO = BIO_new_socket(socket->GetFD(), 0);
-	BIO_set_nbio(m_BIO, 1);
-	SSL_set_bio(m_SSL.get(), m_BIO, m_BIO);
+	SSL_set_fd(m_SSL.get(), socket->GetFD());
 
 	if (m_Role == RoleServer)
 		SSL_set_accept_state(m_SSL.get());
@@ -78,6 +78,7 @@ TlsStream::TlsStream(const Socket::Ptr& socket, ConnectionRole role, shared_ptr<
  */
 shared_ptr<X509> TlsStream::GetClientCertificate(void) const
 {
+	boost::mutex::scoped_lock lock(m_SSLLock);
 	return shared_ptr<X509>(SSL_get_certificate(m_SSL.get()), &Utility::NullDeleter);
 }
 
@@ -88,11 +89,15 @@ shared_ptr<X509> TlsStream::GetClientCertificate(void) const
  */
 shared_ptr<X509> TlsStream::GetPeerCertificate(void) const
 {
+	boost::mutex::scoped_lock lock(m_SSLLock);
 	return shared_ptr<X509>(SSL_get_peer_certificate(m_SSL.get()), X509_free);
 }
 
 void TlsStream::Handshake(void)
 {
+	std::ostringstream msgbuf;
+	char errbuf[120];
+
 	for (;;) {
 		int rc, err;
 
@@ -121,8 +126,7 @@ void TlsStream::Handshake(void)
 				Close();
 				return;
 			default:
-				std::ostringstream msgbuf;
-				msgbuf << "SSL_do_handshake() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), NULL) << "\"";
+				msgbuf << "SSL_do_handshake() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), errbuf) << "\"";
 				Log(LogCritical, "TlsStream", msgbuf.str());
 
 				BOOST_THROW_EXCEPTION(openssl_error()
@@ -138,6 +142,8 @@ void TlsStream::Handshake(void)
 size_t TlsStream::Read(void *buffer, size_t count)
 {
 	size_t left = count;
+	std::ostringstream msgbuf;
+	char errbuf[120];
 
 	while (left > 0) {
 		int rc, err;
@@ -166,8 +172,7 @@ size_t TlsStream::Read(void *buffer, size_t count)
 					Close();
 					return count - left;
 				default:
-					std::ostringstream msgbuf;
-					msgbuf << "SSL_read() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), NULL) << "\"";
+					msgbuf << "SSL_read() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), errbuf) << "\"";
 					Log(LogCritical, "TlsStream", msgbuf.str());
 
 					BOOST_THROW_EXCEPTION(openssl_error()
@@ -185,6 +190,8 @@ size_t TlsStream::Read(void *buffer, size_t count)
 void TlsStream::Write(const void *buffer, size_t count)
 {
 	size_t left = count;
+	std::ostringstream msgbuf;
+	char errbuf[120];
 
 	while (left > 0) {
 		int rc, err;
@@ -213,8 +220,7 @@ void TlsStream::Write(const void *buffer, size_t count)
 					Close();
 					return;
 				default:
-					std::ostringstream msgbuf;
-					msgbuf << "SSL_write() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), NULL) << "\"";
+					msgbuf << "SSL_write() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), errbuf) << "\"";
 					Log(LogCritical, "TlsStream", msgbuf.str());
 
 					BOOST_THROW_EXCEPTION(openssl_error()
@@ -232,15 +238,15 @@ void TlsStream::Write(const void *buffer, size_t count)
  */
 void TlsStream::Close(void)
 {
-	for (;;) {
+	for (int i = 0; i < 5; i++) {
 		int rc, err;
 
 		{
 			boost::mutex::scoped_lock lock(m_SSLLock);
+			rc = SSL_shutdown(m_SSL.get());
 
-			do {
-				rc = SSL_shutdown(m_SSL.get());
-			} while (rc == 0);
+			if (rc == 0)
+				continue;
 
 			if (rc > 0)
 				break;
