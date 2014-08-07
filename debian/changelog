@@ -1,3 +1,16 @@
+icinga2 (2.0.2-1) unstable; urgency=medium
+
+  [ Jan Wagner ]
+  * [e6fec86] Adding me to the Uploaders
+
+  [ Alexander Wirt ]
+  * [aef20e1] Imported Upstream version 2.0.2
+  * [2b1d87f] README is now README.md
+  * [ac7b2ba] Reenable Make snippet for installing upgrade files
+  * [f66aa0e] Fix dep on icinga-cgi-bin
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 07 Aug 2014 14:42:05 +0200
+
 icinga2 (2.0.1-2) unstable; urgency=medium
 
   [ Alexander Wirt ]
