@@ -300,6 +300,7 @@ int Main(void)
 			String prefix = (char *)pvData;
 			Application::DeclarePrefixDir(prefix);
 			Application::DeclareSysconfDir(prefix + "\\etc");
+			Application::DeclareRunDir(prefix + "\\var\\run");
 			Application::DeclareLocalStateDir(prefix + "\\var");
 			Application::DeclarePkgDataDir(prefix + "\\share\\icinga2");
 			Application::DeclareIncludeConfDir(prefix + "\\share\\icinga2\\include");
@@ -316,6 +317,7 @@ int Main(void)
 #endif /* _WIN32 */
 		Application::DeclarePrefixDir(ICINGA_PREFIX);
 		Application::DeclareSysconfDir(ICINGA_SYSCONFDIR);
+		Application::DeclareRunDir(ICINGA_RUNDIR);
 		Application::DeclareLocalStateDir(ICINGA_LOCALSTATEDIR);
 		Application::DeclarePkgDataDir(ICINGA_PKGDATADIR);
 		Application::DeclareIncludeConfDir(ICINGA_INCLUDECONFDIR);
@@ -380,7 +382,7 @@ int Main(void)
 	}
 
 	Application::DeclareStatePath(Application::GetLocalStateDir() + "/lib/icinga2/icinga2.state");
-	Application::DeclarePidPath(Application::GetLocalStateDir() + "/run/icinga2/icinga2.pid");
+	Application::DeclarePidPath(Application::GetRunDir() + "/icinga2/icinga2.pid");
 
 #ifndef _WIN32
 	if (g_AppParams.count("group")) {
@@ -401,6 +403,13 @@ int Main(void)
 				Log(LogCritical, "icinga-app",  msgbuf.str());
 				return EXIT_FAILURE;
 			}
+		}
+
+		if (!g_AppParams.count("reload-internal") && setgroups(0, NULL) < 0) {
+			std::ostringstream msgbuf;
+			msgbuf << "setgroups() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+			Log(LogCritical, "icinga-app",  msgbuf.str());
+			return EXIT_FAILURE;
 		}
 
 		if (setgid(gr->gr_gid) < 0) {
@@ -429,6 +438,14 @@ int Main(void)
 				Log(LogCritical, "icinga-app",  msgbuf.str());
 				return EXIT_FAILURE;
 			}
+		}
+
+		// also activate the additional groups the configured user is member of
+		if (!g_AppParams.count("reload-internal") && initgroups(user.CStr(), pw->pw_gid) < 0) {
+			std::ostringstream msgbuf;
+			msgbuf << "initgroups() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+			Log(LogCritical, "icinga-app",  msgbuf.str());
+			return EXIT_FAILURE;
 		}
 
 		if (setuid(pw->pw_uid) < 0) {
@@ -473,8 +490,13 @@ int Main(void)
 
 		std::cout << std::endl;
 
-		if (g_AppParams.count("version"))
+		if (g_AppParams.count("version")) {
+			std::cout << std::endl;
+
+			Application::DisplayInfoMessage(true);
+
 			return EXIT_SUCCESS;
+		}
 	}
 
 	if (g_AppParams.count("help")) {
@@ -573,7 +595,7 @@ int Main(void)
 	int rc = Application::GetInstance()->Run();
 
 #ifndef _DEBUG
-	_exit(rc); // Yay, our static destructors are pretty much beyond repair at this point.
+	Application::Exit(rc);
 #endif /* _DEBUG */
 
 	return rc;
@@ -766,11 +788,11 @@ int main(int argc, char **argv)
 		};
 
 		StartServiceCtrlDispatcher(dispatchTable);
-		_exit(1);
+		Application::Exit(1);
 	}
 #endif /* _WIN32 */
 
 	int rc = Main();
 
-	exit(rc);
+	Application::Exit(rc);
 }

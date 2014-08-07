@@ -33,7 +33,7 @@
 
 using namespace icinga;
 
-#define SCHEMA_VERSION "1.11.3"
+#define SCHEMA_VERSION "1.11.6"
 
 REGISTER_TYPE(IdoMysqlConnection);
 REGISTER_STATSFUNCTION(IdoMysqlConnectionStats, &IdoMysqlConnection::StatsFunc);
@@ -214,7 +214,8 @@ void IdoMysqlConnection::Reconnect(void)
 
 		if (!version_row) {
 			Log(LogCritical, "IdoMysqlConnection", "Schema does not provide any valid version! Verify your schema installation.");
-			BOOST_THROW_EXCEPTION(std::runtime_error("Schema does not provide any valid version! Verify your schema installation."));
+
+			Application::Exit(EXIT_FAILURE);
 		}
 
 		DiscardRows(result);
@@ -225,8 +226,7 @@ void IdoMysqlConnection::Reconnect(void)
 			Log(LogCritical, "IdoMysqlConnection", "Schema version '" + version + "' does not match the required version '" +
 			   SCHEMA_VERSION + "'! Please check the upgrade documentation.");
 
-			BOOST_THROW_EXCEPTION(std::runtime_error("Schema version '" + version + "' does not match the required version '" +
-			   SCHEMA_VERSION + "'!"));
+			Application::Exit(EXIT_FAILURE);
 		}
 
 		String instanceName = GetInstanceName();
@@ -421,9 +421,16 @@ void IdoMysqlConnection::InternalActivateObject(const DbObject::Ptr& dbobj)
 	std::ostringstream qbuf;
 
 	if (!dbref.IsValid()) {
-		qbuf << "INSERT INTO " + GetTablePrefix() + "objects (instance_id, objecttype_id, name1, name2, is_active) VALUES ("
-		      << static_cast<long>(m_InstanceID) << ", " << dbobj->GetType()->GetTypeID() << ", "
-		      << "'" << Escape(dbobj->GetName1()) << "', '" << Escape(dbobj->GetName2()) << "', 1)";
+		if (!dbobj->GetName2().IsEmpty()) {
+			qbuf << "INSERT INTO " + GetTablePrefix() + "objects (instance_id, objecttype_id, name1, name2, is_active) VALUES ("
+			     << static_cast<long>(m_InstanceID) << ", " << dbobj->GetType()->GetTypeID() << ", "
+			     << "'" << Escape(dbobj->GetName1()) << "', '" << Escape(dbobj->GetName2()) << "', 1)";
+		} else {
+			qbuf << "INSERT INTO " + GetTablePrefix() + "objects (instance_id, objecttype_id, name1, is_active) VALUES ("
+			     << static_cast<long>(m_InstanceID) << ", " << dbobj->GetType()->GetTypeID() << ", "
+			     << "'" << Escape(dbobj->GetName1()) << "', 1)";
+		}
+
 		Query(qbuf.str());
 		SetObjectID(dbobj, GetLastInsertID());
 	} else {

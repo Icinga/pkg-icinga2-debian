@@ -129,7 +129,7 @@ Value ApiEvents::CheckResultAPIHandler(const MessageOrigin& origin, const Dictio
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->ProcessCheckResult(cr, origin);
@@ -182,7 +182,7 @@ Value ApiEvents::NextCheckChangedAPIHandler(const MessageOrigin& origin, const D
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->SetNextCheck(params->Get("next_check"), origin);
@@ -219,7 +219,7 @@ Value ApiEvents::NextNotificationChangedAPIHandler(const MessageOrigin& origin, 
 	if (!notification)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(notification))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(notification))
 		return Empty;
 
 	notification->SetNextNotification(params->Get("next_notification"), origin);
@@ -272,7 +272,7 @@ Value ApiEvents::ForceNextCheckChangedAPIHandler(const MessageOrigin& origin, co
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->SetForceNextCheck(params->Get("forced"), origin);
@@ -325,7 +325,7 @@ Value ApiEvents::ForceNextNotificationChangedAPIHandler(const MessageOrigin& ori
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->SetForceNextNotification(params->Get("forced"), origin);
@@ -378,7 +378,7 @@ Value ApiEvents::EnableActiveChecksChangedAPIHandler(const MessageOrigin& origin
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->SetEnableActiveChecks(params->Get("enabled"), origin);
@@ -431,7 +431,7 @@ Value ApiEvents::EnablePassiveChecksChangedAPIHandler(const MessageOrigin& origi
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->SetEnablePassiveChecks(params->Get("enabled"), origin);
@@ -484,7 +484,7 @@ Value ApiEvents::EnableNotificationsChangedAPIHandler(const MessageOrigin& origi
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->SetEnableNotifications(params->Get("enabled"), origin);
@@ -537,7 +537,7 @@ Value ApiEvents::EnableFlappingChangedAPIHandler(const MessageOrigin& origin, co
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->SetEnableFlapping(params->Get("enabled"), origin);
@@ -590,7 +590,7 @@ Value ApiEvents::CommentAddedAPIHandler(const MessageOrigin& origin, const Dicti
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	Comment::Ptr comment = Deserialize(params->Get("comment"), true);
@@ -646,7 +646,7 @@ Value ApiEvents::CommentRemovedAPIHandler(const MessageOrigin& origin, const Dic
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->RemoveComment(params->Get("id"), origin);
@@ -699,7 +699,7 @@ Value ApiEvents::DowntimeAddedAPIHandler(const MessageOrigin& origin, const Dict
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	Downtime::Ptr downtime = Deserialize(params->Get("downtime"), true);
@@ -758,7 +758,7 @@ Value ApiEvents::DowntimeRemovedAPIHandler(const MessageOrigin& origin, const Di
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->RemoveDowntime(params->Get("id"), false, origin);
@@ -816,7 +816,7 @@ Value ApiEvents::AcknowledgementSetAPIHandler(const MessageOrigin& origin, const
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->AcknowledgeProblem(params->Get("author"), params->Get("comment"),
@@ -870,7 +870,7 @@ Value ApiEvents::AcknowledgementClearedAPIHandler(const MessageOrigin& origin, c
 	if (!checkable)
 		return Empty;
 
-	if (!origin.FromZone || !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
 	checkable->ClearAcknowledgement(origin);
@@ -898,6 +898,12 @@ void ApiEvents::RepositoryTimerHandler(void)
 	}
 
 	Endpoint::Ptr my_endpoint = Endpoint::GetLocalEndpoint();
+
+	if (!my_endpoint) {
+		Log(LogWarning, "ApiEvents", "No local endpoint defined. Bailing out.");
+		return;
+	}
+
 	Zone::Ptr my_zone = my_endpoint->GetZone();
 
 	Dictionary::Ptr params = make_shared<Dictionary>();
@@ -965,14 +971,26 @@ Value ApiEvents::UpdateRepositoryAPIHandler(const MessageOrigin& origin, const D
 String ApiEvents::GetVirtualHostName(const Host::Ptr& host)
 {
 	String host_name = host->GetName();
-	if (host_name == "localhost")
-		host_name = Endpoint::GetLocalEndpoint()->GetName();
+	if (host_name == "localhost") {
+		Endpoint::Ptr local = Endpoint::GetLocalEndpoint();
+
+		if (!local)
+			return Empty;
+
+		host_name = local->GetName();
+	}
+
 	return host_name;
 }
 
 Host::Ptr ApiEvents::FindHostByVirtualName(const String& hostName)
 {
-	if (hostName == Endpoint::GetLocalEndpoint()->GetName())
+	Endpoint::Ptr local = Endpoint::GetLocalEndpoint();
+
+	if (!local)
+		return Host::Ptr();
+
+	if (hostName == local->GetName())
 		return Host::GetByName("localhost");
 	else
 		return Host::GetByName(hostName);
