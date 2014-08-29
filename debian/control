@@ -56,7 +56,12 @@ Description: host and network monitoring system
 
 Package: icinga2-common
 Architecture: all
-Depends: python-icinga2 (= ${source:Version}), adduser, lsb-release, ${misc:Depends}
+Depends:
+    python-icinga2 (= ${source:Version}),
+    adduser,
+    lsb-release,
+    ${python:Depends},
+    ${misc:Depends}
 Description: host and network monitoring system - common files
  Icinga 2 is a general-purpose monitoring application and the next generation
  after Icinga 1.x - which was a Nagios fork. It should fit the needs of a small
@@ -221,7 +226,6 @@ Description: host and network monitoring system - IDO for PostgreSQL
 Package: icinga2-dbg
 Architecture: any
 Section: debug
-Priority: extra
 Depends: icinga2-bin (= ${binary:Version}), ${misc:Depends}
 Description: host and network monitoring system - debug symbols
  Icinga 2 is a general-purpose monitoring application and the next generation
@@ -246,8 +250,11 @@ Description: host and network monitoring system - debug symbols
 Package: python-icinga2
 Architecture: all
 Section: python
-Priority: extra
-Depends: python-pkg-resources, ${misc:Depends}, ${python:Depends}
+Depends:
+    python-pkg-resources,
+    ${misc:Depends},
+    ${python:Depends}
+Provides: ${python:Provides}
 Description: host and network monitoring system - Python module
  Icinga 2 is a general-purpose monitoring application and the next generation
  after Icinga 1.x - which was a Nagios fork. It should fit the needs of a small
