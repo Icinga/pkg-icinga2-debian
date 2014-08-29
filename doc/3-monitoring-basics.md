@@ -496,6 +496,22 @@ Icinga 2 will not check against any end time for this notification.
       assign where service.name == "ping4"
     }
 
+### <a id="disable-renotification"></a> Disable Re-notifications
+
+If you prefer to be notified only once, you can disable re-notifications by setting the
+`interval` attribute to `0`.
+
+    apply Notification "notify-once" to Service {
+      import "generic-notification"
+
+      command = "mail-notification"
+      users = [ "icingaadmin" ]
+
+      interval = 0 // disable re-notification
+
+      assign where service.name == "ping4"
+    }
+
 ### <a id="notification-filters-state-type"></a> Notification Filters by State and Type
 
 If there are no notification state and type filter attributes defined at the `Notification`
@@ -749,9 +765,11 @@ arguments. Each of them is optional by default and will be omitted if
 the value is not set. For example if the service calling the check command
 does not have `vars.http_port` set, it won't get added to the command
 line.
+
 If the `vars.http_ssl` custom attribute is set in the service, host or command
 object definition, Icinga 2 will add the `-S` argument based on the `set_if`
-option to the command line.
+numeric value to the command line. String values are not supported.
+
 That way you can use the `check_http` command definition for both, with and
 without SSL enabled checks saving you duplicated command definitions.
 
@@ -786,6 +804,9 @@ the `my-host2` host requires a different port on 2222. Both hosts are in the hos
 All hosts in the `my-linux-servers` hostgroup should get the `my-ssh` service applied based on an
 [apply rule](#apply). The optional `ssh_port` command argument should be inherited from the host
 the service is applied to. If not set, the check command `my-ssh` will omit the argument.
+The `host` argument is special: `skip_key` tells Icinga 2 to ignore the key, and directly put the
+value onto the command line. The `order` attribute specifies that this argument is the first one
+(`-1` is smaller than the other defaults).
 
     object CheckCommand "my-ssh" {
       import "plugin-check-command"
@@ -1610,14 +1631,6 @@ a forced service check:
     Oct 17 15:01:25 icinga-server icinga2: Executing external command: [1382014885] SCHEDULE_FORCED_SVC_CHECK;localhost;ping4;1382014885
     Oct 17 15:01:25 icinga-server icinga2: Rescheduling next check for service 'ping4'
 
-By default the command pipe file is owned by the group `icingacmd` with read/write
-permissions. Add your webserver's user to the group `icingacmd` to
-enable sending commands to Icinga 2 through your web interface:
-
-    # usermod -G -a icingacmd www-data
-
-Debian packages use `nagios` as the default user and group name. Therefore change `icingacmd` to
-`nagios`. The webserver's user is different between distributions as well.
 
 ### <a id="external-command-list"></a> External Command List
 
@@ -1625,7 +1638,6 @@ A list of currently supported external commands can be found [here](#external-co
 
 Detailed information on the commands and their required parameters can be found
 on the [Icinga 1.x documentation](http://docs.icinga.org/latest/en/extcommands2.html).
-
 
 ## <a id="logging"></a> Logging
 
@@ -1673,7 +1685,7 @@ the output template format for host and services backed with Icinga 2
 runtime vars.
 
     host_format_template = "DATATYPE::HOSTPERFDATA\tTIMET::$icinga.timet$\tHOSTNAME::$host.name$\tHOSTPERFDATA::$host.perfdata$\tHOSTCHECKCOMMAND::$host.checkcommand$\tHOSTSTATE::$host.state$\tHOSTSTATETYPE::$host.statetype$"
-    service_format_template = "DATATYPE::SERVICEPERFDATA\tTIMET::$icinga.timet$\tHOSTNAME::$host.name$\tSERVICEDESC::$service.description$\tSERVICEPERFDATA::$service.perfdata$\tSERVICECHECKCOMMAND::$service.checkcommand$\tHOSTSTATE::$host.state$\tHOSTSTATETYPE::$host.statetype$\tSERVICESTATE::$service.state$\tSERVICESTATETYPE::$service.statetype$"
+    service_format_template = "DATATYPE::SERVICEPERFDATA\tTIMET::$icinga.timet$\tHOSTNAME::$host.name$\tSERVICEDESC::$service.name$\tSERVICEPERFDATA::$service.perfdata$\tSERVICECHECKCOMMAND::$service.checkcommand$\tHOSTSTATE::$host.state$\tHOSTSTATETYPE::$host.statetype$\tSERVICESTATE::$service.state$\tSERVICESTATETYPE::$service.statetype$"
 
 The default templates are already provided with the Icinga 2 feature configuration
 which can be enabled using
@@ -1705,7 +1717,40 @@ The current naming schema is
     icinga.<hostname>.<metricname>
     icinga.<hostname>.<servicename>.<metricname>
 
+To make sure Icinga 2 writes a valid label into Graphite some characters are replaced
+with `_` in the target name:
 
+    \/.-  (and space)
+
+The resulting name in Graphite might look like:
+
+    www-01 / http-cert / response time
+    icinga.www_01.http_cert.response_time
+
+In addition to the performance data retrieved from the check plugin, Icinga 2 sends
+internal check statistic data to Graphite:
+
+  metric             | description
+  -------------------|------------------------------------------
+  current_attempt    | current check attempt
+  max_check_attempts | maximum check attempts until the hard state is reached
+  reachable          | checked object is reachable
+  execution_time     | check execution time
+  latency            | check latency
+  state              | current state of the checked object
+  state_type         | 0=SOFT, 1=HARD state
+
+The following example illustrates how to configure the storage-schemas for Graphite Carbon
+Cache. Please make sure that the order is correct because the first match wins.
+
+    [icinga_internals]
+    pattern = ^icinga\..*\.(max_check_attempts|reachable|current_attempt|execution_time|latency|state|state_type)
+    retentions = 5m:7d
+
+    [icinga_default]
+    # intervals like PNP4Nagios uses them per default
+    pattern = ^icinga\.
+    retentions = 1m:2d,5m:10d,30m:90d,360m:4y
 
 ## <a id="status-data"></a> Status Data
 
@@ -1784,6 +1829,8 @@ chapter. Details on the configuration can be found in the
 [IdoMysqlConnection](#objecttype-idomysqlconnection) and
 [IdoPgsqlConnection](#objecttype-idoPgsqlconnection)
 object configuration documentation.
+The DB IDO feature supports [High Availability](##high-availability-db-ido) in
+the Icinga 2 cluster.
 
 The following example query checks the health of the current Icinga 2 instance
 writing its current status to the DB IDO backend table `icinga_programstatus`

@@ -4,7 +4,7 @@ Source: http://www.icinga.org
 
 Files: *
 Copyright: 2012-2014 Icinga Development Team (http://www.icinga.org)
-License: GPL-2+-with-exeception
+License: GPL-2+-with-exception
  This package is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 2 of the License, or
@@ -33,8 +33,8 @@ License: GPL-2+-with-exeception
  also delete it here.
 
 Files: debian/*
-Copyright: 2012 Alexander Wirt <formorer@debian.org>
-           2013-2014 Markus Frosch <markus@lazyfrosch.de>
+Copyright: 2012-2014 Alexander Wirt <formorer@debian.org>
+           2013-2014 Markus Frosch <lazyfrosch@debian.org>
            2014 Icinga Development Team (http://www.icinga.org)
 License: GPL-2+
  This package is free software; you can redistribute it and/or modify

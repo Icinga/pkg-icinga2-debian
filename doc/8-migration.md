@@ -1028,7 +1028,7 @@ Changes to service runtime macros
 
   Icinga 1.x             | Icinga 2
   -----------------------|----------------------
-  SERVICEDESC            | service.description
+  SERVICEDESC            | service.name
   SERVICEDISPLAYNAME     | service.display_name
   SERVICECHECKCOMMAND    | service.check_command
   SERVICESTATE           | service.state
@@ -1243,6 +1243,17 @@ as array to the `command_line` attribute i.e. for better readability.
 
 It's also possible to define default custom attributes for the command itself which can be
 overridden by a service macro.
+
+#### <a id="differences-1x-2-commands-timeouts"></a> Command Timeouts
+
+In Icinga 1.x there were two global options defining a host and service check
+timeout. This was essentially bad when there only was a couple of check plugins
+requiring some command timeouts to be extended.
+
+Icinga 2 allows you to specify the command timeout directly on the command. So
+if your VMVware check plugin takes 15 minutes, [increase the timeout](#objecttype-checkcommand)
+accordingly.
+
 
 ### <a id="differences-1x-2-groups"></a> Groups
 

@@ -2,7 +2,7 @@ Source: icinga2
 Section: admin
 Priority: extra
 Maintainer: Debian Nagios Maintainer Group <pkg-nagios-devel@lists.alioth.debian.org>
-Uploaders: Markus Frosch <markus@lazyfrosch.de>,
+Uploaders: Markus Frosch <lazyfrosch@debian.org>,
            Jan Wagner <waja@cyconet.org>,
            Alexander Wirt <formorer@debian.org>
 Build-Depends: bison,
@@ -20,7 +20,9 @@ Build-Depends: bison,
                libpq-dev,
                libssl-dev,
                make (>= 3.81),
-               po-debconf
+               po-debconf,
+               python-setuptools,
+               python-all
 Standards-Version: 3.9.5
 Homepage: http://www.icinga.org
 Vcs-Browser: http://anonscm.debian.org/anonscm/git/pkg-nagios/pkg-icinga2.git
@@ -31,7 +33,7 @@ Architecture: any
 Depends: icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
-Recommends: icinga2-doc, nagios-plugins-basic
+Recommends: icinga2-doc, monitoring-plugins-basic | nagios-plugins-basic
 Description: host and network monitoring system
  Icinga 2 is a general-purpose monitoring application and the next generation
  after Icinga 1.x - which was a Nagios fork. It should fit the needs of a small
@@ -54,7 +56,12 @@ Description: host and network monitoring system
 
 Package: icinga2-common
 Architecture: all
-Depends: adduser, lsb-release, ${misc:Depends}
+Depends:
+    python-icinga2 (= ${source:Version}),
+    adduser,
+    lsb-release,
+    ${python:Depends},
+    ${misc:Depends}
 Description: host and network monitoring system - common files
  Icinga 2 is a general-purpose monitoring application and the next generation
  after Icinga 1.x - which was a Nagios fork. It should fit the needs of a small
@@ -143,7 +150,7 @@ Description: host and network monitoring system - classic ui integration
   * All common features of Icinga and Nagios
   * Much faster and more scalable than Icinga 1 and Nagios
   * New configuration format, more intuitive and template based
-  * Monitoring several services by executing checks (see nagios-plugins*)
+  * Monitoring several services by executing checks (see monitoring-plugins*)
     for example ICMP/ping, SMTP, POP3, HTTP, NNTP, or other TCP port
   * Any small script can be used as a check plugin, when following the Nagios
     plugin API
@@ -219,7 +226,6 @@ Description: host and network monitoring system - IDO for PostgreSQL
 Package: icinga2-dbg
 Architecture: any
 Section: debug
-Priority: extra
 Depends: icinga2-bin (= ${binary:Version}), ${misc:Depends}
 Description: host and network monitoring system - debug symbols
  Icinga 2 is a general-purpose monitoring application and the next generation
@@ -240,3 +246,31 @@ Description: host and network monitoring system - debug symbols
   * Native support for Livestatus and Graphite
  .
  This package provides debug symbols for Icinga 2.
+
+Package: python-icinga2
+Architecture: all
+Section: python
+Depends:
+    python-pkg-resources,
+    ${misc:Depends},
+    ${python:Depends}
+Provides: ${python:Provides}
+Description: host and network monitoring system - Python module
+ Icinga 2 is a general-purpose monitoring application and the next generation
+ after Icinga 1.x - which was a Nagios fork. It should fit the needs of a small
+ environment as well as big installations.
+ .
+ Rewritten from scratch in C++, with multi-threading and cluster support.
+ .
+ Features:
+  * All common features of Icinga and Nagios
+  * Much faster and more scalable than Icinga 1 and Nagios
+  * New configuration format, more intuitive and template based
+  * Monitoring several services by executing checks (see nagios-plugins*)
+    for example ICMP/ping, SMTP, POP3, HTTP, NNTP, or other TCP port
+  * Any small script can be used as a check plugin, when following the Nagios
+    plugin API
+  * Notifications about alerts with any custom script, or shipped examples
+  * Native support for Livestatus and Graphite
+ .
+ This package provides the Python module for Icinga 2.

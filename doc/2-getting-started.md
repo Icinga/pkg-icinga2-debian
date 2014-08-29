@@ -14,8 +14,8 @@ and distribution you are running.
 
   Distribution            | Repository
   ------------------------|---------------------------
-  Debian                  | [Icinga Repository](http://packages.icinga.org/debian/), [Upstream](https://packages.debian.org/sid/icinga2), [DebMon](http://debmon.org/packages/debmon-wheezy/icinga2)
-  Ubuntu                  | [Icinga Repository](http://packages.icinga.org/ubuntu/), [Upstream](https://launchpad.net/ubuntu/+source/icinga2)
+  Debian                  | [Upstream](https://packages.debian.org/sid/icinga2), [DebMon](http://debmon.org/packages/debmon-wheezy/icinga2), [Icinga Repository](http://packages.icinga.org/debian/)
+  Ubuntu                  | [Upstream](https://launchpad.net/ubuntu/+source/icinga2), [Icinga PPA](https://launchpad.net/~formorer/+archive/ubuntu/icinga), [Icinga Repository](http://packages.icinga.org/ubuntu/)
   RHEL/CentOS             | [Icinga Repository](http://packages.icinga.org/epel/)
   OpenSUSE                | [Icinga Repository](http://packages.icinga.org/openSUSE/), [Server Monitoring Repository](https://build.opensuse.org/package/show/server:monitoring/icinga2)
   SLES                    | [Icinga Repository](http://packages.icinga.org/SUSE/)
@@ -26,16 +26,68 @@ and distribution you are running.
 Packages for distributions other than the ones listed above may also be
 available. Please contact your distribution packagers.
 
-The packages for RHEL/CentOS 5 depend on other packages which are distributed
+### <a id="installing-requirements"></a> Installing Requirements for Icinga 2
+
+You need to add the Icinga repository to your package management configuration.
+Below is a list with examples for the various distributions.
+
+Debian (debmon):
+    # wget -O - http://debmon.org/debmon/repo.key 2>/dev/null | apt-key add -
+    # cat >/etc/apt/sources.list.d/debmon.list<<EOF
+    deb http://debmon.org/debmon debmon-wheezy main
+    EOF
+    # apt-get update
+
+Ubuntu (PPA):
+    # add-apt-repository ppa:formorer/icinga
+    # apt-get update
+
+RHEL/CentOS:
+    # rpm --import http://packages.icinga.org/icinga.key
+    # wget http://packages.icinga.org/epel/ICINGA-release.repo -O /etc/yum.repos.d/ICINGA-release.repo
+    # yum makecache
+
+Fedora:
+    # wget http://packages.icinga.org/fedora/ICINGA-release.repo -O /etc/yum.repos.d/ICINGA-release.repo
+    # yum makecache
+
+SLES:
+    # zypper ar http://packages.icinga.org/SUSE/ICINGA-release.repo
+    # zypper ref
+
+OpenSUSE:
+    # zypper ar http://packages.icinga.org/openSUSE/ICINGA-release.repo
+    # zypper ref
+
+The packages for RHEL/CentOS depend on other packages which are distributed
 as part of the [EPEL repository](http://fedoraproject.org/wiki/EPEL). Please
-make sure to enable this repository.
+make sure to enable this repository by following
+[these instructions](#http://fedoraproject.org/wiki/EPEL#How_can_I_use_these_extra_packages.3F).
+
+### <a id="installing-icinga2"></a> Installing Icinga 2
 
 You can install Icinga 2 by using your distribution's package manager
 to install the `icinga2` package.
 
+Debian/Ubuntu:
+    # apt-get install icinga2
+
+RHEL/CentOS/Fedora:
+    # yum install icinga2
+
+SLES/OpenSUSE:
+    # zypper install icinga2
+
 On RHEL/CentOS and SLES you will need to use `chkconfig` to enable the
-`icinga2` service. You can manually start Icinga 2 using `/etc/init.d/icinga2 start`.
+`icinga2` service. You can manually start Icinga 2 using `service icinga2 start`.
+
+    # chkconfig icinga2 on
+    # service icinga2 start
+
 RHEL/CentOS 7 use [Systemd](#systemd-service) with `systemctl {enable,start} icinga2`.
+
+    # systemctl enable icinga2
+    # systemctl start icinga2
 
 Some parts of Icinga 2's functionality are available as separate packages:
 
@@ -87,6 +139,92 @@ By default Icinga 2 uses the following files and directories:
   /var/spool/icinga2                  | Used for performance data spool files.
   /var/lib/icinga2                    | Icinga 2 state file, cluster feature replay log and configuration files.
   /var/log/icinga2                    | Log file location and compat/ directory for the CompatLogger feature.
+
+## <a id="setting-up-check-plugins"></a> Setting up Check Plugins
+
+Without plugins Icinga 2 does not know how to check external services. The
+[Monitoring Plugins Project](https://www.monitoring-plugins.org/) provides
+an extensive set of plugins which can be used with Icinga 2 to check whether
+services are working properly.
+
+The recommended way of installing these standard plugins is to use your
+distribution's package manager.
+
+> **Note**
+>
+> The `Nagios Plugins` project was renamed to `Monitoring Plugins`
+> in January 2014. At the time of this writing some packages are still
+> using the old name while some distributions have adopted the new package
+> name `monitoring-plugins` already.
+
+> **Note**
+>
+> EPEL for RHEL/CentOS 7 is still in beta mode at the time of writing and does
+> not provide a `monitoring-plugins` package. You are required to manually install
+> them.
+
+For your convenience here is a list of package names for some of the more
+popular operating systems/distributions:
+
+OS/Distribution        | Package Name       | Installation Path
+-----------------------|--------------------|---------------------------
+RHEL/CentOS (EPEL)     | nagios-plugins-all | /usr/lib/nagios/plugins or /usr/lib64/nagios/plugins
+Debian                 | nagios-plugins     | /usr/lib/nagios/plugins
+FreeBSD                | nagios-plugins     | /usr/local/libexec/nagios
+OS X (MacPorts)        | nagios-plugins     | /opt/local/libexec
+
+Depending on which directory your plugins are installed into you may need to
+update the global `PluginDir` constant in your Icinga 2 configuration. This macro is used
+by the service templates contained in the Icinga Template Library to determine
+where to find the plugin binaries.
+
+### <a id="integrate-additional-plugins"></a> Integrate Additional Plugins
+
+For some services you may need additional 'check plugins' which are not provided
+by the official Monitoring Plugins project.
+
+All existing Nagios or Icinga 1.x plugins work with Icinga 2. Here's a
+list of popular community sites which host check plugins:
+
+* [MonitoringExchange](https://www.monitoringexchange.org)
+* [Icinga Wiki](https://wiki.icinga.org)
+
+The recommended way of setting up these plugins is to copy them to a common directory
+and create an extra global constant, e.g. `CustomPluginDir` in your [constants.conf](#constants-conf)
+configuration file:
+
+    # cp check_snmp_int.pl /opt/plugins
+    # chmod +x /opt/plugins/check_snmp_int.pl
+
+    # cat /etc/icinga2/constants.conf
+    /**
+     * This file defines global constants which can be used in
+     * the other configuration files. At a minimum the
+     * PluginDir constant should be defined.
+     */
+
+    const PluginDir = "/usr/lib/nagios/plugins"
+    const CustomPluginDir = "/opt/monitoring"
+
+Prior to using the check plugin with Icinga 2 you should ensure that it is working properly
+by trying to run it on the console using whichever user Icinga 2 is running as:
+
+    # su - icinga -s /bin/bash
+    $ /opt/plugins/check_snmp_int.pl --help
+
+Additional libraries may be required for some plugins. Please consult the plugin
+documentation and/or plugin provided README for installation instructions.
+
+Each plugin requires a [CheckCommand](#objecttype-checkcommand) object in your
+configuration which can be used in the [Service](#objecttype-service) or
+[Host](#objecttype-host) object definition. Examples for `CheckCommand`
+objects can be found in the [Plugin Check Commands](#plugin-check-commands) shipped
+with Icinga 2.
+For further information on your monitoring configuration read the
+[monitoring basics](#monitoring-basics).
+
+
+## <a id="configuring-icinga2-first-steps"></a> Configuring Icinga 2: First Steps
 
 ### <a id="icinga2-conf"></a> icinga2.conf
 
@@ -365,84 +503,6 @@ their check commands.
 Further details on the monitoring configuration can be found in the
 [monitoring basics](#monitoring-basics) chapter.
 
-## <a id="setting-up-check-plugins"></a> Setting up Check Plugins
-
-Without plugins
-Icinga 2 does not know how to check external services. The
-[Monitoring Plugins Project](https://www.monitoring-plugins.org/) provides
-an extensive set of plugins which can be used with Icinga 2 to check whether
-services are working properly.
-
-The recommended way of installing these standard plugins is to use your
-distribution's package manager.
-
-> **Note**
->
-> The `Nagios Plugins` project was renamed to `Monitoring Plugins`
-> in January 2014. At the time of this writing the packages are still
-> using the old name.
-
-For your convenience here is a list of package names for some of the more
-popular operating systems/distributions:
-
-OS/Distribution        | Package Name       | Installation Path
------------------------|--------------------|---------------------------
-RHEL/CentOS (EPEL)     | nagios-plugins-all | /usr/lib/nagios/plugins or /usr/lib64/nagios/plugins
-Debian                 | nagios-plugins     | /usr/lib/nagios/plugins
-FreeBSD                | nagios-plugins     | /usr/local/libexec/nagios
-OS X (MacPorts)        | nagios-plugins     | /opt/local/libexec
-
-Depending on which directory your plugins are installed into you may need to
-update the global `PluginDir` constant in your Icinga 2 configuration. This macro is used
-by the service templates contained in the Icinga Template Library to determine
-where to find the plugin binaries.
-
-### <a id="integrate-additional-plugins"></a> Integrate Additional Plugins
-
-For some services you may need additional 'check plugins' which are not provided
-by the official Monitoring Plugins project.
-
-All existing Nagios or Icinga 1.x plugins should work with Icinga 2. Here's a
-list of popular community sites which host check plugins:
-
-* [MonitoringExchange](https://www.monitoringexchange.org)
-* [Icinga Wiki](https://wiki.icinga.org)
-
-The recommended way of setting up these plugins is to copy them to a common directory
-and create an extra global constant, e.g. `CustomPluginDir` in your `constants.conf`
-configuration file:
-
-    # cp check_snmp_int.pl /opt/plugins
-    # chmod +x /opt/plugins/check_snmp_int.pl
-
-    # cat /etc/icinga2/constants.conf
-    /**
-     * This file defines global constants which can be used in
-     * the other configuration files. At a minimum the
-     * PluginDir constant should be defined.
-     */
-
-    const PluginDir = "/usr/lib/nagios/plugins"
-    const CustomPluginDir = "/opt/monitoring"
-
-Prior to using the check plugin with Icinga 2 you should ensure that it is working properly
-by trying to run it on the console using whichever user Icinga 2 is running as:
-
-    # su - icinga -s /bin/bash
-    $ /opt/plugins/check_snmp_int.pl --help
-
-Additional libraries may be required for some plugins. Please consult the plugin
-documentation and/or plugin provided README for installation instructions.
-
-Each plugin requires a [CheckCommand](#objecttype-checkcommand) object in your
-configuration which can be used in the [Service](#objecttype-service) or
-[Host](#objecttype-host) object definition. Examples for `CheckCommand`
-objects can be found in the [Plugin Check Commands](#plugin-check-commands) shipped
-with Icinga 2.
-For further information on your monitoring configuration read the
-[monitoring basics](#monitoring-basics).
-
-
 ## <a id="configuring-db-ido"></a> Configuring DB IDO
 
 The DB IDO (Database Icinga Data Output) modules for Icinga 2 take care of exporting
@@ -455,8 +515,9 @@ both MySQL and PostgreSQL is implemented.
 Icinga 2 uses the Icinga 1.x IDOUtils database schema. Icinga 2 requires additional
 features not yet released with older Icinga 1.x versions.
 
-* Current required schema version: `1.11.6`.
-
+> **Note**
+>
+> Please check the [what's new](#whats-new) section for the required schema version.
 
 > **Tip**
 >
@@ -464,7 +525,68 @@ features not yet released with older Icinga 1.x versions.
 > you to do so (for example, [Icinga Web](#setting-up-icinga-web) or [Icinga Web 2](#setting-up-icingaweb2)).
 > [Icinga Classic UI](#setting-up-icinga-classic-ui) does not use IDO as backend.
 
+### <a id="installing-database"></a> Installing the Database Server
+
+In order to use DB IDO you need to setup either [MySQL](#installing-database-mysql-server)
+or [PostgreSQL](#installing-database-postgresql-server) as supported database server.
+
+> **Note**
+>
+> It's up to you whether you choose to install it on the same server where Icinga 2 is running on,
+> or on a dedicated database host (or cluster).
+
+#### <a id="installing-database-mysql-server"></a> Installing MySQL database server
+
+Debian/Ubuntu:
+    # apt-get install mysql-server mysql-client
+
+RHEL/CentOS 5/6:
+    # yum install mysql-server mysql
+    # chkconfig mysqld on
+    # service mysqld start
+
+RHEL/CentOS 7 and Fedora 20 prefer MariaDB over MySQL:
+    # yum install mariadb-server mariadb
+    # systemctl enable mariadb.service
+    # systemctl start mariadb.service
+
+SUSE:
+    # zypper install mysql mysql-client
+    # chkconfig mysqld on
+    # service mysqld start
+
+RHEL based distributions do not automatically set a secure root password. Do that **now**:
+
+    # /usr/bin/mysql_secure_installation
+
+
+#### <a id="installing-database-postgresql-server"></a> Installing PostgreSQL database server
+
+Debian/Ubuntu:
+    # apt-get install postgresql
+
+RHEL/CentOS 5/6:
+    # yum install postgresql-server postgresql
+    # chkconfig postgresql on
+    # service postgresql start
+
+RHEL/CentOS 7 and Fedora 20 use [systemd](#systemd-service):
+    # yum install postgresql-server postgresql
+    # systemctl enable postgresql.service
+    # systemctl start postgresql.service
+
+SUSE:
+    # zypper install postgresql postgresql-server
+    # chkconfig postgresql on
+    # service postgresql start
+
 ### <a id="configuring-db-ido-mysql"></a> Configuring DB IDO MySQL
+
+> **Note**
+>
+> Upstream Debian packages provide a database configuration wizard by default.
+> You can skip the automated setup and install/upgrade the database manually
+> if you prefer that.
 
 #### <a id="setting-up-mysql-db"></a> Setting up the MySQL database
 
@@ -484,24 +606,18 @@ setting up a MySQL database for Icinga 2:
 After creating the database you can import the Icinga 2 IDO schema using the
 following command:
 
-    # mysql -u root -p icinga < /usr/share/doc/icinga2-ido-mysql-*/schema/mysql.sql
+    # mysql -u root -p icinga < /usr/share/icinga2-ido-mysql/schema/mysql.sql
 
-The schema file location differs by the distribution used:
-
-  Distribution  | Schema Files
-  --------------|---------------------
-  RHEL          | `/usr/share/doc/icinga2-ido-mysql-*/schema` (* means package version).
-  SUSE          | `/usr/share/doc/packages/icinga2-ido-mysql/schema`
-  Debian/Ubuntu | `/usr/share/icinga2-ido-mysql/schema`
 
 #### <a id="upgrading-mysql-db"></a> Upgrading the MySQL database
 
-Check the `schema/upgrade` directory for an incremental schema upgrade file.
-If there isn't an upgrade file available there's nothing to do.
+Check the `/usr/share/icinga2-ido-mysql/schema/upgrade` directory for an
+incremental schema upgrade file. If there isn't an upgrade file available
+there's nothing to do.
 
 Apply all database schema upgrade files incrementially.
 
-    # mysql -u root -p icinga < /usr/share/doc/icinga2-ido-mysql-*/schema/upgrade/<version>.sql
+    # mysql -u root -p icinga < /usr/share/icinga2-ido-mysql/schema/upgrade/<version>.sql
 
 The Icinga 2 DB IDO module will check for the required database schema version on startup
 and generate an error message if not satisfied.
@@ -520,10 +636,16 @@ You can enable the `ido-mysql` feature configuration file using `icinga2-enable-
 
 After enabling the ido-mysql feature you have to restart Icinga 2:
 
-    # /etc/init.d/icinga2 restart
+    # service icinga2 restart
 
 
 ### <a id="configuring-db-ido-postgresql"></a> Configuring DB IDO PostgreSQL
+
+> **Note**
+>
+> Upstream Debian packages provide a database configuration wizard by default.
+> You can skip the automated setup and install/upgrade the database manually
+> if you prefer that.
 
 #### Setting up the PostgreSQL database
 
@@ -565,26 +687,18 @@ After creating the database and permissions you can import the Icinga 2 IDO sche
 using the following command:
 
     # export PGPASSWORD=icinga
-    # psql -U icinga -d icinga < /usr/share/doc/icinga2-ido-pgsql-*/schema/pgsql.sql
-
-The schema file location differs by the distribution used:
-
-  Distribution  | Schema Files
-  --------------|---------------------
-  RHEL          | `/usr/share/doc/icinga2-ido-pgsql-*/schema` (* means package version).
-  SUSE          | `/usr/share/doc/packages/icinga2-ido-pgsql/schema`
-  Debian/Ubuntu | `/usr/share/icinga2-ido-pgsql/schema`
-
+    # psql -U icinga -d icinga < /usr/share/icinga2-ido-pgsql/schema/pgsql.sql
 
 #### <a id="upgrading-postgresql-db"></a> Upgrading the PostgreSQL database
 
-Check the `schema/upgrade` directory for an incremental schema upgrade file.
-If there isn't an upgrade file available there's nothing to do.
+Check the `/usr/share/icinga2-ido-pgsql/schema/upgrade` directory for an
+incremental schema upgrade file. If there isn't an upgrade file available
+there's nothing to do.
 
 Apply all database schema upgrade files incrementially.
 
     # export PGPASSWORD=icinga
-    # psql -U icinga -d icinga < /usr/share/doc/icinga2-ido-pgsql-*/schema/upgrade/<version>.sql
+    # psql -U icinga -d icinga < /usr/share/icinga2-ido-pgsql/schema/upgrade/<version>.sql
 
 The Icinga 2 DB IDO module will check for the required database schema version on startup
 and generate an error message if not satisfied.
@@ -603,8 +717,37 @@ You can enable the `ido-pgsql` feature configuration file using `icinga2-enable-
 
 After enabling the ido-pgsql feature you have to restart Icinga 2:
 
-    # /etc/init.d/icinga2 restart
+    # service icinga2 restart
 
+
+### <a id="setting-up-external-command-pipe"></a> Setting Up External Command Pipe
+
+Web interfaces and other Icinga addons are able to send commands to
+Icinga 2 through the external command pipe.
+
+You can enable the External Command Pipe using icinga2-enable-feature:
+
+    # icinga2-enable-feature command
+
+After that you will have to restart Icinga 2:
+
+    # service icinga2 restart
+
+By default the command pipe file is owned by the group `icingacmd` with read/write
+permissions. Add your webserver's user to the group `icingacmd` to
+enable sending commands to Icinga 2 through your web interface:
+
+    # usermod -G -a icingacmd www-data
+
+Debian packages use `nagios` as the default user and group name. Therefore change `icingacmd` to
+`nagios`. The webserver's user is different between distributions as well.
+
+Change "www-data" to the user you're using to run queries.
+
+> **Note**
+>
+> Packages will do that automatically. Verify that by running `id <your-webserver-user>` and skip this
+> step.
 
 ## <a id="setting-up-livestatus"></a> Setting up Livestatus
 
@@ -632,7 +775,7 @@ You can enable Livestatus using icinga2-enable-feature:
 
 After that you will have to restart Icinga 2:
 
-    # /etc/init.d/icinga2 restart
+    # service icinga2 restart
 
 By default the Livestatus socket is available in `/var/run/icinga2/cmd/livestatus`.
 
@@ -653,7 +796,6 @@ are expected to be in `/var/log/icinga2/compat`. A different path can be set usi
 
     # icinga2-enable-feature compatlog
 
-
 ## <a id="setting-up-icinga2-user-interfaces"></a> Setting up Icinga 2 User Interfaces
 
 Icinga 2 is compatible with Icinga 1.x user interfaces by providing additional
@@ -672,6 +814,40 @@ Special restrictions are noted specifically in the sections below.
 > Choose your preferred interface. There's no need to install [Classic UI](#setting-up-icinga-classic-ui)
 > if you prefer [Icinga Web](#setting-up-icinga-web) or [Icinga Web 2](#setting-up-icingaweb2) for example.
 
+### <a id="icinga2-user-interface-requirements"></a> Requirements
+
+* Web server (Apache2/Httpd, Nginx, Lighttp, etc)
+* User credentials
+* Firewall ports (tcp/80)
+
+The Debian, RHEL and SUSE packages for Icinga [Classic UI](#setting-up-icinga-classic-ui),
+[Web](#setting-up-icinga-web) and [Icingaweb 2](#setting-up-icingaweb2) depend on Apache2
+as web server.
+
+#### <a id="icinga2-user-interface-webserver"></a> Webserver
+
+Debian/Ubuntu packages will automatically fetch and install the required packages.
+
+RHEL/CentOS/Fedora:
+    # yum install httpd
+    # chkconfig httpd on && service httpd start
+    ## RHEL7
+    # systemctl enable httpd && systemctl start httpd
+
+SUSE:
+    # zypper install apache2
+    # chkconfig on && service apache2 start
+
+#### <a id="icinga2-user-interface-firewall-rules"></a> Firewall Rules
+
+Example:
+    # iptables -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT
+    # service iptables save
+
+RHEL/CentOS 7 specific:
+    # firewall-cmd --add-service=http
+    # firewall-cmd --permanent --add-service=http
+
 ### <a id="setting-up-icinga-classic-ui"></a> Setting up Icinga Classic UI
 
 Icinga 2 can write `status.dat` and `objects.cache` files in the format that
@@ -687,7 +863,7 @@ the Classic UI using the following packages:
   Distribution  | Packages
   --------------|---------------------
   Debian        | icinga2-classicui
-  all others    | icinga2-classicui-config icinga-gui
+  RHEL/SUSE     | icinga2-classicui-config icinga-gui
 
 The Debian packages require additional packages which are provided by the
 [Debian Monitoring Project](http://www.debmon.org) (`DebMon`) repository.
@@ -710,19 +886,7 @@ Enable these features and restart Icinga 2.
 
     # icinga2-enable-feature statusdata compatlog command
 
-In order for commands to work you will need to add your webserver's user to the `icingacmd` group.
-
-> **Note**
->
-> Packages will do that automatically. Verify that by running `id <your-webserver-user>` and skip this
-> step.
-
-    # usermod -a -G icingacmd www-data
-
-The Debian packages use `nagios` as the user and group name. Make sure to change `icingacmd` to
-`nagios` if you're using Debian.
-
-Change "www-data" to the user your webserver is running as.
+In order for commands to work you will need to [setup the external command pipe](#setting-up-external-command-pipe).
 
 #### <a id="setting-up-icinga-classic-ui-summary"></a> Setting Up Icinga Classic UI Summary
 
@@ -791,6 +955,8 @@ Additionally you need to enable the `command` feature for sending [external comm
 
     # icinga2-enable-feature command
 
+In order for commands to work you will need to [setup the external command pipe](#setting-up-external-command-pipe).
+
 Then edit the Icinga Web configuration for sending commands in `/etc/icinga-web/conf.d/access.xml`
 (RHEL) or `/etc/icinga-web/access.xml` (SUSE) setting the command pipe path
 to the default used in Icinga 2. Make sure to clear the cache afterwards.
@@ -825,17 +991,19 @@ please check the official [Icinga 1.x user interface documentation](http://docs.
 
 ### <a id="setting-up-icingaweb2"></a> Setting up Icinga Web 2
 
-Icinga Web 2 currently supports `status.dat`, `DB IDO`, or `Livestatus` as backends.
+Icinga Web 2 will support `status.dat`, `DB IDO`, or `Livestatus` as backends.
 
 Using DB IDO as backend, you need to install and configure the [DB IDO backend](#configuring-db-ido).
 Once finished, you can enable the feature for DB IDO MySQL:
 
     # icinga2-enable-feature ido-mysql
 
-furthermore [external commands](#external-commands) are supported through the external
+Furthermore [external commands](#external-commands) are supported through the external
 command pipe.
 
     # icinga2-enable-feature command
+
+In order for commands to work you will need to [setup the external command pipe](#setting-up-external-command-pipe).
 
 Please consult the INSTALL documentation shipped with `Icinga Web 2` for
 further instructions on how to install Icinga Web 2 and to configure
@@ -862,16 +1030,9 @@ graphing performance data), [Graphite](#addons-graphing-pnp), and
 
 ## <a id="configuration-tools"></a> Configuration Tools
 
-Well known configuration tools for Icinga 1.x such as [LConf](http://www.netways.de/en/de/produkte/icinga/addons/lconf/),
-[NConf](http://www.nconf.org/) or [NagiosQL](http://www.nagiosql.org/)
-store their configuration in a custom format in their backends (LDAP or RDBMS).
-Currently only LConf 1.4.x supports Icinga 2 configuration export as compatibility extension.
-It does not use advanced Icinga 2 features such as [apply](#using-apply) rules or
-easy [notifications](#using-apply-notifications) and [dependencies](#using-apply-dependencies)
-for example.
-
 If you require your favourite configuration tool to export Icinga 2 configuration, please get in
-touch with their developers.
+touch with their developers. The Icinga project does not provide a configuration web interface
+or similar.
 
 > **Tip**
 >
@@ -880,6 +1041,11 @@ touch with their developers.
 
 If you're looking for puppet manifests, chef cookbooks, ansible recipes, etc - we're happy
 to integrate them upstream, so please get in touch at [https://support.icinga.org](https://support.icinga.org).
+
+These tools are in development and require feedback and tests:
+
+* [Ansible Roles](https://github.com/Icinga/icinga2-ansible)
+* [Puppet Module](https://github.com/Icinga/puppet-icinga2)
 
 ## <a id="configuration-syntax-highlighting"></a> Configuration Syntax Highlighting
 
@@ -982,10 +1148,14 @@ The Icinga 2 `Systemd` service can be (re)started, reloaded, stopped and also qu
   restart             | The `restart` action is a shortcut for running the `stop` action followed by `start`.
   reload              | The `reload` action sends the `HUP` signal to Icinga 2 which causes it to restart. Unlike the `restart` action `reload` does not wait until Icinga 2 has restarted.
   status              | The `status` action checks if Icinga 2 is running.
+  enable              | The `enable` action enables the service being started at system boot time (similar to `chkconfig`)
 
 If you're stuck with configuration errors, you can manually invoke the [configuration validation](#config-validation).
 
+    # systemctl enable icinga2
 
+    # systemctl restart icinga2
+    Job for icinga2.service failed. See 'systemctl status icinga2.service' and 'journalctl -xn' for details.
 
 ### <a id="cmdline"></a> Command-line Options
 
@@ -1038,6 +1208,10 @@ added.
 
 Using the `--config` option you can specify one or more configuration files.
 Config files are processed in the order they're specified on the command-line.
+
+When no configuration file is specified and the `--no-config` is not used
+Icinga 2 automatically falls back to using the configuration file
+`SysconfDir + "/icinga2/icinga2.conf"` (where SysconfDir is usually `/etc`).
 
 #### Config Validation
 
