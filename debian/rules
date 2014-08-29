@@ -3,17 +3,19 @@
 #export DH_VERBOSE=1
 
 %:
-	dh $@
+	dh $@ --with python2
 
 override_dh_auto_configure:
 	dh_auto_configure -- \
 		-DCMAKE_INSTALL_LOCALSTATEDIR=/var \
 		-DCMAKE_INSTALL_SYSCONFDIR=/etc \
+		-DICINGA2_RUNDIR=/run \
 		-DICINGA2_USER=nagios \
 		-DICINGA2_GROUP=nagios \
 		-DICINGA2_COMMAND_USER=nagios \
 		-DICINGA2_COMMAND_GROUP=www-data \
-		-DICINGA2_GIT_VERSION_INFO=false
+		-DICINGA2_GIT_VERSION_INFO=false \
+		-DICINGA2_PLUGINDIR=/usr/lib/nagios/plugins
 
 override_dh_auto_install:
 	dh_auto_install
