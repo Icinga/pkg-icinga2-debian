@@ -45,14 +45,14 @@ void ApiListener::OnConfigLoaded(void)
 	shared_ptr<X509> cert = make_shared<X509>();
 	try {
 		cert = GetX509Certificate(GetCertPath());
-	} catch (std::exception&) {
+	} catch (const std::exception&) {
 		Log(LogCritical, "ApiListener", "Cannot get certificate from cert path: '" + GetCertPath() + "'.");
 		Application::Exit(EXIT_FAILURE);
 	}
 
 	try {
 		SetIdentity(GetCertificateCN(cert));
-	} catch (std::exception&) {
+	} catch (const std::exception&) {
 		Log(LogCritical, "ApiListener", "Cannot get certificate common name from cert path: '" + GetCertPath() + "'.");
 		Application::Exit(EXIT_FAILURE);
 	}
@@ -61,7 +61,7 @@ void ApiListener::OnConfigLoaded(void)
 
 	try {
 		m_SSLContext = MakeSSLContext(GetCertPath(), GetKeyPath(), GetCaPath());
-	} catch (std::exception&) {
+	} catch (const std::exception&) {
 		Log(LogCritical, "ApiListener", "Cannot make SSL context for cert path: '" + GetCertPath() + "' key path: '" + GetKeyPath() + "' ca path: '" + GetCaPath() + "'.");
 		Application::Exit(EXIT_FAILURE);
 	}
@@ -69,7 +69,7 @@ void ApiListener::OnConfigLoaded(void)
 	if (!GetCrlPath().IsEmpty()) {
 		try {
 			AddCRLToSSLContext(m_SSLContext, GetCrlPath());
-		} catch (std::exception&) {
+		} catch (const std::exception&) {
 			Log(LogCritical, "ApiListener", "Cannot add certificate revocation list to SSL context for crl path: '" + GetCrlPath() + "'.");
 			Application::Exit(EXIT_FAILURE);
 		}
@@ -102,8 +102,8 @@ void ApiListener::Start(void)
 	}
 
 	/* create the primary JSON-RPC listener */
-	if (!AddListener(GetBindPort())) {
-		Log(LogCritical, "ApiListener", "Cannot add listener for port '" + Convert::ToString(GetBindPort()) + "'.");
+	if (!AddListener(GetBindHost(), GetBindPort())) {
+		Log(LogCritical, "ApiListener", "Cannot add listener on host '" + GetBindHost() + "' for port '" + GetBindPort() + "'.");
 		Application::Exit(EXIT_FAILURE);
 	}
 
@@ -160,9 +160,10 @@ bool ApiListener::IsMaster(void) const
 /**
  * Creates a new JSON-RPC listener on the specified port.
  *
+ * @param node The host the listener should be bound to.
  * @param service The port to listen on.
  */
-bool ApiListener::AddListener(const String& service)
+bool ApiListener::AddListener(const String& node, const String& service)
 {
 	ObjectLock olock(this);
 
@@ -180,9 +181,9 @@ bool ApiListener::AddListener(const String& service)
 	TcpSocket::Ptr server = make_shared<TcpSocket>();
 
 	try {
-		server->Bind(service, AF_UNSPEC);
-	} catch(std::exception&) {
-		Log(LogCritical, "ApiListener", "Cannot bind tcp socket on '" + service + "'.");
+		server->Bind(node, service, AF_UNSPEC);
+	} catch (const std::exception&) {
+		Log(LogCritical, "ApiListener", "Cannot bind TCP socket for host '" + node + "' on port '" + service + "'.");
 		return false;
 	}
 
@@ -204,7 +205,7 @@ void ApiListener::ListenerThreadProc(const Socket::Ptr& server)
 		try {
 			Socket::Ptr client = server->Accept();
 			Utility::QueueAsyncCallback(boost::bind(&ApiListener::NewClientHandler, this, client, RoleServer));
-		} catch (std::exception&) {
+		} catch (const std::exception&) {
 			Log(LogCritical, "ApiListener", "Cannot accept new connection.");
 		}
 	}
@@ -230,6 +231,8 @@ void ApiListener::AddConnection(const Endpoint::Ptr& endpoint)
 
 	String host = endpoint->GetHost();
 	String port = endpoint->GetPort();
+
+	Log(LogInformation, "ApiClient", "Reconnecting to API endpoint '" + endpoint->GetName() + "' via host '" + host + "' and port " + port);
 
 	TcpSocket::Ptr client = make_shared<TcpSocket>();
 
@@ -265,7 +268,7 @@ void ApiListener::NewClientHandler(const Socket::Ptr& client, ConnectionRole rol
 		ObjectLock olock(this);
 		try {
 			tlsStream = make_shared<TlsStream>(client, role, m_SSLContext);
-		} catch (std::exception&) {
+		} catch (const std::exception&) {
 			Log(LogCritical, "ApiListener", "Cannot create tls stream from client connection.");
 			return;
 		}
@@ -273,7 +276,7 @@ void ApiListener::NewClientHandler(const Socket::Ptr& client, ConnectionRole rol
 
 	try {
 		tlsStream->Handshake();
-	} catch (std::exception) {
+	} catch (const std::exception&) {
 		Log(LogCritical, "ApiListener", "Client TLS handshake failed.");
 		return;
 	}
@@ -283,7 +286,7 @@ void ApiListener::NewClientHandler(const Socket::Ptr& client, ConnectionRole rol
 
 	try {
 		identity = GetCertificateCN(cert);
-	} catch (std::exception&) {
+	} catch (const std::exception&) {
 		Log(LogCritical, "ApiListener", "Cannot get certificate common name from cert path: '" + GetCertPath() + "'.");
 		return;
 	}
@@ -430,7 +433,7 @@ void ApiListener::RelayMessage(const MessageOrigin& origin, const DynamicObject:
 	m_RelayQueue.Enqueue(boost::bind(&ApiListener::SyncRelayMessage, this, origin, secobj, message, log));
 }
 
-void ApiListener::PersistMessage(const Dictionary::Ptr& message)
+void ApiListener::PersistMessage(const Dictionary::Ptr& message, const DynamicObject::Ptr& secobj)
 {
 	double ts = message->Get("ts");
 
@@ -440,6 +443,11 @@ void ApiListener::PersistMessage(const Dictionary::Ptr& message)
 	pmessage->Set("timestamp", ts);
 
 	pmessage->Set("message", JsonSerialize(message));
+	
+	Dictionary::Ptr secname = make_shared<Dictionary>();
+	secname->Set("type", secobj->GetType()->GetName());
+	secname->Set("name", secobj->GetName());
+	pmessage->Set("secobj", secname);
 
 	boost::mutex::scoped_lock lock(m_LogLock);
 	if (m_LogFile) {
@@ -463,7 +471,7 @@ void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObj
 	Log(LogNotice, "ApiListener", "Relaying '" + message->Get("method") + "' message");
 
 	if (log)
-		m_LogQueue.Enqueue(boost::bind(&ApiListener::PersistMessage, this, message));
+		PersistMessage(message, secobj);
 
 	if (origin.FromZone)
 		message->Set("originZone", origin.FromZone->GetName());
@@ -605,6 +613,14 @@ void ApiListener::ReplayLog(const ApiClient::Ptr& client)
 	int count = -1;
 	double peer_ts = endpoint->GetLocalLogPosition();
 	bool last_sync = false;
+	
+	Endpoint::Ptr target_endpoint = client->GetEndpoint();
+	ASSERT(target_endpoint);
+	
+	Zone::Ptr target_zone = target_endpoint->GetZone();
+	
+	if (!target_zone)
+		return;
 
 	for (;;) {
 		boost::mutex::scoped_lock lock(m_LogLock);
@@ -654,6 +670,23 @@ void ApiListener::ReplayLog(const ApiClient::Ptr& client)
 
 				if (pmessage->Get("timestamp") <= peer_ts)
 					continue;
+
+				Dictionary::Ptr secname = pmessage->Get("secname");
+				
+				if (secname) {
+					DynamicType::Ptr dtype = DynamicType::GetByName(secname->Get("type"));
+					
+					if (!dtype)
+						continue;
+					
+					DynamicObject::Ptr secobj = dtype->GetObject(secname->Get("name"));
+					
+					if (!secobj)
+						continue;
+					
+					if (!target_zone->CanAccessObject(secobj))
+						continue;
+				}
 
 				NetString::WriteStringToStream(client->GetStream(), pmessage->Get("message"));
 				count++;

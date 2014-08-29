@@ -13,6 +13,7 @@ LocalStateDir       |**Read-only.** Contains the path of the local state directo
 RunDir              |**Read-only.** Contains the path of the run directory. Defaults to LocalStateDir + "/run".
 PkgDataDir          |**Read-only.** Contains the path of the package data directory. Defaults to PrefixDir + "/share/icinga2".
 StatePath           |**Read-write.** Contains the path of the Icinga 2 state file. Defaults to LocalStateDir + "/lib/icinga2/icinga2.state".
+ObjectsPath         |**Read-write.** Contains the path of the Icinga 2 objects file. Defaults to LocalStateDir + "/cache/icinga2/icinga2.debug".
 PidPath             |**Read-write.** Contains the path of the Icinga 2 PID file. Defaults to RunDir + "/icinga2/icinga2.pid".
 Vars                |**Read-write.** Contains a dictionary with global custom attributes. Not set by default.
 NodeName            |**Read-write.** Contains the cluster node name. Set to the local hostname by default.
@@ -24,6 +25,30 @@ EnableHostChecks    |**Read-write.** Whether active host checks are globally ena
 EnableServiceChecks |**Read-write.** Whether active service checks are globally enabled. Defaults to true.
 EnablePerfdata      |**Read-write.** Whether performance data processing is globally enabled. Defaults to true.
 UseVfork            |**Read-write.** Whether to use vfork(). Only available on *NIX. Defaults to true.
+
+## <a id="reserved-keywords"></a> Reserved Keywords
+
+These keywords are reserved by the configuration parser and must not be
+used as constants or custom attributes.
+
+    object
+    template
+    include
+    include_recursive
+    library
+    null
+    partial
+    true
+    false
+    const
+    apply
+    to
+    where
+    import
+    assign
+    ignore
+    zone
+    in
 
 
 ## <a id="configuration-syntax"></a> Configuration Syntax
@@ -574,7 +599,7 @@ Attributes:
   enable\_active\_checks|**Optional.** Whether active checks are enabled. Defaults to true.
   enable\_passive\_checks|**Optional.** Whether passive checks are enabled. Defaults to true.
   enable\_event\_handler|**Optional.** Enables event handlers for this host. Defaults to true.
-  enable\_flap\_detection|**Optional.** Whether flap detection is enabled. Defaults to true.
+  enable\_flapping|**Optional.** Whether flap detection is enabled. Defaults to true.
   enable\_perfdata|**Optional.** Whether performance data processing is enabled. Defaults to true.
   event\_command  |**Optional.** The name of an event command that should be executed every time the host's state changes or the host is in a `SOFT` state.
   flapping\_threshold|**Optional.** The flapping threshold in percent when a host is considered to be flapping.
@@ -582,13 +607,13 @@ Attributes:
   notes           |**Optional.** Notes for the host.
   notes_url       |**Optional.** Url for notes for the host (for example, in notification commands).
   action_url      |**Optional.** Url for actions for the host (for example, an external graphing tool).
-  icon_image      |**Optional.** Icon image for the host. Required for external interfaces only.
-  icon_image_alt  |**Optional.** Icon image description for the host. Required for external interface only.
+  icon_image      |**Optional.** Icon image for the host. Used by external interfaces only.
+  icon_image_alt  |**Optional.** Icon image description for the host. Used by external interface only.
 
 > **Best Practice**
 >
 > The `address` and `address6` attributes are required for running commands using
-> the `$address$` and `$address6` runtime macros.
+> the `$address$` and `$address6$` runtime macros.
 
 
 ### <a id="objecttype-hostgroup"></a> HostGroup
@@ -660,7 +685,7 @@ Attributes:
   enable\_active\_checks|**Optional.** Whether active checks are enabled. Defaults to true.
   enable\_passive\_checks|**Optional.** Whether passive checks are enabled. Defaults to true.
   enable\_event\_handler|**Optional.** Enables event handlers for this host. Defaults to true.
-  enable\_flap\_detection|**Optional.** Whether flap detection is enabled. Defaults to true.
+  enable\_flapping|**Optional.** Whether flap detection is enabled. Defaults to true.
   enable\_perfdata|**Optional.** Whether performance data processing is enabled. Defaults to true.
   event\_command  |**Optional.** The name of an event command that should be executed every time the service's state changes or the service is in a `SOFT` state.
   flapping\_threshold|**Optional.** The flapping threshold in percent when a service is considered to be flapping.
@@ -668,8 +693,8 @@ Attributes:
   notes           |**Optional.** Notes for the service.
   notes_url       |**Optional.** Url for notes for the service (for example, in notification commands).
   action_url      |**Optional.** Url for actions for the service (for example, an external graphing tool).
-  icon_image      |**Optional.** Icon image for the service. Required for external interfaces only.
-  icon_image_alt  |**Optional.** Icon image description for the service. Required for external interface only.
+  icon_image      |**Optional.** Icon image for the service. Used by external interfaces only.
+  icon_image_alt  |**Optional.** Icon image description for the service. Used by external interface only.
 
 
 Service objects have composite names, i.e. their names are based on the host_name attribute and the name you specified. This means
@@ -848,8 +873,16 @@ CheckCommand:
         description = "My plugin requires this argument for doing X."
         required = false    /* optional, no error if not set */
         skip_key = false    /* always use "-X <value>" */
-        set_if = "$have_x$" /* only set if variable defined */
-        order = 0           /* first position */
+        set_if = "$have_x$" /* only set if variable defined and resolves to a numeric value. String values are not supported */
+        order = -1          /* first position */
+      }
+      "-Y" = {
+        value = "$y_val$"
+        description = "My plugin requires this argument for doing Y."
+        required = false    /* optional, no error if not set */
+        skip_key = true     /* don't prefix "-Y" only use "<value>" */
+        set_if = "$have_y$" /* only set if variable defined and resolves to a numeric value. String values are not supported */
+        order = 0           /* second position */
       }
     }
 
@@ -859,8 +892,11 @@ CheckCommand:
   description | Optional argument description.
   required    | Required argument. Execution error if not set. Defaults to false (optional).
   skip_key    | Use the value as argument and skip the key.
-  set_if      | Argument added if value is set (macro resolves to a defined value).
+  set_if      | Argument is added if the macro resolves to a defined numeric value. String values are not supported.
   order       | Set if multiple arguments require a defined argument order.
+
+Argument order:
+    `..., -3, -2, -1, <un-ordered keys>, 1, 2, 3, ...`
 
 
 ### <a id="objecttype-notificationcommand"></a> NotificationCommand
@@ -970,7 +1006,7 @@ Attributes:
   user_groups               | **Optional.** A list of user group names who should be notified.
   times                     | **Optional.** A dictionary containing `begin` and `end` attributes for the notification.
   command                   | **Required.** The name of the notification command which should be executed when the notification is triggered.
-  interval                  | **Optional.** The notification interval (in seconds). This interval is used for active notifications. Defaults to 30 minutes.
+  interval                  | **Optional.** The notification interval (in seconds). This interval is used for active notifications. Defaults to 30 minutes. If set to 0, [re-notifications](#disable-renotification) are disabled.
   period                    | **Optional.** The name of a time period which determines when this notification should be triggered. Not set by default.
   types                     | **Optional.** A list of type filters when this notification should be triggered. By default everything is matched.
   states                    | **Optional.** A list of state filters when this notification should be triggered. By default everything is matched.
@@ -1272,6 +1308,8 @@ Attributes:
   table\_prefix   |**Optional.** MySQL database table prefix. Defaults to "icinga\_".
   instance\_name  |**Optional.** Unique identifier for the local Icinga 2 instance. Defaults to "default".
   instance\_description|**Optional.** Description for the Icinga 2 instance.
+  enable_ha       |**Optional.** Enable the high availability functionality. Only valid in a [cluster setup](#high-availability-db-ido). Defaults to "true".
+  failover_timeout | **Optional.** Set the failover timeout in a [HA cluster](#high-availability-db-ido). Must not be lower than 60s". Defaults to "60s".
   cleanup         |**Optional.** Dictionary with items for historical table cleanup.
   categories      |**Optional.** The types of information that should be written to the database.
 
@@ -1359,6 +1397,8 @@ Attributes:
   table\_prefix   |**Optional.** PostgreSQL database table prefix. Defaults to "icinga\_".
   instance\_name  |**Optional.** Unique identifier for the local Icinga 2 instance. Defaults to "default".
   instance\_description|**Optional.** Description for the Icinga 2 instance.
+  enable_ha       |**Optional.** Enable the high availability functionality. Only valid in a [cluster setup](#high-availability-db-ido). Defaults to "true".
+  failover_timeout | **Optional.** Set the failover timeout in a [HA cluster](#high-availability-db-ido). Must not be lower than 60s". Defaults to "60s".
   cleanup         |**Optional.** Dictionary with items for historical table cleanup.
   categories      |**Optional.** The types of information that should be written to the database.
 
@@ -1550,6 +1590,13 @@ Example:
     library "notification"
 
     object NotificationComponent "notification" { }
+
+Attributes:
+
+  Name            |Description
+  ----------------|----------------
+  enable_ha       |**Optional.** Enable the high availability functionality. Only valid in a [cluster setup](#high-availability). Defaults to "true".
+
 
 Can be enabled/disabled using
 
@@ -2260,3 +2307,170 @@ Check command object for the `check_running_kernel` plugin
 provided by the `nagios-plugins-contrib` package on Debian.
 
 The `running_kernel` check command does not support any vars.
+
+
+## <a id="snmp-manubulon-plugin-check-commands"></a> SNMP Manubulon Plugin Check Commands
+
+### <a id="snmp-manubulon-plugin-check-commands-overview"></a> Overview
+
+The `SNMP Manubulon Plugin Check Commands` provide example configuration for plugin check
+commands provided by the [SNMP Manubulon project](http://nagios.manubulon.com/index_snmp.html).
+
+The SNMP manubulon plugin check commands assume that the global constant named `ManubulonPluginDir`
+is set to the path where the Manubublon SNMP plugins are installed.
+
+You can enable these plugin check commands by adding the following the include directive in your
+configuration [icinga2.conf](#icinga2-conf) file:
+
+    include <manubulon>
+
+### Checks by Host Type 
+
+**N/A**      : Not available for this type.
+
+**SNMP**     : Available for simple SNMP query.
+
+**??**       : Untested.
+
+**Specific** : Script name for platform specific checks.
+
+
+  Host type               | Interface  | storage  | load/cpu  | mem | process  | env | specific
+  ------------------------|------------|----------|-----------|-----|----------|-----|-------------------------
+  Linux                   |   Yes      |   Yes    |   Yes     | Yes |   Yes    | No  |
+  Windows                 |   Yes      |   Yes    |   Yes     | Yes |   Yes    | No  | check_snmp_win.pl
+  Cisco router/switch     |   Yes      |   N/A    |   Yes     | Yes |   N/A    | Yes |
+  HP router/switch        |   Yes      |   N/A    |   Yes     | Yes |   N/A    | No  |
+  Bluecoat proxy          |   Yes      |   SNMP   |   Yes     | SNMP|   No     | Yes |
+  CheckPoint on SPLAT     |   Yes      |   Yes    |   Yes     | Yes |   Yes    | No  | check_snmp_cpfw.pl
+  CheckPoint on Nokia IP  |   Yes      |   Yes    |   Yes     | No  |   ??     | No  | check_snmp_vrrp.pl
+  Boostedge               |   Yes      |   Yes    |   Yes     | Yes |   ??     | No  | check_snmp_boostedge.pl
+  AS400                   |   Yes      |   Yes    |   Yes     | Yes |   No     | No  |
+  NetsecureOne Netbox     |   Yes      |   Yes    |   Yes     | ??  |   Yes    | No  |
+  Radware Linkproof       |   Yes      |   N/A    |   SNMP    | SNMP|   No     | No  | check_snmp_linkproof_nhr <br> check_snmp_vrrp.pl
+  IronPort                |   Yes      |   SNMP   |   SNMP    | SNMP|   No     | Yes |
+  Cisco CSS               |   Yes      |   ??     |   Yes     | Yes |   No     | ??  | check_snmp_css.pl
+
+
+#### <a id="plugin-check-command-snmp-load"></a> snmp-load
+
+Check command object for the [check_snmp_load.pl](http://nagios.manubulon.com/snmp_load.html) plugin.
+
+Custom Attributes:
+
+
+Name                    | Description
+------------------------|--------------
+snmp_address            | **Optional.** The host's address. Defaults to "$address$".
+snmp_nocrypt            | **Optional.** Define SNMP encryption. If set **snmp_v3** needs to be set. Defaults to "false".
+snmp_community          | **Optional.** The SNMP community. Defaults to "public".
+snmp_port               | **Optional.** The SNMP port connection.
+snmp_v2                 | **Optional.** SNMP version to 2c. Defaults to "false".
+snmp_v3                 | **Optional.** SNMP version to 3. Defaults to "false".
+snmp_login              | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
+snmp_password           | **Required.** SNMP version 3 password. No value defined as default.
+snmp_v3_use_privpass    | **Optional.** Define to use SNMP version 3 priv password. Defaults to "false".
+snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
+snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default.
+snmp_warn               | **Optional.** The warning threshold.
+snmp_crit               | **Optional.** The critical threshold.
+snmp_load_type          | **Optional.** Load type. Defaults to "stand". Check all available types int the [snmp load](http://nagios.manubulon.com/snmp_load.html) documentation.
+snmp_perf               | **Optional.** Enable perfdata values. Defaults to "true".
+
+#### <a id="plugin-check-command-snmp-memory"></a> snmp-memory
+
+Check command object for the [check_snmp_mem.pl](http://nagios.manubulon.com/snmp_mem.html) plugin.
+
+Custom Attributes:
+
+Name                    | Description
+------------------------|--------------
+snmp_address            | **Optional.** The host's address. Defaults to "$address$".
+snmp_nocrypt            | **Optional.** Define SNMP encryption. If set **snmp_v3** needs to be set. Defaults to "false".
+snmp_community          | **Optional.** The SNMP community. Defaults to "public".
+snmp_port               | **Optional.** The SNMP port connection.
+snmp_v2                 | **Optional.** SNMP version to 2c. Defaults to "false".
+snmp_v3                 | **Optional.** SNMP version to 3. Defaults to "false".
+snmp_login              | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
+snmp_password           | **Required.** SNMP version 3 password. No value defined as default.
+snmp_v3_use_privpass    | **Optional.** Define to use SNMP version 3 priv password. Defaults to "false".
+snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
+snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default.
+snmp_warn               | **Optional.** The warning threshold.
+snmp_crit               | **Optional.** The critical threshold.
+snmp_perf               | **Optional.** Enable perfdata values. Defaults to "true".
+
+#### <a id="plugin-check-command-snmp-storage"></a> snmp-storage
+
+Check command object for the [check_snmp_storage.pl](http://nagios.manubulon.com/snmp_storage.html) plugin.
+
+Custom Attributes:
+
+Name                    | Description
+------------------------|--------------
+snmp_address            | **Optional.** The host's address. Defaults to "$address$".
+snmp_nocrypt            | **Optional.** Define SNMP encryption. If set **snmp_v3** needs to be set. Defaults to "false".
+snmp_community          | **Optional.** The SNMP community. Defaults to "public".
+snmp_port               | **Optional.** The SNMP port connection.
+snmp_v2                 | **Optional.** SNMP version to 2c. Defaults to "false".
+snmp_v3                 | **Optional.** SNMP version to 3. Defaults to "false".
+snmp_login              | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
+snmp_password           | **Required.** SNMP version 3 password. No value defined as default.
+snmp_v3_use_privpass    | **Optional.** Define to use SNMP version 3 priv password. Defaults to "false".
+snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
+snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default..
+snmp_warn               | **Optional.** The warning threshold.
+snmp_crit               | **Optional.** The critical threshold.
+snmp_storage_name       | **Optional.** Storage name. Default to regex "^/$$". More options available in the [snmp storage](http://nagios.manubulon.com/snmp_storage.html) documentation.
+snmp_perf               | **Optional.** Enable perfdata values. Defaults to "true".
+
+#### <a id="plugin-check-command-snmp-int"></a> snmp-int
+
+Check command object for the [check_snmp_int.pl](http://nagios.manubulon.com/snmp_int.html) plugin.
+
+Custom Attributes:
+
+Name                    | Description
+------------------------|--------------
+snmp_address            | **Optional.** The host's address. Defaults to "$address$".
+snmp_nocrypt            | **Optional.** Define SNMP encryption. If set **snmp_v3** needs to be set. Defaults to "false".
+snmp_community          | **Optional.** The SNMP community. Defaults to "public".
+snmp_port               | **Optional.** The SNMP port connection.
+snmp_v2                 | **Optional.** SNMP version to 2c. Defaults to "false".
+snmp_v3                 | **Optional.** SNMP version to 3. Defaults to "false".
+snmp_login              | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
+snmp_password           | **Required.** SNMP version 3 password. No value defined as default.
+snmp_v3_use_privpass    | **Optional.** Define to use SNMP version 3 priv password. Defaults to "false".
+snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
+snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default..
+snmp_warn               | **Optional.** The warning threshold.
+snmp_crit               | **Optional.** The critical threshold.
+snmp_interface          | **Optional.** Network interface name. Default to regex "eth0".
+snmp_interface_perf     | **Optional.** Check the input/ouput bandwidth of the interface. Defaults to "true".
+snmp_interface_bits     | **Optional.** Make the warning and critical levels in KBits/s. Defaults to "true".
+snmp_interface_64bit    | **Optional.** Use 64 bits counters instead of the standard counters when checking bandwidth & performance data for interface >= 1Gbps. Defaults to "false".
+snmp_perf               | **Optional.** Enable perfdata values. Defaults to "true".
+
+#### <a id="plugin-check-command-snmp-process"></a> snmp-process
+
+Check command object for the [check_snmp_process.pl](http://nagios.manubulon.com/snmp_process.html) plugin.
+
+Custom Attributes:
+
+Name                    | Description
+------------------------|--------------
+snmp_address            | **Optional.** The host's address. Defaults to "$address$".
+snmp_nocrypt            | **Optional.** Define SNMP encryption. If set **snmp_v3** needs to be set. Defaults to "false".
+snmp_community          | **Optional.** The SNMP community. Defaults to "public".
+snmp_port               | **Optional.** The SNMP port connection.
+snmp_v2                 | **Optional.** SNMP version to 2c. Defaults to "false".
+snmp_v3                 | **Optional.** SNMP version to 3. Defaults to "false".
+snmp_login              | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
+snmp_password           | **Required.** SNMP version 3 password. No value defined as default.
+snmp_v3_use_privpass    | **Optional.** Define to use SNMP version 3 priv password. Defaults to "false".
+snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
+snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default..
+snmp_warn               | **Optional.** The warning threshold.
+snmp_crit               | **Optional.** The critical threshold.
+snmp_process_name       | **Optional.** Name of the process (regexp). No trailing slash!. Defaults to ".*".
+snmp_perf               | **Optional.** Enable perfdata values. Defaults to "true".

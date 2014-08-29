@@ -19,6 +19,11 @@
 
 %define revision 1
 
+# make sure that _rundir is working on older systems
+%if ! %{defined _rundir}
+%define _rundir %{_localstatedir}/run
+%endif
+
 %if "%{_vendor}" == "redhat"
 %define apachename httpd
 %define apacheconfdir %{_sysconfdir}/httpd/conf.d
@@ -44,6 +49,10 @@
 %endif
 %endif
 
+%{!?__python2: %global __python2 /usr/bin/python2}
+%{!?python2_sitelib: %global python2_sitelib %(%{__python2} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
+%{!?python2_sitearch: %global python2_sitearch %(%{__python2} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1))")}
+
 %define icinga_user icinga
 %define icinga_group icinga
 %define icingacmd_group icingacmd
@@ -56,17 +65,14 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.0.2
+Version: 2.1.0
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
 Source: https://github.com/Icinga/%{name}/archive/v%{version}.tar.gz
 URL: http://www.icinga.org/
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
-
-Requires: %{name}-bin = %{version}
-#Requires: %{name}-ido-mysql = %{version}
-#Requires: %{icingaweb2name} >= %{icingaweb2version}
+Requires: %{name}-bin = %{version}-%{release}
 
 %description
 Meta package for Icinga 2 Core, DB IDO and Web.
@@ -75,8 +81,11 @@ Meta package for Icinga 2 Core, DB IDO and Web.
 Summary:      Icinga 2 binaries and libraries
 Group:        Applications/System
 
+Requires: python-%{name} = %{version}-%{release}
 %if "%{_vendor}" == "suse"
-PreReq: permissions
+PreReq:        permissions
+Provides:      monitoring_daemon
+Recommends:    monitoring-plugins
 %endif
 BuildRequires: openssl-devel
 BuildRequires: gcc-c++
@@ -98,7 +107,7 @@ BuildRequires: systemd
 Requires: systemd
 %endif
 
-Requires: %{name}-common = %{version}
+Requires: %{name}-common = %{version}-%{release}
 
 %description bin
 Icinga 2 is a general-purpose network monitoring application.
@@ -160,6 +169,9 @@ Group:        Applications/System
 BuildRequires: %{apachename}
 Requires:     %{apachename}
 Requires:     %{name} = %{version}-%{release}
+%if "%{_vendor}" == "suse"
+Recommends:   icinga-www
+%endif
 Provides:     icinga-classicui-config
 Conflicts:    icinga-gui-config
 
@@ -167,6 +179,17 @@ Conflicts:    icinga-gui-config
 Icinga 1.x Classic UI Standalone configuration with locations
 for Icinga 2.
 
+
+%package -n python-icinga2
+Summary:      Python module for Icinga 2
+Group:        Application/System
+BuildRequires: python
+BuildRequires: python-devel
+BuildRequires: python-setuptools
+Requires:     python-setuptools
+
+%description -n python-icinga2
+Python module for Icinga 2.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -176,6 +199,7 @@ CMAKE_OPTS="-DCMAKE_INSTALL_PREFIX=/usr \
          -DCMAKE_INSTALL_SYSCONFDIR=/etc \
          -DCMAKE_INSTALL_LOCALSTATEDIR=/var \
          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+         -DICINGA2_RUNDIR=%{_rundir} \
          -DICINGA2_USER=%{icinga_user} \
          -DICINGA2_GROUP=%{icinga_group} \
          -DICINGA2_COMMAND_USER=%{icinga_user} \
@@ -207,7 +231,6 @@ cmake $CMAKE_OPTS .
 
 make %{?_smp_mflags}
 
-rm -f components/db_ido_*sql/schema/upgrade/.gitignore
 
 %install
 [ "%{buildroot}" != "/" ] && [ -d "%{buildroot}" ] && rm -rf %{buildroot}
@@ -245,7 +268,7 @@ exit 0
 
 %if "%{_vendor}" == "suse"
 %verifyscript bin
-%verify_permissions -e /var/run/icinga2/cmd
+%verify_permissions -e %{_rundir}/%{name}/cmd
 %endif
 
 
@@ -260,9 +283,9 @@ exit 0
 # all restart/feature actions belong to icinga2-bin
 %post bin
 # suse
-%if 0%{?suse_version}
+%if "%{_vendor}" == "suse"
 %if 0%{?suse_version} >= 1310
-%set_permissions /var/run/icinga2/cmd
+%set_permissions %{_rundir}/%{name}/cmd
 %endif
 %if 0%{?use_systemd}
 %fillup_only  %{name}
@@ -298,7 +321,7 @@ exit 0
 
 %postun bin
 # suse
-%if 0%{?suse_version}
+%if "%{_vendor}" == "suse"
 %if 0%{?using_systemd}
   %service_del_postun %{name}.service
 %else
@@ -329,7 +352,7 @@ exit 0
 
 %preun bin
 # suse
-%if 0%{?suse_version}
+%if "%{_vendor}" == "suse"
 
 %if 0%{?use_systemd}
   %service_del_preun %{name}.service
@@ -448,6 +471,7 @@ exit 0
 %{_bindir}/%{name}-build-ca
 %{_bindir}/%{name}-build-key
 %{_bindir}/%{name}-sign-key
+%{_sbindir}/%{name}-list-objects
 %{_sbindir}/%{name}-enable-feature
 %{_sbindir}/%{name}-disable-feature
 %{_sbindir}/%{name}-prepare-dirs
@@ -464,19 +488,19 @@ exit 0
 %{_mandir}/man8/%{name}-sign-key.8.gz
 %{_mandir}/man8/%{name}-prepare-dirs.8.gz
 
-%attr(0755,%{icinga_user},%{icinga_group}) %{_localstatedir}/cache/%{name}
-%attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}
-%attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}/compat
-%attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}/compat/archives
-%attr(0755,%{icinga_user},%{icinga_group}) %ghost %{_localstatedir}/run/%{name}
+%attr(0750,%{icinga_user},%{icingacmd_group}) %{_localstatedir}/cache/%{name}
+%attr(0750,%{icinga_user},%{icingacmd_group}) %dir %{_localstatedir}/log/%{name}
+%attr(0750,%{icinga_user},%{icingacmd_group}) %dir %{_localstatedir}/log/%{name}/compat
+%attr(0750,%{icinga_user},%{icingacmd_group}) %dir %{_localstatedir}/log/%{name}/compat/archives
 %attr(0750,%{icinga_user},%{icinga_group}) %{_localstatedir}/lib/%{name}
 
-%attr(2755,%{icinga_user},%{icingacmd_group}) %ghost %{_localstatedir}/run/icinga2/cmd
+%attr(0750,%{icinga_user},%{icingacmd_group}) %ghost %{_rundir}/%{name}
+%attr(2750,%{icinga_user},%{icingacmd_group}) %ghost %{_rundir}/%{name}/cmd
 
 %files common
 %defattr(-,root,root,-)
 %doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog tools/syntax
-%attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}
+%attr(0750,%{icinga_user},%{icingacmd_group}) %dir %{_localstatedir}/log/%{name}
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/perfdata
@@ -491,13 +515,15 @@ exit 0
 
 %files ido-mysql
 %defattr(-,root,root,-)
-%doc components/db_ido_mysql/schema COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
+%doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
 %{_libdir}/%{name}/libdb_ido_mysql*
+%{_datadir}/icinga2-ido-mysql
 
 %files ido-pgsql
 %defattr(-,root,root,-)
-%doc components/db_ido_pgsql/schema COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
+%doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
 %{_libdir}/%{name}/libdb_ido_pgsql*
+%{_datadir}/icinga2-ido-pgsql
 
 %files classicui-config
 %defattr(-,root,root,-)
@@ -505,6 +531,9 @@ exit 0
 %config(noreplace) %{icingaclassicconfdir}/cgi.cfg
 %config(noreplace) %{apacheconfdir}/icinga.conf
 %config(noreplace) %attr(0640,root,%{apachegroup}) %{icingaclassicconfdir}/passwd
+
+%files -n python-icinga2
+%{python2_sitelib}/icinga2*
 
 
 %changelog
