@@ -27,15 +27,37 @@ Additionally you can enable the debug log using
     # service icinga2 restart
     # tail -f /var/log/icinga2/debug.log
 
+## <a id="list-configuration-objects"></a> List Configuration Objects
+
+The `icinga2-list-objects` tool can be used to list all configuration objects and their
+attributes. The tool also shows where each of the attributes was modified:
+
+    # icinga2-list-objects
+    Object 'apt' of type 'CheckCommand':
+      * templates = ['apt', 'plugin-check-command']
+        % modified in /usr/share/icinga2/include/command-plugins.conf, lines 458:1-462:1
+        % modified in /usr/share/icinga2/include/command.conf, lines 34:1-36:1
+      * __name = 'apt'
+      * command = ['/usr/lib/nagios/plugins/check_apt']
+        % modified in /usr/share/icinga2/include/command-plugins.conf, lines 461:2-461:39
+      * methods
+        % modified in /usr/share/icinga2/include/command.conf, lines 35:2-35:32
+        * execute = 'PluginCheck'
+          % modified in /usr/share/icinga2/include/command.conf, lines 35:2-35:32
+      * type = 'CheckCommand'
+    [...]
+
+
 ## <a id="checks-not-executed"></a> Checks are not executed
 
 * Check the debug log to see if the check command gets executed
 * Verify that failed depedencies do not prevent command execution
 * Make sure that the plugin is executable by the Icinga 2 user (run a manual test)
+* Make sure the [checker](#features) feature is enabled.
+
+Examples:
 
     # sudo -u icinga /usr/lib/nagios/plugins/check_ping -4 -H 127.0.0.1 -c 5000,100% -w 3000,80%
-
-* Make sure the [checker](#features) feature is enabled.
 
     # icinga2-enable-feature checker
     The feature 'checker' is already enabled.
@@ -53,13 +75,13 @@ Verify the following configuration
 * Do the notification attributes `states`, `types`, `period` match the notification conditions?
 * Do the user attributes `states`, `types`, `period` match the notification conditions?
 * Are there any notification `begin` and `end` times configured?
-
 * Make sure the [notification](#features) feature is enabled.
+* Does the referenced NotificationCommand work when executed as Icinga user on the shell?
+
+Examples:
 
     # icinga2-enable-feature notification
     The feature 'notification' is already enabled.
-
-* Does the referenced NotificationCommand work when executed as Icinga user on the shell?
 
 ## <a id="feature-not-working"></a> Feature is not working
 
@@ -79,7 +101,6 @@ encapsulated by `/* ... */`).
 Icinga 2 allows you to import templates using the [import](#import) keyword. If these templates
 contain additional attributes, your objects will automatically inherit them. You can override
 or modify these attributes in the current object.
-
 
 ## <a id="check-command-definitions"></a> Where are the check command definitions
 
@@ -119,7 +140,7 @@ Use tools like `netstat`, `tcpdump`, `nmap`, etc to make sure that the cluster c
 happens (default port is `5665`).
 
     # tcpdump -n port 5665 -i any
-    
+
     # netstat -tulpen | grep icinga
 
     # nmap yourclusternode.localdomain
@@ -130,10 +151,11 @@ If the cluster communication fails with cryptic SSL error messages, make sure to
 the following
 
 * File permissions on the SSL certificate files
+* Does the used CA match for all cluster endpoints?
+
+Examples:
 
     # ls -la /etc/icinga2/pki
-
-* Does the used CA match for all cluster endpoints?
 
 
 ### <a id="troubleshooting-cluster-message-errors"></a> Cluster Troubleshooting Message Errors
@@ -145,6 +167,14 @@ they remain in a Split-Brain-mode and history may differ.
 Although the Icinga 2 cluster protocol stores historical events in a replay log for later synchronisation,
 you should make sure to check why the network connection failed.
 
+### <a id="troubleshooting-cluster-config-sync"></a> Cluster Troubleshooting Config Sync
+
+If the cluster zones do not sync their configuration, make sure to check the following:
+
+* Within a config master zone, only one configuration master is allowed to have its config in `/etc/icinga2/zones.d`.
+** The master syncs the configuration to `/var/lib/icinga2/api/zones/` during startup and only syncs valid configuration to the other nodes
+** The other nodes receive the configuration into `/var/lib/icinga2/api/zones/`
+* The `icinga2.log` log file will indicate whether this ApiListener [accepts config](#zone-config-sync-permissions), or not
 
 
 ## <a id="debug"></a> Debug Icinga 2

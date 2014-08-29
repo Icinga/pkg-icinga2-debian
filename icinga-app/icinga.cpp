@@ -82,7 +82,7 @@ static void IncludeNonLocalZone(const String& zonePath)
 	IncludeZoneDirRecursive(zonePath);
 }
 
-static bool LoadConfigFiles(const String& appType)
+static bool LoadConfigFiles(const String& appType, const String& objectsFile = String())
 {
 	ConfigCompilerContext::GetInstance()->Reset();
 
@@ -90,7 +90,8 @@ static bool LoadConfigFiles(const String& appType)
 		BOOST_FOREACH(const String& configPath, g_AppParams["config"].as<std::vector<std::string> >()) {
 			ConfigCompiler::CompileFile(configPath);
 		}
-	}
+	} else if (!g_AppParams.count("no-config"))
+		ConfigCompiler::CompileFile(Application::GetSysconfDir() + "/icinga2/icinga2.conf");
 
 	/* Load cluster config files - this should probably be in libremote but
 	* unfortunately moving it there is somewhat non-trivial. */
@@ -113,7 +114,7 @@ static bool LoadConfigFiles(const String& appType)
 	ConfigItem::Ptr item = builder->Compile();
 	item->Register();
 
-	bool result = ConfigItem::ValidateItems();
+	bool result = ConfigItem::ValidateItems(objectsFile);
 
 	int warnings = 0, errors = 0;
 
@@ -382,6 +383,7 @@ int Main(void)
 	}
 
 	Application::DeclareStatePath(Application::GetLocalStateDir() + "/lib/icinga2/icinga2.state");
+	Application::DeclareObjectsPath(Application::GetLocalStateDir() + "/cache/icinga2/icinga2.debug");
 	Application::DeclarePidPath(Application::GetRunDir() + "/icinga2/icinga2.pid");
 
 #ifndef _WIN32
@@ -529,12 +531,6 @@ int Main(void)
 		}
 	}
 
-	if (g_AppParams.count("no-config") == 0 && g_AppParams.count("config") == 0) {
-		Log(LogCritical, "icinga-app", "You need to specify at least one config file (using the --config option).");
-
-		return EXIT_FAILURE;
-	}
-
 	if (!g_AppParams.count("validate") && !g_AppParams.count("reload-internal")) {
 		pid_t runningpid = Application::ReadPidFile(Application::GetPidPath());
 		if (runningpid > 0) {
@@ -543,7 +539,7 @@ int Main(void)
 		}
 	}
 
-	if (!LoadConfigFiles(appType))
+	if (!LoadConfigFiles(appType, Application::GetObjectsPath()))
 		return EXIT_FAILURE;
 
 	if (g_AppParams.count("validate")) {

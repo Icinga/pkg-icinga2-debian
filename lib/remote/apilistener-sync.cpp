@@ -105,10 +105,10 @@ bool ApiListener::UpdateConfigDir(const Dictionary::Ptr& oldConfig, const Dictio
 
 void ApiListener::SyncZoneDir(const Zone::Ptr& zone) const
 {
-	Log(LogInformation, "ApiListener", "Syncing zone: " + zone->GetName());
-
 	String newDir = Application::GetZonesDir() + "/" + zone->GetName();
 	String oldDir = Application::GetLocalStateDir() + "/lib/icinga2/api/zones/" + zone->GetName();
+
+	Log(LogInformation, "ApiListener", "Copying zone configuration files from '" + newDir + "' to  '" + oldDir + "'.");
 
 	if (!Utility::MkDir(oldDir, 0700)) {
 		std::ostringstream msgbuf;
@@ -135,7 +135,7 @@ void ApiListener::SyncZoneDirs(void) const
 
 		try {
 			SyncZoneDir(zone);
-		} catch (std::exception&) {
+		} catch (const std::exception&) {
 			continue;
 		}
 	}
