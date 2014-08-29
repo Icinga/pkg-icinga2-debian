@@ -1,3 +1,20 @@
+icinga2 (2.1.0-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [e1b3b50] Prefer monitoring-plugins over nagios-plugins
+
+  [ Markus Frosch ]
+  * [e192c30] Imported Upstream version 2.1.0
+  * [4e08221] Added python-icinga2 and updates for list-objects
+  * [4bd22b4] Update maintainer mail and copyright
+  * [cd79431] Add missing Python dependency macros
+  * [63d5bfb] Update gitignore
+  * [42a8707] Update lintian ignores
+  * [33ca186] Add patch 21_config_changes to change default mail
+              (Closes: #759011)
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Fri, 29 Aug 2014 14:07:28 +0200
+
 icinga2 (2.0.2-1) unstable; urgency=medium
 
   [ Jan Wagner ]
