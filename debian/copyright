@@ -33,8 +33,8 @@ License: GPL-2+-with-exception
  also delete it here.
 
 Files: debian/*
-Copyright: 2012 Alexander Wirt <formorer@debian.org>
-           2013-2014 Markus Frosch <markus@lazyfrosch.de>
+Copyright: 2012-2014 Alexander Wirt <formorer@debian.org>
+           2013-2014 Markus Frosch <lazyfrosch@debian.org>
            2014 Icinga Development Team (http://www.icinga.org)
 License: GPL-2+
  This package is free software; you can redistribute it and/or modify
