@@ -1,0 +1,21 @@
+commit 4da18d6de1b064f12acf3a47ea2bce1ce50445a0
+Author: Gunnar Beutner <gunnar@beutner.name>
+Date:   Tue Sep 2 17:27:16 2014 +0200
+
+    Build fix for GNU Hurd
+
+diff --git a/lib/base/unix.hpp b/lib/base/unix.hpp
+index 4a4197c..d4dcabc 100644
+--- a/lib/base/unix.hpp
++++ b/lib/base/unix.hpp
+@@ -48,6 +48,10 @@ typedef int SOCKET;
+ #define closesocket close
+ #define ioctlsocket ioctl
+ 
++#ifndef PATH_MAX
++#	define PATH_MAX 1024
++#endif /* PATH_MAX */
++
+ #ifndef MAXPATHLEN
+ #	define MAXPATHLEN PATH_MAX
+ #endif /* MAXPATHLEN */
