@@ -1,10 +1,28 @@
 icinga2 (2.1.0-2) UNRELEASED; urgency=medium
 
+  [ Markus Frosch ]
   * [26e4092] Update copyright for python embed
   * [f9dd427] Fixed typo in copyright
   * [f236eb4] Include all existing manpages
 
- -- Markus Frosch <lazyfrosch@debian.org>  Mon, 01 Sep 2014 12:06:05 +0200
+  [ Christian Perrier ]
+  * Debconf templates and debian/control reviewed by the debian-l10n-
+    english team as part of the Smith review project. Closes: #755248
+  * [Debconf translation updates]
+  * Portuguese (Américo Monteiro).  Closes: #758573
+  * Russian (Yuri Kozlov).  Closes: #758790
+  * German (Chris Leick).  Closes: #759364
+  * Brazilian Portuguese ().  Closes: #759599
+  * Danish (Joe Hansen).  Closes: #759778
+  * Japanese (victory).  Closes: #760094
+  * Spanish; (Matías A. Bellone).  Closes: #760115
+  * Czech (Michal Simunek).  Closes: #760145
+  * Polish (Michał Kułach).  Closes: #760180
+  * Italian (Beatrice Torracca).  Closes: #760300
+  * Turkish (Mert Dirik).  Closes: #760329
+  * French (Steve Petruzzello).  Closes: #760600
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Sun, 07 Sep 2014 22:32:15 +0200
 
 icinga2 (2.1.0-1) unstable; urgency=medium
 
