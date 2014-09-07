@@ -4,6 +4,7 @@ icinga2 (2.1.0-2) UNRELEASED; urgency=medium
   * [26e4092] Update copyright for python embed
   * [f9dd427] Fixed typo in copyright
   * [f236eb4] Include all existing manpages
+  * [280f892] Adding patches for arch problems on Hurd and FreeBSD
 
   [ Christian Perrier ]
   * Debconf templates and debian/control reviewed by the debian-l10n-
