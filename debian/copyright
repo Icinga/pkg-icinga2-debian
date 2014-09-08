@@ -93,7 +93,7 @@ Files: third-party/cmake/BoostTestTargets.*
        third-party/cmake/GetGitRevisionDescription.cmake.in
 Copyright: 2009-2010 Ryan Pavlik <rpavlik@iastate.edu> <abiryan@ryand.net>
            2009-2010 Iowa State University
-License: Boost Software License 1.0
+License: Boost-Software-License-1.0
  Permission is hereby granted, free of charge, to any person or organization
  obtaining a copy of the software and accompanying documentation covered by
  this license (the "Software") to use, reproduce, display, distribute,
