@@ -1,3 +1,10 @@
+icinga2 (2.1.0-3) unstable; urgency=medium
+
+  * [dd04e8c] Fix build problem with CMake libdir on Hurd and kFreeBSD
+              Using dist version of GNUInstallDirs.cmake
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Mon, 08 Sep 2014 16:39:23 +0200
+
 icinga2 (2.1.0-2) unstable; urgency=medium
 
   [ Markus Frosch ]
