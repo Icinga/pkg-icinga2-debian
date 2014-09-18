@@ -36,7 +36,7 @@ bool I2_EXPORT TlsStream::m_SSLIndexInitialized = false;
  * @param sslContext The SSL context for the client.
  */
 TlsStream::TlsStream(const Socket::Ptr& socket, ConnectionRole role, const shared_ptr<SSL_CTX>& sslContext)
-	: m_Socket(socket), m_Role(role)
+	: m_Eof(false), m_Socket(socket), m_Role(role)
 {
 	std::ostringstream msgbuf;
 	char errbuf[120];
@@ -98,6 +98,8 @@ void TlsStream::Handshake(void)
 	std::ostringstream msgbuf;
 	char errbuf[120];
 
+	boost::mutex::scoped_lock alock(m_IOActionLock);
+
 	for (;;) {
 		int rc, err;
 
@@ -144,6 +146,10 @@ size_t TlsStream::Read(void *buffer, size_t count)
 	size_t left = count;
 	std::ostringstream msgbuf;
 	char errbuf[120];
+
+	m_Socket->Poll(true, false);
+
+	boost::mutex::scoped_lock alock(m_IOActionLock);
 
 	while (left > 0) {
 		int rc, err;
@@ -193,6 +199,10 @@ void TlsStream::Write(const void *buffer, size_t count)
 	std::ostringstream msgbuf;
 	char errbuf[120];
 
+	m_Socket->Poll(false, true);
+
+	boost::mutex::scoped_lock alock(m_IOActionLock);
+
 	while (left > 0) {
 		int rc, err;
 
@@ -238,6 +248,10 @@ void TlsStream::Write(const void *buffer, size_t count)
  */
 void TlsStream::Close(void)
 {
+	boost::mutex::scoped_lock alock(m_IOActionLock);
+
+	m_Eof = true;
+
 	for (int i = 0; i < 5; i++) {
 		int rc, err;
 
@@ -276,5 +290,5 @@ close_socket:
 
 bool TlsStream::IsEof(void) const
 {
-	return (BIO_eof(m_BIO) == 1);
+	return m_Eof;
 }

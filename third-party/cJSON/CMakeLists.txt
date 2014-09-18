@@ -23,6 +23,10 @@ set_target_properties (
   FOLDER Lib
 )
 
+if(UNIX AND NOT HAIKU)
+    target_link_libraries(cJSON m)
+endif()
+
 install(
   TARGETS cJSON
   RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}

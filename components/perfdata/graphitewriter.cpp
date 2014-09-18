@@ -50,7 +50,7 @@ Value GraphiteWriter::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
 {
 	Dictionary::Ptr nodes = make_shared<Dictionary>();
 
-	BOOST_FOREACH(const GraphiteWriter::Ptr& graphitewriter, DynamicType::GetObjects<GraphiteWriter>()) {
+	BOOST_FOREACH(const GraphiteWriter::Ptr& graphitewriter, DynamicType::GetObjectsByType<GraphiteWriter>()) {
 		nodes->Set(graphitewriter->GetName(), 1); //add more stats
 	}
 
@@ -135,6 +135,9 @@ void GraphiteWriter::CheckResultHandler(const Checkable::Ptr& checkable, const C
 void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& cr)
 {
 	Value pdv = cr->GetPerformanceData();
+
+	if (pdv.IsEmpty())
+		return;
 
 	if (!pdv.IsObjectType<Dictionary>())
 	{

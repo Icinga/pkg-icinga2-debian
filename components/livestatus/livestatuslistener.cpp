@@ -47,7 +47,7 @@ Value LivestatusListener::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& pe
 {
 	Dictionary::Ptr nodes = make_shared<Dictionary>();
 
-	BOOST_FOREACH(const LivestatusListener::Ptr& livestatuslistener, DynamicType::GetObjects<LivestatusListener>()) {
+	BOOST_FOREACH(const LivestatusListener::Ptr& livestatuslistener, DynamicType::GetObjectsByType<LivestatusListener>()) {
 		Dictionary::Ptr stats = make_shared<Dictionary>();
 		stats->Set("connections", l_Connections);
 
@@ -134,7 +134,7 @@ void LivestatusListener::ServerThreadProc(const Socket::Ptr& server)
 		try {
 			Socket::Ptr client = server->Accept();
 			Log(LogNotice, "LivestatusListener", "Client connected");
-			Utility::QueueAsyncCallback(boost::bind(&LivestatusListener::ClientHandler, this, client));
+			Utility::QueueAsyncCallback(boost::bind(&LivestatusListener::ClientHandler, this, client), LowLatencyScheduler);
 		} catch (std::exception&) {
 			Log(LogCritical, "ListenerListener", "Cannot accept new connection.");
 		}

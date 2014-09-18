@@ -1,11 +1,16 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#cmakedefine HAVE_COUNTER_MACRO
 #cmakedefine HAVE_BACKTRACE_SYMBOLS
 #cmakedefine HAVE_PIPE2
 #cmakedefine HAVE_VFORK
 #cmakedefine HAVE_DLADDR
 #cmakedefine HAVE_LIBEXECINFO
+#cmakedefine HAVE_CXXABI_H
+#cmakedefine HAVE_NICE
+
+#cmakedefine ICINGA2_UNITY_BUILD
 
 #define ICINGA_PREFIX "${CMAKE_INSTALL_PREFIX}"
 #define ICINGA_SYSCONFDIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}"

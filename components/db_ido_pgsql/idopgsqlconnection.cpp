@@ -44,7 +44,7 @@ Value IdoPgsqlConnection::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& pe
 {
 	Dictionary::Ptr nodes = make_shared<Dictionary>();
 
-	BOOST_FOREACH(const IdoPgsqlConnection::Ptr& idopgsqlconnection, DynamicType::GetObjects<IdoPgsqlConnection>()) {
+	BOOST_FOREACH(const IdoPgsqlConnection::Ptr& idopgsqlconnection, DynamicType::GetObjectsByType<IdoPgsqlConnection>()) {
 		size_t items = idopgsqlconnection->m_QueryQueue.GetLength();
 
 		Dictionary::Ptr stats = make_shared<Dictionary>();
@@ -371,8 +371,10 @@ IdoPgsqlResult IdoPgsqlConnection::Query(const String& query)
 	char *rowCount = PQcmdTuples(result);
 	m_AffectedRows = atoi(rowCount);
 
-	if (PQresultStatus(result) == PGRES_COMMAND_OK)
+	if (PQresultStatus(result) == PGRES_COMMAND_OK) {
+		PQclear(result);
 		return IdoPgsqlResult();
+	}
 
 	if (PQresultStatus(result) != PGRES_TUPLES_OK) {
 		String message = PQresultErrorMessage(result);

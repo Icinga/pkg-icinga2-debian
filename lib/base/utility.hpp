@@ -26,9 +26,19 @@
 #include <boost/function.hpp>
 #include <boost/thread/tss.hpp>
 #include <vector>
+#include "base/threadpool.hpp"
 
 namespace icinga
 {
+
+#define TOKENPASTE(x, y) x ## y
+#define TOKENPASTE2(x, y) TOKENPASTE(x, y)
+
+#ifdef HAVE_COUNTER_MACRO
+#	define UNIQUE_NAME(prefix) TOKENPASTE2(prefix, __COUNTER__)
+#else /* HAVE_COUNTER_MACRO */
+#	define UNIQUE_NAME(prefix) prefix
+#endif /* HAVE_COUNTER_MACRO */
 
 #ifdef _WIN32
 #define MS_VC_EXCEPTION 0x406D1388
@@ -82,11 +92,11 @@ public:
 	static bool MkDir(const String& path, int flags);
 	static bool MkDirP(const String& path, int flags);
 
-	static void QueueAsyncCallback(const boost::function<void (void)>& callback);
+	static void QueueAsyncCallback(const boost::function<void (void)>& callback, SchedulerPolicy policy = DefaultScheduler);
 
 	static String NaturalJoin(const std::vector<String>& tokens);
 
-	static String FormatDuration(int duration);
+	static String FormatDuration(double duration);
 	static String FormatDateTime(const char *format, double ts);
 	static String FormatErrorNumber(int code);
 

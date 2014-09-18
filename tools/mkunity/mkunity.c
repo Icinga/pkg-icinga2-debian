@@ -17,62 +17,21 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/sysloglogger.hpp"
-#include "base/dynamictype.hpp"
-#include "base/statsfunction.hpp"
+#include <stdlib.h>
+#include <stdio.h>
 
-#ifndef _WIN32
-using namespace icinga;
-
-REGISTER_TYPE(SyslogLogger);
-
-REGISTER_STATSFUNCTION(SyslogLoggerStats, &SyslogLogger::StatsFunc);
-
-Value SyslogLogger::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+int main(int argc, char **argv)
 {
-	Dictionary::Ptr nodes = make_shared<Dictionary>();
+	int i;
 
-	BOOST_FOREACH(const SyslogLogger::Ptr& sysloglogger, DynamicType::GetObjectsByType<SyslogLogger>()) {
-		nodes->Set(sysloglogger->GetName(), 1); //add more stats
+	if (argc < 3) {
+		fprintf(stderr, "Syntax: %s <prefix> [<file> ...]\n", argv[0]);
+		return EXIT_FAILURE;
 	}
 
-	status->Set("sysloglogger", nodes);
-
-	return 0;
-}
-
-/**
- * Processes a log entry and outputs it to syslog.
- *
- * @param entry The log entry.
- */
-void SyslogLogger::ProcessLogEntry(const LogEntry& entry)
-{
-	int severity;
-	switch (entry.Severity) {
-		case LogDebug:
-			severity = LOG_DEBUG;
-			break;
-		case LogNotice:
-			severity = LOG_NOTICE;
-			break;
-		case LogWarning:
-			severity = LOG_WARNING;
-			break;
-		case LogCritical:
-			severity = LOG_CRIT;
-			break;
-		case LogInformation:
-		default:
-			severity = LOG_INFO;
-			break;
+	for (i = 2; i < argc; i++) {
+		printf("#include \"%s/%s\"\n", argv[1], argv[i]);
 	}
 
-	syslog(severity | LOG_USER, "%s", entry.Message.CStr());
+	return EXIT_SUCCESS;
 }
-
-void SyslogLogger::Flush(void)
-{
-	/* Nothing to do here. */
-}
-#endif /* _WIN32 */
