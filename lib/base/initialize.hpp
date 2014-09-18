@@ -35,9 +35,9 @@ inline bool InitializeOnceHelper(InitializeFunc func)
 }
 
 #define INITIALIZE_ONCE(func) \
-	namespace { \
+	namespace { namespace UNIQUE_NAME(io) { \
 		I2_EXPORT bool l_InitializeOnce(icinga::InitializeOnceHelper(func)); \
-	}
+	} }
 
 }
 

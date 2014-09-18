@@ -32,6 +32,7 @@ You need to add the Icinga repository to your package management configuration.
 Below is a list with examples for the various distributions.
 
 Debian (debmon):
+
     # wget -O - http://debmon.org/debmon/repo.key 2>/dev/null | apt-key add -
     # cat >/etc/apt/sources.list.d/debmon.list<<EOF
     deb http://debmon.org/debmon debmon-wheezy main
@@ -39,23 +40,28 @@ Debian (debmon):
     # apt-get update
 
 Ubuntu (PPA):
+
     # add-apt-repository ppa:formorer/icinga
     # apt-get update
 
 RHEL/CentOS:
+
     # rpm --import http://packages.icinga.org/icinga.key
     # wget http://packages.icinga.org/epel/ICINGA-release.repo -O /etc/yum.repos.d/ICINGA-release.repo
     # yum makecache
 
 Fedora:
+
     # wget http://packages.icinga.org/fedora/ICINGA-release.repo -O /etc/yum.repos.d/ICINGA-release.repo
     # yum makecache
 
 SLES:
+
     # zypper ar http://packages.icinga.org/SUSE/ICINGA-release.repo
     # zypper ref
 
 OpenSUSE:
+
     # zypper ar http://packages.icinga.org/openSUSE/ICINGA-release.repo
     # zypper ref
 
@@ -70,12 +76,15 @@ You can install Icinga 2 by using your distribution's package manager
 to install the `icinga2` package.
 
 Debian/Ubuntu:
+
     # apt-get install icinga2
 
 RHEL/CentOS/Fedora:
+
     # yum install icinga2
 
 SLES/OpenSUSE:
+
     # zypper install icinga2
 
 On RHEL/CentOS and SLES you will need to use `chkconfig` to enable the
@@ -93,8 +102,8 @@ Some parts of Icinga 2's functionality are available as separate packages:
 
   Name                    | Description
   ------------------------|--------------------------------
-  icinga2-ido-mysql       | DB IDO provider module for MySQL
-  icinga2-ido-pgsql       | DB IDO provider module for PostgreSQL
+  icinga2-ido-mysql       | [DB IDO](#configuring-db-ido) provider module for MySQL
+  icinga2-ido-pgsql       | [DB IDO](#configuring-db-ido) provider module for PostgreSQL
 
 If you're running a distribution for which Icinga 2 packages are
 not yet available you will need to use the release tarball which you
@@ -538,19 +547,23 @@ or [PostgreSQL](#installing-database-postgresql-server) as supported database se
 #### <a id="installing-database-mysql-server"></a> Installing MySQL database server
 
 Debian/Ubuntu:
+
     # apt-get install mysql-server mysql-client
 
 RHEL/CentOS 5/6:
+
     # yum install mysql-server mysql
     # chkconfig mysqld on
     # service mysqld start
 
 RHEL/CentOS 7 and Fedora 20 prefer MariaDB over MySQL:
+
     # yum install mariadb-server mariadb
     # systemctl enable mariadb.service
     # systemctl start mariadb.service
 
 SUSE:
+
     # zypper install mysql mysql-client
     # chkconfig mysqld on
     # service mysqld start
@@ -563,24 +576,45 @@ RHEL based distributions do not automatically set a secure root password. Do tha
 #### <a id="installing-database-postgresql-server"></a> Installing PostgreSQL database server
 
 Debian/Ubuntu:
+
     # apt-get install postgresql
 
 RHEL/CentOS 5/6:
+
     # yum install postgresql-server postgresql
     # chkconfig postgresql on
     # service postgresql start
 
 RHEL/CentOS 7 and Fedora 20 use [systemd](#systemd-service):
+
     # yum install postgresql-server postgresql
     # systemctl enable postgresql.service
     # systemctl start postgresql.service
 
 SUSE:
+
     # zypper install postgresql postgresql-server
     # chkconfig postgresql on
     # service postgresql start
 
 ### <a id="configuring-db-ido-mysql"></a> Configuring DB IDO MySQL
+
+First of all you have to install the `icinga2-ido-mysql` package using your
+distribution's package manager.
+
+Debian/Ubuntu:
+
+    # apt-get install icinga2-ido-mysql
+
+RHEL/CentOS:
+
+    # yum install icinga2-ido-mysql
+
+SUSE:
+
+    # zypper install icinga2-ido-mysql
+
+
 
 > **Note**
 >
@@ -590,18 +624,13 @@ SUSE:
 
 #### <a id="setting-up-mysql-db"></a> Setting up the MySQL database
 
-First of all you have to install the `icinga2-ido-mysql` package using your
-distribution's package manager. Once you have done that you can proceed with
-setting up a MySQL database for Icinga 2:
+Set up a MySQL database for Icinga 2:
 
     # mysql -u root -p
 
     mysql>  CREATE DATABASE icinga;
-
-    mysql>  GRANT SELECT, INSERT, UPDATE, DELETE, DROP, CREATE VIEW, INDEX, EXECUTE ON icinga.* TO 'icinga'@'localhost' IDENTIFIED BY 'icinga';
-
-    mysql> quit
-
+            GRANT SELECT, INSERT, UPDATE, DELETE, DROP, CREATE VIEW, INDEX, EXECUTE ON icinga.* TO 'icinga'@'localhost' IDENTIFIED BY 'icinga';
+            quit
 
 After creating the database you can import the Icinga 2 IDO schema using the
 following command:
@@ -612,8 +641,11 @@ following command:
 #### <a id="upgrading-mysql-db"></a> Upgrading the MySQL database
 
 Check the `/usr/share/icinga2-ido-mysql/schema/upgrade` directory for an
-incremental schema upgrade file. If there isn't an upgrade file available
-there's nothing to do.
+incremental schema upgrade file.
+
+> **Note**
+>
+> If there isn't an upgrade file for your current version available there's nothing to do.
 
 Apply all database schema upgrade files incrementially.
 
@@ -621,6 +653,16 @@ Apply all database schema upgrade files incrementially.
 
 The Icinga 2 DB IDO module will check for the required database schema version on startup
 and generate an error message if not satisfied.
+
+
+**Example:** You are upgrading Icinga 2 from version `2.0.2` to `2.1.0`. Look into
+the *upgrade* directory:
+
+    $ ls /usr/share/icinga2-ido-mysql/schema/upgrade/
+    2.0.2.sql  2.1.0.sql
+
+There is a new upgrade file called `2.1.0.sql` which must be applied to your IDO database.
+
 
 #### <a id="installing-ido-mysql"></a> Installing the IDO MySQL module
 
@@ -636,10 +678,30 @@ You can enable the `ido-mysql` feature configuration file using `icinga2-enable-
 
 After enabling the ido-mysql feature you have to restart Icinga 2:
 
+Debian/Ubuntu, RHEL/CentOS 6 and SUSE:
+
     # service icinga2 restart
 
+RHEL/CentOS 7 and Fedora 20:
+
+    # systemctl restart icinga2.service
 
 ### <a id="configuring-db-ido-postgresql"></a> Configuring DB IDO PostgreSQL
+
+First of all you have to install the `icinga2-ido-pgsql` package using your
+distribution's package manager.
+
+Debian/Ubuntu:
+
+    # apt-get install icinga2-ido-pgsql
+
+RHEL/CentOS:
+
+    # yum install icinga2-ido-pgsql
+
+SUSE:
+
+    # zypper install icinga2-ido-pgsql
 
 > **Note**
 >
@@ -649,9 +711,7 @@ After enabling the ido-mysql feature you have to restart Icinga 2:
 
 #### Setting up the PostgreSQL database
 
-First of all you have to install the `icinga2-ido-pgsql` package using your
-distribution's package manager. Once you have done that you can proceed with
-setting up a PostgreSQL database for Icinga 2:
+Set up a PostgreSQL database for Icinga 2:
 
     # cd /tmp
     # sudo -u postgres psql -c "CREATE ROLE icinga WITH LOGIN PASSWORD 'icinga'";
@@ -692,8 +752,11 @@ using the following command:
 #### <a id="upgrading-postgresql-db"></a> Upgrading the PostgreSQL database
 
 Check the `/usr/share/icinga2-ido-pgsql/schema/upgrade` directory for an
-incremental schema upgrade file. If there isn't an upgrade file available
-there's nothing to do.
+incremental schema upgrade file.
+
+> **Note**
+>
+> If there isn't an upgrade file for your current version available there's nothing to do.
 
 Apply all database schema upgrade files incrementially.
 
@@ -702,6 +765,15 @@ Apply all database schema upgrade files incrementially.
 
 The Icinga 2 DB IDO module will check for the required database schema version on startup
 and generate an error message if not satisfied.
+
+**Example:** You are upgrading Icinga 2 from version `2.0.2` to `2.1.0`. Look into
+the *upgrade* directory:
+
+    $ ls /usr/share/icinga2-ido-pgsql/schema/upgrade/
+    2.0.2.sql  2.1.0.sql
+
+There is a new upgrade file called `2.1.0.sql` which must be applied to your IDO database.
+
 
 #### <a id="installing-ido-postgresql"></a> Installing the IDO PostgreSQL module
 
@@ -717,7 +789,13 @@ You can enable the `ido-pgsql` feature configuration file using `icinga2-enable-
 
 After enabling the ido-pgsql feature you have to restart Icinga 2:
 
+Debian/Ubuntu, RHEL/CentOS 6 and SUSE:
+
     # service icinga2 restart
+
+RHEL/CentOS 7 and Fedora 20:
+
+    # systemctl restart icinga2.service
 
 
 ### <a id="setting-up-external-command-pipe"></a> Setting Up External Command Pipe
@@ -731,7 +809,13 @@ You can enable the External Command Pipe using icinga2-enable-feature:
 
 After that you will have to restart Icinga 2:
 
+Debian/Ubuntu, RHEL/CentOS 6 and SUSE:
+
     # service icinga2 restart
+
+RHEL/CentOS 7 and Fedora 20:
+
+    # systemctl restart icinga2.service
 
 By default the command pipe file is owned by the group `icingacmd` with read/write
 permissions. Add your webserver's user to the group `icingacmd` to
@@ -775,7 +859,13 @@ You can enable Livestatus using icinga2-enable-feature:
 
 After that you will have to restart Icinga 2:
 
+Debian/Ubuntu, RHEL/CentOS 6 and SUSE:
+
     # service icinga2 restart
+
+RHEL/CentOS 7 and Fedora 20:
+
+    # systemctl restart icinga2.service
 
 By default the Livestatus socket is available in `/var/run/icinga2/cmd/livestatus`.
 
@@ -829,22 +919,26 @@ as web server.
 Debian/Ubuntu packages will automatically fetch and install the required packages.
 
 RHEL/CentOS/Fedora:
+
     # yum install httpd
     # chkconfig httpd on && service httpd start
     ## RHEL7
     # systemctl enable httpd && systemctl start httpd
 
 SUSE:
+
     # zypper install apache2
     # chkconfig on && service apache2 start
 
 #### <a id="icinga2-user-interface-firewall-rules"></a> Firewall Rules
 
 Example:
+
     # iptables -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT
     # service iptables save
 
 RHEL/CentOS 7 specific:
+
     # firewall-cmd --add-service=http
     # firewall-cmd --permanent --add-service=http
 
@@ -913,9 +1007,11 @@ The Icinga package repository has both Debian and RPM packages. You can install
 Icinga Web using the following packages (RPMs ship an additional configuration package):
 
   Distribution  | Packages
-  --------------|-------------------------------------
+  --------------|-------------------------------------------------------
   RHEL/SUSE     | icinga-web icinga-web-{mysql,pgsql}
-  Debian        | icinga-web
+  Debian        | icinga-web icinga-web-config-icinga2-ido-{mysql,pgsql}
+
+#### <a id="icinga-web-rpm-notes"></a> Icinga Web on RPM based systems
 
 Additionally you need to setup the `icinga_web` database and import the database schema.
 Details can be found in the package `README` files, for example [README.RHEL](https://github.com/Icinga/icinga-web/blob/master/doc/README.RHEL)
@@ -975,6 +1071,38 @@ to the default used in Icinga 2. Make sure to clear the cache afterwards.
 >
 > The path to the Icinga Web `clearcache` script may differ. Please check the
 > [Icinga Web documentation](https://docs.icinga.org) for details.
+
+#### <a id="icinga-web-debian-notes"></a> Icinga Web on Debian systems
+
+Since Icinga Web `1.11.1-2` the IDO auto-configuration has been moved into
+additional packages on Debian and Ubuntu.
+
+The package `icinga-web` no longer configures the IDO connection. You must now
+use one of the config packages:
+
+ - `icinga-web-config-icinga2-ido-mysql`
+ - `icinga-web-config-icinga2-ido-pgsql`
+
+These packages take care of setting up the [DB IDO](#configuring-db-ido) configuration,
+enabling the external command pipe for Icinga Web and depend on
+the corresponding packages of Icinga 2.
+
+Please read the `README.Debian` files for details and advanced configuration:
+
+ - `/usr/share/doc/icinga-web/README.Debian`
+ - `/usr/share/doc/icinga-web-config-icinga2-ido-mysql/README.Debian`
+ - `/usr/share/doc/icinga-web-config-icinga2-ido-pgsql/README.Debian`
+
+When changing Icinga Web configuration files make sure to clear the config cache:
+
+    # /usr/lib/icinga-web/bin/clearcache.sh
+
+> **Note**
+>
+> If you are using an older version of Icinga Web, install it like this and adapt
+> the configuration manually as shown in [the RPM notes](#icinga-web-rpm-notes):
+>
+> `apt-get install --no-install-recommends icinga-web`
 
 #### <a id="setting-up-icinga-web-summary"></a> Setting Up Icinga Web Summary
 

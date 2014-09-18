@@ -65,7 +65,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.1.0
+Version: 2.1.1
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
@@ -189,7 +189,7 @@ BuildRequires: python-setuptools
 Requires:     python-setuptools
 
 %description -n python-icinga2
-Python module for Icinga 2.
+Provides a Python module for Icinga 2.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -203,7 +203,8 @@ CMAKE_OPTS="-DCMAKE_INSTALL_PREFIX=/usr \
          -DICINGA2_USER=%{icinga_user} \
          -DICINGA2_GROUP=%{icinga_group} \
          -DICINGA2_COMMAND_USER=%{icinga_user} \
-         -DICINGA2_COMMAND_GROUP=%{icingacmd_group}"
+         -DICINGA2_COMMAND_GROUP=%{icingacmd_group} \
+         -DICINGA2_UNITY_BUILD=TRUE"
 %if "%{_vendor}" == "redhat"
 %if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5"
 # Boost_VERSION 1.41.0 vs 101400 - disable build tests
@@ -233,7 +234,6 @@ make %{?_smp_mflags}
 
 
 %install
-[ "%{buildroot}" != "/" ] && [ -d "%{buildroot}" ] && rm -rf %{buildroot}
 make install \
 	DESTDIR="%{buildroot}"
 
@@ -533,6 +533,7 @@ exit 0
 %config(noreplace) %attr(0640,root,%{apachegroup}) %{icingaclassicconfdir}/passwd
 
 %files -n python-icinga2
+%defattr(-,root,root,-)
 %{python2_sitelib}/icinga2*
 
 
