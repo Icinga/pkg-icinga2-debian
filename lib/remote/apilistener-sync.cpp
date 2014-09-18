@@ -105,10 +105,10 @@ bool ApiListener::UpdateConfigDir(const Dictionary::Ptr& oldConfig, const Dictio
 
 void ApiListener::SyncZoneDir(const Zone::Ptr& zone) const
 {
-	Log(LogInformation, "ApiListener", "Syncing zone: " + zone->GetName());
-
 	String newDir = Application::GetZonesDir() + "/" + zone->GetName();
 	String oldDir = Application::GetLocalStateDir() + "/lib/icinga2/api/zones/" + zone->GetName();
+
+	Log(LogInformation, "ApiListener", "Copying zone configuration files from '" + newDir + "' to  '" + oldDir + "'.");
 
 	if (!Utility::MkDir(oldDir, 0700)) {
 		std::ostringstream msgbuf;
@@ -129,13 +129,13 @@ void ApiListener::SyncZoneDir(const Zone::Ptr& zone) const
 
 void ApiListener::SyncZoneDirs(void) const
 {
-	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjects<Zone>()) {
+	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
 		if (!IsConfigMaster(zone))
 			continue;
 
 		try {
 			SyncZoneDir(zone);
-		} catch (std::exception&) {
+		} catch (const std::exception&) {
 			continue;
 		}
 	}
@@ -157,7 +157,7 @@ void ApiListener::SendConfigUpdate(const ApiClient::Ptr& aclient)
 
 	String zonesDir = Application::GetLocalStateDir() + "/lib/icinga2/api/zones";
 
-	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjects<Zone>()) {
+	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
 		String zoneDir = zonesDir + "/" + zone->GetName();
 
 		if (!zone->IsChildOf(azone) && !zone->IsGlobal()) {

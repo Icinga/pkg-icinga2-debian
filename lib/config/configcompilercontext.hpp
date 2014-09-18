@@ -21,7 +21,7 @@
 #define CONFIGCOMPILERCONTEXT_H
 
 #include "config/i2-config.hpp"
-#include "config/debuginfo.hpp"
+#include "base/debuginfo.hpp"
 #include <boost/thread/mutex.hpp>
 #include <vector>
 
@@ -54,7 +54,7 @@ public:
 	static ConfigCompilerContext *GetInstance(void);
 
 private:
-        std::vector<ConfigCompilerMessage> m_Messages;
+	std::vector<ConfigCompilerMessage> m_Messages;
 
 	mutable boost::mutex m_Mutex;
 };

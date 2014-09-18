@@ -36,7 +36,7 @@ bool I2_EXPORT TlsStream::m_SSLIndexInitialized = false;
  * @param sslContext The SSL context for the client.
  */
 TlsStream::TlsStream(const Socket::Ptr& socket, ConnectionRole role, const shared_ptr<SSL_CTX>& sslContext)
-	: m_Socket(socket), m_Role(role)
+	: m_Eof(false), m_Socket(socket), m_Role(role)
 {
 	std::ostringstream msgbuf;
 	char errbuf[120];
@@ -44,12 +44,12 @@ TlsStream::TlsStream(const Socket::Ptr& socket, ConnectionRole role, const share
 	m_SSL = shared_ptr<SSL>(SSL_new(sslContext.get()), SSL_free);
 
 	if (!m_SSL) {
-		msgbuf << "SSL_new() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), errbuf) << "\"";
+		msgbuf << "SSL_new() failed with code " << ERR_peek_error() << ", \"" << ERR_error_string(ERR_peek_error(), errbuf) << "\"";
 		Log(LogCritical, "TlsStream", msgbuf.str());
 
 		BOOST_THROW_EXCEPTION(openssl_error()
 			<< boost::errinfo_api_function("SSL_new")
-			<< errinfo_openssl_error(ERR_get_error()));
+			<< errinfo_openssl_error(ERR_peek_error()));
 	}
 
 	if (!m_SSLIndexInitialized) {
@@ -98,6 +98,8 @@ void TlsStream::Handshake(void)
 	std::ostringstream msgbuf;
 	char errbuf[120];
 
+	boost::mutex::scoped_lock alock(m_IOActionLock);
+
 	for (;;) {
 		int rc, err;
 
@@ -115,23 +117,23 @@ void TlsStream::Handshake(void)
 			case SSL_ERROR_WANT_READ:
 				try {
 					m_Socket->Poll(true, false);
-				} catch (std::exception&) {}
+				} catch (const std::exception&) {}
 				continue;
 			case SSL_ERROR_WANT_WRITE:
 				try {
 					m_Socket->Poll(false, true);
-				} catch (std::exception&) {}
+				} catch (const std::exception&) {}
 				continue;
 			case SSL_ERROR_ZERO_RETURN:
 				Close();
 				return;
 			default:
-				msgbuf << "SSL_do_handshake() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), errbuf) << "\"";
+				msgbuf << "SSL_do_handshake() failed with code " << ERR_peek_error() << ", \"" << ERR_error_string(ERR_peek_error(), errbuf) << "\"";
 				Log(LogCritical, "TlsStream", msgbuf.str());
 
 				BOOST_THROW_EXCEPTION(openssl_error()
 				    << boost::errinfo_api_function("SSL_do_handshake")
-				    << errinfo_openssl_error(ERR_get_error()));
+				    << errinfo_openssl_error(ERR_peek_error()));
 		}
 	}
 }
@@ -144,6 +146,10 @@ size_t TlsStream::Read(void *buffer, size_t count)
 	size_t left = count;
 	std::ostringstream msgbuf;
 	char errbuf[120];
+
+	m_Socket->Poll(true, false);
+
+	boost::mutex::scoped_lock alock(m_IOActionLock);
 
 	while (left > 0) {
 		int rc, err;
@@ -161,23 +167,23 @@ size_t TlsStream::Read(void *buffer, size_t count)
 				case SSL_ERROR_WANT_READ:
 					try {
 						m_Socket->Poll(true, false);
-					} catch (std::exception&) {}
+					} catch (const std::exception&) {}
 					continue;
 				case SSL_ERROR_WANT_WRITE:
 					try {
 						m_Socket->Poll(false, true);
-					} catch (std::exception&) {}
+					} catch (const std::exception&) {}
 					continue;
 				case SSL_ERROR_ZERO_RETURN:
 					Close();
 					return count - left;
 				default:
-					msgbuf << "SSL_read() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), errbuf) << "\"";
+					msgbuf << "SSL_read() failed with code " << ERR_peek_error() << ", \"" << ERR_error_string(ERR_peek_error(), errbuf) << "\"";
 					Log(LogCritical, "TlsStream", msgbuf.str());
 
 					BOOST_THROW_EXCEPTION(openssl_error()
 					    << boost::errinfo_api_function("SSL_read")
-					    << errinfo_openssl_error(ERR_get_error()));
+					    << errinfo_openssl_error(ERR_peek_error()));
 			}
 		}
 
@@ -192,6 +198,10 @@ void TlsStream::Write(const void *buffer, size_t count)
 	size_t left = count;
 	std::ostringstream msgbuf;
 	char errbuf[120];
+
+	m_Socket->Poll(false, true);
+
+	boost::mutex::scoped_lock alock(m_IOActionLock);
 
 	while (left > 0) {
 		int rc, err;
@@ -209,23 +219,23 @@ void TlsStream::Write(const void *buffer, size_t count)
 				case SSL_ERROR_WANT_READ:
 					try {
 						m_Socket->Poll(true, false);
-					} catch (std::exception&) {}
+					} catch (const std::exception&) {}
 					continue;
 				case SSL_ERROR_WANT_WRITE:
 					try {
 						m_Socket->Poll(false, true);
-					} catch (std::exception&) {}
+					} catch (const std::exception&) {}
 					continue;
 				case SSL_ERROR_ZERO_RETURN:
 					Close();
 					return;
 				default:
-					msgbuf << "SSL_write() failed with code " << ERR_get_error() << ", \"" << ERR_error_string(ERR_get_error(), errbuf) << "\"";
+					msgbuf << "SSL_write() failed with code " << ERR_peek_error() << ", \"" << ERR_error_string(ERR_peek_error(), errbuf) << "\"";
 					Log(LogCritical, "TlsStream", msgbuf.str());
 
 					BOOST_THROW_EXCEPTION(openssl_error()
 					    << boost::errinfo_api_function("SSL_write")
-					    << errinfo_openssl_error(ERR_get_error()));
+					    << errinfo_openssl_error(ERR_peek_error()));
 			}
 		}
 
@@ -238,6 +248,10 @@ void TlsStream::Write(const void *buffer, size_t count)
  */
 void TlsStream::Close(void)
 {
+	boost::mutex::scoped_lock alock(m_IOActionLock);
+
+	m_Eof = true;
+
 	for (int i = 0; i < 5; i++) {
 		int rc, err;
 
@@ -258,12 +272,12 @@ void TlsStream::Close(void)
 			case SSL_ERROR_WANT_READ:
 				try {
 					m_Socket->Poll(true, false);
-				} catch (std::exception&) {}
+				} catch (const std::exception&) {}
 				continue;
 			case SSL_ERROR_WANT_WRITE:
 				try {
 					m_Socket->Poll(false, true);
-				} catch (std::exception&) {}
+				} catch (const std::exception&) {}
 				continue;
 			default:
 				goto close_socket;
@@ -276,5 +290,5 @@ close_socket:
 
 bool TlsStream::IsEof(void) const
 {
-	return (BIO_eof(m_BIO) == 1);
+	return m_Eof;
 }

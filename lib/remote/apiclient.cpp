@@ -66,7 +66,7 @@ ConnectionRole ApiClient::GetRole(void) const
 
 void ApiClient::SendMessage(const Dictionary::Ptr& message)
 {
-	if (m_WriteQueue.GetLength() > 5000) {
+	if (m_WriteQueue.GetLength() > 20000) {
 		Log(LogWarning, "remote", "Closing connection for API identity '" + m_Identity + "': Too many queued messages.");
 		Disconnect();
 		return;
@@ -79,6 +79,8 @@ void ApiClient::SendMessageSync(const Dictionary::Ptr& message)
 {
 	try {
 		ObjectLock olock(m_Stream);
+		if (m_Stream->IsEof())
+			return;
 		JsonRpc::SendMessage(m_Stream, message);
 		if (message->Get("method") != "log::SetLogPosition")
 			m_Seen = Utility::GetTime();
@@ -114,7 +116,21 @@ void ApiClient::DisconnectSync(void)
 
 bool ApiClient::ProcessMessage(void)
 {
-	Dictionary::Ptr message = JsonRpc::ReadMessage(m_Stream);
+	Dictionary::Ptr message;
+
+	if (m_Stream->IsEof())
+		return false;
+
+	try {
+		message = JsonRpc::ReadMessage(m_Stream);
+	} catch (const openssl_error& ex) {
+		const unsigned long *pe = boost::get_error_info<errinfo_openssl_error>(ex);
+
+		if (pe && *pe == 0)
+			return false; /* Connection was closed cleanly */
+
+		throw;
+	}
 
 	if (!message)
 		return false;
@@ -155,7 +171,7 @@ bool ApiClient::ProcessMessage(void)
 			BOOST_THROW_EXCEPTION(std::invalid_argument("Function '" + method + "' does not exist."));
 
 		resultMessage->Set("result", afunc->Invoke(origin, message->Get("params")));
-	} catch (std::exception& ex) {
+	} catch (const std::exception& ex) {
 		resultMessage->Set("error", DiagnosticInformation(ex));
 	}
 
@@ -175,11 +191,11 @@ void ApiClient::MessageThreadProc(void)
 	try {
 		while (ProcessMessage())
 			; /* empty loop body */
-
-		Disconnect();
 	} catch (const std::exception& ex) {
 		Log(LogWarning, "ApiClient", "Error while reading JSON-RPC message for identity '" + m_Identity + "': " + DiagnosticInformation(ex));
 	}
+
+	Disconnect();
 }
 
 Value SetLogPositionHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)

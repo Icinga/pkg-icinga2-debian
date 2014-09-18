@@ -34,10 +34,10 @@ INITIALIZE_ONCE(&UserGroup::RegisterObjectRuleHandler);
 
 void UserGroup::RegisterObjectRuleHandler(void)
 {
-        ObjectRule::RegisterType("UserGroup", &UserGroup::EvaluateObjectRules);
+	ObjectRule::RegisterType("UserGroup", &UserGroup::EvaluateObjectRules);
 }
 
-bool UserGroup::EvaluateObjectRuleOne(const User::Ptr user, const ObjectRule& rule)
+bool UserGroup::EvaluateObjectRuleOne(const User::Ptr& user, const ObjectRule& rule)
 {
 	DebugInfo di = rule.GetDebugInfo();
 
@@ -74,7 +74,7 @@ bool UserGroup::EvaluateObjectRuleOne(const User::Ptr user, const ObjectRule& ru
 
 void UserGroup::EvaluateObjectRule(const ObjectRule& rule)
 {
-	BOOST_FOREACH(const User::Ptr& user, DynamicType::GetObjects<User>()) {
+	BOOST_FOREACH(const User::Ptr& user, DynamicType::GetObjectsByType<User>()) {
 		CONTEXT("Evaluating group membership in '" + rule.GetName() + "' for user '" + user->GetName() + "'");
 
 		EvaluateObjectRuleOne(user, rule);

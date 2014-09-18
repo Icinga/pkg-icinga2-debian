@@ -43,21 +43,21 @@ String I2_BASE_API SHA256(const String& s);
 class I2_BASE_API openssl_error : virtual public std::exception, virtual public boost::exception { };
 
 struct errinfo_openssl_error_;
-typedef boost::error_info<struct errinfo_openssl_error_, int> errinfo_openssl_error;
+typedef boost::error_info<struct errinfo_openssl_error_, unsigned long> errinfo_openssl_error;
 
 inline std::string to_string(const errinfo_openssl_error& e)
 {
-        std::ostringstream tmp;
-        int code = e.value();
+	std::ostringstream tmp;
+	int code = e.value();
 	char errbuf[120];
 
-        const char *message = ERR_error_string(code, errbuf);
+	const char *message = ERR_error_string(code, errbuf);
 
-        if (message == NULL)
-                message = "Unknown error.";
+	if (message == NULL)
+		message = "Unknown error.";
 
-        tmp << code << ", \"" << message << "\"";
-        return tmp.str();
+	tmp << code << ", \"" << message << "\"";
+	return tmp.str();
 }
 
 }

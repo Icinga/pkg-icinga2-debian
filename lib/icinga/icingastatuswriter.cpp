@@ -38,7 +38,7 @@ Value IcingaStatusWriter::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& pe
 {
 	Dictionary::Ptr nodes = make_shared<Dictionary>();
 
-	BOOST_FOREACH(const IcingaStatusWriter::Ptr& icingastatuswriter, DynamicType::GetObjects<IcingaStatusWriter>()) {
+	BOOST_FOREACH(const IcingaStatusWriter::Ptr& icingastatuswriter, DynamicType::GetObjectsByType<IcingaStatusWriter>()) {
 		nodes->Set(icingastatuswriter->GetName(), 1); //add more stats
 	}
 
@@ -143,29 +143,29 @@ void IcingaStatusWriter::StatusTimerHandler(void)
 {
 	Log(LogNotice, "IcingaStatusWriter", "Writing status.json file");
 
-        String statuspath = GetStatusPath();
-        String statuspathtmp = statuspath + ".tmp"; /* XXX make this a global definition */
+	String statuspath = GetStatusPath();
+	String statuspathtmp = statuspath + ".tmp"; /* XXX make this a global definition */
 
-        std::ofstream statusfp;
-        statusfp.open(statuspathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
+	std::ofstream statusfp;
+	statusfp.open(statuspathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
 
-        statusfp << std::fixed;
+	statusfp << std::fixed;
 
 	statusfp << JsonSerialize(GetStatusData());
 
-        statusfp.close();
+	statusfp.close();
 
 #ifdef _WIN32
-        _unlink(statuspath.CStr());
+	_unlink(statuspath.CStr());
 #endif /* _WIN32 */
 
-        if (rename(statuspathtmp.CStr(), statuspath.CStr()) < 0) {
-                BOOST_THROW_EXCEPTION(posix_error()
-                    << boost::errinfo_api_function("rename")
-                    << boost::errinfo_errno(errno)
-                    << boost::errinfo_file_name(statuspathtmp));
-        }
+	if (rename(statuspathtmp.CStr(), statuspath.CStr()) < 0) {
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("rename")
+		    << boost::errinfo_errno(errno)
+		    << boost::errinfo_file_name(statuspathtmp));
+	}
 
-        Log(LogNotice, "IcingaStatusWriter", "Finished writing status.json file");
+	Log(LogNotice, "IcingaStatusWriter", "Finished writing status.json file");
 }
 

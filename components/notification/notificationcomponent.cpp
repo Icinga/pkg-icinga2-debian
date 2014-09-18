@@ -38,7 +38,7 @@ Value NotificationComponent::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&
 {
 	Dictionary::Ptr nodes = make_shared<Dictionary>();
 
-	BOOST_FOREACH(const NotificationComponent::Ptr& notification_component, DynamicType::GetObjects<NotificationComponent>()) {
+	BOOST_FOREACH(const NotificationComponent::Ptr& notification_component, DynamicType::GetObjectsByType<NotificationComponent>()) {
 		nodes->Set(notification_component->GetName(), 1); //add more stats
 	}
 
@@ -72,8 +72,11 @@ void NotificationComponent::NotificationTimerHandler(void)
 {
 	double now = Utility::GetTime();
 
-	BOOST_FOREACH(const Notification::Ptr& notification, DynamicType::GetObjects<Notification>()) {
+	BOOST_FOREACH(const Notification::Ptr& notification, DynamicType::GetObjectsByType<Notification>()) {
 		Checkable::Ptr checkable = notification->GetCheckable();
+
+		if (checkable->IsPaused() && GetEnableHA())
+			continue;
 
 		if (!IcingaApplication::GetInstance()->GetEnableNotifications() || !checkable->GetEnableNotifications())
 			continue;
@@ -128,5 +131,8 @@ void NotificationComponent::NotificationTimerHandler(void)
 void NotificationComponent::SendNotificationsHandler(const Checkable::Ptr& checkable, NotificationType type,
     const CheckResult::Ptr& cr, const String& author, const String& text)
 {
+	if (checkable->IsPaused() && GetEnableHA())
+		return;
+
 	checkable->SendNotifications(type, cr, author, text);
 }

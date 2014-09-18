@@ -46,69 +46,46 @@ Icinga 2 is available as [Vagrant Demo VM](#vagrant).
 
 ## <a id="whats-new"></a> What's new
 
-### What's New in Version 2.0.2
+### What's New in Version 2.1.1
 
-* Bug #6450: ipmi-sensors segfault due to stack size
-* Bug #6479: Notifications not always triggered
-* Bug #6501: Classic UI Debian/Ubuntu: apache 2.4 requires 'a2enmod cgi' & apacheutils installed
-* Bug #6548: Add cmake constant for PluginDir
-* Bug #6549: GraphiteWriter regularly sends empty lines
-* Bug #6550: add log message for invalid performance data
-* Bug #6589: Command pipe blocks when trying to open it more than once in parallel
-* Bug #6621: Infinite loop in TlsStream::Close
-* Bug #6627: Location of the run directory is hard coded and bound to "local_state_dir"
-* Bug #6659: RPMLint security warning - missing-call-to-setgroups-before-setuid /usr/sbin/icinga2
-* Bug #6682: Missing detailed error messages on ApiListener SSL Errors
-* Bug #6686: Event Commands are triggered in OK HARD state everytime
-* Bug #6687: Remove superfluous quotes and commas in dictionaries
-* Bug #6713: sample config: add check commands location hint (itl/plugin check commands)
-* Bug #6718: "order" attribute doesn't seem to work as expected
-* Bug #6724: TLS Connections still unstable in 2.0.1
-* Bug #6756: GraphiteWriter: Malformatted integer values
-* Bug #6765: Config validation without filename argument fails with unhandled exception
-* Bug #6768: Repo Error on RHEL 6.5
-* Bug #6773: Order doesn't work in check ssh command
-* Bug #6782: The "ssl" check command always sets -D
-* Bug #6790: Service icinga2 reload command does not cause effect
-* Bug #6809: additional group rights missing when Icinga started with -u and -g
-* Bug #6810: High Availablity does not synchronise the data like expected
-* Bug #6820: Icinga 2 crashes during startup
-* Bug #6821: [Patch] Fix build issue and crash found on Solaris, potentially other Unix OSes
-* Bug #6825: incorrect sysconfig path on sles11
-* Bug #6832: Remove if(NOT DEFINED ICINGA2_SYSCONFIGFILE) in etc/initsystem/CMakeLists.txt
-* Bug #6840: Missing space in error message
-* Bug #6849: Error handler for getaddrinfo must use gai_strerror
-* Bug #6852: Startup logfile is not flushed to disk
-* Bug #6856: event command execution does not call finish handler
-* Bug #6861: write startup error messages to error.log
-* Feature #5818: SUSE packages
-* Feature #6655: Build packages for el7
-* Feature #6688: Rename README to README.md
-* Feature #6698: Require command to be an array when the arguments attribute is used
-* Feature #6700: Release 2.0.2
-* Feature #6783: Print application paths for --version
-* DB IDO - Bug #6414: objects and their ids are inserted twice
-* DB IDO - Bug #6608: Two Custom Variables with same name, but Upper/Lowercase creating IDO duplicate entry
-* DB IDO - Bug #6646: NULL vs empty string
-* DB IDO - Bug #6850: exit application if ido schema version does not match
-* Documentation - Bug #6652: clarify on which features are required for classic ui/web/web2
-* Documentation - Bug #6708: update installation with systemd usage
-* Documentation - Bug #6711: icinga Web: wrong path to command pipe
-* Documentation - Bug #6725: Missing documentation about implicit dependency
-* Documentation - Bug #6728: wrong path for the file 'localhost.conf'
-* Migration - Bug #6558: group names quoted twice in arrays
-* Migration - Bug #6560: Service dependencies aren't getting converted properly
-* Migration - Bug #6561: $TOTALHOSTSERVICESWARNING$ and $TOTALHOSTSERVICESCRITICAL$ aren't getting converted
-* Migration - Bug #6563: Check and retry intervals are incorrect
-* Migration - Bug #6786: Fix notification definition if no host_name / service_description given
-* Plugins - Feature #6695: Plugin Check Commands: Add expect option to check_http
-* Plugins - Feature #6791: Plugin Check Commands: Add timeout option to check_ssh
+#### Issues
 
-#### Changes
-
-* DB IDO schema upgrade required (new schema version: 1.11.6)
-
-#### Changes
+* Bug #6147: Link libcJSON against libm
+* Bug #6696: make test fails on openbsd
+* Bug #6841: Too many queued messages
+* Bug #6862: SSL_read errors during restart
+* Bug #6981: SSL errors with interleaved SSL_read/write
+* Bug #7029: icinga2.spec: files-attr-not-set for python-icinga2 package
+* Bug #7032: "Error parsing performance data" in spite of "enable_perfdata = false"
+* Bug #7036: Remove validator for the Script type
+* Bug #7037: icinga2-list-objects doesn't work with Python 3
+* Bug #7038: Fix rpmlint errors
+* Bug #7042: icinga2-list-objects complains about Umlauts and stops output
+* Bug #7044: icinga2 init-script terminates with exit code 0 if $DAEMON is not in place or not executable
+* Bug #7047: service icinga2 status - prints cat error if the service is stopped
+* Bug #7058: Exit code is not initialized for some failed checks
+* Bug #7065: pipe2 returns ENOSYS on GNU Hurd and Debian kfreebsd
+* Bug #7072: GraphiteWriter should ignore empty perfdata value
+* Bug #7080: Missing differentiation between service and systemctl
+* Bug #7096: new SSL Errors with too many queued messages
+* Bug #7115: Build fails on Haiku
+* Bug #7123: Manubulon-Plugin conf Filename wrong
+* Bug #7139: GNUInstallDirs.cmake outdated
+* Bug #7167: Segfault using cluster in TlsStream::IsEof
+* Bug #7168: fping4 doesn't work correctly with the shipped command-plugins.conf
+* Bug #7186: Livestatus hangs from time to time
+* Bug #7195: fix memory leak ido_pgsql
+* Bug #7210: clarify on db ido upgrades
+* Feature #6719: Change log message for checking/sending notifications
+* Feature #7028: Document how to use @ to escape keywords
+* Feature #7033: Add include guards for mkclass files
+* Feature #7034: Ensure that namespaces for INITIALIZE_ONCE and REGISTER_TYPE are truly unique
+* Feature #7035: Implement support for unity builds
+* Feature #7039: Figure out a better way to set the version for snapshot builds
+* Feature #7040: Unity builds: Detect whether __COUNTER__ is available
+* Feature #7041: Enable unity build for RPM/Debian packages
+* Feature #7070: Explain event commands and their integration by a real life example (httpd restart via ssh)
+* Feature #7158: Extend documentation for icinga-web on Debian systems
 
 ### Archive
 

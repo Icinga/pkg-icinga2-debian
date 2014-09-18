@@ -50,6 +50,7 @@ bool Application::m_RequestRestart = false;
 bool Application::m_RequestReopenLogs = false;
 pid_t Application::m_ReloadProcess = 0;
 static bool l_Restarting = false;
+static bool l_InExceptionHandler = false;
 int Application::m_ArgC;
 char **Application::m_ArgV;
 double Application::m_StartTime;
@@ -95,7 +96,7 @@ void Application::Stop(void)
 	if (l_Restarting) {
 		try {
 			UpdatePidFile(GetPidPath(), m_ReloadProcess);
-		} catch (std::exception&) {
+		} catch (const std::exception&) {
 			/* abort restart */
 			Log(LogCritical, "Application", "Cannot update PID file. Aborting restart operation.");
 			return;
@@ -478,6 +479,7 @@ void Application::DisplayInfoMessage(bool skipVersion)
 		  << "  Local state directory: " << GetLocalStateDir() << std::endl
 		  << "  Package data directory: " << GetPkgDataDir() << std::endl
 		  << "  State path: " << GetStatePath() << std::endl
+		  << "  Objects path: " << GetObjectsPath() << std::endl
 		  << "  PID path: " << GetPidPath() << std::endl
 		  << "  Application type: " << GetApplicationType() << std::endl;
 }
@@ -577,6 +579,12 @@ BOOL WINAPI Application::CtrlHandler(DWORD type)
  */
 void Application::ExceptionHandler(void)
 {
+	if (l_InExceptionHandler)
+		for (;;)
+			Utility::Sleep(5);
+
+	l_InExceptionHandler = true;
+
 #ifndef _WIN32
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
@@ -606,6 +614,11 @@ void Application::ExceptionHandler(void)
 #ifdef _WIN32
 LONG CALLBACK Application::SEHUnhandledExceptionFilter(PEXCEPTION_POINTERS exi)
 {
+	if (l_InExceptionHandler)
+		return EXCEPTION_CONTINUE_SEARCH;
+
+	l_InExceptionHandler = true;
+
 	DisplayInfoMessage();
 
 	std::cerr << "Caught unhandled SEH exception." << std::endl
@@ -666,7 +679,7 @@ int Application::Run(void)
 
 	try {
 		UpdatePidFile(GetPidPath());
-	} catch (std::exception&) {
+	} catch (const std::exception&) {
 		Log(LogCritical, "Application", "Cannot update PID file '" + GetPidPath() + "'. Aborting.");
 		return false;
 	}
@@ -977,6 +990,26 @@ void Application::DeclareStatePath(const String& path)
 }
 
 /**
+ * Retrieves the path for the objects file.
+ *
+ * @returns The path.
+ */
+String Application::GetObjectsPath(void)
+{
+	return ScriptVariable::Get("ObjectsPath");
+}
+
+/**
+ * Sets the path for the objects file.
+ *
+ * @param path The new path.
+ */
+void Application::DeclareObjectsPath(const String& path)
+{
+	ScriptVariable::Set("ObjectsPath", path, false);
+}
+
+/**
  * Retrieves the path for the PID file.
  *
  * @returns The path.
@@ -1023,8 +1056,9 @@ void Application::MakeVariablesConstant(void)
 	ScriptVariable::GetByName("LocalStateDir")->SetConstant(true);
 	ScriptVariable::GetByName("RunDir")->SetConstant(true);
 	ScriptVariable::GetByName("PkgDataDir")->SetConstant(true);
-	ScriptVariable::GetByName("StatePath")->SetConstant(false);
-	ScriptVariable::GetByName("PidPath")->SetConstant(false);
+	ScriptVariable::GetByName("StatePath")->SetConstant(true);
+	ScriptVariable::GetByName("ObjectsPath")->SetConstant(true);
+	ScriptVariable::GetByName("PidPath")->SetConstant(true);
 	ScriptVariable::GetByName("ApplicationType")->SetConstant(true);
 }
 

@@ -1,8 +1,68 @@
-icinga2 (2.0.2-1~ppa1~trusty1) trusty; urgency=medium
+icinga2 (2.1.1-1~ppa1~trusty1) trusty; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
+
+icinga2 (2.1.1-1) unstable; urgency=medium
+
+  * [4a0350e] Imported Upstream version 2.1.1
+  * [81a704c] gnu_hurd.patch is now upstream
+  * [e5709e4] pipe_ENOSYS.patch is now upstream
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 18 Sep 2014 08:00:44 +0200
+
+icinga2 (2.1.0-3) unstable; urgency=medium
+
+  * [dd04e8c] Fix build problem with CMake libdir on Hurd and kFreeBSD
+              Using dist version of GNUInstallDirs.cmake
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Mon, 08 Sep 2014 16:39:23 +0200
+
+icinga2 (2.1.0-2) unstable; urgency=medium
+
+  [ Markus Frosch ]
+  * [26e4092] Update copyright for python embed
+  * [f9dd427] Fixed typo in copyright
+  * [f236eb4] Include all existing manpages
+  * [280f892] Adding patches for arch problems on Hurd and FreeBSD
+  * [ba59e9c] Fix lintian warning in copyright
+
+  [ Christian Perrier ]
+  * Debconf templates and debian/control reviewed by the debian-l10n-
+    english team as part of the Smith review project. Closes: #755248
+  * [Debconf translation updates]
+  * Portuguese (Américo Monteiro).  Closes: #758573
+  * Russian (Yuri Kozlov).  Closes: #758790
+  * German (Chris Leick).  Closes: #759364
+  * Brazilian Portuguese ().  Closes: #759599
+  * Danish (Joe Hansen).  Closes: #759778
+  * Japanese (victory).  Closes: #760094
+  * Spanish; (Matías A. Bellone).  Closes: #760115
+  * Czech (Michal Simunek).  Closes: #760145
+  * Polish (Michał Kułach).  Closes: #760180
+  * Italian (Beatrice Torracca).  Closes: #760300
+  * Turkish (Mert Dirik).  Closes: #760329
+  * French (Steve Petruzzello).  Closes: #760600
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Mon, 08 Sep 2014 14:03:13 +0200
+
+icinga2 (2.1.0-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [e1b3b50] Prefer monitoring-plugins over nagios-plugins
+
+  [ Markus Frosch ]
+  * [e192c30] Imported Upstream version 2.1.0
+  * [4e08221] Added python-icinga2 and updates for list-objects
+  * [4bd22b4] Update maintainer mail and copyright
+  * [cd79431] Add missing Python dependency macros
+  * [63d5bfb] Update gitignore
+  * [42a8707] Update lintian ignores
+  * [33ca186] Add patch 21_config_changes to change default mail
+              (Closes: #759011)
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Fri, 29 Aug 2014 14:07:28 +0200
 
 icinga2 (2.0.2-1) unstable; urgency=medium
 

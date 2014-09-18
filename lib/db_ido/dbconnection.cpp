@@ -22,21 +22,34 @@
 #include "icinga/icingaapplication.hpp"
 #include "icinga/host.hpp"
 #include "icinga/service.hpp"
+#include "config/configcompilercontext.hpp"
 #include "base/dynamictype.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
 #include "base/initialize.hpp"
 #include "base/logger_fwd.hpp"
+#include "base/scriptfunction.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(DbConnection);
+REGISTER_SCRIPTFUNCTION(ValidateFailoverTimeout, &DbConnection::ValidateFailoverTimeout);
 
 Timer::Ptr DbConnection::m_ProgramStatusTimer;
 
 INITIALIZE_ONCE(&DbConnection::StaticInitialize);
+
+void DbConnection::OnConfigLoaded(void)
+{
+	DynamicObject::OnConfigLoaded();
+
+	if (!GetEnableHa()) {
+		Log(LogDebug, "DbConnection", "HA functionality disabled. Won't pause IDO connection: " + GetName());
+		SetHAMode(HARunEverywhere);
+	}
+}
 
 void DbConnection::Start(void)
 {
@@ -108,6 +121,7 @@ void DbConnection::ProgramStatusHandler(void)
 	query2.Fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
 	query2.Fields->Set("program_start_time", DbValue::FromTimestamp(Application::GetStartTime()));
 	query2.Fields->Set("is_currently_running", 1);
+	query2.Fields->Set("endpoint_name", IcingaApplication::GetInstance()->GetNodeName());
 	query2.Fields->Set("process_id", Utility::GetPid());
 	query2.Fields->Set("daemon_mode", 1);
 	query2.Fields->Set("last_command_check", DbValue::FromTimestamp(Utility::GetTime()));
@@ -129,10 +143,10 @@ void DbConnection::ProgramStatusHandler(void)
 	query3.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
 	DbObject::OnQuery(query3);
 
-	InsertRuntimeVariable("total_services", std::distance(DynamicType::GetObjects<Service>().first, DynamicType::GetObjects<Service>().second));
-	InsertRuntimeVariable("total_scheduled_services", std::distance(DynamicType::GetObjects<Service>().first, DynamicType::GetObjects<Service>().second));
-	InsertRuntimeVariable("total_hosts", std::distance(DynamicType::GetObjects<Host>().first, DynamicType::GetObjects<Host>().second));
-	InsertRuntimeVariable("total_scheduled_hosts", std::distance(DynamicType::GetObjects<Host>().first, DynamicType::GetObjects<Host>().second));
+	InsertRuntimeVariable("total_services", std::distance(DynamicType::GetObjectsByType<Service>().first, DynamicType::GetObjectsByType<Service>().second));
+	InsertRuntimeVariable("total_scheduled_services", std::distance(DynamicType::GetObjectsByType<Service>().first, DynamicType::GetObjectsByType<Service>().second));
+	InsertRuntimeVariable("total_hosts", std::distance(DynamicType::GetObjectsByType<Host>().first, DynamicType::GetObjectsByType<Host>().second));
+	InsertRuntimeVariable("total_scheduled_hosts", std::distance(DynamicType::GetObjectsByType<Host>().first, DynamicType::GetObjectsByType<Host>().second));
 
 	Dictionary::Ptr vars = IcingaApplication::GetInstance()->GetVars();
 
@@ -358,7 +372,7 @@ void DbConnection::UpdateAllObjects(void)
 
 void DbConnection::PrepareDatabase(void)
 {
-	/* 
+	/*
 	 * only clear tables on reconnect which
 	 * cannot be updated by their existing ids
 	 * for details check https://dev.icinga.org/issues/5565
@@ -384,7 +398,6 @@ void DbConnection::PrepareDatabase(void)
 	//ClearConfigTable("hostgroups");
 	//ClearConfigTable("hosts");
 	//ClearConfigTable("hoststatus");
-	ClearConfigTable("programstatus");
 	ClearConfigTable("scheduleddowntime");
 	ClearConfigTable("service_contactgroups");
 	ClearConfigTable("service_contacts");
@@ -398,5 +411,16 @@ void DbConnection::PrepareDatabase(void)
 
 	BOOST_FOREACH(const DbType::Ptr& type, DbType::GetAllTypes()) {
 		FillIDCache(type);
+	}
+}
+
+void DbConnection::ValidateFailoverTimeout(const String& location, const Dictionary::Ptr& attrs)
+{
+	if (!attrs->Contains("failover_timeout"))
+		return;
+
+	if (attrs->Get("failover_timeout") < 60) {
+		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
+		    location + ": Failover timeout minimum is 60s.");
 	}
 }

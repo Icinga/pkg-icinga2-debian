@@ -22,7 +22,15 @@ if(MYSQL_FOUND)
 
     mkembedconfig_target(db_ido_mysql-type.conf db_ido_mysql-type.cpp)
 
-    add_library(db_ido_mysql SHARED idomysqlconnection.cpp idomysqlconnection.thpp db_ido_mysql-type.cpp)
+    set(db_ido_mysql_SOURCES
+      idomysqlconnection.cpp idomysqlconnection.thpp db_ido_mysql-type.cpp
+    )
+
+    if(ICINGA2_UNITY_BUILD)
+        mkunity_target(db_ido_mysql db_ido_mysql_SOURCES)
+    endif()
+
+    add_library(db_ido_mysql SHARED ${db_ido_mysql_SOURCES})
 
     include_directories(${MYSQL_INCLUDE_DIR})
     target_link_libraries(db_ido_mysql ${Boost_LIBRARIES} ${MYSQL_CLIENT_LIBS} base config icinga db_ido)
@@ -37,5 +45,17 @@ if(MYSQL_FOUND)
       TARGETS db_ido_mysql
       RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}
       LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
+    )
+
+    install(
+      DIRECTORY schema
+      DESTINATION ${CMAKE_INSTALL_DATADIR}/icinga2-ido-mysql
+      FILES_MATCHING PATTERN "*.sql"
+    )
+
+    install(
+      DIRECTORY schema/upgrade
+      DESTINATION ${CMAKE_INSTALL_DATADIR}/icinga2-ido-mysql/schema
+      FILES_MATCHING PATTERN "*.sql"
     )
 endif()

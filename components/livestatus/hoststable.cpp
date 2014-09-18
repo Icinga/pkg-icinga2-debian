@@ -174,7 +174,7 @@ String HostsTable::GetPrefix(void) const
 
 void HostsTable::FetchRows(const AddRowFunction& addRowFn)
 {
-	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjects<Host>()) {
+	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
 		addRowFn(host);
 	}
 }
@@ -584,7 +584,7 @@ Value HostsTable::CurrentNotificationNumberAccessor(const Value& row)
 	if (!host)
 		return Empty;
 
-        return CompatUtility::GetCheckableNotificationNotificationNumber(host);
+	return CompatUtility::GetCheckableNotificationNotificationNumber(host);
 }
 
 Value HostsTable::TotalServicesAccessor(const Value& row)

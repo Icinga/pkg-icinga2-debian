@@ -94,8 +94,17 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 					String set_if_resolved = MacroProcessor::ResolveMacros(set_if, macroResolvers,
 						cr, &missingMacro);
 
-					if (!missingMacro.IsEmpty() || !Convert::ToLong(set_if_resolved))
+					if (!missingMacro.IsEmpty())
 						continue;
+
+					try {
+						if (!Convert::ToLong(set_if_resolved))
+							continue;
+					} catch (const std::exception& ex) {
+						/* tried to convert a string */
+						Log(LogWarning, "PluginUtility", "Error evaluating set_if value '" + set_if_resolved + "': " + ex.what());
+						continue;
+					}
 				}
 			}
 			else
@@ -117,8 +126,10 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 
 					if (callback) {
 						ProcessResult pr;
+						pr.PID = -1;
 						pr.ExecutionStart = Utility::GetTime();
 						pr.ExecutionStart = pr.ExecutionStart;
+						pr.ExitStatus = 3; /* Unknown */
 						pr.Output = message;
 						callback(Empty, pr);
 					}
@@ -178,7 +189,7 @@ ServiceState PluginUtility::ExitStatusToState(int exitStatus)
 	}
 }
 
-std::pair<String, Value> PluginUtility::ParseCheckOutput(const String& output)
+std::pair<String, String> PluginUtility::ParseCheckOutput(const String& output)
 {
 	String text;
 	String perfdata;
@@ -206,17 +217,17 @@ std::pair<String, Value> PluginUtility::ParseCheckOutput(const String& output)
 
 	boost::algorithm::trim(perfdata);
 
-	return std::make_pair(text, ParsePerfdata(perfdata));
+	return std::make_pair(text, perfdata);
 }
 
 Value PluginUtility::ParsePerfdata(const String& perfdata)
 {
 	try {
 		Dictionary::Ptr result = make_shared<Dictionary>();
-	
+
 		size_t begin = 0;
 		String multi_prefix;
-		
+
 		for (;;) {
 			size_t eqp = perfdata.FindFirstOf('=', begin);
 

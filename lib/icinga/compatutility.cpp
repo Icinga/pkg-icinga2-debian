@@ -242,9 +242,9 @@ int CompatUtility::GetCheckableIsReachable(const Checkable::Ptr& checkable)
 	return (checkable->IsReachable() ? 1 : 0);
 }
 
-String CompatUtility::GetCheckablePercentStateChange(const Checkable::Ptr& checkable)
+double CompatUtility::GetCheckablePercentStateChange(const Checkable::Ptr& checkable)
 {
-	return Convert::ToString(checkable->GetFlappingCurrent());
+	return checkable->GetFlappingCurrent();
 }
 
 int CompatUtility::GetCheckableProcessPerformanceData(const Checkable::Ptr& checkable)
@@ -314,8 +314,8 @@ int CompatUtility::GetCheckableIsAcknowledged(const Checkable::Ptr& checkable)
 
 int CompatUtility::GetCheckableNoMoreNotifications(const Checkable::Ptr& checkable)
 {
-        if (CompatUtility::GetCheckableNotificationNotificationInterval(checkable) == 0 && !checkable->GetVolatile())
-                return 1;
+	if (CompatUtility::GetCheckableNotificationNotificationInterval(checkable) == 0 && !checkable->GetVolatile())
+		return 1;
 
 	return 0;
 }

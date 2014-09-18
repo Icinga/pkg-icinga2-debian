@@ -50,7 +50,7 @@ Value GraphiteWriter::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
 {
 	Dictionary::Ptr nodes = make_shared<Dictionary>();
 
-	BOOST_FOREACH(const GraphiteWriter::Ptr& graphitewriter, DynamicType::GetObjects<GraphiteWriter>()) {
+	BOOST_FOREACH(const GraphiteWriter::Ptr& graphitewriter, DynamicType::GetObjectsByType<GraphiteWriter>()) {
 		nodes->Set(graphitewriter->GetName(), 1); //add more stats
 	}
 
@@ -93,6 +93,8 @@ void GraphiteWriter::ReconnectTimerHandler(void)
 
 void GraphiteWriter::CheckResultHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
 {
+	CONTEXT("Processing check result for '" + checkable->GetName() + "'");
+
 	if (!IcingaApplication::GetInstance()->GetEnablePerfdata() || !checkable->GetEnablePerfdata())
 		return;
 
@@ -134,8 +136,12 @@ void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& 
 {
 	Value pdv = cr->GetPerformanceData();
 
+	if (pdv.IsEmpty())
+		return;
+
 	if (!pdv.IsObjectType<Dictionary>())
 	{
+		CONTEXT("Processing performance data value '" + String(pdv) + "'");
 		Log(LogWarning, "GraphiteWriter", "Could not send performance data: unparsed data.");
 		return;
 	}

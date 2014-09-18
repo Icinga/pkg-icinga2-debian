@@ -71,23 +71,24 @@ void Process::StaticInitialize(void)
 #else /* _WIN32 */
 #	ifdef HAVE_PIPE2
 		if (pipe2(l_EventFDs[tid], O_CLOEXEC) < 0) {
-			BOOST_THROW_EXCEPTION(posix_error()
-				<< boost::errinfo_api_function("pipe2")
-				<< boost::errinfo_errno(errno));
-		}
-#	else /* HAVE_PIPE2 */
-		if (pipe(l_EventFDs[tid]) < 0) {
-			BOOST_THROW_EXCEPTION(posix_error()
-				<< boost::errinfo_api_function("pipe")
-				<< boost::errinfo_errno(errno));
-		}
-
-		Utility::SetCloExec(l_EventFDs[tid][0]);
-		Utility::SetCloExec(l_EventFDs[tid][1]);
+			if (errno == ENOSYS) {
 #	endif /* HAVE_PIPE2 */
+				if (pipe(l_EventFDs[tid]) < 0) {
+					BOOST_THROW_EXCEPTION(posix_error()
+					    << boost::errinfo_api_function("pipe")
+					    << boost::errinfo_errno(errno));
+				}
 
-		Utility::SetNonBlocking(l_EventFDs[tid][0]);
-		Utility::SetNonBlocking(l_EventFDs[tid][1]);
+				Utility::SetCloExec(l_EventFDs[tid][0]);
+				Utility::SetCloExec(l_EventFDs[tid][1]);
+#	ifdef HAVE_PIPE2
+			} else {
+				BOOST_THROW_EXCEPTION(posix_error()
+					<< boost::errinfo_api_function("pipe2")
+					<< boost::errinfo_errno(errno));
+			}
+		}
+#	endif /* HAVE_PIPE2 */
 #endif /* _WIN32 */
 	}
 }
@@ -280,6 +281,15 @@ void Process::IOThreadProc(int tid)
 	}
 }
 
+String Process::PrettyPrintArguments(const Process::Arguments& arguments)
+{
+#ifdef _WIN32
+	return "'" + arguments + "'";
+#else /* _WIN32 */
+	return "'" + boost::algorithm::join(arguments, "' '") + "'";
+#endif /* _WIN32 */
+}
+
 void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 {
 	boost::call_once(l_OnceFlag, &Process::ThreadInitialize);
@@ -427,27 +437,31 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 	m_FD = outReadPipe;
 	m_PID = pi.dwProcessId;
 
-	Log(LogNotice, "Process", "Running command '" + m_Arguments +
-		"': PID " + Convert::ToString(m_PID));
+	Log(LogNotice, "Process", "Running command " + PrettyPrintArguments(m_Arguments) +
+	    ": PID " + Convert::ToString(m_PID));
 
 #else /* _WIN32 */
 	int fds[2];
 
 #ifdef HAVE_PIPE2
 	if (pipe2(fds, O_CLOEXEC) < 0) {
-		BOOST_THROW_EXCEPTION(posix_error()
-			<< boost::errinfo_api_function("pipe2")
-			<< boost::errinfo_errno(errno));
-	}
-#else /* HAVE_PIPE2 */
-	if (pipe(fds) < 0) {
-		BOOST_THROW_EXCEPTION(posix_error()
-			<< boost::errinfo_api_function("pipe")
-			<< boost::errinfo_errno(errno));
-	}
+		if (errno == ENOSYS) {
+#endif /* HAVE_PIPE2 */
+			if (pipe(fds) < 0) {
+				BOOST_THROW_EXCEPTION(posix_error()
+				    << boost::errinfo_api_function("pipe")
+				    << boost::errinfo_errno(errno));
+			}
 
-	Utility::SetCloExec(fds[0]);
-	Utility::SetCloExec(fds[1]);
+			Utility::SetCloExec(fds[0]);
+			Utility::SetCloExec(fds[1]);
+#ifdef HAVE_PIPE2
+		} else {
+			BOOST_THROW_EXCEPTION(posix_error()
+				<< boost::errinfo_api_function("pipe2")
+				<< boost::errinfo_errno(errno));
+		}
+	}
 #endif /* HAVE_PIPE2 */
 
 	// build argv
@@ -506,21 +520,23 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 		// child process
 
 		if (dup2(fds[1], STDOUT_FILENO) < 0 || dup2(fds[1], STDERR_FILENO) < 0) {
-			perror("dup2() failed.");
+			perror("dup2() failed");
 			_exit(128);
 		}
 
 		(void)close(fds[0]);
 		(void)close(fds[1]);
 
+#ifdef HAVE_NICE
 		if (nice(5) < 0)
 			Log(LogWarning, "base", "Failed to renice child process.");
+#endif /* HAVE_NICE */
 
 		if (icinga2_execvpe(argv[0], argv, envp) < 0) {
 			char errmsg[512];
 			strcpy(errmsg, "execvpe(");
 			strncat(errmsg, argv[0], sizeof(errmsg) - 1);
-			strncat(errmsg, ") failed.", sizeof(errmsg) - 1);
+			strncat(errmsg, ") failed", sizeof(errmsg) - 1);
 			errmsg[sizeof(errmsg) - 1] = '\0';
 			perror(errmsg);
 			_exit(128);
@@ -533,10 +549,8 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 
 	m_PID = m_Process;
 
-	Log(LogNotice, "Process", "Running command '" + boost::algorithm::join(m_Arguments, "', '") +
-		"': PID " + Convert::ToString(m_PID));
-
-	m_Arguments.clear();
+	Log(LogNotice, "Process", "Running command " + PrettyPrintArguments(m_Arguments) +
+	    ": PID " + Convert::ToString(m_PID));
 
 	// free arguments
 	for (int i = 0; argv[i] != NULL; i++)
@@ -585,7 +599,9 @@ bool Process::DoEvents(void)
 		double timeout = m_Result.ExecutionStart + m_Timeout;
 
 		if (timeout < Utility::GetTime()) {
-			Log(LogNotice, "Process", "Killing process '" + Convert::ToString(m_PID) + " after timeout of " + Convert::ToString(m_Timeout) + " seconds");
+			Log(LogWarning, "Process", "Killing process " + Convert::ToString(m_PID) +
+			    " (" + PrettyPrintArguments(m_Arguments) + ") after timeout of " +
+			    Convert::ToString(m_Timeout) + " seconds");
 
 			m_OutputStream << "<Timeout exceeded.>";
 #ifdef _WIN32
@@ -633,7 +649,9 @@ bool Process::DoEvents(void)
 	DWORD exitcode;
 	GetExitCodeProcess(m_Process, &exitcode);
 
-	Log(LogNotice, "Process", "PID " + Convert::ToString(m_PID) + " terminated with exit code " + Convert::ToString(exitcode));
+	Log(LogNotice, "Process", "PID " + Convert::ToString(m_PID) +
+	    " (" + PrettyPrintArguments(m_Arguments) + ") terminated with exit code " +
+	    Convert::ToString(exitcode));
 #else /* _WIN32 */
 	int status, exitcode;
 	if (waitpid(m_Process, &status, 0) != m_Process) {
@@ -645,9 +663,12 @@ bool Process::DoEvents(void)
 	if (WIFEXITED(status)) {
 		exitcode = WEXITSTATUS(status);
 
-		Log(LogNotice, "Process", "PID " + Convert::ToString(m_PID) + " terminated with exit code " + Convert::ToString(exitcode));
+		Log(LogNotice, "Process", "PID " + Convert::ToString(m_PID) +
+		    " (" + PrettyPrintArguments(m_Arguments) + ") terminated with exit code " +
+		    Convert::ToString(exitcode));
 	} else if (WIFSIGNALED(status)) {
-		Log(LogNotice, "Process", "PID " + Convert::ToString(m_PID) + " was terminated by signal " + Convert::ToString(WTERMSIG(status)));
+		Log(LogWarning, "Process", "PID " + Convert::ToString(m_PID) + " was terminated by signal " +
+		    Convert::ToString(WTERMSIG(status)));
 
 		std::ostringstream outputbuf;
 		outputbuf << "<Terminated by signal " << WTERMSIG(status) << ".>";
@@ -658,6 +679,7 @@ bool Process::DoEvents(void)
 	}
 #endif /* _WIN32 */
 
+	m_Result.PID = m_PID;
 	m_Result.ExecutionEnd = Utility::GetTime();
 	m_Result.ExitStatus = exitcode;
 	m_Result.Output = output;

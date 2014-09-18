@@ -17,55 +17,8 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#ifndef DEBUGINFO_H
-#define DEBUGINFO_H
-
-#include "config/i2-config.hpp"
-#include "base/qstring.hpp"
-
-namespace icinga
-{
-
 /**
- * Debug information for a configuration element.
- *
- * @ingroup config
+ * This is the SNMP Manubulon Template Library.
  */
-struct DebugInfo
-{
-	String Path;
 
-	union
-	{
-		int FirstLine;
-		int first_line;
-	};
-
-	union
-	{
-		int FirstColumn;
-		int first_column;
-	};
-
-	union
-	{
-		int LastLine;
-		int last_line;
-	};
-
-	union
-	{
-		int LastColumn;
-		int last_column;
-	};
-};
-
-I2_CONFIG_API std::ostream& operator<<(std::ostream& out, const DebugInfo& val);
-
-I2_CONFIG_API DebugInfo DebugInfoRange(const DebugInfo& start, const DebugInfo& end);
-
-I2_CONFIG_API void ShowCodeFragment(std::ostream& out, const DebugInfo& di, bool verbose);
-
-}
-
-#endif /* DEBUGINFO_H */
+include "command-plugins-manubulon.conf"

@@ -34,10 +34,10 @@ INITIALIZE_ONCE(&HostGroup::RegisterObjectRuleHandler);
 
 void HostGroup::RegisterObjectRuleHandler(void)
 {
-        ObjectRule::RegisterType("HostGroup", &HostGroup::EvaluateObjectRules);
+	ObjectRule::RegisterType("HostGroup", &HostGroup::EvaluateObjectRules);
 }
 
-bool HostGroup::EvaluateObjectRuleOne(const Host::Ptr host, const ObjectRule& rule)
+bool HostGroup::EvaluateObjectRuleOne(const Host::Ptr& host, const ObjectRule& rule)
 {
 	DebugInfo di = rule.GetDebugInfo();
 
@@ -74,7 +74,7 @@ bool HostGroup::EvaluateObjectRuleOne(const Host::Ptr host, const ObjectRule& ru
 
 void HostGroup::EvaluateObjectRule(const ObjectRule& rule)
 {
-	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjects<Host>()) {
+	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
 		CONTEXT("Evaluating group membership in '" + rule.GetName() + "' for host '" + host->GetName() + "'");
 
 		EvaluateObjectRuleOne(host, rule);
