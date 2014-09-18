@@ -21,14 +21,14 @@ if [ -f $SYSCONFIGFILE ]; then
 	. $SYSCONFIGFILE
 else
 	echo "Can't load system specific defines from $SYSCONFIGFILE."
-	exit 1
+	exit 6
 fi
 
-test -x $DAEMON || exit 0
+test -x $DAEMON || exit 5
 
 if [ ! -e $ICINGA2_CONFIG_FILE ]; then
         echo "Config file '$ICINGA2_CONFIG_FILE' does not exist."
-        exit 1
+        exit 6
 fi
 
 # Get function from functions library
@@ -65,7 +65,7 @@ stop() {
                 if [ "x$1" = "xnofail" ]; then
 			return
 		else
-			exit 1
+			exit 7
 		fi
         fi
 
@@ -94,12 +94,16 @@ stop() {
 reload() {
 	printf "Reloading Icinga 2: "
 
+	if [ ! -e $ICINGA2_PID_FILE ]; then
+		exit 7
+	fi
+
 	pid=`cat $ICINGA2_PID_FILE`
 	if kill -HUP $pid >/dev/null 2>&1; then
 		echo "Done"
 	else
 		echo "Error: Icinga not running"
-		exit 3
+		exit 7
 	fi
 }
 
@@ -131,12 +135,17 @@ checkconfig() {
 status() {
 	printf "Icinga 2 status: "
 
+	if [ ! -e $ICINGA2_PID_FILE ]; then
+		echo "Not running"
+		exit 7
+	fi
+
 	pid=`cat $ICINGA2_PID_FILE`
 	if kill -CHLD $pid >/dev/null 2>&1; then
 		echo "Running"
 	else
 		echo "Not running"
-		exit 3
+		exit 7
 	fi
 }
 
@@ -165,6 +174,6 @@ case "$1" in
 	;;
   *)
         echo "Usage: $0 {start|stop|restart|reload|checkconfig|status}"
-        exit 1
+        exit 3
 esac
 exit 0

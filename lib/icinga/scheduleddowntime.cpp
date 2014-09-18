@@ -39,7 +39,7 @@ INITIALIZE_ONCE(&ScheduledDowntime::StaticInitialize);
 
 static Timer::Ptr l_Timer;
 
-String ScheduledDowntimeNameComposer::MakeName(const String& shortName, const Dictionary::Ptr props) const
+String ScheduledDowntimeNameComposer::MakeName(const String& shortName, const Dictionary::Ptr& props) const
 {
 	if (!props)
 		return "";
@@ -71,7 +71,7 @@ void ScheduledDowntime::Start(void)
 
 void ScheduledDowntime::TimerProc(void)
 {
-	BOOST_FOREACH(const ScheduledDowntime::Ptr& sd, DynamicType::GetObjects<ScheduledDowntime>()) {
+	BOOST_FOREACH(const ScheduledDowntime::Ptr& sd, DynamicType::GetObjectsByType<ScheduledDowntime>()) {
 		sd->CreateNextDowntime();
 	}
 }
