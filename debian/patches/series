@@ -1,3 +1,2 @@
-gnu_hurd.patch
 pipe_ENOSYS.patch
 21_config_changes
