@@ -1,3 +1,11 @@
+icinga2 (2.1.1-1) unstable; urgency=medium
+
+  * [4a0350e] Imported Upstream version 2.1.1
+  * [81a704c] gnu_hurd.patch is now upstream
+  * [e5709e4] pipe_ENOSYS.patch is now upstream
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 18 Sep 2014 08:00:44 +0200
+
 icinga2 (2.1.0-3) unstable; urgency=medium
 
   * [dd04e8c] Fix build problem with CMake libdir on Hurd and kFreeBSD
