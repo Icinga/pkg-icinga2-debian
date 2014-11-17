@@ -33,15 +33,15 @@ namespace icinga
 class I2_REMOTE_API Zone : public ObjectImpl<Zone>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(Zone);
-	DECLARE_TYPENAME(Zone);
+	DECLARE_OBJECT(Zone);
+	DECLARE_OBJECTNAME(Zone);
 
 	Zone::Ptr GetParent(void) const;
 	std::set<Endpoint::Ptr> GetEndpoints(void) const;
 
 	bool CanAccessObject(const DynamicObject::Ptr& object);
 	bool IsChildOf(const Zone::Ptr& zone);
-	bool IsGlobal(void);
+	bool IsGlobal(void) const;
 
 	static Zone::Ptr GetLocalZone(void);
 };

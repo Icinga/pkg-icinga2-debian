@@ -21,7 +21,7 @@
 #define APPLYRULE_H
 
 #include "config/i2-config.hpp"
-#include "config/aexpression.hpp"
+#include "config/expression.hpp"
 #include "base/debuginfo.hpp"
 #include <boost/function.hpp>
 
@@ -40,15 +40,18 @@ public:
 
 	String GetTargetType(void) const;
 	String GetName(void) const;
-	AExpression::Ptr GetExpression(void) const;
-	AExpression::Ptr GetFilter(void) const;
+	boost::shared_ptr<Expression> GetExpression(void) const;
+	boost::shared_ptr<Expression> GetFilter(void) const;
+	String GetFKVar(void) const;
+	String GetFVVar(void) const;
+	boost::shared_ptr<Expression> GetFTerm(void) const;
 	DebugInfo GetDebugInfo(void) const;
-	Dictionary::Ptr GetScope(void) const;
+	Object::Ptr GetScope(void) const;
 
-	bool EvaluateFilter(const Dictionary::Ptr& scope) const;
+	bool EvaluateFilter(const Object::Ptr& scope) const;
 
-	static void AddRule(const String& sourceType, const String& targetType, const String& name, const AExpression::Ptr& expression,
-	    const AExpression::Ptr& filter, const DebugInfo& di, const Dictionary::Ptr& scope);
+	static void AddRule(const String& sourceType, const String& targetType, const String& name, const boost::shared_ptr<Expression>& expression,
+	    const boost::shared_ptr<Expression>& filter, const String& fkvar, const String& fvvar, const boost::shared_ptr<Expression>& fterm, const DebugInfo& di, const Object::Ptr& scope);
 	static void EvaluateRules(bool clear);
 
 	static void RegisterType(const String& sourceType, const std::vector<String>& targetTypes, const ApplyRule::Callback& callback);
@@ -59,16 +62,20 @@ public:
 private:
 	String m_TargetType;
 	String m_Name;
-	AExpression::Ptr m_Expression;
-	AExpression::Ptr m_Filter;
+	boost::shared_ptr<Expression> m_Expression;
+	boost::shared_ptr<Expression> m_Filter;
+	String m_FKVar;
+	String m_FVVar;
+	boost::shared_ptr<Expression> m_FTerm;
 	DebugInfo m_DebugInfo;
-	Dictionary::Ptr m_Scope;
+	Object::Ptr m_Scope;
 
 	static CallbackMap m_Callbacks;
 	static RuleMap m_Rules;
 
-	ApplyRule(const String& targetType, const String& name, const AExpression::Ptr& expression,
-	    const AExpression::Ptr& filter, const DebugInfo& di, const Dictionary::Ptr& scope);
+	ApplyRule(const String& targetType, const String& name, const boost::shared_ptr<Expression>& expression,
+	    const boost::shared_ptr<Expression>& filter, const String& fkvar, const String& fvvar, const boost::shared_ptr<Expression>& fterm,
+	    const DebugInfo& di, const Object::Ptr& scope);
 };
 
 }

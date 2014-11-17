@@ -27,6 +27,14 @@
 namespace icinga
 {
 
+class ScriptVariable;
+
+class I2_BASE_API ScriptVariableRegistry : public Registry<ScriptVariableRegistry, intrusive_ptr<ScriptVariable> >
+{
+public:
+	static ScriptVariableRegistry *GetInstance(void);
+};
+	
 /**
  * A script variables.
  *
@@ -48,18 +56,14 @@ public:
 	static ScriptVariable::Ptr GetByName(const String& name);
 	static void Unregister(const String& name);
 
-	static Value Get(const String& name);
+	static Value Get(const String& name, const Value *defaultValue = NULL);
 	static ScriptVariable::Ptr Set(const String& name, const Value& value, bool overwrite = true, bool make_const = false);
+
+	static void WriteVariablesFile(const String& filename);
 
 private:
 	Value m_Data;
 	bool m_Constant;
-};
-
-class I2_BASE_API ScriptVariableRegistry : public Registry<ScriptVariableRegistry, ScriptVariable::Ptr>
-{
-public:
-	static ScriptVariableRegistry *GetInstance(void);
 };
 
 }

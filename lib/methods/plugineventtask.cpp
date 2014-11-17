@@ -23,7 +23,7 @@
 #include "icinga/pluginutility.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "base/dynamictype.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/scriptfunction.hpp"
 #include "base/utility.hpp"
 #include "base/process.hpp"
@@ -34,7 +34,8 @@ using namespace icinga;
 
 REGISTER_SCRIPTFUNCTION(PluginEvent, &PluginEventTask::ScriptFunc);
 
-void PluginEventTask::ScriptFunc(const Checkable::Ptr& checkable)
+void PluginEventTask::ScriptFunc(const Checkable::Ptr& checkable,
+    const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)
 {
 	EventCommand::Ptr commandObj = checkable->GetEventCommand();
 
@@ -49,15 +50,18 @@ void PluginEventTask::ScriptFunc(const Checkable::Ptr& checkable)
 	resolvers.push_back(std::make_pair("command", commandObj));
 	resolvers.push_back(std::make_pair("icinga", IcingaApplication::GetInstance()));
 
-	PluginUtility::ExecuteCommand(commandObj, checkable, checkable->GetLastCheckResult(), resolvers, boost::bind(&PluginEventTask::ProcessFinishedHandler, checkable, _1, _2));
+	PluginUtility::ExecuteCommand(commandObj, checkable, checkable->GetLastCheckResult(),
+	    resolvers, resolvedMacros, useResolvedMacros,
+	    boost::bind(&PluginEventTask::ProcessFinishedHandler, checkable, _1, _2));
 }
 
 void PluginEventTask::ProcessFinishedHandler(const Checkable::Ptr& checkable, const Value& commandLine, const ProcessResult& pr)
 {
 	if (pr.ExitStatus != 0) {
 		Process::Arguments parguments = Process::PrepareCommand(commandLine);
-		Log(LogNotice, "PluginEventTask", "Event command for object '" + checkable->GetName() + "' (PID: " + Convert::ToString(pr.PID) +
-		    ", arguments: " + Process::PrettyPrintArguments(parguments) + ") terminated with exit code " +
-		    Convert::ToString(pr.ExitStatus) + ", output: " + pr.Output);
+		Log(LogNotice, "PluginEventTask")
+		    << "Event command for object '" << checkable->GetName() << "' (PID: " << pr.PID
+		    << ", arguments: " << Process::PrettyPrintArguments(parguments) << ") terminated with exit code "
+		    << pr.ExitStatus << ", output: " << pr.Output;
 	}
 }

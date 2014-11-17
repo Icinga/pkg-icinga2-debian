@@ -26,6 +26,7 @@
 #include "icinga/notification.hpp"
 #include "icinga/comment.hpp"
 #include "icinga/downtime.hpp"
+#include "remote/endpoint.hpp"
 #include "remote/messageorigin.hpp"
 
 namespace icinga
@@ -77,8 +78,8 @@ class Dependency;
 class I2_ICINGA_API Checkable : public ObjectImpl<Checkable>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(Checkable);
-	DECLARE_TYPENAME(Checkable);
+	DECLARE_OBJECT(Checkable);
+	DECLARE_OBJECTNAME(Checkable);
 
 	Checkable(void);
 
@@ -89,7 +90,7 @@ public:
 
 	//bool IsHostCheck(void) const;
 
-	bool IsReachable(DependencyType dt = DependencyState, shared_ptr<Dependency> *failedDependency = NULL, int rstack = 0) const;
+	bool IsReachable(DependencyType dt = DependencyState, intrusive_ptr<Dependency> *failedDependency = NULL, int rstack = 0) const;
 
 	AcknowledgementType GetAcknowledgement(void);
 
@@ -97,8 +98,8 @@ public:
 	void ClearAcknowledgement(const MessageOrigin& origin = MessageOrigin());
 
 	/* Checks */
-	shared_ptr<CheckCommand> GetCheckCommand(void) const;
-	void SetCheckCommand(const shared_ptr<CheckCommand>& command, const MessageOrigin& origin = MessageOrigin());
+	intrusive_ptr<CheckCommand> GetCheckCommand(void) const;
+	void SetCheckCommand(const intrusive_ptr<CheckCommand>& command, const MessageOrigin& origin = MessageOrigin());
 
 	TimePeriod::Ptr GetCheckPeriod(void) const;
 	void SetCheckPeriod(const TimePeriod::Ptr& tp, const MessageOrigin& origin = MessageOrigin());
@@ -134,11 +135,14 @@ public:
 
 	static void UpdateStatistics(const CheckResult::Ptr& cr, CheckableType type);
 
-	void ExecuteCheck(void);
+	void ExecuteCheck(const Dictionary::Ptr& resolvedMacros = Dictionary::Ptr(),
+	    bool useResolvedMacros = false);
 	void ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrigin& origin = MessageOrigin());
 
 	int GetModifiedAttributes(void) const;
 	void SetModifiedAttributes(int flags, const MessageOrigin& origin = MessageOrigin());
+
+	Endpoint::Ptr GetCommandEndpoint(void) const;
 
 	bool IsCheckPending(void) const;
 
@@ -158,8 +162,8 @@ public:
 	static boost::signals2::signal<void (const Checkable::Ptr&, double, const MessageOrigin&)> OnCheckIntervalChanged;
 	static boost::signals2::signal<void (const Checkable::Ptr&, double, const MessageOrigin&)> OnRetryIntervalChanged;
 	static boost::signals2::signal<void (const Checkable::Ptr&, int, const MessageOrigin&)> OnMaxCheckAttemptsChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const shared_ptr<EventCommand>&, const MessageOrigin&)> OnEventCommandChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const shared_ptr<CheckCommand>&, const MessageOrigin&)> OnCheckCommandChanged;
+	static boost::signals2::signal<void (const Checkable::Ptr&, const intrusive_ptr<EventCommand>&, const MessageOrigin&)> OnEventCommandChanged;
+	static boost::signals2::signal<void (const Checkable::Ptr&, const intrusive_ptr<CheckCommand>&, const MessageOrigin&)> OnCheckCommandChanged;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const TimePeriod::Ptr&, const MessageOrigin&)> OnCheckPeriodChanged;
 
 	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, const MessageOrigin&)> OnNewCheckResult;
@@ -241,10 +245,11 @@ public:
 	void ResetNotificationNumbers(void);
 
 	/* Event Handler */
-	void ExecuteEventHandler(void);
+	void ExecuteEventHandler(const Dictionary::Ptr& resolvedMacros = Dictionary::Ptr(),
+	    bool useResolvedMacros = false);
 
-	shared_ptr<EventCommand> GetEventCommand(void) const;
-	void SetEventCommand(const shared_ptr<EventCommand>& command, const MessageOrigin& origin = MessageOrigin());
+	intrusive_ptr<EventCommand> GetEventCommand(void) const;
+	void SetEventCommand(const intrusive_ptr<EventCommand>& command, const MessageOrigin& origin = MessageOrigin());
 
 	bool GetEnableEventHandler(void) const;
 	void SetEnableEventHandler(bool enabled, const MessageOrigin& origin = MessageOrigin());
@@ -263,13 +268,13 @@ public:
 	void SetEnablePerfdata(bool enabled, const MessageOrigin& origin = MessageOrigin());
 
 	/* Dependencies */
-	void AddDependency(const shared_ptr<Dependency>& dep);
-	void RemoveDependency(const shared_ptr<Dependency>& dep);
-	std::set<shared_ptr<Dependency> > GetDependencies(void) const;
+	void AddDependency(const intrusive_ptr<Dependency>& dep);
+	void RemoveDependency(const intrusive_ptr<Dependency>& dep);
+	std::set<intrusive_ptr<Dependency> > GetDependencies(void) const;
 
-	void AddReverseDependency(const shared_ptr<Dependency>& dep);
-	void RemoveReverseDependency(const shared_ptr<Dependency>& dep);
-	std::set<shared_ptr<Dependency> > GetReverseDependencies(void) const;
+	void AddReverseDependency(const intrusive_ptr<Dependency>& dep);
+	void RemoveReverseDependency(const intrusive_ptr<Dependency>& dep);
+	std::set<intrusive_ptr<Dependency> > GetReverseDependencies(void) const;
 
 protected:
 	virtual void Start(void);
@@ -297,10 +302,12 @@ private:
 
 	/* Dependencies */
 	mutable boost::mutex m_DependencyMutex;
-	std::set<shared_ptr<Dependency> > m_Dependencies;
-	std::set<shared_ptr<Dependency> > m_ReverseDependencies;
+	std::set<intrusive_ptr<Dependency> > m_Dependencies;
+	std::set<intrusive_ptr<Dependency> > m_ReverseDependencies;
 };
 
 }
 
 #endif /* CHECKABLE_H */
+
+#include "icinga/dependency.hpp"

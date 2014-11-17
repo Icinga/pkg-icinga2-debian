@@ -60,7 +60,8 @@ enum FieldAttribute
 	FAState = 2,
 	FAEnum = 4,
 	FAGetProtected = 8,
-	FASetProtected = 16
+	FASetProtected = 16,
+	FAInternal = 32
 };
 
 struct Field
@@ -105,8 +106,7 @@ struct Field
 
 enum TypeAttribute
 {
-	TAAbstract = 1,
-	TASafe = 2
+	TAAbstract = 1
 };
 
 struct Klass
@@ -144,6 +144,8 @@ public:
 
 	static void CompileFile(const std::string& path);
 	static void CompileStream(const std::string& path, std::istream *stream);
+
+	static void OptimizeStructLayout(std::vector<Field>& fields);
 
 private:
 	std::string m_Path;

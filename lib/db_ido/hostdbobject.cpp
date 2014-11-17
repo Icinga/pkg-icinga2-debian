@@ -30,7 +30,7 @@
 #include "icinga/compatutility.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -43,7 +43,7 @@ HostDbObject::HostDbObject(const DbType::Ptr& type, const String& name1, const S
 
 Dictionary::Ptr HostDbObject::GetConfigFields(void) const
 {
-	Dictionary::Ptr fields = make_shared<Dictionary>();
+	Dictionary::Ptr fields = new Dictionary();
 	Host::Ptr host = static_pointer_cast<Host>(GetObject());
 
 	fields->Set("alias", CompatUtility::GetHostAlias(host));
@@ -110,7 +110,7 @@ Dictionary::Ptr HostDbObject::GetConfigFields(void) const
 
 Dictionary::Ptr HostDbObject::GetStatusFields(void) const
 {
-	Dictionary::Ptr fields = make_shared<Dictionary>();
+	Dictionary::Ptr fields = new Dictionary();
 	Host::Ptr host = static_pointer_cast<Host>(GetObject());
 
 	CheckResult::Ptr cr = host->GetLastCheckResult();
@@ -143,8 +143,11 @@ Dictionary::Ptr HostDbObject::GetStatusFields(void) const
 	fields->Set("next_notification", DbValue::FromTimestamp(CompatUtility::GetCheckableNotificationNextNotification(host)));
 	fields->Set("no_more_notifications", Empty);
 	fields->Set("notifications_enabled", CompatUtility::GetCheckableNotificationsEnabled(host));
-	fields->Set("problem_has_been_acknowledged", CompatUtility::GetCheckableProblemHasBeenAcknowledged(host));
-	fields->Set("acknowledgement_type", CompatUtility::GetCheckableAcknowledgementType(host));
+	{
+		ObjectLock olock(host);
+		fields->Set("problem_has_been_acknowledged", CompatUtility::GetCheckableProblemHasBeenAcknowledged(host));
+		fields->Set("acknowledgement_type", CompatUtility::GetCheckableAcknowledgementType(host));
+	}
 	fields->Set("current_notification_number", CompatUtility::GetCheckableNotificationNotificationNumber(host));
 	fields->Set("passive_checks_enabled", CompatUtility::GetCheckablePassiveChecksEnabled(host));
 	fields->Set("active_checks_enabled", CompatUtility::GetCheckableActiveChecksEnabled(host));
@@ -184,10 +187,11 @@ void HostDbObject::OnConfigUpdate(void)
 		if (!parent)
 			continue;
 
-		Log(LogDebug, "HostDbObject", "host parents: " + parent->GetName());
+		Log(LogDebug, "HostDbObject")
+		    << "host parents: " << parent->GetName();
 
 		/* parents: host_id, parent_host_object_id */
-		Dictionary::Ptr fields1 = make_shared<Dictionary>();
+		Dictionary::Ptr fields1 = new Dictionary();
 		fields1->Set(GetType()->GetTable() + "_id", DbValue::FromObjectInsertID(GetObject()));
 		fields1->Set("parent_host_object_id", parent);
 		fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
@@ -201,21 +205,24 @@ void HostDbObject::OnConfigUpdate(void)
 	}
 
 	/* host dependencies */
-	Log(LogDebug, "HostDbObject", "host dependencies for '" + host->GetName() + "'");
+	Log(LogDebug, "HostDbObject")
+	    << "host dependencies for '" << host->GetName() << "'";
 
 	BOOST_FOREACH(const Dependency::Ptr& dep, host->GetDependencies()) {
 		Checkable::Ptr parent = dep->GetParent();
 
 		if (!parent) {
-			Log(LogDebug, "HostDbObject", "Missing parent for dependency '" + dep->GetName() + "'.");
+			Log(LogDebug, "HostDbObject")
+			    << "Missing parent for dependency '" << dep->GetName() << "'.";
 			continue;
 		}
 
 		int state_filter = dep->GetStateFilter();
 
-		Log(LogDebug, "HostDbObject", "parent host: " + parent->GetName());
+		Log(LogDebug, "HostDbObject")
+		    << "parent host: " << parent->GetName();
 
-		Dictionary::Ptr fields2 = make_shared<Dictionary>();
+		Dictionary::Ptr fields2 = new Dictionary();
 		fields2->Set("host_object_id", parent);
 		fields2->Set("dependent_host_object_id", host);
 		fields2->Set("inherits_parent", 1);
@@ -232,12 +239,14 @@ void HostDbObject::OnConfigUpdate(void)
 		OnQuery(query2);
 	}
 
-	Log(LogDebug, "HostDbObject", "host contacts: " + host->GetName());
+	Log(LogDebug, "HostDbObject")
+	    << "host contacts: " << host->GetName();
 
 	BOOST_FOREACH(const User::Ptr& user, CompatUtility::GetCheckableNotificationUsers(host)) {
-		Log(LogDebug, "HostDbObject", "host contacts: " + user->GetName());
+		Log(LogDebug, "HostDbObject")
+		    << "host contacts: " << user->GetName();
 
-		Dictionary::Ptr fields_contact = make_shared<Dictionary>();
+		Dictionary::Ptr fields_contact = new Dictionary();
 		fields_contact->Set("host_id", DbValue::FromObjectInsertID(host));
 		fields_contact->Set("contact_object_id", user);
 		fields_contact->Set("instance_id", 0); /* DbConnection class fills in real ID */
@@ -250,12 +259,14 @@ void HostDbObject::OnConfigUpdate(void)
 		OnQuery(query_contact);
 	}
 
-	Log(LogDebug, "HostDbObject", "host contactgroups: " + host->GetName());
+	Log(LogDebug, "HostDbObject")
+	    << "host contactgroups: " << host->GetName();
 
 	BOOST_FOREACH(const UserGroup::Ptr& usergroup, CompatUtility::GetCheckableNotificationUserGroups(host)) {
-		Log(LogDebug, "HostDbObject", "host contactgroups: " + usergroup->GetName());
+		Log(LogDebug, "HostDbObject")
+		    << "host contactgroups: " << usergroup->GetName();
 
-		Dictionary::Ptr fields_contact = make_shared<Dictionary>();
+		Dictionary::Ptr fields_contact = new Dictionary();
 		fields_contact->Set("host_id", DbValue::FromObjectInsertID(host));
 		fields_contact->Set("contactgroup_object_id", usergroup);
 		fields_contact->Set("instance_id", 0); /* DbConnection class fills in real ID */

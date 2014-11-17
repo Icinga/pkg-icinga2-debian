@@ -19,7 +19,7 @@
 
 #include "icinga/api.hpp"
 #include "remote/apifunction.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 
 using namespace icinga;
 
@@ -32,7 +32,8 @@ Value API::GetAnswerToEverything(const Dictionary::Ptr& params)
 	if (params)
 		text = params->Get("text");
 
-	Log(LogInformation, "API", "Hello from the Icinga 2 API: " + text);
+	Log(LogInformation, "API")
+	    << "Hello from the Icinga 2 API: " << text;
 
 	return 42;
 }

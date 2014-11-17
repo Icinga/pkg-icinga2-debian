@@ -81,7 +81,8 @@ void Timer::Uninitialize(void)
 		l_CV.notify_all();
 	}
 
-	l_Thread.join();
+	if (l_Thread.joinable())
+		l_Thread.join();
 }
 
 /**
@@ -91,10 +92,8 @@ void Timer::Call(void)
 {
 	ASSERT(!OwnsLock());
 
-	Timer::Ptr self = GetSelf();
-
 	try {
-		OnTimerExpired(self);
+		OnTimerExpired(Timer::Ptr(this));
 	} catch (...) {
 		Reschedule();
 
@@ -151,6 +150,9 @@ void Timer::Start(void)
 void Timer::Stop(void)
 {
 	ASSERT(!OwnsLock());
+
+	if (l_StopThread)
+		return;
 
 	boost::mutex::scoped_lock lock(l_Mutex);
 
@@ -272,11 +274,11 @@ void Timer::TimerThreadProc(void)
 			continue;
 		}
 
+		Timer::Ptr ptimer = timer;
+
 		/* Remove the timer from the list so it doesn't get called again
 		 * until the current call is completed. */
 		l_Timers.erase(timer);
-
-		Timer::Ptr ptimer = timer->GetSelf();
 
 		lock.unlock();
 

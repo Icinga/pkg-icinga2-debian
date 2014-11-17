@@ -35,14 +35,14 @@ namespace icinga
 class I2_ICINGA_API IcingaApplication : public ObjectImpl<IcingaApplication>, public MacroResolver
 {
 public:
-	DECLARE_PTR_TYPEDEFS(IcingaApplication);
-	DECLARE_TYPENAME(IcingaApplication);
+	DECLARE_OBJECT(IcingaApplication);
+	DECLARE_OBJECTNAME(IcingaApplication);
 
 	static void StaticInitialize(void);
 
 	int Main(void);
 
-	static Value StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata);
+	static Value StatsFunc(Dictionary::Ptr& status, Array::Ptr& perfdata);
 
 	static IcingaApplication::Ptr GetInstance(void);
 

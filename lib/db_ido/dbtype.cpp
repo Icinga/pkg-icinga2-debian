@@ -92,7 +92,7 @@ DbObject::Ptr DbType::GetOrCreateObjectByName(const String& name1, const String&
 	if (it != m_Objects.end())
 		return it->second;
 
-	DbObject::Ptr dbobj = m_ObjectFactory(GetSelf(), name1, name2);
+	DbObject::Ptr dbobj = m_ObjectFactory(this, name1, name2);
 	m_Objects[std::make_pair(name1, name2)] = dbobj;
 
 	return dbobj;
@@ -125,3 +125,9 @@ std::set<DbType::Ptr> DbType::GetAllTypes(void)
 
 	return result;
 }
+
+DbTypeRegistry *DbTypeRegistry::GetInstance(void)
+{
+	return Singleton<DbTypeRegistry>::GetInstance();
+}
+

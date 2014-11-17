@@ -30,7 +30,7 @@ int Command::GetModifiedAttributes(void) const
 {
 	int attrs = 0;
 
-	if (!GetOverrideVars().IsEmpty())
+	if (GetOverrideVars())
 		attrs |= ModAttrCustomVariable;
 
 	return attrs;
@@ -40,13 +40,13 @@ void Command::SetModifiedAttributes(int flags, const MessageOrigin& origin)
 {
 	if ((flags & ModAttrCustomVariable) == 0) {
 		SetOverrideVars(Empty);
-		OnVarsChanged(GetSelf(), GetVars(), origin);
+		OnVarsChanged(this, GetVars(), origin);
 	}
 }
 
 void Command::ValidateAttributes(const String& location, const Dictionary::Ptr& attrs)
 {
-	if (attrs->Contains("arguments") && !attrs->Get("command").IsObjectType<Array>()) {
+	if (attrs->Get("arguments") != Empty && !attrs->Get("command").IsObjectType<Array>()) {
 		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
 		    location + ": Attribute 'command' must be an array if the 'arguments' attribute is set.");
 	}

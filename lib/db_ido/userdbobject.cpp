@@ -24,7 +24,7 @@
 #include "icinga/notification.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -37,7 +37,7 @@ UserDbObject::UserDbObject(const DbType::Ptr& type, const String& name1, const S
 
 Dictionary::Ptr UserDbObject::GetConfigFields(void) const
 {
-	Dictionary::Ptr fields = make_shared<Dictionary>();
+	Dictionary::Ptr fields = new Dictionary();
 	User::Ptr user = static_pointer_cast<User>(GetObject());
 
 	fields->Set("alias", user->GetDisplayName());
@@ -65,7 +65,7 @@ Dictionary::Ptr UserDbObject::GetConfigFields(void) const
 
 Dictionary::Ptr UserDbObject::GetStatusFields(void) const
 {
-	Dictionary::Ptr fields = make_shared<Dictionary>();
+	Dictionary::Ptr fields = new Dictionary();
 	User::Ptr user = static_pointer_cast<User>(GetObject());
 
 	fields->Set("host_notifications_enabled", user->GetEnableNotifications());
@@ -81,21 +81,23 @@ Dictionary::Ptr UserDbObject::GetStatusFields(void) const
 
 void UserDbObject::OnConfigUpdate(void)
 {
-	Dictionary::Ptr fields = make_shared<Dictionary>();
+	Dictionary::Ptr fields = new Dictionary();
 	User::Ptr user = static_pointer_cast<User>(GetObject());
 
 	/* contact addresses */
-	Log(LogDebug, "UserDbObject", "contact addresses for '" + user->GetName() + "'");
+	Log(LogDebug, "UserDbObject")
+	    << "contact addresses for '" << user->GetName() << "'";
 
 	Dictionary::Ptr vars = user->GetVars();
 
 	if (vars) { /* This is sparta. */
 		for (int i = 1; i <= 6; i++) {
 			String key = "address" + Convert::ToString(i);
-			String val = vars->Get(key);
 
-			if (val.IsEmpty())
+			if (!vars->Contains(key))
 				continue;
+
+			String val = vars->Get(key);
 
 			fields->Set("contact_id", DbValue::FromObjectInsertID(user));
 			fields->Set("address_number", i);
