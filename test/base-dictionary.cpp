@@ -19,7 +19,7 @@
 
 #include "base/dictionary.hpp"
 #include "base/objectlock.hpp"
-#include "base/serializer.hpp"
+#include "base/json.hpp"
 #include <boost/test/unit_test.hpp>
 #include <boost/foreach.hpp>
 #include <boost/tuple/tuple.hpp>
@@ -30,13 +30,13 @@ BOOST_AUTO_TEST_SUITE(base_dictionary)
 
 BOOST_AUTO_TEST_CASE(construct)
 {
-	Dictionary::Ptr dictionary = make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = new Dictionary();
 	BOOST_CHECK(dictionary);
 }
 
 BOOST_AUTO_TEST_CASE(get1)
 {
-	Dictionary::Ptr dictionary = make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = new Dictionary();
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
 
@@ -58,8 +58,8 @@ BOOST_AUTO_TEST_CASE(get1)
 
 BOOST_AUTO_TEST_CASE(get2)
 {
-	Dictionary::Ptr dictionary = make_shared<Dictionary>();
-	Dictionary::Ptr other = make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = new Dictionary();
+	Dictionary::Ptr other = new Dictionary();
 
 	dictionary->Set("test1", other);
 
@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(get2)
 
 BOOST_AUTO_TEST_CASE(foreach)
 {
-	Dictionary::Ptr dictionary = make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = new Dictionary();
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
 
@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(foreach)
 
 BOOST_AUTO_TEST_CASE(remove)
 {
-	Dictionary::Ptr dictionary = make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = new Dictionary();
 
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
@@ -144,7 +144,7 @@ BOOST_AUTO_TEST_CASE(remove)
 
 BOOST_AUTO_TEST_CASE(clone)
 {
-	Dictionary::Ptr dictionary = make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = new Dictionary();
 
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
@@ -167,14 +167,14 @@ BOOST_AUTO_TEST_CASE(clone)
 
 BOOST_AUTO_TEST_CASE(json)
 {
-	Dictionary::Ptr dictionary = make_shared<Dictionary>();
+	Dictionary::Ptr dictionary = new Dictionary();
 
 	dictionary->Set("test1", 7);
 	dictionary->Set("test2", "hello world");
 
-	String json = JsonSerialize(dictionary);
+	String json = JsonEncode(dictionary);
 	BOOST_CHECK(json.GetLength() > 0);
-	Dictionary::Ptr deserialized = JsonDeserialize(json);
+	Dictionary::Ptr deserialized = JsonDecode(json);
 	BOOST_CHECK(deserialized->GetLength() == 2);
 	BOOST_CHECK(deserialized->Get("test1") == 7);
 	BOOST_CHECK(deserialized->Get("test2") == "hello world");

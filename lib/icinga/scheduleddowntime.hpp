@@ -38,8 +38,8 @@ class ApplyRule;
 class I2_ICINGA_API ScheduledDowntime : public ObjectImpl<ScheduledDowntime>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(ScheduledDowntime);
-	DECLARE_TYPENAME(ScheduledDowntime);
+	DECLARE_OBJECT(ScheduledDowntime);
+	DECLARE_OBJECTNAME(ScheduledDowntime);
 
 	static void StaticInitialize(void);
 
@@ -56,7 +56,9 @@ private:
 	std::pair<double, double> FindNextSegment(void);
 	void CreateNextDowntime(void);
 
-	static bool EvaluateApplyRule(const Checkable::Ptr& checkable, const ApplyRule& rule);
+	static void EvaluateApplyRuleOneInstance(const Checkable::Ptr& checkable, const String& name, const Dictionary::Ptr& locals, const ApplyRule& rule);
+	static bool EvaluateApplyRuleOne(const Checkable::Ptr& checkable, const ApplyRule& rule);
+	static void EvaluateApplyRule(const ApplyRule& rule);
 	static void EvaluateApplyRules(const std::vector<ApplyRule>& rules);
 };
 

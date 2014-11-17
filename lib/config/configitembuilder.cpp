@@ -25,7 +25,7 @@
 using namespace icinga;
 
 ConfigItemBuilder::ConfigItemBuilder(void)
-	: m_Abstract(false), m_Expressions(make_shared<Array>())
+	: m_Abstract(false)
 {
 	m_DebugInfo.FirstLine = 0;
 	m_DebugInfo.FirstColumn = 0;
@@ -34,7 +34,7 @@ ConfigItemBuilder::ConfigItemBuilder(void)
 }
 
 ConfigItemBuilder::ConfigItemBuilder(const DebugInfo& debugInfo)
-	: m_Abstract(false), m_Expressions(make_shared<Array>())
+	: m_Abstract(false)
 {
 	m_DebugInfo = debugInfo;
 }
@@ -54,7 +54,7 @@ void ConfigItemBuilder::SetAbstract(bool abstract)
 	m_Abstract = abstract;
 }
 
-void ConfigItemBuilder::SetScope(const Dictionary::Ptr& scope)
+void ConfigItemBuilder::SetScope(const Object::Ptr& scope)
 {
 	m_Scope = scope;
 }
@@ -64,9 +64,9 @@ void ConfigItemBuilder::SetZone(const String& zone)
 	m_Zone = zone;
 }
 
-void ConfigItemBuilder::AddExpression(const AExpression::Ptr& expr)
+void ConfigItemBuilder::AddExpression(Expression *expr)
 {
-	m_Expressions->Add(expr);
+	m_Expressions.push_back(expr);
 }
 
 ConfigItem::Ptr ConfigItemBuilder::Compile(void)
@@ -89,19 +89,25 @@ ConfigItem::Ptr ConfigItemBuilder::Compile(void)
 		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
 	}
 
-	Array::Ptr exprs = make_shared<Array>();
-	Array::Ptr templateArray = make_shared<Array>();
+	std::vector<Expression *> exprs;
+
+	Array::Ptr templateArray = new Array();
 	templateArray->Add(m_Name);
 
-	exprs->Add(make_shared<AExpression>(&AExpression::OpSetPlus,
-	    make_shared<AExpression>(&AExpression::OpLiteral, "templates", m_DebugInfo),
-	    make_shared<AExpression>(&AExpression::OpLiteral, templateArray, m_DebugInfo),
-	    m_DebugInfo));
+	std::vector<Expression *> indexer;
+	indexer.push_back(new LiteralExpression("templates"));
 
-	exprs->Add(make_shared<AExpression>(&AExpression::OpDict, m_Expressions, true, m_DebugInfo));
-	
-	AExpression::Ptr exprl = make_shared<AExpression>(&AExpression::OpDict, exprs, true, m_DebugInfo);
+	exprs.push_back(new SetExpression(indexer, OpSetAdd,
+	    new LiteralExpression(templateArray), m_DebugInfo));
 
-	return make_shared<ConfigItem>(m_Type, m_Name, m_Abstract, exprl,
+	DictExpression *dexpr = new DictExpression(m_Expressions, m_DebugInfo);
+	dexpr->MakeInline();
+	exprs.push_back(dexpr);
+
+	DictExpression *exprl = new DictExpression(exprs, m_DebugInfo);
+	exprl->MakeInline();
+
+	return new ConfigItem(m_Type, m_Name, m_Abstract, boost::shared_ptr<Expression>(exprl),
 	    m_DebugInfo, m_Scope, m_Zone);
 }
+

@@ -29,9 +29,9 @@ REGISTER_TYPE(FileLogger);
 
 REGISTER_STATSFUNCTION(FileLoggerStats, &FileLogger::StatsFunc);
 
-Value FileLogger::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+Value FileLogger::StatsFunc(Dictionary::Ptr& status, Array::Ptr&)
 {
-	Dictionary::Ptr nodes = make_shared<Dictionary>();
+	Dictionary::Ptr nodes = new Dictionary();
 
 	BOOST_FOREACH(const FileLogger::Ptr& filelogger, DynamicType::GetObjectsByType<FileLogger>()) {
 		nodes->Set(filelogger->GetName(), 1); //add more stats

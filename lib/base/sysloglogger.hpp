@@ -20,10 +20,10 @@
 #ifndef SYSLOGLOGGER_H
 #define SYSLOGLOGGER_H
 
+#ifndef _WIN32
 #include "base/i2-base.hpp"
 #include "base/sysloglogger.thpp"
 
-#ifndef _WIN32
 namespace icinga
 {
 
@@ -35,10 +35,10 @@ namespace icinga
 class I2_BASE_API SyslogLogger : public ObjectImpl<SyslogLogger>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(SyslogLogger);
-	DECLARE_TYPENAME(SyslogLogger);
+	DECLARE_OBJECT(SyslogLogger);
+	DECLARE_OBJECTNAME(SyslogLogger);
 
-	static Value StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata);
+	static Value StatsFunc(Dictionary::Ptr& status, Array::Ptr& perfdata);
 
 protected:
 	virtual void ProcessLogEntry(const LogEntry& entry);

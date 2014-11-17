@@ -147,6 +147,8 @@ Icinga 2 specific extensions:
 * host and service objects support 'check_source' (added in Classic UI 1.10.0)
 * command objects support custom variables (added in Classic UI 1.11.2)
 * host and service objects support 'is_reachable' (added in Classic UI 1.11.3)
+* 2.2 adds custom attributes with arrays and dictionaries. They are dumped as JSON encoded string and `_is_json`
+is set as additional custom variable in `objects.cache`.
 
 ### <a id="schema-db-ido"></a> DB IDO Schema
 
@@ -186,6 +188,7 @@ New columns:
   {host,service}group | notes                   | TEXT     | NULL    | -
   {host,service}group | notes_url               | TEXT     | NULL    | -
   {host,service}group | action_url              | TEXT     | NULL    | -
+  customvariable*     | is_json			| integer  | 0	     | Defines whether `varvalue` is a json encoded string from custom attributes, or not
 
 Additional command custom variables populated from 'vars' dictionary.
 Additional global custom variables populated from 'Vars' constant (object_id is NULL).
@@ -211,6 +214,9 @@ New columns:
   ----------|--------------
   hosts     | is_reachable
   services  | is_reachable
+  hosts	    | cv_is_json
+  services  | cv_is_json
+  contacts  | cv_is_json
   hosts     | check_source
   services  | check_source
   downtimes | triggers
@@ -654,5 +660,3 @@ Not supported: `neb_callbacks`, `neb_callbacks_rate`, `requests`, `requests_rate
   current_host_         | join      | Prefix for attributes from implicit join with hosts table.
 
 Not supported: `debug_info`.
-
-

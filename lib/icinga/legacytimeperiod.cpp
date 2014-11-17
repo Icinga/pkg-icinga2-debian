@@ -22,7 +22,7 @@
 #include "base/convert.hpp"
 #include "base/exception.hpp"
 #include "base/objectlock.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/debug.hpp"
 #include "base/utility.hpp"
 #include <boost/algorithm/string/split.hpp>
@@ -323,7 +323,9 @@ bool LegacyTimePeriod::IsInDayDefinition(const String& daydef, tm *reference)
 
 	ParseTimeRange(daydef, &begin, &end, &stride, reference);
 
-	Log(LogDebug, "LegacyTimePeriod", "ParseTimeRange: '" + daydef + "' => " + Convert::ToString(static_cast<long>(mktime(&begin))) + " -> " + Convert::ToString(static_cast<long>(mktime(&end))) + ", stride: " + Convert::ToString(stride));
+	Log(LogDebug, "LegacyTimePeriod")
+	    << "ParseTimeRange: '" << daydef << "' => " << mktime(&begin)
+	    << " -> " << mktime(&end) << ", stride: " << stride;
 
 	return IsInTimeRange(&begin, &end, stride, reference);
 }
@@ -363,7 +365,7 @@ Dictionary::Ptr LegacyTimePeriod::ProcessTimeRange(const String& timestamp, tm *
 {
 	tm begin, end;
 	ProcessTimeRangeRaw(timestamp, reference, &begin, &end);
-	Dictionary::Ptr segment = make_shared<Dictionary>();
+	Dictionary::Ptr segment = new Dictionary();
 	segment->Set("begin", (long)mktime(&begin));
 	segment->Set("end", (long)mktime(&end));
 	return segment;
@@ -405,7 +407,7 @@ Dictionary::Ptr LegacyTimePeriod::FindNextSegment(const String& daydef, const St
 
 		do {
 			if (IsInTimeRange(&begin, &end, stride, &iter)) {
-				Array::Ptr segments = make_shared<Array>();
+				Array::Ptr segments = new Array();
 				ProcessTimeRanges(timeranges, &iter, segments);
 
 				Dictionary::Ptr bestSegment;
@@ -441,7 +443,7 @@ Dictionary::Ptr LegacyTimePeriod::FindNextSegment(const String& daydef, const St
 
 Array::Ptr LegacyTimePeriod::ScriptFunc(const TimePeriod::Ptr& tp, double begin, double end)
 {
-	Array::Ptr segments = make_shared<Array>();
+	Array::Ptr segments = new Array();
 
 	Dictionary::Ptr ranges = tp->GetRanges();
 
@@ -451,20 +453,23 @@ Array::Ptr LegacyTimePeriod::ScriptFunc(const TimePeriod::Ptr& tp, double begin,
 			tm reference = Utility::LocalTime(refts);
 
 #ifdef _DEBUG
-			Log(LogDebug, "LegacyTimePeriod", "Checking reference time " + Convert::ToString(static_cast<long>(refts)));
+			Log(LogDebug, "LegacyTimePeriod")
+			    << "Checking reference time " << refts;
 #endif /* _DEBUG */
 
 			ObjectLock olock(ranges);
 			BOOST_FOREACH(const Dictionary::Pair& kv, ranges) {
 				if (!IsInDayDefinition(kv.first, &reference)) {
 #ifdef _DEBUG
-					Log(LogDebug, "LegacyTimePeriod", "Not in day definition '" + kv.first + "'.");
+					Log(LogDebug, "LegacyTimePeriod")
+					    << "Not in day definition '" << kv.first << "'.";
 #endif /* _DEBUG */
 					continue;
 				}
 
 #ifdef _DEBUG
-				Log(LogDebug, "LegacyTimePeriod", "In day definition '" + kv.first + "'.");
+				Log(LogDebug, "LegacyTimePeriod")
+				    << "In day definition '" << kv.first << "'.";
 #endif /* _DEBUG */
 
 				ProcessTimeRanges(kv.second, &reference, segments);
@@ -472,7 +477,8 @@ Array::Ptr LegacyTimePeriod::ScriptFunc(const TimePeriod::Ptr& tp, double begin,
 		}
 	}
 
-	Log(LogDebug, "LegacyTimePeriod", "Legacy timeperiod update returned " + Convert::ToString(static_cast<long>(segments->GetLength())) + " segments.");
+	Log(LogDebug, "LegacyTimePeriod")
+	    << "Legacy timeperiod update returned " << segments->GetLength() << " segments.";
 
 	return segments;
 }

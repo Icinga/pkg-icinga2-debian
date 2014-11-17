@@ -42,23 +42,24 @@ class ApiClient;
 class I2_REMOTE_API ApiListener : public ObjectImpl<ApiListener>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(ApiListener);
-	DECLARE_TYPENAME(ApiListener);
+	DECLARE_OBJECT(ApiListener);
+	DECLARE_OBJECTNAME(ApiListener);
 
 	static boost::signals2::signal<void(bool)> OnMasterChanged;
 
 	static ApiListener::Ptr GetInstance(void);
 
-	shared_ptr<SSL_CTX> GetSSLContext(void) const;
+	boost::shared_ptr<SSL_CTX> GetSSLContext(void) const;
 
 	Endpoint::Ptr GetMaster(void) const;
 	bool IsMaster(void) const;
 
 	static String GetApiDir(void);
 
+	void SyncSendMessage(const Endpoint::Ptr& endpoint, const Dictionary::Ptr& message);
 	void RelayMessage(const MessageOrigin& origin, const DynamicObject::Ptr& secobj, const Dictionary::Ptr& message, bool log);
 
-	static Value StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata);
+	static Value StatsFunc(Dictionary::Ptr& status, Array::Ptr& perfdata);
 	std::pair<Dictionary::Ptr, Dictionary::Ptr> GetStatus(void);
 
 	void AddAnonymousClient(const ApiClient::Ptr& aclient);
@@ -72,7 +73,7 @@ protected:
 	virtual void Start(void);
 
 private:
-	shared_ptr<SSL_CTX> m_SSLContext;
+	boost::shared_ptr<SSL_CTX> m_SSLContext;
 	std::set<TcpSocket::Ptr> m_Servers;
 	std::set<ApiClient::Ptr> m_AnonymousClients;
 	Timer::Ptr m_Timer;
@@ -84,8 +85,6 @@ private:
 
 	void NewClientHandler(const Socket::Ptr& client, ConnectionRole role);
 	void ListenerThreadProc(const Socket::Ptr& server);
-
-	void MessageHandler(const TlsStream::Ptr& sender, const String& identity, const Dictionary::Ptr& message);
 
 	WorkQueue m_RelayQueue;
 

@@ -26,11 +26,12 @@
 #include "remote/endpoint.hpp"
 #include "base/dynamicobject.hpp"
 #include "base/dynamictype.hpp"
+#include "base/json.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
 #include "base/initialize.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -39,7 +40,7 @@ boost::signals2::signal<void (const DbQuery&)> DbObject::OnQuery;
 
 INITIALIZE_ONCE(&DbObject::StaticInitialize);
 
-DbObject::DbObject(const shared_ptr<DbType>& type, const String& name1, const String& name2)
+DbObject::DbObject(const intrusive_ptr<DbType>& type, const String& name1, const String& name2)
 	: m_Name1(name1), m_Name2(name2), m_Type(type), m_LastConfigUpdate(0), m_LastStatusUpdate(0)
 { }
 
@@ -94,9 +95,9 @@ void DbObject::SendConfigUpdate(void)
 	query.Fields->Set(GetType()->GetIDColumn(), GetObject());
 	query.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	query.Fields->Set("config_type", 1);
-	query.WhereCriteria = make_shared<Dictionary>();
+	query.WhereCriteria = new Dictionary();
 	query.WhereCriteria->Set(GetType()->GetIDColumn(), GetObject());
-	query.Object = GetSelf();
+	query.Object = this;
 	query.ConfigUpdate = true;
 	OnQuery(query);
 
@@ -127,7 +128,8 @@ void DbObject::SendStatusUpdate(void)
 	if (GetType()->GetTable() != "endpoint") {
 		String node = IcingaApplication::GetInstance()->GetNodeName();
 
-		Log(LogDebug, "DbObject", "Endpoint node: '" + node + "' status update for '" + GetObject()->GetName() + "'");
+		Log(LogDebug, "DbObject")
+		    << "Endpoint node: '" << node << "' status update for '" << GetObject()->GetName() << "'";
 
 		Endpoint::Ptr endpoint = Endpoint::GetByName(node);
 		if (endpoint)
@@ -137,9 +139,9 @@ void DbObject::SendStatusUpdate(void)
 	query.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	query.Fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
-	query.WhereCriteria = make_shared<Dictionary>();
+	query.WhereCriteria = new Dictionary();
 	query.WhereCriteria->Set(GetType()->GetIDColumn(), GetObject());
-	query.Object = GetSelf();
+	query.Object = this;
 	query.StatusUpdate = true;
 	OnQuery(query);
 
@@ -160,32 +162,45 @@ void DbObject::SendVarsConfigUpdate(void)
 	Dictionary::Ptr vars = CompatUtility::GetCustomAttributeConfig(custom_var_object);
 
 	if (vars) {
-		Log(LogDebug, "DbObject", "Updating object vars for '" + custom_var_object->GetName() + "'");
+		Log(LogDebug, "DbObject")
+		    << "Updating object vars for '" << custom_var_object->GetName() << "'";
 
 		ObjectLock olock (vars);
 
 		BOOST_FOREACH(const Dictionary::Pair& kv, vars) {
-			if (!kv.first.IsEmpty()) {
-				int overridden = custom_var_object->IsVarOverridden(kv.first) ? 1 : 0;
+			if (kv.first.IsEmpty())
+				continue;
 
-				Log(LogDebug, "DbObject", "object customvar key: '" + kv.first + "' value: '" + Convert::ToString(kv.second) +
-				    "' overridden: " + Convert::ToString(overridden));
+			String value;
+			int is_json = 0;
 
-				Dictionary::Ptr fields = make_shared<Dictionary>();
-				fields->Set("varname", Convert::ToString(kv.first));
-				fields->Set("varvalue", Convert::ToString(kv.second));
-				fields->Set("config_type", 1);
-				fields->Set("has_been_modified", overridden);
-				fields->Set("object_id", obj);
-				fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+			if (kv.second.IsObjectType<Array>() || kv.second.IsObjectType<Dictionary>()) {
+				value = JsonEncode(kv.second);
+				is_json = 1;
+			} else
+				value = kv.second;
 
-				DbQuery query;
-				query.Table = "customvariables";
-				query.Type = DbQueryInsert;
-				query.Category = DbCatConfig;
-				query.Fields = fields;
-				OnQuery(query);
-			}
+			int overridden = custom_var_object->IsVarOverridden(kv.first) ? 1 : 0;
+
+			Log(LogDebug, "DbObject")
+			    << "object customvar key: '" << kv.first << "' value: '" << kv.second
+			    << "' overridden: " << overridden;
+
+			Dictionary::Ptr fields = new Dictionary();
+			fields->Set("varname", kv.first);
+			fields->Set("varvalue", value);
+			fields->Set("is_json", is_json);
+			fields->Set("config_type", 1);
+			fields->Set("has_been_modified", overridden);
+			fields->Set("object_id", obj);
+			fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+
+			DbQuery query;
+			query.Table = "customvariables";
+			query.Type = DbQueryInsert;
+			query.Category = DbCatConfig;
+			query.Fields = fields;
+			OnQuery(query);
 		}
 	}
 }
@@ -202,40 +217,52 @@ void DbObject::SendVarsStatusUpdate(void)
 	Dictionary::Ptr vars = CompatUtility::GetCustomAttributeConfig(custom_var_object);
 
 	if (vars) {
-		Log(LogDebug, "DbObject", "Updating object vars for '" + custom_var_object->GetName() + "'");
+		Log(LogDebug, "DbObject")
+		    << "Updating object vars for '" << custom_var_object->GetName() << "'";
 
 		ObjectLock olock (vars);
 
 		BOOST_FOREACH(const Dictionary::Pair& kv, vars) {
-			if (!kv.first.IsEmpty()) {
-				int overridden = custom_var_object->IsVarOverridden(kv.first) ? 1 : 0;
+			if (kv.first.IsEmpty())
+				continue;
 
-				Log(LogDebug, "DbObject", "object customvar key: '" + kv.first + "' value: '" + Convert::ToString(kv.second) +
-				    "' overridden: " + Convert::ToString(overridden));
+			String value;
+			int is_json = 0;
 
-				Dictionary::Ptr fields = make_shared<Dictionary>();
-				fields->Set("varname", Convert::ToString(kv.first));
-				fields->Set("varvalue", Convert::ToString(kv.second));
-				fields->Set("has_been_modified", overridden);
-				fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
-				fields->Set("object_id", obj);
-				fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+			if (kv.second.IsObjectType<Array>() || kv.second.IsObjectType<Dictionary>()) {
+				value = JsonEncode(kv.second);
+				is_json = 1;
+			} else
+				value = kv.second;
 
-				DbQuery query;
-				query.Table = "customvariablestatus";
-				query.Type = DbQueryInsert | DbQueryUpdate;
-				query.Category = DbCatState;
-				query.Fields = fields;
+			int overridden = custom_var_object->IsVarOverridden(kv.first) ? 1 : 0;
 
-				query.WhereCriteria = make_shared<Dictionary>();
-				query.WhereCriteria->Set("object_id", obj);
-				query.WhereCriteria->Set("varname", Convert::ToString(kv.first));
-				query.Object = GetSelf();
+			Log(LogDebug, "DbObject")
+			    << "object customvar key: '" << kv.first << "' value: '" << kv.second
+			    << "' overridden: " << overridden;
 
-				OnQuery(query);
-			}
+			Dictionary::Ptr fields = new Dictionary();
+			fields->Set("varname", kv.first);
+			fields->Set("varvalue", value);
+			fields->Set("is_json", is_json);
+			fields->Set("has_been_modified", overridden);
+			fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
+			fields->Set("object_id", obj);
+			fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+
+			DbQuery query;
+			query.Table = "customvariablestatus";
+			query.Type = DbQueryInsert | DbQueryUpdate;
+			query.Category = DbCatState;
+			query.Fields = fields;
+
+			query.WhereCriteria = new Dictionary();
+			query.WhereCriteria->Set("object_id", obj);
+			query.WhereCriteria->Set("varname", Convert::ToString(kv.first));
+			query.Object = this;
+
+			OnQuery(query);
 		}
-
 	}
 }
 
@@ -266,7 +293,7 @@ void DbObject::OnStatusUpdate(void)
 
 DbObject::Ptr DbObject::GetOrCreateByObject(const DynamicObject::Ptr& object)
 {
-	DbObject::Ptr dbobj = static_pointer_cast<DbObject>(object->GetExtension("DbObject"));
+	DbObject::Ptr dbobj = object->GetExtension("DbObject");
 
 	if (dbobj)
 		return dbobj;
@@ -322,7 +349,8 @@ void DbObject::VarsChangedHandler(const CustomVarObject::Ptr& object)
 {
 	DbObject::Ptr dbobj = GetOrCreateByObject(object);
 
-	Log(LogDebug, "DbObject", "Vars changed for object '" + object->GetName() + "'");
+	Log(LogDebug, "DbObject")
+	    << "Vars changed for object '" << object->GetName() << "'";
 
 	if (!dbobj)
 		return;

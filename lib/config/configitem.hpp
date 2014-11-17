@@ -21,7 +21,7 @@
 #define CONFIGITEM_H
 
 #include "config/i2-config.hpp"
-#include "config/aexpression.hpp"
+#include "config/expression.hpp"
 #include "base/dynamicobject.hpp"
 
 namespace icinga
@@ -38,8 +38,8 @@ public:
 	DECLARE_PTR_TYPEDEFS(ConfigItem);
 
 	ConfigItem(const String& type, const String& name, bool abstract,
-	    const AExpression::Ptr& exprl, const DebugInfo& debuginfo,
-	    const Dictionary::Ptr& scope, const String& zone);
+	    const boost::shared_ptr<Expression>& exprl, const DebugInfo& debuginfo,
+	    const Object::Ptr& scope, const String& zone);
 
 	String GetType(void) const;
 	String GetName(void) const;
@@ -47,43 +47,32 @@ public:
 
 	std::vector<ConfigItem::Ptr> GetParents(void) const;
 
-	AExpression::Ptr GetExpressionList(void) const;
-	Dictionary::Ptr GetProperties(void);
-	Dictionary::Ptr GetDebugHints(void) const;
+	boost::shared_ptr<Expression> GetExpression(void) const;
 
-	DynamicObject::Ptr Commit(void);
+	DynamicObject::Ptr Commit(bool discard = true);
 	void Register(void);
 
 	DebugInfo GetDebugInfo(void) const;
 
-	Dictionary::Ptr GetScope(void) const;
+	Object::Ptr GetScope(void) const;
 
 	String GetZone(void) const;
 
 	static ConfigItem::Ptr GetObject(const String& type,
 	    const String& name);
 
-	void ValidateItem(void);
-
-	static bool ValidateItems(const String& objectsFile = String());
+	static bool ValidateItems(void);
 	static bool ActivateItems(void);
 	static void DiscardItems(void);
-
-	static void WriteObjectsFile(const String& filename);
 
 private:
 	String m_Type; /**< The object type. */
 	String m_Name; /**< The name. */
 	bool m_Abstract; /**< Whether this is a template. */
-	bool m_Validated; /** Whether this object has been validated. */
 
-	AExpression::Ptr m_ExpressionList;
-	Dictionary::Ptr m_Properties;
-	Dictionary::Ptr m_DebugHints;
-	std::vector<String> m_ParentNames; /**< The names of parent configuration
-				       items. */
+	boost::shared_ptr<Expression> m_Expression;
 	DebugInfo m_DebugInfo; /**< Debug information. */
-	Dictionary::Ptr m_Scope; /**< variable scope. */
+	Object::Ptr m_Scope; /**< variable scope. */
 	String m_Zone; /**< The zone. */
 
 	DynamicObject::Ptr m_Object;
@@ -93,8 +82,13 @@ private:
 	typedef std::map<std::pair<String, String>, ConfigItem::Ptr> ItemMap;
 	static ItemMap m_Items; /**< All registered configuration items. */
 
+	typedef std::vector<ConfigItem::Ptr> ItemList;
+	static ItemList m_UnnamedItems;
+
 	static ConfigItem::Ptr GetObjectUnlocked(const String& type,
 	    const String& name);
+
+	static bool CommitNewItems(void);
 };
 
 }

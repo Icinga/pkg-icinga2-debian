@@ -20,16 +20,22 @@
 #include "base/utility.hpp"
 #include "base/convert.hpp"
 #include "base/application.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/exception.hpp"
 #include "base/socket.hpp"
 #include "base/utility.hpp"
+#include "base/json.hpp"
+#include "base/objectlock.hpp"
 #include <mmatch.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/trim.hpp>
+#include <boost/algorithm/string/replace.hpp>
+#include <ios>
+#include <fstream>
+#include <iostream>
 
 #ifdef __FreeBSD__
 #	include <pthread_np.h>
@@ -39,12 +45,17 @@
 #	include <cxxabi.h>
 #endif /* HAVE_CXXABI_H */
 
+#ifndef _WIN32
+#       include <sys/types.h>
+#       include <pwd.h>
+#       include <grp.h>
+#endif /* _WIN32 */
+
+
 using namespace icinga;
 
 boost::thread_specific_ptr<String> Utility::m_ThreadName;
 boost::thread_specific_ptr<unsigned int> Utility::m_RandSeed;
-boost::thread_specific_ptr<bool> Utility::m_LoadingLibrary;
-boost::thread_specific_ptr<std::vector<boost::function<void(void)> > > Utility::m_DeferredInitializers;
 
 /**
  * Demangles a symbol name.
@@ -304,11 +315,12 @@ Utility::LoadExtensionLibrary(const String& library)
 	path = "lib" + library + ".so";
 #endif /* _WIN32 */
 
-	Log(LogInformation, "Utility", "Loading library '" + path + "'");
+	Log(LogInformation, "Utility")
+	    << "Loading library '" << path << "'";
 
 #ifdef _WIN32
 	HMODULE hModule = LoadLibrary(path.CStr());
-	
+
 	if (hModule == NULL) {
 		BOOST_THROW_EXCEPTION(win32_error()
 		    << boost::errinfo_api_function("LoadLibrary")
@@ -316,8 +328,8 @@ Utility::LoadExtensionLibrary(const String& library)
 		    << boost::errinfo_file_name(path));
 	}
 #else /* _WIN32 */
-	void *hModule = dlopen(path.CStr(), RTLD_NOW);
-	
+	void *hModule = dlopen(path.CStr(), RTLD_NOW | RTLD_GLOBAL);
+
 	if (hModule == NULL) {
 		BOOST_THROW_EXCEPTION(std::runtime_error("Could not load library '" + path + "': " + dlerror()));
 	}
@@ -329,23 +341,29 @@ Utility::LoadExtensionLibrary(const String& library)
 	return hModule;
 }
 
+boost::thread_specific_ptr<std::vector<boost::function<void(void)> > >& Utility::GetDeferredInitializers(void)
+{
+	static boost::thread_specific_ptr<std::vector<boost::function<void(void)> > > initializers;
+	return initializers;
+}
+
 void Utility::ExecuteDeferredInitializers(void)
 {
-	if (!m_DeferredInitializers.get())
+	if (!GetDeferredInitializers().get())
 		return;
 
-	BOOST_FOREACH(const boost::function<void(void)>& callback, *m_DeferredInitializers.get())
+	BOOST_FOREACH(const boost::function<void(void)>& callback, *GetDeferredInitializers().get())
 		callback();
 
-	m_DeferredInitializers.reset();
+	GetDeferredInitializers().reset();
 }
 
 void Utility::AddDeferredInitializer(const boost::function<void(void)>& callback)
 {
-	if (!m_DeferredInitializers.get())
-		m_DeferredInitializers.reset(new std::vector<boost::function<void(void)> >());
+	if (!GetDeferredInitializers().get())
+		GetDeferredInitializers().reset(new std::vector<boost::function<void(void)> >());
 
-	m_DeferredInitializers.get()->push_back(callback);
+	GetDeferredInitializers().get()->push_back(callback);
 }
 
 /**
@@ -637,6 +655,59 @@ bool Utility::MkDirP(const String& path, int flags)
 	return ret;
 }
 
+void Utility::CopyFile(const String& source, const String& target)
+{
+	std::ifstream ifs(source.CStr(), std::ios::binary);
+	std::ofstream ofs(target.CStr(), std::ios::binary | std::ios::trunc);
+
+	ofs << ifs.rdbuf();
+}
+
+/*
+ * Set file permissions
+ */
+bool Utility::SetFileOwnership(const String& file, const String& user, const String& group)
+{
+#ifndef _WIN32
+	errno = 0;
+	struct passwd *pw = getpwnam(user.CStr());
+
+	if (!pw) {
+		if (errno == 0) {
+			Log(LogCritical, "cli")
+			    << "Invalid user specified: " << user;
+			return false;
+		} else {
+			Log(LogCritical, "cli")
+			    << "getpwnam() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+			return false;
+		}
+	}
+
+	errno = 0;
+	struct group *gr = getgrnam(group.CStr());
+
+	if (!gr) {
+		if (errno == 0) {
+			Log(LogCritical, "cli")
+			    << "Invalid group specified: " << group;
+			return false;
+		} else {
+			Log(LogCritical, "cli")
+			    << "getgrnam() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+			return false;
+		}
+	}
+
+	if (chown(file.CStr(), pw->pw_uid, gr->gr_gid) < 0) {
+		Log(LogCritical, "cli")
+		    << "chown() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+		return false;
+	}
+#endif /* _WIN32 */
+
+	return true;
+}
 
 #ifndef _WIN32
 void Utility::SetNonBlocking(int fd)
@@ -702,6 +773,35 @@ String Utility::NaturalJoin(const std::vector<String>& tokens)
 			else if (i == tokens.size() - 2)
 				result += " and ";
 		}
+	}
+
+	return result;
+}
+
+String Utility::Join(const Array::Ptr& tokens, char separator)
+{
+	String result;
+	bool first = true;
+
+	ObjectLock olock(tokens);
+	BOOST_FOREACH(const Value& vtoken, tokens) {
+		String token = Convert::ToString(vtoken);
+		boost::algorithm::replace_all(token, "\\", "\\\\");
+
+		char sep_before[2], sep_after[3];
+		sep_before[0] = separator;
+		sep_before[1] = '\0';
+		sep_after[0] = '\\';
+		sep_after[1] = separator;
+		sep_after[2] = '\0';
+		boost::algorithm::replace_all(token, sep_before, sep_after);
+
+		if (first)
+			first = false;
+		else
+			result += String(1, separator);
+
+		result += token;
 	}
 
 	return result;
@@ -1001,21 +1101,17 @@ String Utility::GetFQDN(void)
 	addrinfo *result;
 	int rc = getaddrinfo(hostname.CStr(), NULL, &hints, &result);
 
-	if (rc < 0)
+	if (rc != 0)
 		result = NULL;
-
-	String canonicalName;
 
 	if (result) {
 		if (strcmp(result->ai_canonname, "localhost") != 0)
-			canonicalName = result->ai_canonname;
+			hostname = result->ai_canonname;
 
 		freeaddrinfo(result);
-	} else {
-		canonicalName = hostname;
 	}
 
-	return canonicalName;
+	return hostname;
 }
 
 int Utility::Random(void)
@@ -1068,4 +1164,40 @@ bool Utility::PathExists(const String& path)
 	struct _stat statbuf;
 	return (_stat(path.CStr(), &statbuf) >= 0);
 #endif /* _WIN32 */
+}
+
+Value Utility::LoadJsonFile(const String& path)
+{
+	std::ifstream fp;
+	fp.open(path.CStr());
+
+	String json((std::istreambuf_iterator<char>(fp)), std::istreambuf_iterator<char>());
+
+	fp.close();
+
+	if (fp.fail())
+		BOOST_THROW_EXCEPTION(std::runtime_error("Could not read JSON file '" + path + "'."));
+
+	return JsonDecode(json);
+}
+
+void Utility::SaveJsonFile(const String& path, const Value& value)
+{
+	String tempPath = path + ".tmp";
+
+	std::ofstream fp(tempPath.CStr(), std::ofstream::out | std::ostream::trunc);
+	fp.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+	fp << JsonEncode(value);
+	fp.close();
+
+#ifdef _WIN32
+	_unlink(path.CStr());
+#endif /* _WIN32 */
+
+	if (rename(tempPath.CStr(), path.CStr()) < 0) {
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("rename")
+		    << boost::errinfo_errno(errno)
+		    << boost::errinfo_file_name(tempPath));
+	}
 }

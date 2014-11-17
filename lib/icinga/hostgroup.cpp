@@ -20,7 +20,7 @@
 #include "icinga/hostgroup.hpp"
 #include "config/objectrule.hpp"
 #include "base/dynamictype.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/objectlock.hpp"
 #include "base/context.hpp"
 #include "base/workqueue.hpp"
@@ -45,29 +45,27 @@ bool HostGroup::EvaluateObjectRuleOne(const Host::Ptr& host, const ObjectRule& r
 	msgbuf << "Evaluating 'object' rule (" << di << ")";
 	CONTEXT(msgbuf.str());
 
-	Dictionary::Ptr locals = make_shared<Dictionary>();
+	Dictionary::Ptr locals = new Dictionary();
+	locals->Set("__parent", rule.GetScope());
 	locals->Set("host", host);
 
 	if (!rule.EvaluateFilter(locals))
 		return false;
 
-	std::ostringstream msgbuf2;
-	msgbuf2 << "Assigning membership for group '" << rule.GetName() << "' to host '" << host->GetName() << "' for rule " << di;
-	Log(LogDebug, "HostGroup", msgbuf2.str());
+	Log(LogDebug, "HostGroup")
+	    << "Assigning membership for group '" << rule.GetName() << "' to host '" << host->GetName() << "' for rule " << di;
 
 	String group_name = rule.GetName();
 	HostGroup::Ptr group = HostGroup::GetByName(group_name);
 
 	if (!group) {
-		Log(LogCritical, "HostGroup", "Invalid membership assignment. Group '" + group_name + "' does not exist.");
+		Log(LogCritical, "HostGroup")
+		    << "Invalid membership assignment. Group '" << group_name << "' does not exist.";
 		return false;
 	}
 
 	/* assign host group membership */
 	group->ResolveGroupMembership(host, true);
-
-	/* update groups attribute for apply */
-	host->AddGroup(group_name);
 
 	return true;
 }
@@ -100,6 +98,8 @@ std::set<Host::Ptr> HostGroup::GetMembers(void) const
 
 void HostGroup::AddMember(const Host::Ptr& host)
 {
+	host->AddGroup(GetName());
+
 	boost::mutex::scoped_lock lock(m_HostGroupMutex);
 	m_Members.insert(host);
 }
@@ -110,11 +110,12 @@ void HostGroup::RemoveMember(const Host::Ptr& host)
 	m_Members.erase(host);
 }
 
-bool HostGroup::ResolveGroupMembership(Host::Ptr const& host, bool add, int rstack) {
+bool HostGroup::ResolveGroupMembership(const Host::Ptr& host, bool add, int rstack) {
 
 	if (add && rstack > 20) {
-		Log(LogWarning, "HostGroup", "Too many nested groups for group '" + GetName() + "': Host '" +
-		    host->GetName() + "' membership assignment failed.");
+		Log(LogWarning, "HostGroup")
+		    << "Too many nested groups for group '" << GetName() << "': Host '"
+		    << host->GetName() << "' membership assignment failed.";
 
 		return false;
 	}

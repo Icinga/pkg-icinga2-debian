@@ -106,6 +106,38 @@ unsigned long ClassCompiler::SDBM(const std::string& str, size_t len = std::stri
         return hash;
 }
 
+static int TypePreference(const std::string& type)
+{
+	if (type == "Value")
+		return 0;
+	else if (type == "String")
+		return 1;
+	else if (type == "double")
+		return 2;
+	else if (type.find("::Ptr") != std::string::npos)
+		return 3;
+	else if (type == "int")
+		return 4;
+	else
+		return 5;
+}
+
+static bool FieldLayoutCmp(const Field& a, const Field& b)
+{
+	return TypePreference(a.Type) < TypePreference(b.Type);
+}
+
+static bool FieldTypeCmp(const Field& a, const Field& b)
+{
+	return a.Type < b.Type;
+}
+
+void ClassCompiler::OptimizeStructLayout(std::vector<Field>& fields)
+{
+	std::sort(fields.begin(), fields.end(), FieldTypeCmp);
+	std::stable_sort(fields.begin(), fields.end(), FieldLayoutCmp);
+}
+
 void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 {
 	std::vector<Field>::const_iterator it;
@@ -113,6 +145,18 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 	/* forward declaration */
 	if (klass.Name.find_first_of(':') == std::string::npos)
 		std::cout << "class " << klass.Name << ";" << std::endl << std::endl;
+
+	/* TypeHelper */
+	if (klass.Attributes & TAAbstract) {
+		std::cout << "template<>" << std::endl
+			  << "struct TypeHelper<" << klass.Name << ">" << std::endl
+			  << "{" << std::endl
+			  << "\t" << "static ObjectFactory GetFactory(void)" << std::endl
+			  << "\t" << "{" << std::endl
+			  << "\t\t" << "return NULL;" << std::endl
+			  << "\t" << "}" << std::endl
+			  << "};" << std::endl << std::endl;
+	}
 
 	/* TypeImpl */
 	std::cout << "template<>" << std::endl
@@ -139,7 +183,7 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 		  << "\t" << "}" << std::endl << std::endl;
 
 	/* GetBaseType */
-	std::cout << "\t" << "virtual const Type *GetBaseType(void) const" << std::endl
+	std::cout << "\t" << "virtual Type::Ptr GetBaseType(void) const" << std::endl
 		<< "\t" << "{" << std::endl;
 
 	std::cout << "\t\t" << "return ";
@@ -147,7 +191,7 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 	if (!klass.Parent.empty())
 		std::cout << "Type::GetByName(\"" << klass.Parent << "\")";
 	else
-		std::cout << "NULL";
+		std::cout << "Type::Ptr()";
 
 	std::cout << ";" << std::endl
 			  << "\t" << "}" << std::endl << std::endl;
@@ -253,8 +297,16 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 
 		size_t num = 0;
 		for (it = klass.Fields.begin(); it != klass.Fields.end(); it++) {
+			std::string ftype = it->Type;
+
+			if (ftype.find("::Ptr") != std::string::npos)
+				ftype = ftype.substr(0, ftype.size() - strlen("::Ptr"));
+
+			if (it->Attributes & FAEnum)
+				ftype = "int";
+
 			std::cout << "\t\t\t" << "case " << num << ":" << std::endl
-				<< "\t\t\t\t" << "return Field(" << num << ", \"" << it->Name << "\", " << it->Attributes << ");" << std::endl;
+				<< "\t\t\t\t" << "return Field(" << num << ", \"" << ftype << "\", \"" << it->Name << "\", " << it->Attributes << ");" << std::endl;
 			num++;
 		}
 
@@ -286,6 +338,12 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 	std::cout << ";" << std::endl
 		<< "\t" << "}" << std::endl << std::endl;
 
+	/* GetFactory */
+	std::cout << "\t" << "virtual ObjectFactory GetFactory(void) const" << std::endl
+		  << "\t" << "{" << std::endl
+		  << "\t\t" << "return TypeHelper<" << klass.Name << ">::GetFactory();" << std::endl
+		  << "\t" << "}" << std::endl << std::endl;
+
 	std::cout << "};" << std::endl << std::endl;
 
 	/* ObjectImpl */
@@ -294,13 +352,7 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 		  << " : public " << (klass.Parent.empty() ? "Object" : klass.Parent) << std::endl
 		  << "{" << std::endl
 		  << "public:" << std::endl
-		  << "\t" << "DECLARE_PTR_TYPEDEFS(ObjectImpl<" << klass.Name << ">);" << std::endl << std::endl;
-
-	/* GetReflectionType */
-	std::cout << "\t" << "virtual const Type *GetReflectionType(void) const" << std::endl
-			  << "\t" << "{" << std::endl
-			  << "\t\t" << "return Type::GetByName(\"" << klass.Name << "\");" << std::endl
-			  << "\t" << "}" << std::endl << std::endl;
+		  << "\t" << "DECLARE_PTR_TYPEDEFS(ObjectImpl<" << klass.Name << ">);" << std::endl;
 
 	if (!klass.Fields.empty()) {
 		/* constructor */
@@ -462,19 +514,13 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 		}
 	}
 
-	std::cout << "};" << std::endl << std::endl;
+	if (klass.Name == "DynamicObject")
+		std::cout << "\t" << "friend class ConfigItem;" << std::endl;
 
-	/* FactoryHelper */
-	if (klass.Attributes & TAAbstract) {
-		std::cout << "template<>" << std::endl
-			  << "struct FactoryHelper<" << klass.Name << ">" << std::endl
-			  << "{" << std::endl
-			  << "\t" << "Type::Factory GetFactory(void)" << std::endl
-			  << "\t" << "{" << std::endl
-			  << "\t\t" << "return Type::Factory();"
-			  << "\t" << "}"
-			  << "};" << std::endl << std::endl;
-	}
+	if (!klass.TypeBase.empty())
+		std::cout << "\t" << "friend class " << klass.TypeBase << ";" << std::endl;
+
+	std::cout << "};" << std::endl << std::endl;
 }
 
 void ClassCompiler::CompileFile(const std::string& path)
