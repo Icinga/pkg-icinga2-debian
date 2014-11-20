@@ -55,6 +55,7 @@ Description: host and network monitoring system
 
 Package: icinga2-common
 Architecture: all
+Replaces: python-icinga2
 Depends:
     adduser,
     lsb-release,
