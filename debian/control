@@ -21,7 +21,7 @@ Build-Depends: bison,
                libssl-dev,
                make (>= 3.81),
                po-debconf
-Standards-Version: 3.9.5
+Standards-Version: 3.9.6
 Homepage: http://www.icinga.org
 Vcs-Browser: http://anonscm.debian.org/cgit/pkg-nagios/pkg-icinga2.git
 Vcs-Git: git://anonscm.debian.org/pkg-nagios/pkg-icinga2.git
