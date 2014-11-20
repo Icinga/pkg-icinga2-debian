@@ -86,10 +86,10 @@ msgstr "Uveďte prosím, zda má Icinga 2 používat MySQL."
 #. Description
 #: ../icinga2-ido-mysql.templates:2001
 msgid ""
-"You may later disable the feature by using the \"icinga2-disable-feature ido-"
+"You may later disable the feature by using the \"icinga2 feature disable ido-"
 "mysql\" command."
 msgstr ""
-"Tuto funkci můžete později zakázat příkazem \"icinga2-disable-feature ido-"
+"Tuto funkci můžete později zakázat příkazem \"icinga2 feature disable ido-"
 "mysql\"."
 
 #. Type: boolean
@@ -108,8 +108,8 @@ msgstr "Uveďte prosím, zda má Icinga 2 používat PostgreSQL."
 #. Description
 #: ../icinga2-ido-pgsql.templates:2001
 msgid ""
-"You may later disable the feature by using the \"icinga2-disable-feature ido-"
+"You may later disable the feature by using the \"icinga2 feature disable ido-"
 "pgsql\" command."
 msgstr ""
-"Tuto funkci můžete později zakázat příkazem \"icinga2-disable-feature ido-"
+"Tuto funkci můžete později zakázat příkazem \"icinga2 feature disable ido-"
 "pgsql\"."

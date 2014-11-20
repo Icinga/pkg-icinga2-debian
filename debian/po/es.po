@@ -108,7 +108,7 @@ msgstr "Indique si Icinga 2 debería utilizar MySQL."
 #. Description
 #: ../icinga2-ido-mysql.templates:2001
 msgid ""
-"You may later disable the feature by using the \"icinga2-disable-feature ido-"
+"You may later disable the feature by using the \"icinga2 feature disable ido-"
 "mysql\" command."
 msgstr ""
 "Podrá desactivar la funcionalidad más adelante ejecutando «icinga2-disable-"
@@ -130,7 +130,7 @@ msgstr "Indique si Icinga 2 debería utilizar PostgreSQL."
 #. Description
 #: ../icinga2-ido-pgsql.templates:2001
 msgid ""
-"You may later disable the feature by using the \"icinga2-disable-feature ido-"
+"You may later disable the feature by using the \"icinga2 feature disable ido-"
 "pgsql\" command."
 msgstr ""
 "Podrá desactivar la funcionalidad más adelante ejecutando «icinga2-disable-"
