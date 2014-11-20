@@ -3,8 +3,10 @@
 #export DH_VERBOSE=1
 
 %:
-	dh $@
+	dh $@ --with systemd
 
+override_dh_systemd_enable:
+	dh_systemd_enable --name=icinga2
 override_dh_auto_build:
 	dh_auto_build --parallel
 
@@ -29,11 +31,12 @@ override_dh_auto_configure:
 
 override_dh_auto_install:
 	dh_auto_install
-	# remove features-enabled - these will be activated by postinst later
+		# remove features-enabled - these will be activated by postinst later
 	rm -r debian/tmp/etc/icinga2/features-enabled/*
 
 override_dh_install:
 	dh_install
+	chmod +x debian/icinga2-common/usr/lib/icinga2/icinga2-prepare-dirs
 	# remove ido files from other packages
 	if [ -d debian/icinga2-common/ ]; then rm debian/icinga2-common/etc/icinga2/features-available/ido-*; fi
 	rm debian/icinga2-bin/usr/lib/*/icinga2/libdb_ido_*
