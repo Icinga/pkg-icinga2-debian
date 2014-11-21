@@ -1,4 +1,4 @@
-icinga2 (2.2.0-1~ppa1~lucid3) lucid; urgency=medium
+icinga2 (2.2.0-1~ppa1~trusty3) trusty; urgency=medium
 
   * Fix multi-arch path 
 
