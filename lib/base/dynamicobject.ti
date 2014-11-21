@@ -1,3 +1,22 @@
+/******************************************************************************
+ * Icinga 2                                                                   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ *                                                                            *
+ * This program is free software; you can redistribute it and/or              *
+ * modify it under the terms of the GNU General Public License                *
+ * as published by the Free Software Foundation; either version 2             *
+ * of the License, or (at your option) any later version.                     *
+ *                                                                            *
+ * This program is distributed in the hope that it will be useful,            *
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of             *
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              *
+ * GNU General Public License for more details.                               *
+ *                                                                            *
+ * You should have received a copy of the GNU General Public License          *
+ * along with this program; if not, write to the Free Software Foundation     *
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
+ ******************************************************************************/
+
 namespace icinga
 {
 
@@ -10,13 +29,15 @@ enum HAMode
 
 class NameComposer {
 public:
-	virtual String MakeName(const String& shortName, const Dictionary::Ptr& props) const = 0;
+	virtual String MakeName(const String& shortName, const Object::Ptr& context) const = 0;
 };
 }}}
 
 abstract class DynamicObject
 {
-	[config] String __name (Name);
+	[protected] Object::Ptr __parent (ParentScope);
+
+	[config, internal] String __name (Name);
 	[config] String name (ShortName) {
 		get {{{
 			if (m_ShortName.IsEmpty())
@@ -25,11 +46,10 @@ abstract class DynamicObject
 				return m_ShortName;
 		}}}
 	};
-	[config, get_protected] String type (TypeName);
+	[config, internal, get_protected] String type (TypeName);
 	[config] String zone;
-	[config, get_protected] Array::Ptr templates;
+	[config, internal, get_protected] Array::Ptr templates;
 	[config] Dictionary::Ptr methods;
-	[config] Dictionary::Ptr vars (VarsRaw);
 	[get_protected] bool active;
 	[get_protected] bool paused {
 		default {{{ return true; }}}
@@ -39,10 +59,9 @@ abstract class DynamicObject
 	[get_protected] bool pause_called;
 	[get_protected] bool resume_called;
 	[enum] HAMode ha_mode (HAMode);
-	Dictionary::Ptr authority_info;
 	[protected] Dictionary::Ptr extensions;
 
-	[state] Value override_vars;
+	[protected] bool state_loaded;
 };
 
 }

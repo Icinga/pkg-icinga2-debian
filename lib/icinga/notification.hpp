@@ -26,6 +26,7 @@
 #include "icinga/usergroup.hpp"
 #include "icinga/timeperiod.hpp"
 #include "icinga/checkresult.hpp"
+#include "remote/endpoint.hpp"
 #include "remote/messageorigin.hpp"
 #include "base/array.hpp"
 
@@ -76,13 +77,13 @@ class ApplyRule;
 class I2_ICINGA_API Notification : public ObjectImpl<Notification>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(Notification);
-	DECLARE_TYPENAME(Notification);
+	DECLARE_OBJECT(Notification);
+	DECLARE_OBJECTNAME(Notification);
 
 	static void StaticInitialize(void);
 
-	shared_ptr<Checkable> GetCheckable(void) const;
-	shared_ptr<NotificationCommand> GetCommand(void) const;
+	intrusive_ptr<Checkable> GetCheckable(void) const;
+	intrusive_ptr<NotificationCommand> GetCommand(void) const;
 	TimePeriod::Ptr GetPeriod(void) const;
 	std::set<User::Ptr> GetUsers(void) const;
 	std::set<UserGroup::Ptr> GetUserGroups(void) const;
@@ -96,6 +97,8 @@ public:
 	void BeginExecuteNotification(NotificationType type, const CheckResult::Ptr& cr, bool force, const String& author = "", const String& text = "");
 
 	bool CheckNotificationUserFilters(NotificationType type, const User::Ptr& user, bool force);
+
+	Endpoint::Ptr GetCommandEndpoint(void) const;
 
 	static String NotificationTypeToString(NotificationType type);
 
@@ -113,7 +116,8 @@ protected:
 private:
 	void ExecuteNotificationHelper(NotificationType type, const User::Ptr& user, const CheckResult::Ptr& cr, bool force, const String& author = "", const String& text = "");
 
-	static bool EvaluateApplyRuleOne(const shared_ptr<Checkable>& checkable, const ApplyRule& rule);
+	static void EvaluateApplyRuleOneInstance(const intrusive_ptr<Checkable>& checkable, const String& name, const Dictionary::Ptr& locals, const ApplyRule& rule);
+	static bool EvaluateApplyRuleOne(const intrusive_ptr<Checkable>& checkable, const ApplyRule& rule);
 	static void EvaluateApplyRule(const ApplyRule& rule);
 	static void EvaluateApplyRules(const std::vector<ApplyRule>& rules);
 };

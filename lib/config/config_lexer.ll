@@ -21,7 +21,7 @@
 #include "config/configcompiler.hpp"
 #include "config/typerule.hpp"
 #include "config/configcompilercontext.hpp"
-#include "config/aexpression.hpp"
+#include "config/expression.hpp"
 
 using namespace icinga;
 
@@ -40,6 +40,21 @@ do {							\
 	yylloc->LastColumn = yycolumn + yyleng - 1;	\
 	yycolumn += yyleng;				\
 } while (0);
+
+#define YYLLOC_DEFAULT(Current, Rhs, N)							\
+	do										\
+		if (YYID (N)) {								\
+			(Current).first_line   = YYRHSLOC (Rhs, 1).first_line;		\
+			(Current).first_column = YYRHSLOC (Rhs, 1).first_column;	\
+			(Current).last_line    = YYRHSLOC (Rhs, N).last_line;		\
+			(Current).last_column  = YYRHSLOC (Rhs, N).last_column;		\
+		} else {								\
+			(Current).first_line   = (Current).last_line =			\
+			    YYRHSLOC(Rhs, 0).last_line;					\
+			(Current).first_column = (Current).last_column =		\
+			    YYRHSLOC(Rhs, 0).last_column;				\
+		}									\
+	while (YYID(0))
 
 #define YY_INPUT(buf, result, max_size)			\
 do {							\
@@ -98,6 +113,7 @@ static char *lb_steal(lex_buf *lb)
 %option reentrant noyywrap yylineno
 %option bison-bridge bison-locations
 %option never-interactive nounistd
+%option noinput nounput
 
 %x C_COMMENT
 %x STRING
@@ -219,7 +235,6 @@ include				return T_INCLUDE;
 include_recursive		return T_INCLUDE_RECURSIVE;
 library				return T_LIBRARY;
 null				return T_NULL;
-partial				return T_PARTIAL;
 true				{ yylval->num = 1; return T_NUMBER; }
 false				{ yylval->num = 0; return T_NUMBER; }
 const				return T_CONST;
@@ -229,20 +244,21 @@ where				return T_WHERE;
 import				return T_IMPORT;
 assign				return T_ASSIGN;
 ignore				return T_IGNORE;
+for				return T_APPLY_FOR;
 __function			return T_FUNCTION;
 __return			return T_RETURN;
-zone				return T_ZONE;
 __for				return T_FOR;
-\<\<				{ yylval->op = &AExpression::OpShiftLeft; return T_SHIFT_LEFT; }
-\>\>				{ yylval->op = &AExpression::OpShiftRight; return T_SHIFT_RIGHT; }
-\<=				{ yylval->op = &AExpression::OpLessThanOrEqual; return T_LESS_THAN_OR_EQUAL; }
-\>=				{ yylval->op = &AExpression::OpGreaterThanOrEqual; return T_GREATER_THAN_OR_EQUAL; }
-==				{ yylval->op = &AExpression::OpEqual; return T_EQUAL; }
-!=				{ yylval->op = &AExpression::OpNotEqual; return T_NOT_EQUAL; }
-!in				{ yylval->op = &AExpression::OpNotIn; return T_NOT_IN; }
-in				{ yylval->op = &AExpression::OpIn; return T_IN; }
-&&				{ yylval->op = &AExpression::OpLogicalAnd; return T_LOGICAL_AND; }
-\|\|				{ yylval->op = &AExpression::OpLogicalOr; return T_LOGICAL_OR; }
+=\>				return T_FOLLOWS;
+\<\<				return T_SHIFT_LEFT;
+\>\>				return T_SHIFT_RIGHT;
+\<=				return T_LESS_THAN_OR_EQUAL;
+\>=				return T_GREATER_THAN_OR_EQUAL;
+==				return T_EQUAL;
+!=				return T_NOT_EQUAL;
+!in				return T_NOT_IN;
+in				return T_IN;
+&&				return T_LOGICAL_AND;
+\|\|				return T_LOGICAL_OR;
 [a-zA-Z_][a-zA-Z0-9\-_]*	{ yylval->text = strdup(yytext); return T_IDENTIFIER; }
 @[a-zA-Z_][a-zA-Z0-9\-_]*	{ yylval->text = strdup(yytext + 1); return T_IDENTIFIER; }
 \<[^\>]*\>			{ yytext[yyleng-1] = '\0'; yylval->text = strdup(yytext + 1); return T_STRING_ANGLE; }
@@ -252,19 +268,19 @@ in				{ yylval->op = &AExpression::OpIn; return T_IN; }
 -?[0-9]+(\.[0-9]+)?m		{ yylval->num = strtod(yytext, NULL) * 60; return T_NUMBER; }
 -?[0-9]+(\.[0-9]+)?s		{ yylval->num = strtod(yytext, NULL); return T_NUMBER; }
 -?[0-9]+(\.[0-9]+)?		{ yylval->num = strtod(yytext, NULL); return T_NUMBER; }
-=				{ yylval->op = &AExpression::OpSet; return T_SET; }
-\+=				{ yylval->op = &AExpression::OpSetPlus; return T_SET_PLUS; }
--=				{ yylval->op = &AExpression::OpSetMinus; return T_SET_MINUS; }
-\*=				{ yylval->op = &AExpression::OpSetMultiply; return T_SET_MULTIPLY; }
-\/=				{ yylval->op = &AExpression::OpSetDivide; return T_SET_DIVIDE; }
-\+				{ yylval->op = &AExpression::OpAdd; return T_PLUS; }
-\-				{ yylval->op = &AExpression::OpSubtract; return T_MINUS; }
-\*				{ yylval->op = &AExpression::OpMultiply; return T_MULTIPLY; }
-\/				{ yylval->op = &AExpression::OpMultiply; return T_DIVIDE_OP; }
-\&				{ yylval->op = &AExpression::OpBinaryAnd; return T_BINARY_AND; }
-\|				{ yylval->op = &AExpression::OpBinaryOr; return T_BINARY_OR; }
-\<				{ yylval->op = &AExpression::OpLessThan; return T_LESS_THAN; }
-\>				{ yylval->op = &AExpression::OpLessThan; return T_GREATER_THAN; }
+=				{ yylval->csop = OpSetLiteral; return T_SET; }
+\+=				{ yylval->csop = OpSetAdd; return T_SET_ADD; }
+-=				{ yylval->csop = OpSetSubtract; return T_SET_SUBTRACT; }
+\*=				{ yylval->csop = OpSetMultiply; return T_SET_MULTIPLY; }
+\/=				{ yylval->csop = OpSetDivide; return T_SET_DIVIDE; }
+\+				return T_PLUS;
+\-				return T_MINUS;
+\*				return T_MULTIPLY;
+\/				return T_DIVIDE_OP;
+\&				return T_BINARY_AND;
+\|				return T_BINARY_OR;
+\<				return T_LESS_THAN;
+\>				return T_GREATER_THAN;
 }
 
 [\r\n]+				{ yycolumn -= strlen(yytext) - 1; if (!ignore_newlines) return T_NEWLINE; }

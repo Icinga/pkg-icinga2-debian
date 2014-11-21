@@ -20,24 +20,25 @@
 #ifndef _WIN32
 #	include <stdlib.h>
 #endif /* _WIN32 */
-#include "icinga/icingaapplication.hpp"
 #include "methods/randomchecktask.hpp"
+#include "icinga/perfdatavalue.hpp"
 #include "base/utility.hpp"
 #include "base/convert.hpp"
 #include "base/scriptfunction.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 
 using namespace icinga;
 
 REGISTER_SCRIPTFUNCTION(RandomCheck, &RandomCheckTask::ScriptFunc);
 
-void RandomCheckTask::ScriptFunc(const Checkable::Ptr& service, const CheckResult::Ptr& cr)
+void RandomCheckTask::ScriptFunc(const Checkable::Ptr& service, const CheckResult::Ptr& cr,
+    const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)
 {
 	String output = "Hello from ";
 	output += Utility::GetFQDN();
 
-	Dictionary::Ptr perfdata = make_shared<Dictionary>();
-	perfdata->Set("time", Convert::ToDouble(Utility::GetTime()));
+	Array::Ptr perfdata = new Array();
+	perfdata->Add(new PerfdataValue("time", Convert::ToDouble(Utility::GetTime())));
 
 	cr->SetOutput(output);
 	cr->SetPerformanceData(perfdata);
@@ -45,4 +46,3 @@ void RandomCheckTask::ScriptFunc(const Checkable::Ptr& service, const CheckResul
 
 	service->ProcessCheckResult(cr);
 }
-

@@ -36,12 +36,14 @@ class Notification;
 class I2_ICINGA_API NotificationCommand : public ObjectImpl<NotificationCommand>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(NotificationCommand);
-	DECLARE_TYPENAME(NotificationCommand);
+	DECLARE_OBJECT(NotificationCommand);
+	DECLARE_OBJECTNAME(NotificationCommand);
 
-	virtual Dictionary::Ptr Execute(const shared_ptr<Notification>& notification,
+	virtual Dictionary::Ptr Execute(const intrusive_ptr<Notification>& notification,
 		const User::Ptr& user, const CheckResult::Ptr& cr, const NotificationType& type,
-	    const String& author, const String& comment);
+	    const String& author, const String& comment,
+	    const Dictionary::Ptr& resolvedMacros = Dictionary::Ptr(),
+	    bool useResolvedMacros = false);
 };
 
 }

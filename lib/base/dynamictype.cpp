@@ -22,12 +22,15 @@
 #include "base/debug.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
+#include "base/configerror.hpp"
 
 using namespace icinga;
 
 DynamicType::DynamicType(const String& name)
 	: m_Name(name)
-{ }
+{
+	InflateMutex();
+}
 
 DynamicType::Ptr DynamicType::GetByName(const String& name)
 {
@@ -36,13 +39,13 @@ DynamicType::Ptr DynamicType::GetByName(const String& name)
 	DynamicType::TypeMap::const_iterator tt = InternalGetTypeMap().find(name);
 
 	if (tt == InternalGetTypeMap().end()) {
-		const Type *type = Type::GetByName(name);
+		Type::Ptr type = Type::GetByName(name);
 
 		if (!type || !Type::GetByName("DynamicObject")->IsAssignableFrom(type)
 		    || type->IsAbstract())
 			return DynamicType::Ptr();
 
-		DynamicType::Ptr dtype = make_shared<DynamicType>(name);
+		DynamicType::Ptr dtype = new DynamicType(name);
 
 		InternalGetTypeMap()[type->GetName()] = dtype;
 		InternalGetTypeVector().push_back(dtype);
@@ -77,8 +80,8 @@ DynamicType::TypeVector DynamicType::GetTypes(void)
 std::pair<DynamicTypeIterator<DynamicObject>, DynamicTypeIterator<DynamicObject> > DynamicType::GetObjects(void)
 {
 	return std::make_pair(
-	    DynamicTypeIterator<DynamicObject>(GetSelf(), 0),
-	    DynamicTypeIterator<DynamicObject>(GetSelf(), -1)
+	    DynamicTypeIterator<DynamicObject>(this, 0),
+	    DynamicTypeIterator<DynamicObject>(this, -1)
 	);
 }
 
@@ -100,7 +103,7 @@ void DynamicType::RegisterObject(const DynamicObject::Ptr& object)
 			if (it->second == object)
 				return;
 
-			BOOST_THROW_EXCEPTION(user_error("An object with type '" + m_Name + "' and name '" + name + "' already exists (" +
+			BOOST_THROW_EXCEPTION(ConfigError("An object with type '" + m_Name + "' and name '" + name + "' already exists (" +
 			    Convert::ToString(it->second->GetDebugInfo()) + "), new declaration: " + Convert::ToString(object->GetDebugInfo()))
 			    << errinfo_debuginfo(object->GetDebugInfo()));
 		}
@@ -120,19 +123,6 @@ DynamicObject::Ptr DynamicType::GetObject(const String& name) const
 		return DynamicObject::Ptr();
 
 	return nt->second;
-}
-
-DynamicObject::Ptr DynamicType::CreateObject(const Dictionary::Ptr& serializedUpdate)
-{
-	ASSERT(!OwnsLock());
-
-	const Type *type = Type::GetByName(m_Name);
-
-	Object::Ptr object = type->Instantiate();
-
-	Deserialize(object, serializedUpdate, false, FAConfig);
-
-	return static_pointer_cast<DynamicObject>(object);
 }
 
 boost::mutex& DynamicType::GetStaticMutex(void)

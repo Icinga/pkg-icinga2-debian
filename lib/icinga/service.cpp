@@ -30,11 +30,14 @@ using namespace icinga;
 
 REGISTER_TYPE(Service);
 
-String ServiceNameComposer::MakeName(const String& shortName, const Dictionary::Ptr& props) const {
-	if (!props)
+String ServiceNameComposer::MakeName(const String& shortName, const Object::Ptr& context) const
+{
+	Service::Ptr service = dynamic_pointer_cast<Service>(context);
+
+	if (!service)
 		return "";
 
-	return props->Get("host_name") + "!" + shortName;
+	return service->GetHostName() + "!" + shortName;
 }
 
 void Service::OnConfigLoaded(void)
@@ -42,20 +45,22 @@ void Service::OnConfigLoaded(void)
 	Array::Ptr groups = GetGroups();
 
 	if (groups) {
+		groups = groups->ShallowClone();
+
 		ObjectLock olock(groups);
 
 		BOOST_FOREACH(const String& name, groups) {
 			ServiceGroup::Ptr sg = ServiceGroup::GetByName(name);
 
 			if (sg)
-				sg->ResolveGroupMembership(GetSelf(), true);
+				sg->ResolveGroupMembership(this, true);
 		}
 	}
 
 	m_Host = Host::GetByName(GetHostName());
 
 	if (m_Host)
-		m_Host->AddService(GetSelf());
+		m_Host->AddService(this);
 
 	SetSchedulingOffset(Utility::Random());
 

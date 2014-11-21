@@ -20,10 +20,12 @@
 #include "base/array.hpp"
 #include "base/objectlock.hpp"
 #include "base/debug.hpp"
-#include <cJSON.h>
+#include "base/primitivetype.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
+
+REGISTER_PRIMITIVE_TYPE(Array);
 
 /**
  * Restrieves a value from an array.
@@ -113,7 +115,7 @@ size_t Array::GetLength(void) const
  * @param value The value.
  * @returns true if the array contains the value, false otherwise.
  */
-bool Array::Contains(const String& value) const
+bool Array::Contains(const Value& value) const
 {
 	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
@@ -194,50 +196,41 @@ void Array::CopyTo(const Array::Ptr& dest) const
  */
 Array::Ptr Array::ShallowClone(void) const
 {
-	Array::Ptr clone = make_shared<Array>();
+	Array::Ptr clone = new Array();
 	CopyTo(clone);
 	return clone;
 }
 
-/**
- * Converts a JSON object to an array.
- *
- * @param json The JSON object.
- * @returns An array that is equivalent to the JSON object.
- */
-Array::Ptr Array::FromJson(cJSON *json)
+Array::Ptr icinga::MakeArray(const Value& val1)
 {
-	Array::Ptr array = make_shared<Array>();
-
-	ASSERT(json->type == cJSON_Array);
-
-	for (cJSON *i = json->child; i != NULL; i = i->next) {
-		array->Add(Value::FromJson(i));
-	}
-
-	return array;
+	Array::Ptr result = new Array();
+	result->Add(val1);
+	return result;
 }
 
-/**
- * Converts this array to a JSON object.
- *
- * @returns A JSON object that is equivalent to the array. Values that
- *	    cannot be represented in JSON are omitted.
- */
-cJSON *Array::ToJson(void) const
+Array::Ptr icinga::MakeArray(const Value& val1, const Value& val2)
 {
-	cJSON *json = cJSON_CreateArray();
+	Array::Ptr result = new Array();
+	result->Add(val1);
+	result->Add(val2);
+	return result;
+}
 
-	try {
-		ObjectLock olock(this);
+Array::Ptr icinga::MakeArray(const Value& val1, const Value& val2, const Value& val3)
+{
+	Array::Ptr result = new Array();
+	result->Add(val1);
+	result->Add(val2);
+	result->Add(val3);
+	return result;
+}
 
-		BOOST_FOREACH(const Value& value, m_Data) {
-			cJSON_AddItemToArray(json, value.ToJson());
-		}
-	} catch (...) {
-		cJSON_Delete(json);
-		throw;
-	}
-
-	return json;
+Array::Ptr icinga::MakeArray(const Value& val1, const Value& val2, const Value& val3, const Value& val4)
+{
+	Array::Ptr result = new Array();
+	result->Add(val1);
+	result->Add(val2);
+	result->Add(val3);
+	result->Add(val4);
+	return result;
 }

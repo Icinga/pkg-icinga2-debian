@@ -28,7 +28,7 @@
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
 #include "base/initialize.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/scriptfunction.hpp"
 #include <boost/foreach.hpp>
 
@@ -46,7 +46,9 @@ void DbConnection::OnConfigLoaded(void)
 	DynamicObject::OnConfigLoaded();
 
 	if (!GetEnableHa()) {
-		Log(LogDebug, "DbConnection", "HA functionality disabled. Won't pause IDO connection: " + GetName());
+		Log(LogDebug, "DbConnection")
+		    << "HA functionality disabled. Won't pause IDO connection: " << GetName();
+
 		SetHAMode(HARunEverywhere);
 	}
 }
@@ -62,9 +64,10 @@ void DbConnection::Resume(void)
 {
 	DynamicObject::Resume();
 
-	Log(LogInformation, "DbConnection", "Resuming IDO connection: " + GetName());
+	Log(LogInformation, "DbConnection")
+	    << "Resuming IDO connection: " << GetName();
 
-	m_CleanUpTimer = make_shared<Timer>();
+	m_CleanUpTimer = new Timer();
 	m_CleanUpTimer->SetInterval(60);
 	m_CleanUpTimer->OnTimerExpired.connect(boost::bind(&DbConnection::CleanUpHandler, this));
 	m_CleanUpTimer->Start();
@@ -74,14 +77,15 @@ void DbConnection::Pause(void)
 {
 	DynamicObject::Pause();
 
-	Log(LogInformation, "DbConnection", "Pausing IDO connection: " + GetName());
+	Log(LogInformation, "DbConnection")
+	     << "Pausing IDO connection: " << GetName();
 
 	m_CleanUpTimer.reset();
 }
 
 void DbConnection::StaticInitialize(void)
 {
-	m_ProgramStatusTimer = make_shared<Timer>();
+	m_ProgramStatusTimer = new Timer();
 	m_ProgramStatusTimer->SetInterval(10);
 	m_ProgramStatusTimer->OnTimerExpired.connect(boost::bind(&DbConnection::ProgramStatusHandler));
 	m_ProgramStatusTimer->Start();
@@ -93,7 +97,7 @@ void DbConnection::InsertRuntimeVariable(const String& key, const Value& value)
 	query.Table = "runtimevariables";
 	query.Type = DbQueryInsert;
 	query.Category = DbCatProgramStatus;
-	query.Fields = make_shared<Dictionary>();
+	query.Fields = new Dictionary();
 	query.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	query.Fields->Set("varname", key);
 	query.Fields->Set("varvalue", value);
@@ -106,7 +110,7 @@ void DbConnection::ProgramStatusHandler(void)
 	query1.Table = "programstatus";
 	query1.Type = DbQueryDelete;
 	query1.Category = DbCatProgramStatus;
-	query1.WhereCriteria = make_shared<Dictionary>();
+	query1.WhereCriteria = new Dictionary();
 	query1.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
 	DbObject::OnQuery(query1);
 
@@ -116,8 +120,9 @@ void DbConnection::ProgramStatusHandler(void)
 	query2.Type = DbQueryInsert;
 	query2.Category = DbCatProgramStatus;
 
-	query2.Fields = make_shared<Dictionary>();
+	query2.Fields = new Dictionary();
 	query2.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+	query2.Fields->Set("program_version", Application::GetVersion());
 	query2.Fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
 	query2.Fields->Set("program_start_time", DbValue::FromTimestamp(Application::GetStartTime()));
 	query2.Fields->Set("is_currently_running", 1);
@@ -139,7 +144,7 @@ void DbConnection::ProgramStatusHandler(void)
 	query3.Table = "runtimevariables";
 	query3.Type = DbQueryDelete;
 	query3.Category = DbCatProgramStatus;
-	query3.WhereCriteria = make_shared<Dictionary>();
+	query3.WhereCriteria = new Dictionary();
 	query3.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
 	DbObject::OnQuery(query3);
 
@@ -159,9 +164,10 @@ void DbConnection::ProgramStatusHandler(void)
 
 	BOOST_FOREACH(const Dictionary::Pair& kv, vars) {
 		if (!kv.first.IsEmpty()) {
-			Log(LogDebug, "DbConnection", "icinga application customvar key: '" + kv.first + "' value: '" + Convert::ToString(kv.second) + "'");
+			Log(LogDebug, "DbConnection")
+			    << "icinga application customvar key: '" << kv.first << "' value: '" << kv.second << "'";
 
-			Dictionary::Ptr fields4 = make_shared<Dictionary>();
+			Dictionary::Ptr fields4 = new Dictionary();
 			fields4->Set("varname", Convert::ToString(kv.first));
 			fields4->Set("varvalue", Convert::ToString(kv.second));
 			fields4->Set("config_type", 1);
@@ -210,9 +216,10 @@ void DbConnection::CleanUpHandler(void)
 			continue;
 
 		CleanUpExecuteQuery(tables[i].name, tables[i].time_column, now - max_age);
-		Log(LogNotice, "DbConnection", "Cleanup (" + tables[i].name + "): " + Convert::ToString(max_age) +
-		    " now: " + Convert::ToString(now) +
-		    " old: " + Convert::ToString(now - max_age));
+		Log(LogNotice, "DbConnection")
+		    << "Cleanup (" << tables[i].name << "): " << max_age
+		    << " now: " << now
+		    << " old: " << now - max_age;
 	}
 
 }

@@ -87,7 +87,7 @@ msgstr "Укажите, должна ли Icinga 2 использовать MySQ
 #. Description
 #: ../icinga2-ido-mysql.templates:2001
 msgid ""
-"You may later disable the feature by using the \"icinga2-disable-feature ido-"
+"You may later disable the feature by using the \"icinga2 feature disable ido-"
 "mysql\" command."
 msgstr ""
 "Позднее вы можете выключить это свойство с помощью команды «icinga2-disable-"
@@ -109,7 +109,7 @@ msgstr "Укажите, должна ли Icinga 2 использовать Post
 #. Description
 #: ../icinga2-ido-pgsql.templates:2001
 msgid ""
-"You may later disable the feature by using the \"icinga2-disable-feature ido-"
+"You may later disable the feature by using the \"icinga2 feature disable ido-"
 "pgsql\" command."
 msgstr ""
 "Позднее вы можете выключить это свойство с помощью команды «icinga2-disable-"

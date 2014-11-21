@@ -21,8 +21,11 @@
 #define SCRIPTUTILS_H
 
 #include "base/i2-base.hpp"
-#include "base/qstring.hpp"
+#include "base/string.hpp"
 #include "base/array.hpp"
+#include "base/dictionary.hpp"
+#include "base/type.hpp"
+#include "base/dynamicobject.hpp"
 
 namespace icinga
 {
@@ -39,7 +42,9 @@ public:
 	static Array::Ptr Intersection(const std::vector<Value>& arguments);
 	static void Log(const std::vector<Value>& arguments);
 	static Array::Ptr Range(const std::vector<Value>& arguments);
-	static void Exit(int code);
+	static Type::Ptr TypeOf(const Value& value);
+	static Array::Ptr Keys(const Dictionary::Ptr& dict);
+	static DynamicObject::Ptr GetObject(const String& type, const String& name);
 
 private:
 	ScriptUtils(void);

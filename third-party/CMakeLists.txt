@@ -15,8 +15,11 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-add_subdirectory(cJSON)
 add_subdirectory(mmatch)
+
+if(NOT YAJL_FOUND)
+  add_subdirectory(yajl)
+endif()
 
 if(UNIX OR CYGWIN)
   add_subdirectory(execvpe)

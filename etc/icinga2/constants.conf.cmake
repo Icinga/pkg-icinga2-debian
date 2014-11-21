@@ -19,3 +19,6 @@ const ManubulonPluginDir = "@ICINGA2_PLUGINDIR@"
 
 /* Our local zone name. */
 const ZoneName = NodeName
+
+/* Secret key for remote node tickets */
+const TicketSalt = ""

@@ -23,7 +23,7 @@
 #include "base/i2-base.hpp"
 #include "base/dynamicobject.thpp"
 #include "base/object.hpp"
-#include "base/serializer.hpp"
+#include "base/type.hpp"
 #include "base/dictionary.hpp"
 #include "base/debuginfo.hpp"
 #include <boost/signals2.hpp>
@@ -42,7 +42,7 @@ class DynamicType;
 class I2_BASE_API DynamicObject : public ObjectImpl<DynamicObject>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(DynamicObject);
+	DECLARE_OBJECT(DynamicObject);
 
 	static boost::signals2::signal<void (const DynamicObject::Ptr&)> OnStarted;
 	static boost::signals2::signal<void (const DynamicObject::Ptr&)> OnStopped;
@@ -52,7 +52,7 @@ public:
 
 	Value InvokeMethod(const String& method, const std::vector<Value>& arguments);
 
-	shared_ptr<DynamicType> GetType(void) const;
+	intrusive_ptr<DynamicType> GetType(void) const;
 
 	DebugInfo GetDebugInfo(void) const;
 	void SetDebugInfo(const DebugInfo& di);
@@ -60,8 +60,8 @@ public:
 	bool IsActive(void) const;
 	bool IsPaused(void) const;
 
-	void SetExtension(const String& key, const Object::Ptr& object);
-	Object::Ptr GetExtension(const String& key);
+	void SetExtension(const String& key, const Value& value);
+	Value GetExtension(const String& key);
 	void ClearExtension(const String& key);
 
 	void Register(void);
@@ -80,7 +80,7 @@ public:
 	virtual void OnStateLoaded(void);
 
 	template<typename T>
-	static shared_ptr<T> GetObject(const String& name)
+	static intrusive_ptr<T> GetObject(const String& name)
 	{
 		DynamicObject::Ptr object = GetObject(T::GetTypeName(), name);
 
@@ -101,15 +101,15 @@ private:
 	DebugInfo m_DebugInfo;
 };
 
-#define DECLARE_TYPENAME(klass)						\
-	inline static String GetTypeName(void)				\
-	{								\
-		return #klass;						\
-	}								\
-									\
-	inline static shared_ptr<klass> GetByName(const String& name)	\
-	{								\
-		return DynamicObject::GetObject<klass>(name);		\
+#define DECLARE_OBJECTNAME(klass)						\
+	inline static String GetTypeName(void)					\
+	{									\
+		return #klass;							\
+	}									\
+										\
+	inline static intrusive_ptr<klass> GetByName(const String& name)	\
+	{									\
+		return DynamicObject::GetObject<klass>(name);			\
 	}
 
 }

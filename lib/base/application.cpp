@@ -44,7 +44,7 @@ using namespace icinga;
 REGISTER_TYPE(Application);
 
 boost::signals2::signal<void (void)> Application::OnReopenLogs;
-Application *Application::m_Instance = NULL;
+Application::Ptr Application::m_Instance = NULL;
 bool Application::m_ShuttingDown = false;
 bool Application::m_RequestRestart = false;
 bool Application::m_RequestReopenLogs = false;
@@ -61,18 +61,6 @@ double Application::m_StartTime;
 void Application::OnConfigLoaded(void)
 {
 	m_PidFile = NULL;
-
-#ifdef _WIN32
-	/* disable GUI-based error messages for LoadLibrary() */
-	SetErrorMode(SEM_FAILCRITICALERRORS);
-
-	WSADATA wsaData;
-	if (WSAStartup(MAKEWORD(1, 1), &wsaData) != 0) {
-		BOOST_THROW_EXCEPTION(win32_error()
-		    << boost::errinfo_api_function("WSAStartup")
-		    << errinfo_win32_error(WSAGetLastError()));
-	}
-#endif /* _WIN32 */
 
 	ASSERT(m_Instance == NULL);
 	m_Instance = this;
@@ -121,7 +109,13 @@ void Application::Exit(int rc)
 		logger->Flush();
 	}
 
+	Timer::Uninitialize();
+
+#ifdef _DEBUG
+	exit(rc);
+#else /* _DEBUG */
 	_exit(rc); // Yay, our static destructors are pretty much beyond repair at this point.
+#endif /* _DEBUG */
 }
 
 void Application::InitializeBase(void)
@@ -135,9 +129,23 @@ void Application::InitializeBase(void)
 			maxfds = 65536;
 
 		for (rlim_t i = 3; i < maxfds; i++) {
+#ifdef _DEBUG
 			if (close(i) >= 0)
 				std::cerr << "Closed FD " << i << " which we inherited from our parent process." << std::endl;
+#endif /* _DEBUG */
 		}
+	}
+#endif /* _WIN32 */
+
+#ifdef _WIN32
+	/* disable GUI-based error messages for LoadLibrary() */
+	SetErrorMode(SEM_FAILCRITICALERRORS);
+
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(1, 1), &wsaData) != 0) {
+		BOOST_THROW_EXCEPTION(win32_error()
+			<< boost::errinfo_api_function("WSAStartup")
+			<< errinfo_win32_error(WSAGetLastError()));
 	}
 #endif /* _WIN32 */
 
@@ -151,10 +159,7 @@ void Application::InitializeBase(void)
  */
 Application::Ptr Application::GetInstance(void)
 {
-	if (!m_Instance)
-		return Application::Ptr();
-
-	return m_Instance->GetSelf();
+	return m_Instance;
 }
 
 void Application::SetResourceLimits(void)
@@ -211,7 +216,7 @@ void Application::SetResourceLimits(void)
 
 		if (!new_argv) {
 			perror("malloc");
-			exit(1);
+			Exit(EXIT_FAILURE);
 		}
 
 		new_argv[0] = argv[0];
@@ -230,7 +235,7 @@ void Application::SetResourceLimits(void)
 		if (execvp(new_argv[0], new_argv) < 0)
 			perror("execvp");
 
-		exit(1);
+		Exit(EXIT_FAILURE);
 	}
 #	else /* RLIMIT_STACK */
 	Log(LogNotice, "Application", "System does not support adjusting the resource limit for stack size (RLIMIT_STACK)");
@@ -284,11 +289,10 @@ mainloop:
 
 		if (abs(timeDiff) > 15) {
 			/* We made a significant jump in time. */
-			std::ostringstream msgbuf;
-			msgbuf << "We jumped "
-				<< (timeDiff < 0 ? "forward" : "backward")
-				<< " in time: " << abs(timeDiff) << " seconds";
-			Log(LogInformation, "Application", msgbuf.str());
+			Log(LogInformation, "Application")
+			    << "We jumped "
+			    << (timeDiff < 0 ? "forward" : "backward")
+			    << " in time: " << abs(timeDiff) << " seconds";
 
 			Timer::AdjustTimers(-timeDiff);
 		}
@@ -317,8 +321,6 @@ mainloop:
 	GetTP().Stop();
 	m_ShuttingDown = false;
 
-	GetTP().Join(true);
-
 	Timer::Uninitialize();
 #endif /* _DEBUG */
 }
@@ -340,7 +342,7 @@ pid_t Application::StartReloadProcess(void)
 	Log(LogInformation, "Application", "Got reload command: Starting new instance.");
 
 	// prepare arguments
-	Array::Ptr args = make_shared<Array>();
+	Array::Ptr args = new Array();
 	args->Add(GetExePath(m_ArgV[0]));
 
 	for (int i=1; i < Application::GetArgC(); i++) {
@@ -352,7 +354,7 @@ pid_t Application::StartReloadProcess(void)
 	args->Add("--reload-internal");
 	args->Add(Convert::ToString(Utility::GetPid()));
 
-	Process::Ptr process = make_shared<Process>(Process::PrepareCommand(args));
+	Process::Ptr process = new Process(Process::PrepareCommand(args));
 	process->SetTimeout(300);
 	process->Run(&ReloadProcessCallback);
 
@@ -480,6 +482,7 @@ void Application::DisplayInfoMessage(bool skipVersion)
 		  << "  Package data directory: " << GetPkgDataDir() << std::endl
 		  << "  State path: " << GetStatePath() << std::endl
 		  << "  Objects path: " << GetObjectsPath() << std::endl
+		  << "  Vars path: " << GetVarsPath() << std::endl
 		  << "  PID path: " << GetPidPath() << std::endl
 		  << "  Application type: " << GetApplicationType() << std::endl;
 }
@@ -680,7 +683,8 @@ int Application::Run(void)
 	try {
 		UpdatePidFile(GetPidPath());
 	} catch (const std::exception&) {
-		Log(LogCritical, "Application", "Cannot update PID file '" + GetPidPath() + "'. Aborting.");
+		Log(LogCritical, "Application")
+		    << "Cannot update PID file '" << GetPidPath() << "'. Aborting.";
 		return false;
 	}
 
@@ -712,7 +716,8 @@ void Application::UpdatePidFile(const String& filename, pid_t pid)
 		m_PidFile = fopen(filename.CStr(), "w");
 
 	if (m_PidFile == NULL) {
-		Log(LogCritical, "Application", "Could not open PID file '" + filename + "'.");
+		Log(LogCritical, "Application")
+		    << "Could not open PID file '" << filename << "'.";
 		BOOST_THROW_EXCEPTION(std::runtime_error("Could not open PID file '" + filename + "'"));
 	}
 
@@ -735,9 +740,8 @@ void Application::UpdatePidFile(const String& filename, pid_t pid)
 	}
 
 	if (ftruncate(fd, 0) < 0) {
-		std::ostringstream msgbuf;
-		msgbuf << "ftruncate() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-		Log(LogCritical, "Application",  msgbuf.str());
+		Log(LogCritical, "Application")
+		    << "ftruncate() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
 
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("ftruncate")
@@ -916,7 +920,7 @@ void Application::DeclareLocalStateDir(const String& path)
  */
 String Application::GetZonesDir(void)
 {
-	return ScriptVariable::Get("ZonesDir");
+	return ScriptVariable::Get("ZonesDir", &Empty);
 }
 
 /**
@@ -936,7 +940,8 @@ void Application::DeclareZonesDir(const String& path)
  */
 String Application::GetPkgDataDir(void)
 {
-	return ScriptVariable::Get("PkgDataDir");
+	String defaultValue = "";
+	return ScriptVariable::Get("PkgDataDir", &Empty);
 }
 
 /**
@@ -956,7 +961,7 @@ void Application::DeclarePkgDataDir(const String& path)
  */
 String Application::GetIncludeConfDir(void)
 {
-	return ScriptVariable::Get("IncludeConfDir");
+	return ScriptVariable::Get("IncludeConfDir", &Empty);
 }
 
 /**
@@ -976,7 +981,7 @@ void Application::DeclareIncludeConfDir(const String& path)
  */
 String Application::GetStatePath(void)
 {
-	return ScriptVariable::Get("StatePath");
+	return ScriptVariable::Get("StatePath", &Empty);
 }
 
 /**
@@ -996,7 +1001,7 @@ void Application::DeclareStatePath(const String& path)
  */
 String Application::GetObjectsPath(void)
 {
-	return ScriptVariable::Get("ObjectsPath");
+	return ScriptVariable::Get("ObjectsPath", &Empty);
 }
 
 /**
@@ -1010,13 +1015,33 @@ void Application::DeclareObjectsPath(const String& path)
 }
 
 /**
+* Retrieves the path for the vars file.
+*
+* @returns The path.
+*/
+String Application::GetVarsPath(void)
+{
+	return ScriptVariable::Get("VarsPath", &Empty);
+}
+
+/**
+* Sets the path for the vars file.
+*
+* @param path The new path.
+*/
+void Application::DeclareVarsPath(const String& path)
+{
+	ScriptVariable::Set("VarsPath", path, false);
+}
+
+/**
  * Retrieves the path for the PID file.
  *
  * @returns The path.
  */
 String Application::GetPidPath(void)
 {
-	return ScriptVariable::Get("PidPath");
+	return ScriptVariable::Get("PidPath", &Empty);
 }
 
 /**
@@ -1049,6 +1074,67 @@ void Application::DeclareApplicationType(const String& type)
 	ScriptVariable::Set("ApplicationType", type, false);
 }
 
+/**
+ * Retrieves the name of the user.
+ *
+ * @returns The name.
+ */
+String Application::GetRunAsUser(void)
+{
+	return ScriptVariable::Get("RunAsUser");
+}
+
+/**
+ * Sets the name of the user.
+ *
+ * @param path The new user name.
+ */
+void Application::DeclareRunAsUser(const String& user)
+{
+	ScriptVariable::Set("RunAsUser", user, false);
+}
+
+/**
+ * Retrieves the name of the group.
+ *
+ * @returns The name.
+ */
+String Application::GetRunAsGroup(void)
+{
+	return ScriptVariable::Get("RunAsGroup");
+}
+
+/**
+ * Sets the concurrency level.
+ *
+ * @param path The new concurrency level.
+ */
+void Application::DeclareConcurrency(int ncpus)
+{
+	ScriptVariable::Set("Concurrency", ncpus, false);
+}
+
+/**
+ * Retrieves the concurrency level.
+ *
+ * @returns The concurrency level.
+ */
+int Application::GetConcurrency(void)
+{
+	Value defaultConcurrency = boost::thread::hardware_concurrency();
+	return ScriptVariable::Get("Concurrency", &defaultConcurrency);
+}
+
+/**
+ * Sets the name of the group.
+ *
+ * @param path The new group name.
+ */
+void Application::DeclareRunAsGroup(const String& group)
+{
+	ScriptVariable::Set("RunAsGroup", group, false);
+}
+
 void Application::MakeVariablesConstant(void)
 {
 	ScriptVariable::GetByName("PrefixDir")->SetConstant(true);
@@ -1060,6 +1146,8 @@ void Application::MakeVariablesConstant(void)
 	ScriptVariable::GetByName("ObjectsPath")->SetConstant(true);
 	ScriptVariable::GetByName("PidPath")->SetConstant(true);
 	ScriptVariable::GetByName("ApplicationType")->SetConstant(true);
+	ScriptVariable::GetByName("RunAsUser")->SetConstant(true);
+	ScriptVariable::GetByName("RunAsGroup")->SetConstant(true);
 }
 
 /**

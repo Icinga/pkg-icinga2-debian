@@ -16,9 +16,25 @@
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
 add_subdirectory(base)
+add_subdirectory(cli)
 add_subdirectory(config)
 add_subdirectory(icinga)
 add_subdirectory(db_ido)
 add_subdirectory(methods)
 add_subdirectory(hello)
 add_subdirectory(remote)
+add_subdirectory(checker)
+add_subdirectory(compat)
+
+if(ICINGA2_WITH_MYSQL)
+       add_subdirectory(db_ido_mysql)
+endif()
+
+if(ICINGA2_WITH_PGSQL)
+       add_subdirectory(db_ido_pgsql)
+endif()
+
+add_subdirectory(demo)
+add_subdirectory(livestatus)
+add_subdirectory(notification)
+add_subdirectory(perfdata)

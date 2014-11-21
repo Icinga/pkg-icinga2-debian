@@ -46,8 +46,8 @@ void Checkable::SetEnableFlapping(bool enabled, const MessageOrigin& origin)
 {
 	SetOverrideEnableFlapping(enabled);
 
-	OnFlappingChanged(GetSelf(), enabled ? FlappingEnabled : FlappingDisabled);
-	OnEnableFlappingChanged(GetSelf(), enabled, origin);
+	OnFlappingChanged(this, enabled ? FlappingEnabled : FlappingDisabled);
+	OnEnableFlappingChanged(this, enabled, origin);
 }
 
 void Checkable::UpdateFlappingStatus(bool stateChange)
@@ -80,7 +80,8 @@ void Checkable::UpdateFlappingStatus(bool stateChange)
 	if (negative < 0)
 		negative = 0;
 
-//	Log(LogDebug, "Checkable", "Flapping counter for '" + GetName() + "' is positive=" + Convert::ToString(positive) + ", negative=" + Convert::ToString(negative));
+//	Log(LogDebug, "Checkable")
+//	    << "Flapping counter for '" << GetName() << "' is positive=" << positive << ", negative=" << negative;
 
 	SetFlappingLastChange(now);
 	SetFlappingPositive(positive);

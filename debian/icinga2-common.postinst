@@ -29,7 +29,7 @@ enable_default_features() {
     if is_fresh_install $@ \
        || dpkg --compare-versions "$2" lt "$FIX_VERSION"; then
         echo "enabling default icinga2 features"
-        icinga2-enable-feature checker notification mainlog
+        icinga2 feature enable checker notification mainlog
     fi
     # handle new default features here in the future
 }
@@ -44,6 +44,8 @@ case "$1" in
 
         # explicitly set permissions on some files that are dependent
         # on the uid/gid of the nagios user, which is dynamically created.
+        setperm nagios nagios 0750 /etc/icinga2
+
         setperm nagios adm 2751 /var/log/icinga2
         setperm nagios adm 2751 /var/log/icinga2/compat
         setperm nagios adm 2755 /var/log/icinga2/compat/archives

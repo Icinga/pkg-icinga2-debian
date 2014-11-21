@@ -37,7 +37,7 @@ namespace icinga
 class I2_BASE_API Dictionary : public Object
 {
 public:
-	DECLARE_PTR_TYPEDEFS(Dictionary);
+	DECLARE_OBJECT(Dictionary);
 
 	/**
 	 * An iterator that can be used to iterate over dictionary elements.
@@ -63,9 +63,6 @@ public:
 
 	void CopyTo(const Dictionary::Ptr& dest) const;
 	Dictionary::Ptr ShallowClone(void) const;
-
-	static Dictionary::Ptr FromJson(cJSON *json);
-	cJSON *ToJson(void) const;
 
 private:
 	std::map<String, Value> m_Data; /**< The data for the dictionary. */

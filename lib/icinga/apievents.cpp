@@ -19,6 +19,7 @@
 
 #include "icinga/apievents.hpp"
 #include "icinga/service.hpp"
+#include "icinga/perfdatavalue.hpp"
 #include "remote/apilistener.hpp"
 #include "remote/endpoint.hpp"
 #include "remote/messageorigin.hpp"
@@ -29,6 +30,8 @@
 #include "base/utility.hpp"
 #include "base/exception.hpp"
 #include "base/initialize.hpp"
+#include "base/serializer.hpp"
+#include "base/json.hpp"
 #include <fstream>
 
 using namespace icinga;
@@ -60,6 +63,7 @@ REGISTER_APIFUNCTION(RemoveDowntime, event, &ApiEvents::DowntimeRemovedAPIHandle
 REGISTER_APIFUNCTION(SetAcknowledgement, event, &ApiEvents::AcknowledgementSetAPIHandler);
 REGISTER_APIFUNCTION(ClearAcknowledgement, event, &ApiEvents::AcknowledgementClearedAPIHandler);
 REGISTER_APIFUNCTION(UpdateRepository, event, &ApiEvents::UpdateRepositoryAPIHandler);
+REGISTER_APIFUNCTION(ExecuteCommand, event, &ApiEvents::ExecuteCommandAPIHandler);
 
 static Timer::Ptr l_RepositoryTimer;
 
@@ -90,11 +94,38 @@ void ApiEvents::StaticInitialize(void)
 	Checkable::OnAcknowledgementSet.connect(&ApiEvents::AcknowledgementSetHandler);
 	Checkable::OnAcknowledgementCleared.connect(&ApiEvents::AcknowledgementClearedHandler);
 
-	l_RepositoryTimer = make_shared<Timer>();
+	l_RepositoryTimer = new Timer();
 	l_RepositoryTimer->SetInterval(30);
 	l_RepositoryTimer->OnTimerExpired.connect(boost::bind(&ApiEvents::RepositoryTimerHandler));
 	l_RepositoryTimer->Start();
 	l_RepositoryTimer->Reschedule(0);
+}
+
+Dictionary::Ptr ApiEvents::MakeCheckResultMessage(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
+{
+	Dictionary::Ptr message = new Dictionary();
+	message->Set("jsonrpc", "2.0");
+	message->Set("method", "event::CheckResult");
+
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
+
+	Dictionary::Ptr params = new Dictionary();
+	params->Set("host", host->GetName());
+	if (service)
+		params->Set("service", service->GetShortName());
+	else {
+		Value agent_service_name = checkable->GetExtension("agent_service_name");
+
+		if (!agent_service_name.IsEmpty())
+			params->Set("service", agent_service_name);
+	}
+	params->Set("cr", Serialize(cr));
+
+	message->Set("params", params);
+
+	return message;
 }
 
 void ApiEvents::CheckResultHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, const MessageOrigin& origin)
@@ -104,35 +135,47 @@ void ApiEvents::CheckResultHandler(const Checkable::Ptr& checkable, const CheckR
 	if (!listener)
 		return;
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::CheckResult");
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = make_shared<Dictionary>();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("cr", Serialize(cr));
-
-	message->Set("params", params);
-
+	Dictionary::Ptr message = MakeCheckResultMessage(checkable, cr);
 	listener->RelayMessage(origin, checkable, message, true);
 }
 
 Value ApiEvents::CheckResultAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
+
+	if (!endpoint)
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Value crv = params->Get("cr");
+	CheckResult::Ptr cr = new CheckResult();
 
-	CheckResult::Ptr cr = Deserialize(crv, true);
+	Dictionary::Ptr vcr = params->Get("cr");
+	Array::Ptr vperf = vcr->Get("performance_data");
+	vcr->Remove("performance_data");
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Deserialize(cr, params->Get("cr"), true);
+
+	Array::Ptr rperf = new Array();
+
+	if (vperf) {
+		ObjectLock olock(vperf);
+		BOOST_FOREACH(const Value& vp, vperf) {
+			Value p;
+
+			if (vp.IsObjectType<Dictionary>()) {
+				PerfdataValue::Ptr val = new PerfdataValue();
+				Deserialize(val, vp, true);
+				rperf->Add(val);
+			} else
+				rperf->Add(vp);
+		}
+	}
+
+	cr->SetPerformanceData(rperf);
+
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -147,7 +190,7 @@ Value ApiEvents::CheckResultAPIHandler(const MessageOrigin& origin, const Dictio
 	if (!checkable)
 		return Empty;
 
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
+	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable) && endpoint != checkable->GetCommandEndpoint())
 		return Empty;
 
 	checkable->ProcessCheckResult(cr, origin);
@@ -166,13 +209,13 @@ void ApiEvents::NextCheckChangedHandler(const Checkable::Ptr& checkable, double 
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("next_check", nextCheck);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetNextCheck");
 	message->Set("params", params);
@@ -182,10 +225,13 @@ void ApiEvents::NextCheckChangedHandler(const Checkable::Ptr& checkable, double 
 
 Value ApiEvents::NextCheckChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -215,11 +261,11 @@ void ApiEvents::NextNotificationChangedHandler(const Notification::Ptr& notifica
 	if (!listener)
 		return;
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("notification", notification->GetName());
 	params->Set("next_notification", nextNotification);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetNextNotification");
 	message->Set("params", params);
@@ -229,6 +275,9 @@ void ApiEvents::NextNotificationChangedHandler(const Notification::Ptr& notifica
 
 Value ApiEvents::NextNotificationChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
@@ -256,13 +305,13 @@ void ApiEvents::ForceNextCheckChangedHandler(const Checkable::Ptr& checkable, bo
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("forced", forced);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetForceNextCheck");
 	message->Set("params", params);
@@ -272,10 +321,13 @@ void ApiEvents::ForceNextCheckChangedHandler(const Checkable::Ptr& checkable, bo
 
 Value ApiEvents::ForceNextCheckChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -309,13 +361,13 @@ void ApiEvents::ForceNextNotificationChangedHandler(const Checkable::Ptr& checka
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("forced", forced);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetForceNextNotification");
 	message->Set("params", params);
@@ -325,10 +377,13 @@ void ApiEvents::ForceNextNotificationChangedHandler(const Checkable::Ptr& checka
 
 Value ApiEvents::ForceNextNotificationChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -362,13 +417,13 @@ void ApiEvents::EnableActiveChecksChangedHandler(const Checkable::Ptr& checkable
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetEnableActiveChecks");
 	message->Set("params", params);
@@ -378,10 +433,13 @@ void ApiEvents::EnableActiveChecksChangedHandler(const Checkable::Ptr& checkable
 
 Value ApiEvents::EnableActiveChecksChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -415,13 +473,13 @@ void ApiEvents::EnablePassiveChecksChangedHandler(const Checkable::Ptr& checkabl
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetEnablePassiveChecks");
 	message->Set("params", params);
@@ -431,10 +489,13 @@ void ApiEvents::EnablePassiveChecksChangedHandler(const Checkable::Ptr& checkabl
 
 Value ApiEvents::EnablePassiveChecksChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -468,13 +529,13 @@ void ApiEvents::EnableNotificationsChangedHandler(const Checkable::Ptr& checkabl
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetEnableNotifications");
 	message->Set("params", params);
@@ -484,10 +545,13 @@ void ApiEvents::EnableNotificationsChangedHandler(const Checkable::Ptr& checkabl
 
 Value ApiEvents::EnableNotificationsChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -521,13 +585,13 @@ void ApiEvents::EnableFlappingChangedHandler(const Checkable::Ptr& checkable, bo
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetEnableFlapping");
 	message->Set("params", params);
@@ -537,10 +601,13 @@ void ApiEvents::EnableFlappingChangedHandler(const Checkable::Ptr& checkable, bo
 
 Value ApiEvents::EnableFlappingChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -574,13 +641,13 @@ void ApiEvents::EnableEventHandlerChangedHandler(const Checkable::Ptr& checkable
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetEnableEventHandler");
 	message->Set("params", params);
@@ -590,10 +657,13 @@ void ApiEvents::EnableEventHandlerChangedHandler(const Checkable::Ptr& checkable
 
 Value ApiEvents::EnableEventHandlerChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -627,13 +697,13 @@ void ApiEvents::EnablePerfdataChangedHandler(const Checkable::Ptr& checkable, bo
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("enabled", enabled);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetEnablePerfdata");
 	message->Set("params", params);
@@ -643,10 +713,13 @@ void ApiEvents::EnablePerfdataChangedHandler(const Checkable::Ptr& checkable, bo
 
 Value ApiEvents::EnablePerfdataChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -680,13 +753,13 @@ void ApiEvents::CheckIntervalChangedHandler(const Checkable::Ptr& checkable, dou
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("interval", interval);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetCheckInterval");
 	message->Set("params", params);
@@ -696,10 +769,13 @@ void ApiEvents::CheckIntervalChangedHandler(const Checkable::Ptr& checkable, dou
 
 Value ApiEvents::CheckIntervalChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -733,13 +809,13 @@ void ApiEvents::RetryIntervalChangedHandler(const Checkable::Ptr& checkable, dou
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("interval", interval);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetRetryInterval");
 	message->Set("params", params);
@@ -749,10 +825,13 @@ void ApiEvents::RetryIntervalChangedHandler(const Checkable::Ptr& checkable, dou
 
 Value ApiEvents::RetryIntervalChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -786,13 +865,13 @@ void ApiEvents::MaxCheckAttemptsChangedHandler(const Checkable::Ptr& checkable, 
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("attempts", attempts);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetMaxCheckAttempts");
 	message->Set("params", params);
@@ -802,10 +881,13 @@ void ApiEvents::MaxCheckAttemptsChangedHandler(const Checkable::Ptr& checkable, 
 
 Value ApiEvents::MaxCheckAttemptsChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -839,13 +921,13 @@ void ApiEvents::EventCommandChangedHandler(const Checkable::Ptr& checkable, cons
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("command", command->GetName());
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetEventCommand");
 	message->Set("params", params);
@@ -855,10 +937,13 @@ void ApiEvents::EventCommandChangedHandler(const Checkable::Ptr& checkable, cons
 
 Value ApiEvents::EventCommandChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -897,13 +982,13 @@ void ApiEvents::CheckCommandChangedHandler(const Checkable::Ptr& checkable, cons
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("command", command->GetName());
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetCheckCommand");
 	message->Set("params", params);
@@ -913,10 +998,13 @@ void ApiEvents::CheckCommandChangedHandler(const Checkable::Ptr& checkable, cons
 
 Value ApiEvents::CheckCommandChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -955,13 +1043,13 @@ void ApiEvents::CheckPeriodChangedHandler(const Checkable::Ptr& checkable, const
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("timeperiod", timeperiod->GetName());
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetCheckPeriod");
 	message->Set("params", params);
@@ -971,10 +1059,13 @@ void ApiEvents::CheckPeriodChangedHandler(const Checkable::Ptr& checkable, const
 
 Value ApiEvents::CheckPeriodChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -1009,11 +1100,11 @@ void ApiEvents::VarsChangedHandler(const CustomVarObject::Ptr& object, const Dic
 	if (!listener)
 		return;
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("object", object->GetName());
 	params->Set("vars", Serialize(vars));
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetVars");
 	message->Set("params", params);
@@ -1023,6 +1114,9 @@ void ApiEvents::VarsChangedHandler(const CustomVarObject::Ptr& object, const Dic
 
 Value ApiEvents::VarsChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
@@ -1051,7 +1145,7 @@ Value ApiEvents::VarsChangedAPIHandler(const MessageOrigin& origin, const Dictio
 	if (origin.FromZone && !origin.FromZone->CanAccessObject(object))
 		return Empty;
 
-	Dictionary::Ptr vars = Deserialize(params->Get("vars"), true);
+	Dictionary::Ptr vars = params->Get("vars");
 
 	if (!vars)
 		return Empty;
@@ -1072,13 +1166,13 @@ void ApiEvents::CommentAddedHandler(const Checkable::Ptr& checkable, const Comme
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("comment", Serialize(comment));
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::AddComment");
 	message->Set("params", params);
@@ -1088,10 +1182,13 @@ void ApiEvents::CommentAddedHandler(const Checkable::Ptr& checkable, const Comme
 
 Value ApiEvents::CommentAddedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -1109,7 +1206,8 @@ Value ApiEvents::CommentAddedAPIHandler(const MessageOrigin& origin, const Dicti
 	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
-	Comment::Ptr comment = Deserialize(params->Get("comment"), true);
+	Comment::Ptr comment = new Comment();
+	Deserialize(comment, params->Get("comment"), true);
 
 	checkable->AddComment(comment->GetEntryType(), comment->GetAuthor(),
 	    comment->GetText(), comment->GetExpireTime(), comment->GetId(), origin);
@@ -1128,13 +1226,13 @@ void ApiEvents::CommentRemovedHandler(const Checkable::Ptr& checkable, const Com
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("id", comment->GetId());
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::RemoveComment");
 	message->Set("params", params);
@@ -1144,10 +1242,13 @@ void ApiEvents::CommentRemovedHandler(const Checkable::Ptr& checkable, const Com
 
 Value ApiEvents::CommentRemovedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -1181,13 +1282,13 @@ void ApiEvents::DowntimeAddedHandler(const Checkable::Ptr& checkable, const Down
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("downtime", Serialize(downtime));
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::AddDowntime");
 	message->Set("params", params);
@@ -1197,10 +1298,13 @@ void ApiEvents::DowntimeAddedHandler(const Checkable::Ptr& checkable, const Down
 
 Value ApiEvents::DowntimeAddedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -1218,7 +1322,8 @@ Value ApiEvents::DowntimeAddedAPIHandler(const MessageOrigin& origin, const Dict
 	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable))
 		return Empty;
 
-	Downtime::Ptr downtime = Deserialize(params->Get("downtime"), true);
+	Downtime::Ptr downtime = new Downtime();
+	Deserialize(downtime, params->Get("downtime"), true);
 
 	checkable->AddDowntime(downtime->GetAuthor(), downtime->GetComment(),
 	    downtime->GetStartTime(), downtime->GetEndTime(),
@@ -1240,13 +1345,13 @@ void ApiEvents::DowntimeRemovedHandler(const Checkable::Ptr& checkable, const Do
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 	params->Set("id", downtime->GetId());
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::RemoveDowntime");
 	message->Set("params", params);
@@ -1256,10 +1361,13 @@ void ApiEvents::DowntimeRemovedHandler(const Checkable::Ptr& checkable, const Do
 
 Value ApiEvents::DowntimeRemovedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -1295,7 +1403,7 @@ void ApiEvents::AcknowledgementSetHandler(const Checkable::Ptr& checkable,
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
@@ -1304,7 +1412,7 @@ void ApiEvents::AcknowledgementSetHandler(const Checkable::Ptr& checkable,
 	params->Set("acktype", type);
 	params->Set("expiry", expiry);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::SetAcknowledgement");
 	message->Set("params", params);
@@ -1314,10 +1422,13 @@ void ApiEvents::AcknowledgementSetHandler(const Checkable::Ptr& checkable,
 
 Value ApiEvents::AcknowledgementSetAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -1353,12 +1464,12 @@ void ApiEvents::AcknowledgementClearedHandler(const Checkable::Ptr& checkable, c
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("host", host->GetName());
 	if (service)
 		params->Set("service", service->GetShortName());
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::ClearAcknowledgement");
 	message->Set("params", params);
@@ -1368,10 +1479,13 @@ void ApiEvents::AcknowledgementClearedHandler(const Checkable::Ptr& checkable, c
 
 Value ApiEvents::AcknowledgementClearedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
+	if (!origin.FromClient->GetEndpoint())
+		return Empty;
+
 	if (!params)
 		return Empty;
 
-	Host::Ptr host = FindHostByVirtualName(params->Get("host"), origin);
+	Host::Ptr host = Host::GetByName(params->Get("host"));
 
 	if (!host)
 		return Empty;
@@ -1394,6 +1508,73 @@ Value ApiEvents::AcknowledgementClearedAPIHandler(const MessageOrigin& origin, c
 	return Empty;
 }
 
+Value ApiEvents::ExecuteCommandAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
+{
+	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
+
+	if (!endpoint || (origin.FromZone && !Zone::GetLocalZone()->IsChildOf(origin.FromZone)))
+		return Empty;
+
+	ApiListener::Ptr listener = ApiListener::GetInstance();
+
+	if (!listener) {
+		Log(LogCritical, "ApiListener", "No instance available.");
+		return Empty;
+	}
+
+	if (!listener->GetAcceptCommands()) {
+		Log(LogWarning, "ApiListener")
+		    << "Ignoring command. '" << listener->GetName() << "' does not accept commands.";
+		return Empty;
+	}
+
+	Host::Ptr host = new Host();
+	Dictionary::Ptr attrs = new Dictionary();
+
+	attrs->Set("__name", params->Get("host"));
+	attrs->Set("type", "Host");
+
+	String command = params->Get("command");
+	String command_type = params->Get("command_type");
+
+	if (command_type == "check_command") {
+		if (!CheckCommand::GetByName(command)) {
+			CheckResult::Ptr cr = new CheckResult();
+			cr->SetState(ServiceUnknown);
+			cr->SetOutput("Check command '" + command + "' does not exist.");
+			Dictionary::Ptr message = MakeCheckResultMessage(host, cr);
+			listener->SyncSendMessage(endpoint, message);
+			return Empty;
+		}
+	} else if (command_type == "event_command") {
+		if (!EventCommand::GetByName(command))
+			return Empty;
+	} else
+		return Empty;
+
+	attrs->Set(command_type, params->Get("command"));
+	attrs->Set("command_endpoint", endpoint->GetName());
+
+	Deserialize(host, attrs, false, FAConfig);
+
+	if (params->Contains("service"))
+		host->SetExtension("agent_service_name", params->Get("service"));
+
+	host->SetExtension("agent_check", true);
+
+	static_pointer_cast<DynamicObject>(host)->OnStateLoaded();
+	static_pointer_cast<DynamicObject>(host)->OnConfigLoaded();
+
+	Dictionary::Ptr macros = params->Get("macros");
+
+	if (command_type == "check_command")
+		host->ExecuteCheck(macros, true);
+	else if (command_type == "event_command")
+		host->ExecuteEventHandler(macros, true);
+
+	return Empty;
+}
+
 void ApiEvents::RepositoryTimerHandler(void)
 {
 	ApiListener::Ptr listener = ApiListener::GetInstance();
@@ -1401,10 +1582,10 @@ void ApiEvents::RepositoryTimerHandler(void)
 	if (!listener)
 		return;
 
-	Dictionary::Ptr repository = make_shared<Dictionary>();
+	Dictionary::Ptr repository = new Dictionary();
 
 	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
-		Array::Ptr services = make_shared<Array>();
+		Array::Ptr services = new Array();
 
 		BOOST_FOREACH(const Service::Ptr& service, host->GetServices()) {
 			services->Add(service->GetShortName());
@@ -1422,7 +1603,7 @@ void ApiEvents::RepositoryTimerHandler(void)
 
 	Zone::Ptr my_zone = my_endpoint->GetZone();
 
-	Dictionary::Ptr params = make_shared<Dictionary>();
+	Dictionary::Ptr params = new Dictionary();
 	params->Set("seen", Utility::GetTime());
 	params->Set("endpoint", my_endpoint->GetName());
 
@@ -1433,7 +1614,7 @@ void ApiEvents::RepositoryTimerHandler(void)
 	params->Set("zone", my_zone->GetName());
 	params->Set("repository", repository);
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::UpdateRepository");
 	message->Set("params", params);
@@ -1455,19 +1636,11 @@ Value ApiEvents::UpdateRepositoryAPIHandler(const MessageOrigin& origin, const D
 	if (vrepository.IsEmpty() || !vrepository.IsObjectType<Dictionary>())
 		return Empty;
 
-	Dictionary::Ptr repository = vrepository;
-	Value hostInfo = repository->Get("localhost");
-
-	if (!hostInfo.IsEmpty() && origin.FromZone) {
-		repository->Remove("localhost");
-		repository->Set(origin.FromZone->GetName(), hostInfo);
-	}
-
-	String repositoryFile = GetRepositoryDir() + SHA256(params->Get("endpoint"));
+	String repositoryFile = GetRepositoryDir() + SHA256(params->Get("endpoint")) + ".repo";
 	String repositoryTempFile = repositoryFile + ".tmp";
 
 	std::ofstream fp(repositoryTempFile.CStr(), std::ofstream::out | std::ostream::trunc);
-	fp << JsonSerialize(params);
+	fp << JsonEncode(params);
 	fp.close();
 
 #ifdef _WIN32
@@ -1486,7 +1659,7 @@ Value ApiEvents::UpdateRepositoryAPIHandler(const MessageOrigin& origin, const D
 	if (!listener)
 		return Empty;
 
-	Dictionary::Ptr message = make_shared<Dictionary>();
+	Dictionary::Ptr message = new Dictionary();
 	message->Set("jsonrpc", "2.0");
 	message->Set("method", "event::UpdateRepository");
 	message->Set("params", params);
@@ -1496,16 +1669,3 @@ Value ApiEvents::UpdateRepositoryAPIHandler(const MessageOrigin& origin, const D
 	return Empty;
 }
 
-Host::Ptr ApiEvents::FindHostByVirtualName(const String& hostName, const MessageOrigin& origin)
-{
-	if (origin.FromZone) {
-		Zone::Ptr my_zone = Zone::GetLocalZone();
-
-		if (origin.FromZone->IsChildOf(my_zone) && hostName == "localhost")
-			return Host::GetByName(origin.FromZone->GetName());
-		else if (!origin.FromZone->IsChildOf(my_zone) && hostName == my_zone->GetName())
-			return Host::GetByName("localhost");
-	}
-
-	return Host::GetByName(hostName);
-}

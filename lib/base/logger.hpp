@@ -22,11 +22,25 @@
 
 #include "base/i2-base.hpp"
 #include "base/logger.thpp"
-#include "base/logger_fwd.hpp"
 #include <set>
+#include <sstream>
 
 namespace icinga
 {
+
+/**
+ * Log severity.
+ *
+ * @ingroup base
+ */
+enum LogSeverity
+{
+	LogDebug,
+	LogNotice,
+	LogInformation,
+	LogWarning,
+	LogCritical
+};
 
 /**
  * A log entry.
@@ -48,7 +62,7 @@ struct LogEntry {
 class I2_BASE_API Logger : public ObjectImpl<Logger>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(Logger);
+	DECLARE_OBJECT(Logger);
 
 	static String SeverityToString(LogSeverity severity);
 	static LogSeverity StringToSeverity(const String& severity);
@@ -69,6 +83,8 @@ public:
 
 	static void DisableConsoleLog(void);
 	static bool IsConsoleLogEnabled(void);
+	static void DisableTimestamp(bool);
+	static bool IsTimestampEnabled(void);
 
 	static void SetConsoleLogSeverity(LogSeverity logSeverity);
 	static LogSeverity GetConsoleLogSeverity(void);
@@ -83,10 +99,44 @@ private:
 	static boost::mutex m_Mutex;
 	static std::set<Logger::Ptr> m_Loggers;
 	static bool m_ConsoleLogEnabled;
+	static bool m_TimestampEnabled;
 	static LogSeverity m_ConsoleLogSeverity;
+};
 
-	friend I2_BASE_API void Log(LogSeverity severity, const String& facility,
-	    const String& message);
+I2_BASE_API void IcingaLog(LogSeverity severity, const String& facility, const String& message);
+
+class Log
+{
+public:
+	inline Log(LogSeverity severity, const String& facility, const String& message)
+		: m_Severity(severity), m_Facility(facility)
+	{
+		m_Buffer << message;
+	}
+
+	inline Log(LogSeverity severity, const String& facility)
+		: m_Severity(severity), m_Facility(facility)
+	{ }
+
+	inline ~Log(void)
+	{
+		IcingaLog(m_Severity, m_Facility, m_Buffer.str());
+	}
+
+	template<typename T>
+	Log& operator<<(const T& val)
+	{
+		m_Buffer << val;
+		return *this;
+	}
+
+private:
+	LogSeverity m_Severity;
+	String m_Facility;
+	std::ostringstream m_Buffer;
+
+	Log(void);
+	Log& operator=(const Log& rhs);
 };
 
 }

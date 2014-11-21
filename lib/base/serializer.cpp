@@ -22,58 +22,12 @@
 #include "base/application.hpp"
 #include "base/objectlock.hpp"
 #include <boost/foreach.hpp>
-#include <cJSON.h>
 
 using namespace icinga;
 
-/**
- * Serializes a Value into a JSON string.
- *
- * @returns A string representing the Value.
- */
-String icinga::JsonSerialize(const Value& value)
-{
-	cJSON *json = value.ToJson();
-
-	char *jsonString;
-
-#ifdef _DEBUG
-	jsonString = cJSON_Print(json);
-#else /* _DEBUG */
-	jsonString = cJSON_PrintUnformatted(json);
-#endif /* _DEBUG */
-
-	cJSON_Delete(json);
-
-	String result = jsonString;
-
-	free(jsonString);
-
-	return result;
-}
-
-/**
- * Deserializes the string representation of a Value.
- *
- * @param data A JSON string obtained from JsonSerialize
- * @returns The newly deserialized Value.
- */
-Value icinga::JsonDeserialize(const String& data)
-{
-	cJSON *json = cJSON_Parse(data.CStr());
-
-	if (!json)
-		BOOST_THROW_EXCEPTION(std::runtime_error("Invalid JSON String: " + data));
-
-	Value value = Value::FromJson(json);
-	cJSON_Delete(json);
-
-	return value;
-}
-
 static Array::Ptr SerializeArray(const Array::Ptr& input, int attributeTypes)
 {
-	Array::Ptr result = make_shared<Array>();
+	Array::Ptr result = new Array();
 
 	ObjectLock olock(input);
 
@@ -86,7 +40,7 @@ static Array::Ptr SerializeArray(const Array::Ptr& input, int attributeTypes)
 
 static Dictionary::Ptr SerializeDictionary(const Dictionary::Ptr& input, int attributeTypes)
 {
-	Dictionary::Ptr result = make_shared<Dictionary>();
+	Dictionary::Ptr result = new Dictionary();
 
 	ObjectLock olock(input);
 
@@ -99,11 +53,11 @@ static Dictionary::Ptr SerializeDictionary(const Dictionary::Ptr& input, int att
 
 static Object::Ptr SerializeObject(const Object::Ptr& input, int attributeTypes)
 {
-	const Type *type = input->GetReflectionType();
+	Type::Ptr type = input->GetReflectionType();
 
 	VERIFY(type);
 
-	Dictionary::Ptr fields = make_shared<Dictionary>();
+	Dictionary::Ptr fields = new Dictionary();
 
 	for (int i = 0; i < type->GetFieldCount(); i++) {
 		Field field = type->GetFieldInfo(i);
@@ -121,7 +75,7 @@ static Object::Ptr SerializeObject(const Object::Ptr& input, int attributeTypes)
 
 static Array::Ptr DeserializeArray(const Array::Ptr& input, bool safe_mode, int attributeTypes)
 {
-	Array::Ptr result = make_shared<Array>();
+	Array::Ptr result = new Array();
 
 	ObjectLock olock(input);
 
@@ -134,7 +88,7 @@ static Array::Ptr DeserializeArray(const Array::Ptr& input, bool safe_mode, int 
 
 static Dictionary::Ptr DeserializeDictionary(const Dictionary::Ptr& input, bool safe_mode, int attributeTypes)
 {
-	Dictionary::Ptr result = make_shared<Dictionary>();
+	Dictionary::Ptr result = new Dictionary();
 
 	ObjectLock olock(input);
 
@@ -147,7 +101,10 @@ static Dictionary::Ptr DeserializeDictionary(const Dictionary::Ptr& input, bool 
 
 static Object::Ptr DeserializeObject(const Object::Ptr& object, const Dictionary::Ptr& input, bool safe_mode, int attributeTypes)
 {
-	const Type *type;
+	if (!object && safe_mode)
+		BOOST_THROW_EXCEPTION(std::runtime_error("Tried to instantiate object while safe mode is enabled."));
+
+	Type::Ptr type;
 
 	if (object)
 		type = object->GetReflectionType();
@@ -157,14 +114,12 @@ static Object::Ptr DeserializeObject(const Object::Ptr& object, const Dictionary
 	if (!type)
 		return object;
 
-	Object::Ptr instance = object;
-
-	if (!instance) {
-		if (safe_mode && !type->IsSafe())
-			BOOST_THROW_EXCEPTION(std::runtime_error("Tried to instantiate type '" + type->GetName() + "' which is not marked as safe."));
-
+	Object::Ptr instance;
+	
+	if (object)
+		instance = object;
+	else
 		instance = type->Instantiate();
-	}
 
 	ObjectLock olock(input);
 	BOOST_FOREACH(const Dictionary::Pair& kv, input) {
@@ -232,8 +187,8 @@ Value icinga::Deserialize(const Object::Ptr& object, const Value& value, bool sa
 
 	ASSERT(dict != NULL);
 
-	if (!dict->Contains("type"))
+	if ((safe_mode && !object) || !dict->Contains("type"))
 		return DeserializeDictionary(dict, safe_mode, attributeTypes);
-
-	return DeserializeObject(object, dict, safe_mode, attributeTypes);
+	else
+		return DeserializeObject(object, dict, safe_mode, attributeTypes);
 }

@@ -25,10 +25,13 @@ parentheses):
 * Boost library and header files (boost-devel on RHEL, libboost-all-dev on Debian)
 * GNU bison (bison)
 * GNU flex (flex) >= 2.5.35
-* Python (python-devel on RHEL, python-dev on Debian)
-* recommended: libexecinfo on FreeBSD
-* optional: MySQL (mysql-devel on RHEL, libmysqlclient-dev on Debian)
-* optional: PostgreSQL (postgresql-devel on RHEL, libpq-dev on Debian)
+* recommended: libexecinfo on FreeBSD (automatically used when Icinga 2 is
+               installed via port or package)
+* optional: MySQL (mysql-devel on RHEL, libmysqlclient-dev on Debian) set CMake
+             variable `ICINGA2_WITH_MYSQL` to enable
+* optional: PostgreSQL (postgresql-devel on RHEL, libpq-dev on Debian) set CMake
+            variable `ICINGA2_WITH_PGSQL` to enable
+* optional: YAJL (yajl-devel on RHEL, libyajl-dev on Debian)
 
 Note: RHEL5 ships an ancient flex version. Updated packages are available for
 example from the repoforge buildtools repository.
@@ -136,10 +139,9 @@ variables are supported:
 
 - `ICINGA2_USER`: The user Icinga 2 should run as; defaults to `icinga`
 - `ICINGA2_GROUP`: The group Icinga 2 should run as; defaults to `icinga`
-- `ICINGA2_COMMAND_USER`: The command user Icinga 2 should use; defaults to `icinga`
 - `ICINGA2_GIT_VERSION_INFO`: Whether to use Git to determine the version number; defaults to `ON`
 - `ICINGA2_COMMAND_GROUP`: The command group Icinga 2 should use; defaults to `icingacmd`
-- `ICINGA2_UNITY_BUILD`: Whether to perform a unity build
+- `ICINGA2_UNITY_BUILD`: Whether to perform a unity build; defaults to `OFF`
 - `ICINGA2_PLUGINDIR`: The path for the Monitoring Plugins project binaries; defaults to `/usr/lib/nagios/plugins`
 - `ICINGA2_RUNDIR`: The location of the "run" directory; defaults to `CMAKE_INSTALL_LOCALSTATEDIR/run`
 - `CMAKE_INSTALL_SYSCONFDIR`: The configuration directory; defaults to `CMAKE_INSTALL_PREFIX/etc`
