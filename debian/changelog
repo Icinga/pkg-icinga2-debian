@@ -1,4 +1,4 @@
-icinga2 (2.2.0-1~ppa1~trusty4) trusty; urgency=medium
+icinga2 (2.2.0-1~ppa1~lucid4) lucid; urgency=medium
 
   * remove unused files 
 
