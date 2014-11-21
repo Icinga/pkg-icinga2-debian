@@ -1,3 +1,9 @@
+icinga2 (2.2.0-1~ppa1~vivid6) vivid; urgency=medium
+
+  * lower dpkg version in pre-depends
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 23:40:05 +0100
+
 icinga2 (2.2.0-1~ppa1~trusty5) trusty; urgency=medium
 
   * Rebuild for trusty 
