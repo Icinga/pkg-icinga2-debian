@@ -1,3 +1,42 @@
+icinga2 (2.2.0-1) unstable; urgency=medium
+
+  [ Jan Wagner ]
+  * [cc6aad5] Fixing threshold for snmp-load check command
+
+  [ Alexander Wirt ]
+  * [9a53b6f] Imported Upstream version 2.2.0
+  * [74a5438] Remove obsolete snmp threshold patch
+  * [cd0954a] Fix path of sql upgrade files
+  * [0609016] Move sql files to a new location
+  * [dced984] The python package does not exist anymore
+  * [945985d] Reflect the new icinga cli tool
+  * [418ba11] Python is no more
+  * [5f880bb] dh-python is not needed anymore
+  * [e3c6d8d] Bump standards version (no changes)
+  * [5db6146] Update example configuration
+  * [cd040c6] Build-depend on libyajl-dev
+  * [f004624] Add yajl license
+  * [62b4c4b] Update initscript to new cli command style
+  * [f7183e3] Change filename of apt.conf and install bash-completion 
+              for new cli
+  * [87415d0] Update postinst script to new cli command style
+  * [8dd43b4] Allow the nagios user to write to /etc/icinga2
+  * [ea389c7] Use new cli command style
+  * [42e1c2d] Use new command line style interface for debconf templates
+  * [4833cee] Use new commandline interface in classicui postinst
+  * [6c4485d] Allow parallel builds
+  * [4723043] Update translations for new command
+  * [83a2c2a] Add support for systemd
+  * [e104007] Enhance apache 2.4 support
+  * [4fecd7b] Fix apache config with 2.4
+  * [27bc54b] Move icinga2-classicui to its own configuration directory.
+  * [e6fe02e] Replace python-icinga2
+  * [434cbef] Add a pre-depends to dpkg for dpkg-maintscript-helper
+  * [28e9995] Fix indenting in apache config
+  * [eaec113] Replace/Break/Conflict with deprecated python-icinga2
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 13:48:18 +0100
+
 icinga2 (2.1.1-1) unstable; urgency=medium
 
   * [4a0350e] Imported Upstream version 2.1.1
