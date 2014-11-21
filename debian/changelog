@@ -1,3 +1,9 @@
+icinga2 (2.2.0-1~ppa1~vivid3) vivid; urgency=medium
+
+  * remove unused systemd files 
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 16:10:39 +0100
+
 icinga2 (2.2.0-1~ppa1~vivid2) vivid; urgency=medium
 
   * No systemd for ubuntu  
