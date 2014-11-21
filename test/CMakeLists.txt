@@ -17,12 +17,22 @@
 
 include(BoostTestTargets)
 
+set(base_test_SOURCES
+  base-array.cpp base-convert.cpp base-dictionary.cpp base-fifo.cpp
+  base-json.cpp base-match.cpp base-netstring.cpp base-object.cpp
+  base-serialize.cpp base-shellescape.cpp base-stacktrace.cpp
+  base-stream.cpp base-string.cpp base-timer.cpp base-type.cpp
+  base-value.cpp icinga-perfdata.cpp test.cpp
+)
+
+set_property(SOURCE test.cpp PROPERTY EXCLUDE_UNITY_BUILD TRUE)
+
+if(ICINGA2_UNITY_BUILD)
+    mkunity_target(test base_test_SOURCES)
+endif()
+
 add_boost_test(base
-  SOURCES base-array.cpp base-convert.cpp base-dictionary.cpp base-fifo.cpp
-          base-match.cpp base-netstring.cpp base-object.cpp base-serialize.cpp
-          base-shellescape.cpp base-stacktrace.cpp base-stream.cpp
-          base-string.cpp base-timer.cpp base-type.cpp base-value.cpp
-          icinga-perfdata.cpp test.cpp
+  SOURCES test.cpp ${base_test_SOURCES}
   LIBRARIES base config icinga
   TESTS base_array/construct
         base_array/getset
@@ -44,11 +54,11 @@ add_boost_test(base
         base_dictionary/json
         base_fifo/construct
         base_fifo/io
+        base_json/invalid1
         base_match/tolong
         base_netstring/netstring
         base_object/construct
         base_object/getself
-        base_object/weak
         base_serialize/scalar
         base_serialize/array
         base_serialize/dictionary

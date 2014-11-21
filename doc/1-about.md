@@ -27,12 +27,12 @@ is appreciated!
 
 Please get in touch with the Icinga team at https://www.icinga.org/community/.
 
-## <a id="development"></a> Icinga 2 Development
+### <a id="development"></a> Icinga 2 Development
 
 You can follow Icinga 2's development closely by checking
 out these resources:
 
-* [Development Bug Tracker](https://dev.icinga.org/projects/i2): [How to report a bug?](http://www.icinga.org/faq/how-to-report-a-bug/)
+* [Development Bug Tracker](https://dev.icinga.org/projects/i2): [How to report a bug?](https://www.icinga.org/icinga/faq/)
 * Git Repositories: [main mirror on icinga.org](https://git.icinga.org/?p=icinga2.git;a=summary) [release mirror at github.com](https://github.com/Icinga/icinga2)
 * [Git Checkins Mailinglist](https://lists.icinga.org/mailman/listinfo/icinga-checkins)
 * [Development](https://lists.icinga.org/mailman/listinfo/icinga-devel) and [Users](https://lists.icinga.org/mailman/listinfo/icinga-users) Mailinglists
@@ -40,75 +40,174 @@ out these resources:
 
 For general support questions, please refer to the [community support channels](https://support.icinga.org).
 
+### <a id="how-to-report-bug-feature-requests"></a> How to Report a Bug or Feature Request
+
+More details in the [Icinga FAQ](https://www.icinga.org/icinga/faq/).
+
+* [Register](https://exchange.icinga.org/authentication/register) an Icinga account.
+* Create a new issue at the [Icinga 2 Development Tracker](https://dev.icinga.org/projects/i2).
+* When reporting a bug, please include the details described in the [Troubleshooting](#troubleshooting-information-required) chapter (version, configs, logs, etc).
+
 ## <a id="demo-vm"></a> Demo VM
 
 Icinga 2 is available as [Vagrant Demo VM](#vagrant).
 
 ## <a id="whats-new"></a> What's new
 
-### What's New in Version 2.0.2
-
-* Bug #6450: ipmi-sensors segfault due to stack size
-* Bug #6479: Notifications not always triggered
-* Bug #6501: Classic UI Debian/Ubuntu: apache 2.4 requires 'a2enmod cgi' & apacheutils installed
-* Bug #6548: Add cmake constant for PluginDir
-* Bug #6549: GraphiteWriter regularly sends empty lines
-* Bug #6550: add log message for invalid performance data
-* Bug #6589: Command pipe blocks when trying to open it more than once in parallel
-* Bug #6621: Infinite loop in TlsStream::Close
-* Bug #6627: Location of the run directory is hard coded and bound to "local_state_dir"
-* Bug #6659: RPMLint security warning - missing-call-to-setgroups-before-setuid /usr/sbin/icinga2
-* Bug #6682: Missing detailed error messages on ApiListener SSL Errors
-* Bug #6686: Event Commands are triggered in OK HARD state everytime
-* Bug #6687: Remove superfluous quotes and commas in dictionaries
-* Bug #6713: sample config: add check commands location hint (itl/plugin check commands)
-* Bug #6718: "order" attribute doesn't seem to work as expected
-* Bug #6724: TLS Connections still unstable in 2.0.1
-* Bug #6756: GraphiteWriter: Malformatted integer values
-* Bug #6765: Config validation without filename argument fails with unhandled exception
-* Bug #6768: Repo Error on RHEL 6.5
-* Bug #6773: Order doesn't work in check ssh command
-* Bug #6782: The "ssl" check command always sets -D
-* Bug #6790: Service icinga2 reload command does not cause effect
-* Bug #6809: additional group rights missing when Icinga started with -u and -g
-* Bug #6810: High Availablity does not synchronise the data like expected
-* Bug #6820: Icinga 2 crashes during startup
-* Bug #6821: [Patch] Fix build issue and crash found on Solaris, potentially other Unix OSes
-* Bug #6825: incorrect sysconfig path on sles11
-* Bug #6832: Remove if(NOT DEFINED ICINGA2_SYSCONFIGFILE) in etc/initsystem/CMakeLists.txt
-* Bug #6840: Missing space in error message
-* Bug #6849: Error handler for getaddrinfo must use gai_strerror
-* Bug #6852: Startup logfile is not flushed to disk
-* Bug #6856: event command execution does not call finish handler
-* Bug #6861: write startup error messages to error.log
-* Feature #5818: SUSE packages
-* Feature #6655: Build packages for el7
-* Feature #6688: Rename README to README.md
-* Feature #6698: Require command to be an array when the arguments attribute is used
-* Feature #6700: Release 2.0.2
-* Feature #6783: Print application paths for --version
-* DB IDO - Bug #6414: objects and their ids are inserted twice
-* DB IDO - Bug #6608: Two Custom Variables with same name, but Upper/Lowercase creating IDO duplicate entry
-* DB IDO - Bug #6646: NULL vs empty string
-* DB IDO - Bug #6850: exit application if ido schema version does not match
-* Documentation - Bug #6652: clarify on which features are required for classic ui/web/web2
-* Documentation - Bug #6708: update installation with systemd usage
-* Documentation - Bug #6711: icinga Web: wrong path to command pipe
-* Documentation - Bug #6725: Missing documentation about implicit dependency
-* Documentation - Bug #6728: wrong path for the file 'localhost.conf'
-* Migration - Bug #6558: group names quoted twice in arrays
-* Migration - Bug #6560: Service dependencies aren't getting converted properly
-* Migration - Bug #6561: $TOTALHOSTSERVICESWARNING$ and $TOTALHOSTSERVICESCRITICAL$ aren't getting converted
-* Migration - Bug #6563: Check and retry intervals are incorrect
-* Migration - Bug #6786: Fix notification definition if no host_name / service_description given
-* Plugins - Feature #6695: Plugin Check Commands: Add expect option to check_http
-* Plugins - Feature #6791: Plugin Check Commands: Add timeout option to check_ssh
+### What's New in Version 2.2.0
 
 #### Changes
 
-* DB IDO schema upgrade required (new schema version: 1.11.6)
+* DB IDO schema update to version `1.12.0`
+    * schema files in `lib/db_ido_{mysql,pgsql}/schema` (source)
+    * Table `programstatus`: New column `program_version`
+    * Table `customvariables` and `customvariablestatus`: New column `is_json` (required for custom attribute array/dictionary support)
+* New features
+    * [GelfWriter](#gelfwriter): Logging check results, state changes, notifications to GELF (graylog2, logstash) #7619
+    * Agent/Client/Node framework #7249
+    * Windows plugins for the client/agent parts #7242 #7243
+* New CLI commands #7245
+    * `icinga2 feature {enable,disable}` replaces `icinga2-{enable,disable}-feature` script  #7250
+    * `icinga2 object list` replaces `icinga2-list-objects` script  #7251
+    * `icinga2 pki` replaces` icinga2-build-{ca,key}` scripts  #7247
+    * `icinga2 repository` manages `/etc/icinga2/repository.d` which must be included in `icinga2.conf` #7255
+    * `icinga2 node` cli command provides node (master, satellite, agent) setup (wizard) and management functionality #7248
+    * `icinga2 daemon` for existing daemon arguments (`-c`, `-C`). Removed `-u` and `-g` parameters in favor of [init.conf](#init-conf).
+    * bash auto-completion & terminal colors #7396
+* Configuration
+    * Former `localhost` example host is now defined in [hosts.conf](#hosts-conf) #7594
+    * All example services moved into advanced apply rules in [services.conf](#services-conf)
+    * Updated downtimes configuration example in [downtimes.conf](#downtimes-conf) #7472
+    * Updated notification apply example in [notifications.conf](#notifications-conf) #7594
+    * Support for object attribute 'zone' #7400
+    * Support setting [object variables in apply rules](#dependencies-apply-custom-attributes) #7479
+    * Support arrays and dictionaries in [custom attributes](#custom-attributes-apply) #6544 #7560
+    * Add [apply for rules](#using-apply-for) for advanced dynamic object generation #7561
+    * New attribute `accept_commands` for [ApiListener](#objecttype-apilistener) #7559
+    * New [init.conf](#init-conf) file included first containing new constants `RunAsUser` and `RunAsGroup`.
+* Cluster
+    * Add [CSR Auto-Signing support](#csr-autosigning-requirements) using generated ticket #7244
+    * Allow to [execute remote commands](#icinga2-remote-monitoring-client-command-execution) on endpoint clients #7559
+* Perfdata
+    * [PerfdataWriter](#writing-performance-data-files): Don't change perfdata, pass through from plugins #7268
+    * [GraphiteWriter](#graphite-carbon-cache-writer): Add warn/crit/min/max perfdata and downtime_depth stats values #7366 #6946
+* Packages
+    * `python-icinga2` package dropped in favor of integrated cli commands #7245
+    * Windows Installer for the agent parts #7243
 
-#### Changes
+> **Note**
+>
+>  Please remove `conf.d/hosts/localhost*` after verifying your updated configuration!
+
+#### Issues
+
+* Feature #6544: Support for array in custom variable.
+* Feature #6946: Add downtime depth as statistic metric for GraphiteWriter
+* Feature #7187: Document how to use multiple assign/ignore statements with logical "and" & "or"
+* Feature #7199: Cli commands: add filter capability to 'object list'
+* Feature #7241: Windows Wizard
+* Feature #7242: Windows plugins
+* Feature #7243: Windows installer
+* Feature #7244: CSR auto-signing
+* Feature #7245: Cli commands
+* Feature #7246: Cli command framework
+* Feature #7247: Cli command: pki
+* Feature #7248: Cli command: Node
+* Feature #7249: Node Repository
+* Feature #7250: Cli command: Feature
+* Feature #7251: Cli command: Object
+* Feature #7252: Cli command: SCM
+* Feature #7253: Cli Commands: Node Repository Blacklist & Whitelist
+* Feature #7254: Documentation: Agent/Satellite Setup
+* Feature #7255: Cli command: Repository
+* Feature #7262: macro processor needs an array printer
+* Feature #7319: Documentation: Add support for locally-scoped variables for host/service in applied Dependency
+* Feature #7334: GraphiteWriter: Add support for customized metric prefix names
+* Feature #7356: Documentation: Cli Commands
+* Feature #7366: GraphiteWriter: Add warn/crit/min/max perfdata values if existing
+* Feature #7370: CLI command: variable
+* Feature #7391: Add program_version column to programstatus table
+* Feature #7396: Implement generic color support for terminals
+* Feature #7400: Remove zone keyword and allow to use object attribute 'zone'
+* Feature #7415: CLI: List disabled features in feature list too
+* Feature #7421: Add -h next to --help
+* Feature #7423: Cli command: Node Setup
+* Feature #7452: Replace cJSON with a better JSON parser
+* Feature #7465: Cli command: Node Setup Wizard (for Satellites and Agents)
+* Feature #7467: Remove virtual agent name feature for localhost
+* Feature #7472: Update downtimes.conf example config
+* Feature #7478: Documentation: Mention 'icinga2 object list' in config validation
+* Feature #7479: Set host/service variable in apply rules
+* Feature #7480: Documentation: Add host/services variables in apply rules
+* Feature #7504: Documentation: Revamp getting started with 1 host and multiple (service) applies
+* Feature #7514: Documentation: Move troubleshooting after the getting started chapter
+* Feature #7524: Documentation: Explain how to manage agent config in central repository
+* Feature #7543: Documentation for arrays & dictionaries in custom attributes and their usage in apply rules for
+* Feature #7559: Execute remote commands on the agent w/o local objects by passing custom attributes
+* Feature #7560: Support dictionaries in custom attributes
+* Feature #7561: Generate objects using apply with foreach in arrays or dictionaries (key => value)
+* Feature #7566: Implement support for arbitrarily complex indexers
+* Feature #7594: Revamp sample configuration: add NodeName host, move services into apply rules schema
+* Feature #7596: Plugin Check Commands: disk is missing '-p', 'x' parameter
+* Feature #7619: Add GelfWriter for writing log events to graylog2/logstash
+* Feature #7620: Documentation: Update Icinga Web 2 installation
+* Feature #7622: Icinga 2 should use less RAM
+* Feature #7680: Conditionally enable MySQL and PostgresSQL, add support for FreeBSD and DragonFlyBSD
+
+* Bug #6547: delaying notifications with times.begin should postpone first notification into that window
+* Bug #7257: default value for "disable_notifications" in service dependencies is set to "false"
+* Bug #7268: Icinga2 changes perfdata order and removes maximum
+* Bug #7272: icinga2 returns exponential perfdata format with check_nt
+* Bug #7275: snmp-load checkcommand has wrong threshold syntax
+* Bug #7276: SLES (Suse Linux Enterprise Server) 11 SP3 package dependency failure
+* Bug #7302: ITL: check_procs and check_http are missing arguments
+* Bug #7324: config parser crashes on unknown attribute in assign
+* Bug #7327: Icinga2 docs: link supported operators from sections about apply rules
+* Bug #7331: Error messages for invalid imports missing
+* Bug #7338: Docs: Default command timeout is 60s not 5m
+* Bug #7339: Importing a CheckCommand in a NotificationCommand results in an exception without stacktrace.
+* Bug #7349: Documentation: Wrong check command for snmp-int(erface)
+* Bug #7351: snmp-load checkcommand has a wrong "-T" param value
+* Bug #7359: Setting snmp_v2 can cause snmp-manubulon-command derived checks to fail
+* Bug #7365: Typo for "HTTP Checks" match in groups.conf
+* Bug #7369: Fix reading perfdata in compat/checkresultreader
+* Bug #7372: custom attribute name 'type' causes empty vars dictionary
+* Bug #7373: Wrong usermod command for external command pipe setup
+* Bug #7378: Commands are auto-completed when they shouldn't be
+* Bug #7379: failed en/disable feature should return error
+* Bug #7380: Debian package root permissions interfere with icinga2 cli commands as icinga user
+* Bug #7392: Schema upgrade files are missing in /usr/share/icinga2-ido-{mysql,pgsql}
+* Bug #7417: CMake warnings on OS X
+* Bug #7428: Documentation: 1-about contribute links to non-existing report a bug howto
+* Bug #7433: Unity build fails on RHEL 5
+* Bug #7446: When replaying logs the secobj attribute is ignored
+* Bug #7473: Performance data via API is broken
+* Bug #7475: can't assign Service to Host in nested HostGroup
+* Bug #7477: Fix typos and other small corrections in documentation
+* Bug #7482: OnStateLoaded isn't called for objects which don't have any state
+* Bug #7483: Hosts/services should not have themselves as parents
+* Bug #7495: Utility::GetFQDN doesn't work on OS X
+* Bug #7503: Icinga2 fails to start due to configuration errors
+* Bug #7520: Use ScriptVariable::Get for RunAsUser/RunAsGroup
+* Bug #7536: Object list dump erraneously evaluates template definitions
+* Bug #7537: Nesting an object in a template causes the template to become non-abstract
+* Bug #7538: There is no __name available to nested objects
+* Bug #7573: link missing in documentation about livestatus
+* Bug #7577: Invalid checkresult object causes Icinga 2 to crash
+* Bug #7579: only notify users on recovery which have been notified before (not-ok state)
+* Bug #7585: Nested templates do not work (anymore)
+* Bug #7586: Exception when executing check
+* Bug #7597: Compilation Error with boost 1.56 under Windows
+* Bug #7599: Plugin execution on Windows does not work
+* Bug #7617: mkclass crashes when called without arguments
+* Bug #7623: Missing state filter 'OK' must not prevent recovery notifications being sent
+* Bug #7624: Installation on Windows fails
+* Bug #7625: IDO module crashes on Windows
+* Bug #7646: Get rid of static boost::mutex variables
+* Bug #7648: Unit tests fail to run
+* Bug #7650: Wrong set of dependency state when a host depends on a service
+* Bug #7681: CreateProcess fails on Windows 7
+* Bug #7688: DebugInfo is missing for nested dictionaries
 
 ### Archive
 
@@ -129,6 +228,15 @@ synchronisation between zones is available, but not mandatory (for example when 
 tools such as Puppet are used). Secured by SSL x509 certificates, supporting IPv4 and IPv6.
 High Availability for DB IDO: Only active on the current zone master, failover happens automatically.
 
+* Monitoring Remote Clients
+
+Built on proven [cluster](#distributed-monitoring-high-availability) stack,
+[Icinga 2 clients](#icinga2-remote-client-monitoring) can be installed acting as remote satellite or
+agent. Secured communication by SSL x509 certificates, install them with [cli commands](#cli-commands),
+and configure them either locally with discovery on the master, or use them for executing checks and
+event handlers remotely.
+
+
 * High Performance
 
 Multithreaded and scalable for small embedded systems as well as large scale environments.
@@ -138,15 +246,26 @@ in its operation. Same goes for performance data writers and the external comman
 file writers on disk (`statusdata`).
 Unlike Icinga 1.x the [daemon reload](#differences-1x-2-real-reload) happens asynchronously.
 A child daemon validates the new configuration, the parent process is still doing checks, replicating cluster events, triggering alert notifications, etc. If the configuration validation is ok, all remaining events are synchronized and the child process continues as normal.
-The DB IDO configuration dump and status/historical event updates also runs asynchronously in a queue not blocking the core anymore. The configuration validation itself runs in paralell allowing fast verification checks.
+The DB IDO configuration dump and status/historical event updates also runs asynchronously in a queue not blocking the core anymore. The configuration validation itself runs in parallel allowing fast verification checks.
 That way you are not blind (anymore) during a configuration reload and benefit from a real scalable architecture.
 
+* Integrated CLI with Bash Auto-Completion
+
+Enable only the [features](#cli-command-feature) which are currently disabled,
+[list objects](#cli-command-object) generated from [apply rules](#using-apply) or
+[generate SSL x509 certificates](#cli-command-pki) for remote clients or cluster setup.
+Start/stop the Icinga 2 [daemon](#cli-command-daemon) or validate your configuration,
+[manage and install](#cli-command-node) remote clients and service discovery helped
+with black- and whitelists.
 
 * Modular & flexible [features](#features)
 
 Enable only the features you require. Want to use Icinga Web 2 with DB IDO but no status data?
 No problem! Just enable ido-mysql and disable statusdata. Another example: Graphite should be enabled
 on a dedicated cluster node. Enable it over there and point it to the carbon cache socket.
+
+Combine Icinga 2 Core with web user interfaces: Use [Icinga Web 2](#setting-up-icingaweb2), but also
+Web 1.x or Classic UI or your own preferred addon.
 
 * Native support for the [Livestatus protocol](#setting-up-livestatus)
 
@@ -158,13 +277,22 @@ Icinga 2 still supports writing performance data files for graphing addons, but 
 capability of writing performance data directly into a Graphite TCP socket simplifying realtime
 monitoring graphs.
 
+* Native support for writing log events to [GELF](#gelf-writer) receivers (graylog2, Logstash)
+
+Icinga 2 will write all check result, state change and notification event logs into a defined
+[GELF](#gelfwriter) input receiver. Natively provided by [graylog2](http://www.graylog2.org),
+and as additional input type provided by [Logstash](http://logstash.net).
+
 * Dynamic configuration language
 
 Simple [apply](#using-apply) and [assign](#group-assign) rules for creating configuration object
-relationships based on patterns. Supported with [duration literals](#duration-literals) for interval
+relationships based on patterns. More advanced features for dynamic object generation using
+[apply for rules](#using-apply-for) helped with arrays and dictionaries for
+[custom attributes](#custom-attributes-apply).
+Supported with [duration literals](#duration-literals) for interval
 attributes, [expression operators](#expression-operators), [function calls](#function-calls) for
 pattern and regex matching and (global) [constants](#constants).
-Sample configuration for common plugins is shipped with Icinga 2 as part of the [Icinga Template Library](#itl).
+[Check command configuration](#plugin-check-commands) for common plugins is shipped with Icinga 2 as part of the [Icinga Template Library](#itl).
 
 * Revamped Commands
 
@@ -198,6 +326,8 @@ same way as "mixed" dependencies from a service to a parent host and vice versa.
 depending on an upstream link port (as service) are not a problem anymore.
 No more additional parents settings - host dependencies already define the host parent relationship
 required for network reachability calculations.
+Set parent host/services based on [host/service custom attributes](#dependencies-apply-custom-attributes)
+generated from your cloud inventory or CMDB and make your dependency rules simple and short.
 
 * [Recurring Downtimes](#recurring-downtimes)
 
@@ -219,7 +349,7 @@ All [Monitoring Plugins](#setting-up-check-plugins) can be integrated into Icing
 newly created check command configuration if not already provided.
 [Configuration migration](#configuration-migration) is possible through an external migration tool.
 
-Detailed [migration hints](#manual-config-migration-hints) explain migration the Icinga 1.x
+Detailed [migration hints](#manual-config-migration-hints) explain migration of the Icinga 1.x
 configuration objects into the native Icinga 2 configuration schema.
 Additional information on the differences is documented in the [migration](#differences-1x-2) chapter.
 

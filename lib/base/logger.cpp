@@ -36,6 +36,7 @@ INITIALIZE_ONCE(&Logger::StaticInitialize);
 std::set<Logger::Ptr> Logger::m_Loggers;
 boost::mutex Logger::m_Mutex;
 bool Logger::m_ConsoleLogEnabled = true;
+bool Logger::m_TimestampEnabled = true;
 LogSeverity Logger::m_ConsoleLogSeverity = LogInformation;
 
 void Logger::StaticInitialize(void)
@@ -55,13 +56,17 @@ void Logger::Start(void)
 	DynamicObject::Start();
 
 	boost::mutex::scoped_lock lock(m_Mutex);
-	m_Loggers.insert(GetSelf());
+	m_Loggers.insert(this);
 }
 
 void Logger::Stop(void)
 {
-	boost::mutex::scoped_lock lock(m_Mutex);
-	m_Loggers.erase(GetSelf());
+	{
+		boost::mutex::scoped_lock lock(m_Mutex);
+		m_Loggers.erase(this);
+	}
+
+	DynamicObject::Stop();
 }
 
 std::set<Logger::Ptr> Logger::GetLoggers(void)
@@ -77,7 +82,7 @@ std::set<Logger::Ptr> Logger::GetLoggers(void)
  * @param facility The log facility.
  * @param message The message.
  */
-void icinga::Log(LogSeverity severity, const String& facility,
+void icinga::IcingaLog(LogSeverity severity, const String& facility,
     const String& message)
 {
 	LogEntry entry;
@@ -106,11 +111,8 @@ void icinga::Log(LogSeverity severity, const String& facility,
 			logger->ProcessLogEntry(entry);
 	}
 
-	if (Logger::IsConsoleLogEnabled() && entry.Severity >= Logger::GetConsoleLogSeverity()) {
-		static bool tty = StreamLogger::IsTty(std::cout);
-
-		StreamLogger::ProcessLogEntry(std::cout, tty, entry);
-	}
+	if (Logger::IsConsoleLogEnabled() && entry.Severity >= Logger::GetConsoleLogSeverity())
+		StreamLogger::ProcessLogEntry(std::cout, entry);
 }
 
 /**
@@ -128,7 +130,7 @@ LogSeverity Logger::GetMinSeverity(void) const
 
 		try {
 			ls = Logger::StringToSeverity(severity);
-		} catch (std::exception&) { /* use the default level */ }
+		} catch (const std::exception&) { /* use the default level */ }
 
 		return ls;
 	}
@@ -176,7 +178,8 @@ LogSeverity Logger::StringToSeverity(const String& severity)
 	else if (severity == "critical")
 		return LogCritical;
 	else {
-		Log(LogCritical, "Logger", "Invalid severity: '" + severity + "'.");
+		Log(LogCritical, "Logger")
+		    << "Invalid severity: '" << severity << "'.";
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid severity: " + severity));
 	}
 }
@@ -199,4 +202,14 @@ void Logger::SetConsoleLogSeverity(LogSeverity logSeverity)
 LogSeverity Logger::GetConsoleLogSeverity(void)
 {
 	return m_ConsoleLogSeverity;
+}
+
+void Logger::DisableTimestamp(bool disable)
+{
+	m_TimestampEnabled = !disable;
+}
+
+bool Logger::IsTimestampEnabled(void)
+{
+	return m_TimestampEnabled;
 }

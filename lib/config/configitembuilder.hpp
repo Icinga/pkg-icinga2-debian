@@ -20,9 +20,9 @@
 #ifndef CONFIGITEMBUILDER_H
 #define CONFIGITEMBUILDER_H
 
-#include "config/debuginfo.hpp"
-#include "config/aexpression.hpp"
+#include "config/expression.hpp"
 #include "config/configitem.hpp"
+#include "base/debuginfo.hpp"
 #include "base/object.hpp"
 
 namespace icinga
@@ -45,10 +45,10 @@ public:
 	void SetType(const String& type);
 	void SetName(const String& name);
 	void SetAbstract(bool abstract);
-	void SetScope(const Dictionary::Ptr& scope);
+	void SetScope(const Object::Ptr& scope);
 	void SetZone(const String& zone);
 
-	void AddExpression(const AExpression::Ptr& expr);
+	void AddExpression(Expression *expr);
 
 	ConfigItem::Ptr Compile(void);
 
@@ -56,9 +56,9 @@ private:
 	String m_Type; /**< The object type. */
 	String m_Name; /**< The name. */
 	bool m_Abstract; /**< Whether the item is abstract. */
-	Array::Ptr m_Expressions; /**< Expressions for this item. */
+	std::vector<Expression *> m_Expressions; /**< Expressions for this item. */
 	DebugInfo m_DebugInfo; /**< Debug information. */
-	Dictionary::Ptr m_Scope; /**< variable scope. */
+	Object::Ptr m_Scope; /**< variable scope. */
 	String m_Zone; /**< The zone. */
 };
 

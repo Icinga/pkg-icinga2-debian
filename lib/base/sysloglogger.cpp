@@ -28,11 +28,11 @@ REGISTER_TYPE(SyslogLogger);
 
 REGISTER_STATSFUNCTION(SyslogLoggerStats, &SyslogLogger::StatsFunc);
 
-Value SyslogLogger::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr&)
+Value SyslogLogger::StatsFunc(Dictionary::Ptr& status, Array::Ptr&)
 {
-	Dictionary::Ptr nodes = make_shared<Dictionary>();
+	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const SyslogLogger::Ptr& sysloglogger, DynamicType::GetObjects<SyslogLogger>()) {
+	BOOST_FOREACH(const SyslogLogger::Ptr& sysloglogger, DynamicType::GetObjectsByType<SyslogLogger>()) {
 		nodes->Set(sysloglogger->GetName(), 1); //add more stats
 	}
 

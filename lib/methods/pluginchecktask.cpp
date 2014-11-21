@@ -23,10 +23,11 @@
 #include "icinga/macroprocessor.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "base/dynamictype.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/scriptfunction.hpp"
 #include "base/utility.hpp"
 #include "base/process.hpp"
+#include "base/convert.hpp"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/foreach.hpp>
@@ -35,7 +36,8 @@ using namespace icinga;
 
 REGISTER_SCRIPTFUNCTION(PluginCheck,  &PluginCheckTask::ScriptFunc);
 
-void PluginCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
+void PluginCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr,
+    const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)
 {
 	CheckCommand::Ptr commandObj = checkable->GetCheckCommand();
 
@@ -50,17 +52,27 @@ void PluginCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckRes
 	resolvers.push_back(std::make_pair("command", commandObj));
 	resolvers.push_back(std::make_pair("icinga", IcingaApplication::GetInstance()));
 
-	PluginUtility::ExecuteCommand(commandObj, checkable, checkable->GetLastCheckResult(), resolvers, boost::bind(&PluginCheckTask::ProcessFinishedHandler, checkable, cr, _1, _2));
+	PluginUtility::ExecuteCommand(commandObj, checkable, checkable->GetLastCheckResult(),
+	    resolvers, resolvedMacros, useResolvedMacros,
+	    boost::bind(&PluginCheckTask::ProcessFinishedHandler, checkable, cr, _1, _2));
 }
 
 void PluginCheckTask::ProcessFinishedHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, const Value& commandLine, const ProcessResult& pr)
 {
+	if (pr.ExitStatus > 3) {
+		Process::Arguments parguments = Process::PrepareCommand(commandLine);
+		Log(LogWarning, "PluginCheckTask")
+		    << "Check command for object '" << checkable->GetName() << "' (PID: " << pr.PID
+		    << ", arguments: " << Process::PrettyPrintArguments(parguments) << ") terminated with exit code "
+		    << pr.ExitStatus << ", output: " << pr.Output;
+	}
+
 	String output = pr.Output;
 	output.Trim();
-	std::pair<String, Value> co = PluginUtility::ParseCheckOutput(output);
+	std::pair<String, String> co = PluginUtility::ParseCheckOutput(output);
 	cr->SetCommand(commandLine);
 	cr->SetOutput(co.first);
-	cr->SetPerformanceData(co.second);
+	cr->SetPerformanceData(PluginUtility::SplitPerfdata(co.second));
 	cr->SetState(PluginUtility::ExitStatusToState(pr.ExitStatus));
 	cr->SetExitStatus(pr.ExitStatus);
 	cr->SetExecutionStart(pr.ExecutionStart);

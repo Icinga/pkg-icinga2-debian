@@ -26,9 +26,9 @@ using namespace icinga;
 ObjectRule::RuleMap ObjectRule::m_Rules;
 ObjectRule::CallbackMap ObjectRule::m_Callbacks;
 
-ObjectRule::ObjectRule(const String& name, const AExpression::Ptr& expression,
-    const AExpression::Ptr& filter, const DebugInfo& di, const Dictionary::Ptr& scope)
-	: m_Name(name), m_Expression(expression), m_Filter(filter), m_DebugInfo(di), m_Scope(scope)
+ObjectRule::ObjectRule(const String& name, const boost::shared_ptr<Expression>& filter,
+    const DebugInfo& di, const Object::Ptr& scope)
+	: m_Name(name), m_Filter(filter), m_DebugInfo(di), m_Scope(scope)
 { }
 
 String ObjectRule::GetName(void) const
@@ -36,12 +36,7 @@ String ObjectRule::GetName(void) const
 	return m_Name;
 }
 
-AExpression::Ptr ObjectRule::GetExpression(void) const
-{
-	return m_Expression;
-}
-
-AExpression::Ptr ObjectRule::GetFilter(void) const
+boost::shared_ptr<Expression> ObjectRule::GetFilter(void) const
 {
 	return m_Filter;
 }
@@ -51,24 +46,20 @@ DebugInfo ObjectRule::GetDebugInfo(void) const
 	return m_DebugInfo;
 }
 
-Dictionary::Ptr ObjectRule::GetScope(void) const
+Object::Ptr ObjectRule::GetScope(void) const
 {
 	return m_Scope;
 }
 
 void ObjectRule::AddRule(const String& sourceType, const String& name,
-    const AExpression::Ptr& expression, const AExpression::Ptr& filter,
-    const DebugInfo& di, const Dictionary::Ptr& scope)
+    const boost::shared_ptr<Expression>& filter, const DebugInfo& di, const Object::Ptr& scope)
 {
-	m_Rules[sourceType].push_back(ObjectRule(name, expression, filter, di, scope));
+	m_Rules[sourceType].push_back(ObjectRule(name, filter, di, scope));
 }
 
-bool ObjectRule::EvaluateFilter(const Dictionary::Ptr& scope) const
+bool ObjectRule::EvaluateFilter(const Object::Ptr& scope) const
 {
-	scope->Set("__parent", m_Scope);
-	bool result = m_Filter->Evaluate(scope);
-	scope->Remove("__parent");
-	return result;
+	return m_Filter->Evaluate(scope).ToBool();
 }
 
 void ObjectRule::EvaluateRules(bool clear)

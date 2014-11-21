@@ -37,6 +37,7 @@ namespace icinga
  */
 struct ProcessResult
 {
+	pid_t PID;
 	double ExecutionStart;
 	double ExecutionEnd;
 	long ExitStatus;
@@ -79,6 +80,8 @@ public:
 
 	static void StaticInitialize(void);
 	static void ThreadInitialize(void);
+
+	static String PrettyPrintArguments(const Arguments& arguments);
 
 private:
 	Arguments m_Arguments;

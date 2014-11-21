@@ -36,7 +36,9 @@ namespace icinga
 class I2_BASE_API StreamLogger : public ObjectImpl<StreamLogger>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(StreamLogger);
+	DECLARE_OBJECT(StreamLogger);
+
+	StreamLogger(void);
 
 	virtual void Start(void);
 	virtual void Stop(void);
@@ -44,8 +46,7 @@ public:
 
 	void BindStream(std::ostream *stream, bool ownsStream);
 
-	static void ProcessLogEntry(std::ostream& stream, bool tty, const LogEntry& entry);
-        static bool IsTty(std::ostream& stream);
+	static void ProcessLogEntry(std::ostream& stream, const LogEntry& entry);
 
 protected:
 	virtual void ProcessLogEntry(const LogEntry& entry);

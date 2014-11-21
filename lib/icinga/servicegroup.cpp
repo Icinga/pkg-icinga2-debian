@@ -21,7 +21,7 @@
 #include "config/objectrule.hpp"
 #include "base/dynamictype.hpp"
 #include "base/objectlock.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/context.hpp"
 #include "base/workqueue.hpp"
 #include <boost/foreach.hpp>
@@ -34,10 +34,10 @@ INITIALIZE_ONCE(&ServiceGroup::RegisterObjectRuleHandler);
 
 void ServiceGroup::RegisterObjectRuleHandler(void)
 {
-        ObjectRule::RegisterType("ServiceGroup", &ServiceGroup::EvaluateObjectRules);
+	ObjectRule::RegisterType("ServiceGroup", &ServiceGroup::EvaluateObjectRules);
 }
 
-bool ServiceGroup::EvaluateObjectRuleOne(const Service::Ptr service, const ObjectRule& rule)
+bool ServiceGroup::EvaluateObjectRuleOne(const Service::Ptr& service, const ObjectRule& rule)
 {
 	DebugInfo di = rule.GetDebugInfo();
 
@@ -47,37 +47,35 @@ bool ServiceGroup::EvaluateObjectRuleOne(const Service::Ptr service, const Objec
 
 	Host::Ptr host = service->GetHost();
 
-	Dictionary::Ptr locals = make_shared<Dictionary>();
+	Dictionary::Ptr locals = new Dictionary();
+	locals->Set("__parent", rule.GetScope());
 	locals->Set("host", host);
 	locals->Set("service", service);
 
 	if (!rule.EvaluateFilter(locals))
 		return false;
 
-	std::ostringstream msgbuf2;
-	msgbuf2 << "Assigning membership for group '" << rule.GetName() << "' to service '" << service->GetName() << "' for rule " << di;
-	Log(LogDebug, "ServiceGroup", msgbuf2.str());
+	Log(LogDebug, "ServiceGroup")
+	    << "Assigning membership for group '" << rule.GetName() << "' to service '" << service->GetName() << "' for rule " << di;
 
 	String group_name = rule.GetName();
 	ServiceGroup::Ptr group = ServiceGroup::GetByName(group_name);
 
 	if (!group) {
-		Log(LogCritical, "ServiceGroup", "Invalid membership assignment. Group '" + group_name + "' does not exist.");
+		Log(LogCritical, "ServiceGroup")
+		    << "Invalid membership assignment. Group '" << group_name << "' does not exist.";
 		return false;
 	}
 
 	/* assign service group membership */
 	group->ResolveGroupMembership(service, true);
 
-	/* update groups attribute for apply */
-	service->AddGroup(group_name);
-
 	return true;
 }
 
 void ServiceGroup::EvaluateObjectRule(const ObjectRule& rule)
 {
-	BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjects<Service>()) {
+	BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjectsByType<Service>()) {
 		CONTEXT("Evaluating group membership in '" + rule.GetName() + "' for service '" + service->GetName() + "'");
 
 		EvaluateObjectRuleOne(service, rule);
@@ -103,6 +101,8 @@ std::set<Service::Ptr> ServiceGroup::GetMembers(void) const
 
 void ServiceGroup::AddMember(const Service::Ptr& service)
 {
+	service->AddGroup(GetName());
+
 	boost::mutex::scoped_lock lock(m_ServiceGroupMutex);
 	m_Members.insert(service);
 }
@@ -113,11 +113,12 @@ void ServiceGroup::RemoveMember(const Service::Ptr& service)
 	m_Members.erase(service);
 }
 
-bool ServiceGroup::ResolveGroupMembership(Service::Ptr const& service, bool add, int rstack) {
+bool ServiceGroup::ResolveGroupMembership(const Service::Ptr& service, bool add, int rstack) {
 
 	if (add && rstack > 20) {
-		Log(LogWarning, "ServiceGroup", "Too many nested groups for group '" + GetName() + "': Service '" +
-		    service->GetName() + "' membership assignment failed.");
+		Log(LogWarning, "ServiceGroup")
+		    << "Too many nested groups for group '" << GetName() << "': Service '"
+		    << service->GetName() << "' membership assignment failed.";
 
 		return false;
 	}

@@ -25,17 +25,20 @@
 #include "icinga/macroprocessor.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "base/scriptfunction.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/utility.hpp"
 #include "base/process.hpp"
+#include "base/convert.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_SCRIPTFUNCTION(PluginNotification, &PluginNotificationTask::ScriptFunc);
 
-void PluginNotificationTask::ScriptFunc(const Notification::Ptr& notification, const User::Ptr& user, const CheckResult::Ptr& cr, int itype,
-    const String& author, const String& comment)
+void PluginNotificationTask::ScriptFunc(const Notification::Ptr& notification,
+    const User::Ptr& user, const CheckResult::Ptr& cr, int itype,
+    const String& author, const String& comment, const Dictionary::Ptr& resolvedMacros,
+    bool useResolvedMacros)
 {
 	NotificationCommand::Ptr commandObj = notification->GetCommand();
 
@@ -43,7 +46,7 @@ void PluginNotificationTask::ScriptFunc(const Notification::Ptr& notification, c
 
 	Checkable::Ptr checkable = notification->GetCheckable();
 
-	Dictionary::Ptr notificationExtra = make_shared<Dictionary>();
+	Dictionary::Ptr notificationExtra = new Dictionary();
 	notificationExtra->Set("type", Notification::NotificationTypeToString(type));
 	notificationExtra->Set("author", author);
 	notificationExtra->Set("comment", comment);
@@ -62,16 +65,18 @@ void PluginNotificationTask::ScriptFunc(const Notification::Ptr& notification, c
 	resolvers.push_back(std::make_pair("command", commandObj));
 	resolvers.push_back(std::make_pair("icinga", IcingaApplication::GetInstance()));
 
-	PluginUtility::ExecuteCommand(commandObj, checkable, cr, resolvers, boost::bind(&PluginNotificationTask::ProcessFinishedHandler, checkable, _1, _2));
+	PluginUtility::ExecuteCommand(commandObj, checkable, cr, resolvers,
+	    resolvedMacros, useResolvedMacros,
+	    boost::bind(&PluginNotificationTask::ProcessFinishedHandler, checkable, _1, _2));
 }
 
-void PluginNotificationTask::ProcessFinishedHandler(const Checkable::Ptr& checkable, const Value& command, const ProcessResult& pr)
+void PluginNotificationTask::ProcessFinishedHandler(const Checkable::Ptr& checkable, const Value& commandLine, const ProcessResult& pr)
 {
 	if (pr.ExitStatus != 0) {
-		std::ostringstream msgbuf;
-		msgbuf << "Notification command '" << command << "' for object '"
-		       << checkable->GetName() << "' failed; exit status: "
-		       << pr.ExitStatus << ", output: " << pr.Output;
-		Log(LogWarning, "PluginNotificationTask", msgbuf.str());
+		Process::Arguments parguments = Process::PrepareCommand(commandLine);
+		Log(LogWarning, "PluginNotificationTask")
+		    << "Notification command for object '" << checkable->GetName() << "' (PID: " << pr.PID
+		    << ", arguments: " << Process::PrettyPrintArguments(parguments) << ") terminated with exit code "
+		    << pr.ExitStatus << ", output: " << pr.Output;
 	}
 }

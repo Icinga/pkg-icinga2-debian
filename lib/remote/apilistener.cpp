@@ -22,8 +22,9 @@
 #include "remote/endpoint.hpp"
 #include "base/convert.hpp"
 #include "base/netstring.hpp"
+#include "base/json.hpp"
 #include "base/dynamictype.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/objectlock.hpp"
 #include "base/stdiostream.hpp"
 #include "base/application.hpp"
@@ -42,41 +43,47 @@ REGISTER_STATSFUNCTION(ApiListenerStats, &ApiListener::StatsFunc);
 void ApiListener::OnConfigLoaded(void)
 {
 	/* set up SSL context */
-	shared_ptr<X509> cert = make_shared<X509>();
+	boost::shared_ptr<X509> cert;
 	try {
 		cert = GetX509Certificate(GetCertPath());
-	} catch (std::exception&) {
-		Log(LogCritical, "ApiListener", "Cannot get certificate from cert path: '" + GetCertPath() + "'.");
+	} catch (const std::exception&) {
+		Log(LogCritical, "ApiListener")
+		    << "Cannot get certificate from cert path: '" << GetCertPath() << "'.";
 		Application::Exit(EXIT_FAILURE);
 	}
 
 	try {
 		SetIdentity(GetCertificateCN(cert));
-	} catch (std::exception&) {
-		Log(LogCritical, "ApiListener", "Cannot get certificate common name from cert path: '" + GetCertPath() + "'.");
+	} catch (const std::exception&) {
+		Log(LogCritical, "ApiListener")
+		    << "Cannot get certificate common name from cert path: '" << GetCertPath() << "'.";
 		Application::Exit(EXIT_FAILURE);
 	}
 
-	Log(LogInformation, "ApiListener", "My API identity: " + GetIdentity());
+	Log(LogInformation, "ApiListener")
+	    << "My API identity: " << GetIdentity();
 
 	try {
 		m_SSLContext = MakeSSLContext(GetCertPath(), GetKeyPath(), GetCaPath());
-	} catch (std::exception&) {
-		Log(LogCritical, "ApiListener", "Cannot make SSL context for cert path: '" + GetCertPath() + "' key path: '" + GetKeyPath() + "' ca path: '" + GetCaPath() + "'.");
+	} catch (const std::exception&) {
+		Log(LogCritical, "ApiListener")
+		    << "Cannot make SSL context for cert path: '" << GetCertPath() << "' key path: '" << GetKeyPath() << "' ca path: '" << GetCaPath() << "'.";
 		Application::Exit(EXIT_FAILURE);
 	}
 
 	if (!GetCrlPath().IsEmpty()) {
 		try {
 			AddCRLToSSLContext(m_SSLContext, GetCrlPath());
-		} catch (std::exception&) {
-			Log(LogCritical, "ApiListener", "Cannot add certificate revocation list to SSL context for crl path: '" + GetCrlPath() + "'.");
+		} catch (const std::exception&) {
+			Log(LogCritical, "ApiListener")
+			    << "Cannot add certificate revocation list to SSL context for crl path: '" << GetCrlPath() << "'.";
 			Application::Exit(EXIT_FAILURE);
 		}
 	}
 
 	if (!Endpoint::GetByName(GetIdentity())) {
-		Log(LogCritical, "ApiListener", "Endpoint object for '" + GetIdentity() + "' is missing.");
+		Log(LogCritical, "ApiListener")
+		    << "Endpoint object for '" << GetIdentity() << "' is missing.";
 		Application::Exit(EXIT_FAILURE);
 	}
 
@@ -88,7 +95,7 @@ void ApiListener::OnConfigLoaded(void)
  */
 void ApiListener::Start(void)
 {
-	if (std::distance(DynamicType::GetObjects<ApiListener>().first, DynamicType::GetObjects<ApiListener>().second) > 1) {
+	if (std::distance(DynamicType::GetObjectsByType<ApiListener>().first, DynamicType::GetObjectsByType<ApiListener>().second) > 1) {
 		Log(LogCritical, "ApiListener", "Only one ApiListener object is allowed.");
 		return;
 	}
@@ -102,12 +109,13 @@ void ApiListener::Start(void)
 	}
 
 	/* create the primary JSON-RPC listener */
-	if (!AddListener(GetBindPort())) {
-		Log(LogCritical, "ApiListener", "Cannot add listener for port '" + Convert::ToString(GetBindPort()) + "'.");
+	if (!AddListener(GetBindHost(), GetBindPort())) {
+		Log(LogCritical, "ApiListener")
+		     << "Cannot add listener on host '" << GetBindHost() << "' for port '" << GetBindPort() << "'.";
 		Application::Exit(EXIT_FAILURE);
 	}
 
-	m_Timer = make_shared<Timer>();
+	m_Timer = new Timer();
 	m_Timer->OnTimerExpired.connect(boost::bind(&ApiListener::ApiTimerHandler, this));
 	m_Timer->SetInterval(5);
 	m_Timer->Start();
@@ -118,13 +126,13 @@ void ApiListener::Start(void)
 
 ApiListener::Ptr ApiListener::GetInstance(void)
 {
-	BOOST_FOREACH(const ApiListener::Ptr& listener, DynamicType::GetObjects<ApiListener>())
+	BOOST_FOREACH(const ApiListener::Ptr& listener, DynamicType::GetObjectsByType<ApiListener>())
 		return listener;
 
 	return ApiListener::Ptr();
 }
 
-shared_ptr<SSL_CTX> ApiListener::GetSSLContext(void) const
+boost::shared_ptr<SSL_CTX> ApiListener::GetSSLContext(void) const
 {
 	return m_SSLContext;
 }
@@ -160,29 +168,30 @@ bool ApiListener::IsMaster(void) const
 /**
  * Creates a new JSON-RPC listener on the specified port.
  *
+ * @param node The host the listener should be bound to.
  * @param service The port to listen on.
  */
-bool ApiListener::AddListener(const String& service)
+bool ApiListener::AddListener(const String& node, const String& service)
 {
 	ObjectLock olock(this);
 
-	shared_ptr<SSL_CTX> sslContext = m_SSLContext;
+	boost::shared_ptr<SSL_CTX> sslContext = m_SSLContext;
 
 	if (!sslContext) {
 		Log(LogCritical, "ApiListener", "SSL context is required for AddListener()");
 		return false;
 	}
 
-	std::ostringstream s;
-	s << "Adding new listener: port " << service;
-	Log(LogInformation, "ApiListener", s.str());
+	Log(LogInformation, "ApiListener")
+	    << "Adding new listener on port '" << service << "'";
 
-	TcpSocket::Ptr server = make_shared<TcpSocket>();
+	TcpSocket::Ptr server = new TcpSocket();
 
 	try {
-		server->Bind(service, AF_UNSPEC);
-	} catch(std::exception&) {
-		Log(LogCritical, "ApiListener", "Cannot bind tcp socket on '" + service + "'.");
+		server->Bind(node, service, AF_UNSPEC);
+	} catch (const std::exception&) {
+		Log(LogCritical, "ApiListener")
+		    << "Cannot bind TCP socket for host '" << node << "' on port '" << service << "'.";
 		return false;
 	}
 
@@ -203,8 +212,8 @@ void ApiListener::ListenerThreadProc(const Socket::Ptr& server)
 	for (;;) {
 		try {
 			Socket::Ptr client = server->Accept();
-			Utility::QueueAsyncCallback(boost::bind(&ApiListener::NewClientHandler, this, client, RoleServer));
-		} catch (std::exception&) {
+			Utility::QueueAsyncCallback(boost::bind(&ApiListener::NewClientHandler, this, client, RoleServer), LowLatencyScheduler);
+		} catch (const std::exception&) {
 			Log(LogCritical, "ApiListener", "Cannot accept new connection.");
 		}
 	}
@@ -220,7 +229,7 @@ void ApiListener::AddConnection(const Endpoint::Ptr& endpoint)
 	{
 		ObjectLock olock(this);
 
-		shared_ptr<SSL_CTX> sslContext = m_SSLContext;
+		boost::shared_ptr<SSL_CTX> sslContext = m_SSLContext;
 
 		if (!sslContext) {
 			Log(LogCritical, "ApiListener", "SSL context is required for AddConnection()");
@@ -231,7 +240,10 @@ void ApiListener::AddConnection(const Endpoint::Ptr& endpoint)
 	String host = endpoint->GetHost();
 	String port = endpoint->GetPort();
 
-	TcpSocket::Ptr client = make_shared<TcpSocket>();
+	Log(LogInformation, "ApiClient")
+	    << "Reconnecting to API endpoint '" << endpoint->GetName() << "' via host '" << host << "' and port '" << port << "'";
+
+	TcpSocket::Ptr client = new TcpSocket();
 
 	try {
 		endpoint->SetConnecting(true);
@@ -242,11 +254,11 @@ void ApiListener::AddConnection(const Endpoint::Ptr& endpoint)
 		endpoint->SetConnecting(false);
 		client->Close();
 
-		std::ostringstream info, debug;
+		std::ostringstream info;
 		info << "Cannot connect to host '" << host << "' on port '" << port << "'";
-		debug << info.str() << std::endl << DiagnosticInformation(ex);
 		Log(LogCritical, "ApiListener", info.str());
-		Log(LogDebug, "ApiListener", debug.str());
+		Log(LogDebug, "ApiListener")
+		    << info.str() << "\n" << DiagnosticInformation(ex);
 	}
 }
 
@@ -264,40 +276,47 @@ void ApiListener::NewClientHandler(const Socket::Ptr& client, ConnectionRole rol
 	{
 		ObjectLock olock(this);
 		try {
-			tlsStream = make_shared<TlsStream>(client, role, m_SSLContext);
-		} catch (std::exception&) {
-			Log(LogCritical, "ApiListener", "Cannot create tls stream from client connection.");
+			tlsStream = new TlsStream(client, role, m_SSLContext);
+		} catch (const std::exception&) {
+			Log(LogCritical, "ApiListener", "Cannot create TLS stream from client connection.");
 			return;
 		}
 	}
 
 	try {
 		tlsStream->Handshake();
-	} catch (std::exception) {
+	} catch (const std::exception&) {
 		Log(LogCritical, "ApiListener", "Client TLS handshake failed.");
 		return;
 	}
 
-	shared_ptr<X509> cert = tlsStream->GetPeerCertificate();
+	boost::shared_ptr<X509> cert = tlsStream->GetPeerCertificate();
 	String identity;
 
 	try {
 		identity = GetCertificateCN(cert);
-	} catch (std::exception&) {
-		Log(LogCritical, "ApiListener", "Cannot get certificate common name from cert path: '" + GetCertPath() + "'.");
+	} catch (const std::exception&) {
+		Log(LogCritical, "ApiListener")
+		    << "Cannot get certificate common name from cert path: '" << GetCertPath() << "'.";
 		return;
 	}
 
-	Log(LogInformation, "ApiListener", "New client connection for identity '" + identity + "'");
+	bool verify_ok = tlsStream->IsVerifyOK();
 
-	Endpoint::Ptr endpoint = Endpoint::GetByName(identity);
+	Log(LogInformation, "ApiListener")
+	    << "New client connection for identity '" << identity << "'" << (verify_ok ? "" : " (unauthenticated)");
+
+	Endpoint::Ptr endpoint;
+
+	if (verify_ok)
+		endpoint = Endpoint::GetByName(identity);
 
 	bool need_sync = false;
 
 	if (endpoint)
 		need_sync = !endpoint->IsConnected();
 
-	ApiClient::Ptr aclient = make_shared<ApiClient>(identity, tlsStream, role);
+	ApiClient::Ptr aclient = new ApiClient(identity, verify_ok, tlsStream, role);
 	aclient->Start();
 
 	if (endpoint) {
@@ -329,7 +348,7 @@ void ApiListener::ApiTimerHandler(void)
 	BOOST_FOREACH(int ts, files) {
 		bool need = false;
 
-		BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjects<Endpoint>()) {
+		BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
 			if (endpoint->GetName() == GetIdentity())
 				continue;
 
@@ -344,7 +363,8 @@ void ApiListener::ApiTimerHandler(void)
 
 		if (!need) {
 			String path = GetApiDir() + "log/" + Convert::ToString(ts);
-			Log(LogNotice, "ApiListener", "Removing old log file: " + path);
+			Log(LogNotice, "ApiListener")
+			    << "Removing old log file: " << path;
 			(void)unlink(path.CStr());
 		}
 	}
@@ -352,7 +372,7 @@ void ApiListener::ApiTimerHandler(void)
 	if (IsMaster()) {
 		Zone::Ptr my_zone = Zone::GetLocalZone();
 
-		BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjects<Zone>()) {
+		BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
 			/* only connect to endpoints in a) the same zone b) our parent zone c) immediate child zones */
 			if (my_zone != zone && my_zone != zone->GetParent() && zone != my_zone->GetParent())
 				continue;
@@ -388,7 +408,7 @@ void ApiListener::ApiTimerHandler(void)
 		}
 	}
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjects<Endpoint>()) {
+	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
 		if (!endpoint->IsConnected())
 			continue;
 
@@ -397,10 +417,10 @@ void ApiListener::ApiTimerHandler(void)
 		if (ts == 0)
 			continue;
 
-		Dictionary::Ptr lparams = make_shared<Dictionary>();
+		Dictionary::Ptr lparams = new Dictionary();
 		lparams->Set("log_position", ts);
 
-		Dictionary::Ptr lmessage = make_shared<Dictionary>();
+		Dictionary::Ptr lmessage = new Dictionary();
 		lmessage->Set("jsonrpc", "2.0");
 		lmessage->Set("method", "log::SetLogPosition");
 		lmessage->Set("params", lparams);
@@ -408,21 +428,24 @@ void ApiListener::ApiTimerHandler(void)
 		BOOST_FOREACH(const ApiClient::Ptr& client, endpoint->GetClients())
 			client->SendMessage(lmessage);
 
-		Log(LogNotice, "ApiListener", "Setting log position for identity '" + endpoint->GetName() + "': " +
-			Utility::FormatDateTime("%Y/%m/%d %H:%M:%S", ts));
+		Log(LogNotice, "ApiListener")
+		    << "Setting log position for identity '" << endpoint->GetName() << "': "
+		    << Utility::FormatDateTime("%Y/%m/%d %H:%M:%S", ts);
 	}
 
 	Endpoint::Ptr master = GetMaster();
 
 	if (master)
-		Log(LogNotice, "ApiListener", "Current zone master: " + master->GetName());
+		Log(LogNotice, "ApiListener")
+		    << "Current zone master: " << master->GetName();
 
 	std::vector<String> names;
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjects<Endpoint>())
+	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>())
 		if (endpoint->IsConnected())
 			names.push_back(endpoint->GetName() + " (" + Convert::ToString(endpoint->GetClients().size()) + ")");
 
-	Log(LogNotice, "ApiListener", "Connected endpoints: " + Utility::NaturalJoin(names));
+	Log(LogNotice, "ApiListener")
+	    << "Connected endpoints: " << Utility::NaturalJoin(names);
 }
 
 void ApiListener::RelayMessage(const MessageOrigin& origin, const DynamicObject::Ptr& secobj, const Dictionary::Ptr& message, bool log)
@@ -430,20 +453,25 @@ void ApiListener::RelayMessage(const MessageOrigin& origin, const DynamicObject:
 	m_RelayQueue.Enqueue(boost::bind(&ApiListener::SyncRelayMessage, this, origin, secobj, message, log));
 }
 
-void ApiListener::PersistMessage(const Dictionary::Ptr& message)
+void ApiListener::PersistMessage(const Dictionary::Ptr& message, const DynamicObject::Ptr& secobj)
 {
 	double ts = message->Get("ts");
 
 	ASSERT(ts != 0);
 
-	Dictionary::Ptr pmessage = make_shared<Dictionary>();
+	Dictionary::Ptr pmessage = new Dictionary();
 	pmessage->Set("timestamp", ts);
 
-	pmessage->Set("message", JsonSerialize(message));
+	pmessage->Set("message", JsonEncode(message));
+	
+	Dictionary::Ptr secname = new Dictionary();
+	secname->Set("type", secobj->GetType()->GetName());
+	secname->Set("name", secobj->GetName());
+	pmessage->Set("secobj", secname);
 
 	boost::mutex::scoped_lock lock(m_LogLock);
 	if (m_LogFile) {
-		NetString::WriteStringToStream(m_LogFile, JsonSerialize(pmessage));
+		NetString::WriteStringToStream(m_LogFile, JsonEncode(pmessage));
 		m_LogMessageCount++;
 		SetLogMessageTimestamp(ts);
 
@@ -455,15 +483,30 @@ void ApiListener::PersistMessage(const Dictionary::Ptr& message)
 	}
 }
 
+void ApiListener::SyncSendMessage(const Endpoint::Ptr& endpoint, const Dictionary::Ptr& message)
+{
+	ObjectLock olock(endpoint);
+
+	if (!endpoint->GetSyncing()) {
+		Log(LogNotice, "ApiListener")
+		    << "Sending message to '" << endpoint->GetName() << "'";
+
+		BOOST_FOREACH(const ApiClient::Ptr& client, endpoint->GetClients())
+			client->SendMessage(message);
+	}
+}
+
+
 void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObject::Ptr& secobj, const Dictionary::Ptr& message, bool log)
 {
 	double ts = Utility::GetTime();
 	message->Set("ts", ts);
 
-	Log(LogNotice, "ApiListener", "Relaying '" + message->Get("method") + "' message");
+	Log(LogNotice, "ApiListener")
+	    << "Relaying '" << message->Get("method") << "' message";
 
 	if (log)
-		m_LogQueue.Enqueue(boost::bind(&ApiListener::PersistMessage, this, message));
+		PersistMessage(message, secobj);
 
 	if (origin.FromZone)
 		message->Set("originZone", origin.FromZone->GetName());
@@ -475,7 +518,7 @@ void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObj
 	std::vector<Endpoint::Ptr> skippedEndpoints;
 	std::set<Zone::Ptr> finishedZones;
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjects<Endpoint>()) {
+	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
 		/* don't relay messages to ourselves or disconnected endpoints */
 		if (endpoint->GetName() == GetIdentity() || !endpoint->IsConnected())
 			continue;
@@ -519,16 +562,7 @@ void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObj
 
 		finishedZones.insert(target_zone);
 
-		{
-			ObjectLock olock(endpoint);
-
-			if (!endpoint->GetSyncing()) {
-				Log(LogNotice, "ApiListener", "Sending message to '" + endpoint->GetName() + "'");
-
-				BOOST_FOREACH(const ApiClient::Ptr& client, endpoint->GetClients())
-					client->SendMessage(message);
-			}
-		}
+		SyncSendMessage(endpoint, message);
 	}
 
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, skippedEndpoints)
@@ -548,11 +582,12 @@ void ApiListener::OpenLogFile(void)
 	std::fstream *fp = new std::fstream(path.CStr(), std::fstream::out | std::ofstream::app);
 
 	if (!fp->good()) {
-		Log(LogWarning, "ApiListener", "Could not open spool file: " + path);
+		Log(LogWarning, "ApiListener")
+		    << "Could not open spool file: " << path;
 		return;
 	}
 
-	m_LogFile = make_shared<StdioStream>(fp, true);
+	m_LogFile = new StdioStream(fp, true);
 	m_LogMessageCount = 0;
 	SetLogMessageTimestamp(Utility::GetTime());
 }
@@ -605,6 +640,14 @@ void ApiListener::ReplayLog(const ApiClient::Ptr& client)
 	int count = -1;
 	double peer_ts = endpoint->GetLocalLogPosition();
 	bool last_sync = false;
+	
+	Endpoint::Ptr target_endpoint = client->GetEndpoint();
+	ASSERT(target_endpoint);
+	
+	Zone::Ptr target_zone = target_endpoint->GetZone();
+	
+	if (!target_zone)
+		return;
 
 	for (;;) {
 		boost::mutex::scoped_lock lock(m_LogLock);
@@ -631,10 +674,11 @@ void ApiListener::ReplayLog(const ApiClient::Ptr& client)
 			if (ts < peer_ts)
 				continue;
 
-			Log(LogNotice, "ApiListener", "Replaying log: " + path);
+			Log(LogNotice, "ApiListener")
+			    << "Replaying log: " << path;
 
 			std::fstream *fp = new std::fstream(path.CStr(), std::fstream::in);
-			StdioStream::Ptr logStream = make_shared<StdioStream>(fp, true);
+			StdioStream::Ptr logStream = new StdioStream(fp, true);
 
 			String message;
 			while (true) {
@@ -644,9 +688,10 @@ void ApiListener::ReplayLog(const ApiClient::Ptr& client)
 					if (!NetString::ReadStringFromStream(logStream, &message))
 						break;
 
-					pmessage = JsonDeserialize(message);
+					pmessage = JsonDecode(message);
 				} catch (const std::exception&) {
-					Log(LogWarning, "ApiListener", "Unexpected end-of-file for cluster log: " + path);
+					Log(LogWarning, "ApiListener")
+					    << "Unexpected end-of-file for cluster log: " << path;
 
 					/* Log files may be incomplete or corrupted. This is perfectly OK. */
 					break;
@@ -654,6 +699,23 @@ void ApiListener::ReplayLog(const ApiClient::Ptr& client)
 
 				if (pmessage->Get("timestamp") <= peer_ts)
 					continue;
+
+				Dictionary::Ptr secname = pmessage->Get("secobj");
+				
+				if (secname) {
+					DynamicType::Ptr dtype = DynamicType::GetByName(secname->Get("type"));
+					
+					if (!dtype)
+						continue;
+					
+					DynamicObject::Ptr secobj = dtype->GetObject(secname->Get("name"));
+					
+					if (!secobj)
+						continue;
+					
+					if (!target_zone->CanAccessObject(secobj))
+						continue;
+				}
 
 				NetString::WriteStringToStream(client->GetStream(), pmessage->Get("message"));
 				count++;
@@ -664,7 +726,8 @@ void ApiListener::ReplayLog(const ApiClient::Ptr& client)
 			logStream->Close();
 		}
 
-		Log(LogNotice, "ApiListener", "Replayed " + Convert::ToString(count) + " messages.");
+		Log(LogNotice, "ApiListener")
+		   << "Replayed " << count << " messages.";
 
 		if (last_sync) {
 			{
@@ -679,9 +742,9 @@ void ApiListener::ReplayLog(const ApiClient::Ptr& client)
 	}
 }
 
-Value ApiListener::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata)
+Value ApiListener::StatsFunc(Dictionary::Ptr& status, Array::Ptr& perfdata)
 {
-	Dictionary::Ptr nodes = make_shared<Dictionary>();
+	Dictionary::Ptr nodes = new Dictionary();
 	std::pair<Dictionary::Ptr, Dictionary::Ptr> stats;
 
 	ApiListener::Ptr listener = ApiListener::GetInstance();
@@ -691,8 +754,9 @@ Value ApiListener::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata)
 
 	stats = listener->GetStatus();
 
-	BOOST_FOREACH(Dictionary::Pair const& kv, stats.second)
-		perfdata->Set("api_" + kv.first, kv.second);
+	ObjectLock olock(stats.second);
+	BOOST_FOREACH(const Dictionary::Pair& kv, stats.second)
+		perfdata->Add("'api_" + kv.first + "'=" + Convert::ToString(kv.second));
 
 	status->Set("api", stats.first);
 
@@ -701,17 +765,17 @@ Value ApiListener::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata)
 
 std::pair<Dictionary::Ptr, Dictionary::Ptr> ApiListener::GetStatus(void)
 {
-	Dictionary::Ptr status = make_shared<Dictionary>();
-	Dictionary::Ptr perfdata = make_shared<Dictionary>();
+	Dictionary::Ptr status = new Dictionary();
+	Dictionary::Ptr perfdata = new Dictionary();
 
 	/* cluster stats */
 	status->Set("identity", GetIdentity());
 
 	double count_endpoints = 0;
-	Array::Ptr not_connected_endpoints = make_shared<Array>();
-	Array::Ptr connected_endpoints = make_shared<Array>();
+	Array::Ptr not_connected_endpoints = new Array();
+	Array::Ptr connected_endpoints = new Array();
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjects<Endpoint>()) {
+	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
 		if (endpoint->GetName() == GetIdentity())
 			continue;
 

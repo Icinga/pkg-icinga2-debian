@@ -27,7 +27,7 @@
 #include "base/utility.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/exception.hpp"
 #include <boost/foreach.hpp>
 
@@ -39,15 +39,17 @@ INITIALIZE_ONCE(&ScheduledDowntime::StaticInitialize);
 
 static Timer::Ptr l_Timer;
 
-String ScheduledDowntimeNameComposer::MakeName(const String& shortName, const Dictionary::Ptr props) const
+String ScheduledDowntimeNameComposer::MakeName(const String& shortName, const Object::Ptr& context) const
 {
-	if (!props)
+	ScheduledDowntime::Ptr downtime = dynamic_pointer_cast<ScheduledDowntime>(context);
+
+	if (!downtime)
 		return "";
 
-	String name = props->Get("host_name");
+	String name = downtime->GetHostName();
 
-	if (props->Contains("service_name"))
-		name += "!" + props->Get("service_name");
+	if (!downtime->GetServiceName().IsEmpty())
+		name += "!" + downtime->GetServiceName();
 
 	name += "!" + shortName;
 
@@ -56,7 +58,7 @@ String ScheduledDowntimeNameComposer::MakeName(const String& shortName, const Di
 
 void ScheduledDowntime::StaticInitialize(void)
 {
-	l_Timer = make_shared<Timer>();
+	l_Timer = new Timer();
 	l_Timer->SetInterval(60);
 	l_Timer->OnTimerExpired.connect(boost::bind(&ScheduledDowntime::TimerProc));
 	l_Timer->Start();
@@ -71,7 +73,7 @@ void ScheduledDowntime::Start(void)
 
 void ScheduledDowntime::TimerProc(void)
 {
-	BOOST_FOREACH(const ScheduledDowntime::Ptr& sd, DynamicType::GetObjects<ScheduledDowntime>()) {
+	BOOST_FOREACH(const ScheduledDowntime::Ptr& sd, DynamicType::GetObjectsByType<ScheduledDowntime>()) {
 		sd->CreateNextDowntime();
 	}
 }
@@ -91,11 +93,12 @@ std::pair<double, double> ScheduledDowntime::FindNextSegment(void)
 	time_t refts = Utility::GetTime();
 	tm reference = Utility::LocalTime(refts);
 
-	Log(LogDebug, "ScheduledDowntime", "Finding next scheduled downtime segment for time " + Convert::ToString(static_cast<long>(refts)));
+	Log(LogDebug, "ScheduledDowntime")
+	    << "Finding next scheduled downtime segment for time " << refts;
 
 	Dictionary::Ptr ranges = GetRanges();
 
-	Array::Ptr segments = make_shared<Array>();
+	Array::Ptr segments = new Array();
 
 	Dictionary::Ptr bestSegment;
 	double bestBegin;

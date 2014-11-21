@@ -22,42 +22,53 @@
 
 #include "base/i2-base.hpp"
 #include "base/object.hpp"
-#include "base/qstring.hpp"
+#include "base/string.hpp"
 #include "base/exception.hpp"
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/comp.h>
 #include <openssl/sha.h>
+#include <openssl/x509v3.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#include <boost/smart_ptr/shared_ptr.hpp>
 
 namespace icinga
 {
 
-shared_ptr<SSL_CTX> I2_BASE_API MakeSSLContext(const String& pubkey, const String& privkey, const String& cakey);
-void I2_BASE_API AddCRLToSSLContext(const shared_ptr<SSL_CTX>& context, const String& crlPath);
-String I2_BASE_API GetCertificateCN(const shared_ptr<X509>& certificate);
-shared_ptr<X509> I2_BASE_API GetX509Certificate(const String& pemfile);
-extern "C" int I2_BASE_API MakeX509CSR(const char *cn, const char *keyfile, const char *csrfile);
+void I2_BASE_API InitializeOpenSSL(void);
+boost::shared_ptr<SSL_CTX> I2_BASE_API MakeSSLContext(const String& pubkey, const String& privkey, const String& cakey = String());
+void I2_BASE_API AddCRLToSSLContext(const boost::shared_ptr<SSL_CTX>& context, const String& crlPath);
+String I2_BASE_API GetCertificateCN(const boost::shared_ptr<X509>& certificate);
+boost::shared_ptr<X509> I2_BASE_API GetX509Certificate(const String& pemfile);
+int I2_BASE_API MakeX509CSR(const String& cn, const String& keyfile, const String& csrfile = String(), const String& certfile = String(), bool ca = false);
+boost::shared_ptr<X509> I2_BASE_API CreateCert(EVP_PKEY *pubkey, X509_NAME *subject, X509_NAME *issuer, EVP_PKEY *cakey, bool ca, const String& serialfile = String());
+String I2_BASE_API GetIcingaCADir(void);
+String I2_BASE_API CertificateToString(const boost::shared_ptr<X509>& cert);
+boost::shared_ptr<X509> I2_BASE_API CreateCertIcingaCA(EVP_PKEY *pubkey, X509_NAME *subject);
+String I2_BASE_API PBKDF2_SHA1(const String& password, const String& salt, int iterations);
 String I2_BASE_API SHA256(const String& s);
+String I2_BASE_API RandomString(int length);
 
 class I2_BASE_API openssl_error : virtual public std::exception, virtual public boost::exception { };
 
 struct errinfo_openssl_error_;
-typedef boost::error_info<struct errinfo_openssl_error_, int> errinfo_openssl_error;
+typedef boost::error_info<struct errinfo_openssl_error_, unsigned long> errinfo_openssl_error;
 
 inline std::string to_string(const errinfo_openssl_error& e)
 {
-        std::ostringstream tmp;
-        int code = e.value();
+	std::ostringstream tmp;
+	int code = e.value();
 	char errbuf[120];
 
-        const char *message = ERR_error_string(code, errbuf);
+	const char *message = ERR_error_string(code, errbuf);
 
-        if (message == NULL)
-                message = "Unknown error.";
+	if (message == NULL)
+		message = "Unknown error.";
 
-        tmp << code << ", \"" << message << "\"";
-        return tmp.str();
+	tmp << code << ", \"" << message << "\"";
+	return tmp.str();
 }
 
 }

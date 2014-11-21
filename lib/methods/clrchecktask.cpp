@@ -23,7 +23,7 @@
 #include "icinga/macroprocessor.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "base/dynamictype.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/scriptfunction.hpp"
 #include "base/utility.hpp"
 #include "base/process.hpp"
@@ -86,7 +86,7 @@ static variant_t InvokeClrMethod(const variant_t& vtObject, const String& method
 {
 	CLSID clsid;
 	HRESULT hr = CLSIDFromProgID(L"System.Collections.Hashtable", &clsid);
-	
+
 	mscorlib::IDictionaryPtr pHashtable;
 	CoCreateInstance(clsid, NULL, CLSCTX_ALL, __uuidof(mscorlib::IDictionary), (void **)&pHashtable);
 
@@ -95,7 +95,7 @@ static variant_t InvokeClrMethod(const variant_t& vtObject, const String& method
 		String value = kv.second;
 		pHashtable->Add(kv.first.CStr(), value.CStr());
 	}
-		
+
 	mscorlib::_ObjectPtr pObject;
 	vtObject.pdispVal->QueryInterface(__uuidof(mscorlib::_Object), (void**)&pObject);
 	mscorlib::_TypePtr pType = pObject->GetType();
@@ -142,10 +142,11 @@ static void FillCheckResult(const CheckResult::Ptr& cr, variant_t vtResult)
 		vtResult,
 		psa);
 	SafeArrayDestroy(psa);
-	cr->SetPerformanceData(static_cast<const char *>(sPerformanceData));
+	cr->SetPerformanceData(PluginUtility::SplitPerfdata(static_cast<const char *>(sPerformanceData)));
 }
 
-void ClrCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
+void ClrCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr,
+    const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)
 {
 	CheckCommand::Ptr commandObj = checkable->GetCheckCommand();
 	Value raw_command = commandObj->GetCommandLine();
@@ -161,7 +162,7 @@ void ClrCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult
 	resolvers.push_back(std::make_pair("command", commandObj));
 	resolvers.push_back(std::make_pair("icinga", IcingaApplication::GetInstance()));
 
-	Dictionary::Ptr envMacros = make_shared<Dictionary>();
+	Dictionary::Ptr envMacros = new Dictionary();
 
 	Dictionary::Ptr env = commandObj->GetEnv();
 

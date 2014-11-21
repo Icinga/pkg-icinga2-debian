@@ -20,6 +20,7 @@
 #include "base/streamlogger.hpp"
 #include "base/utility.hpp"
 #include "base/objectlock.hpp"
+#include "base/console.hpp"
 #include <iostream>
 
 using namespace icinga;
@@ -27,6 +28,10 @@ using namespace icinga;
 REGISTER_TYPE(StreamLogger);
 
 boost::mutex StreamLogger::m_Mutex;
+
+StreamLogger::StreamLogger(void)
+	: m_Stream(NULL), m_OwnsStream(false)
+{ }
 
 /**
  * Constructor for the StreamLogger class.
@@ -78,9 +83,8 @@ void StreamLogger::BindStream(std::ostream *stream, bool ownsStream)
 
 	m_Stream = stream;
 	m_OwnsStream = ownsStream;
-	m_Tty = IsTty(*stream);
-	
-	m_FlushLogTimer = make_shared<Timer>();
+
+	m_FlushLogTimer = new Timer();
 	m_FlushLogTimer->SetInterval(1);
 	m_FlushLogTimer->OnTimerExpired.connect(boost::bind(&StreamLogger::FlushLogTimerHandler, this));
 	m_FlushLogTimer->Start();
@@ -90,46 +94,42 @@ void StreamLogger::BindStream(std::ostream *stream, bool ownsStream)
  * Processes a log entry and outputs it to a stream.
  *
  * @param stream The output stream.
- * @param tty Whether the output stream is a TTY.
  * @param entry The log entry.
  */
-void StreamLogger::ProcessLogEntry(std::ostream& stream, bool tty, const LogEntry& entry)
+void StreamLogger::ProcessLogEntry(std::ostream& stream, const LogEntry& entry)
 {
 	String timestamp = Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", entry.Timestamp);
 
 	boost::mutex::scoped_lock lock(m_Mutex);
 
-	stream << "[" << timestamp << "] ";
+	if (Logger::IsTimestampEnabled())
+		stream << "[" << timestamp << "] ";
 
-	if (tty) {
-		switch (entry.Severity) {
-			case LogNotice:
-				stream << "\x1b[1;34m"; // blue
-				break;
-			case LogInformation:
-				stream << "\x1b[1;32m"; // green
-				break;
-			case LogWarning:
-				stream << "\x1b[1;33m"; // yellow;
-				break;
-			case LogCritical:
-				stream << "\x1b[1;31m"; // red
-				break;
-			default:
-				break;
-		}
+	int color;
+
+	switch (entry.Severity) {
+		case LogDebug:
+			color = Console_ForegroundCyan;
+			break;
+		case LogNotice:
+			color = Console_ForegroundBlue;
+			break;
+		case LogInformation:
+			color = Console_ForegroundGreen;
+			break;
+		case LogWarning:
+			color = Console_ForegroundYellow | Console_Bold;
+			break;
+		case LogCritical:
+			color = Console_ForegroundRed | Console_Bold;
+			break;
+		default:
+			return;
 	}
 
-	try {
-		stream << Logger::SeverityToString(entry.Severity);
-	} catch (std::exception&) {
-		/* bail early */
-		return;
-	}
-
-	if (tty)
-		stream << "\x1b[0m"; // clear colors
-
+	stream << ConsoleColorTag(color);
+	stream << Logger::SeverityToString(entry.Severity);
+	stream << ConsoleColorTag(Console_Normal);
 	stream << "/" << entry.Facility << ": " << entry.Message << "\n";
 }
 
@@ -140,25 +140,5 @@ void StreamLogger::ProcessLogEntry(std::ostream& stream, bool tty, const LogEntr
  */
 void StreamLogger::ProcessLogEntry(const LogEntry& entry)
 {
-	ProcessLogEntry(*m_Stream, m_Tty, entry);
-}
-
-/**
- * Checks whether the specified stream is a terminal.
- *
- * @param stream The stream.
- * @returns true if the stream is a terminal, false otherwise.
- */
-bool StreamLogger::IsTty(std::ostream& stream)
-{
-#ifndef _WIN32
-	/* Eww... */
-	if (&stream == &std::cout)
-		return isatty(fileno(stdout));
-
-	if (&stream == &std::cerr)
-		return isatty(fileno(stderr));
-#endif /*_ WIN32 */
-
-	return false;
+	ProcessLogEntry(*m_Stream, entry);
 }

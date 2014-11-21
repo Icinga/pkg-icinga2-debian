@@ -37,24 +37,24 @@ class ObjectRule;
 class I2_ICINGA_API UserGroup : public ObjectImpl<UserGroup>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(UserGroup);
-	DECLARE_TYPENAME(UserGroup);
+	DECLARE_OBJECT(UserGroup);
+	DECLARE_OBJECTNAME(UserGroup);
 
 	std::set<User::Ptr> GetMembers(void) const;
 	void AddMember(const User::Ptr& user);
 	void RemoveMember(const User::Ptr& user);
 
-        bool ResolveGroupMembership(User::Ptr const& user, bool add = true, int rstack = 0);
+	bool ResolveGroupMembership(const User::Ptr& user, bool add = true, int rstack = 0);
 
-        static void RegisterObjectRuleHandler(void);
+	static void RegisterObjectRuleHandler(void);
 
 private:
 	mutable boost::mutex m_UserGroupMutex;
 	std::set<User::Ptr> m_Members;
 
-        static bool EvaluateObjectRuleOne(const User::Ptr user, const ObjectRule& rule);
+	static bool EvaluateObjectRuleOne(const User::Ptr& user, const ObjectRule& rule);
 	static void EvaluateObjectRule(const ObjectRule& rule);
-        static void EvaluateObjectRules(const std::vector<ObjectRule>& rules);
+	static void EvaluateObjectRules(const std::vector<ObjectRule>& rules);
 };
 
 }

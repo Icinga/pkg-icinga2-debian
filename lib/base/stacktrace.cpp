@@ -18,7 +18,6 @@
  ******************************************************************************/
 
 #include "base/stacktrace.hpp"
-#include "base/qstring.hpp"
 #include "base/utility.hpp"
 #include "base/initialize.hpp"
 
@@ -136,10 +135,10 @@ void StackTrace::Print(std::ostream& fp, int ignoreFrames) const
 			}
 		}
 
-        	fp << "\t(" << i - ignoreFrames - 1 << ") " << message << std::endl;
+		fp << "\t(" << i - ignoreFrames - 1 << ") " << message << std::endl;
 	}
 
-	free(messages);
+	std::free(messages);
 
 	fp << std::endl;
 #	else /* HAVE_BACKTRACE_SYMBOLS */

@@ -37,7 +37,7 @@ namespace icinga
 class I2_DB_IDO_API DbConnection : public ObjectImpl<DbConnection>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(DbConnection);
+	DECLARE_OBJECT(DbConnection);
 
 	static void StaticInitialize(void);
 
@@ -63,7 +63,10 @@ public:
 	void SetStatusUpdate(const DbObject::Ptr& dbobj, bool hasupdate);
 	bool GetStatusUpdate(const DbObject::Ptr& dbobj) const;
 
+	static void ValidateFailoverTimeout(const String& location, const Dictionary::Ptr& attrs);
+
 protected:
+	virtual void OnConfigLoaded(void);
 	virtual void Start(void);
 	virtual void Resume(void);
 	virtual void Pause(void);
@@ -82,7 +85,7 @@ protected:
 private:
 	std::map<DbObject::Ptr, DbReference> m_ObjectIDs;
 	std::map<std::pair<DbType::Ptr, DbReference>, DbReference> m_InsertIDs;
-        std::map<CustomVarObject::Ptr, DbReference> m_NotificationInsertIDs;
+	std::map<CustomVarObject::Ptr, DbReference> m_NotificationInsertIDs;
 	std::set<DbObject::Ptr> m_ActiveObjects;
 	std::set<DbObject::Ptr> m_ConfigUpdates;
 	std::set<DbObject::Ptr> m_StatusUpdates;

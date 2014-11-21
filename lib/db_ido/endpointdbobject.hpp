@@ -37,19 +37,19 @@ class EndpointDbObject : public DbObject
 public:
 	DECLARE_PTR_TYPEDEFS(EndpointDbObject);
 
-	EndpointDbObject(const shared_ptr<DbType>& type, const String& name1, const String& name2);
+	EndpointDbObject(const intrusive_ptr<DbType>& type, const String& name1, const String& name2);
 
-        static void StaticInitialize(void);
+	static void StaticInitialize(void);
 
 	virtual Dictionary::Ptr GetConfigFields(void) const;
 	virtual Dictionary::Ptr GetStatusFields(void) const;
 
 protected:
-        virtual void OnConfigUpdate(void);
+	virtual void OnConfigUpdate(void);
 
 private:
-        static void UpdateConnectedStatus(const Endpoint::Ptr& endpoint);
-        static int EndpointIsConnected(const Endpoint::Ptr& endpoint);
+	static void UpdateConnectedStatus(const Endpoint::Ptr& endpoint);
+	static int EndpointIsConnected(const Endpoint::Ptr& endpoint);
 };
 
 }

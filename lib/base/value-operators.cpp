@@ -49,7 +49,7 @@ Value::operator String(void) const
 		case ValueEmpty:
 			return String();
 		case ValueNumber:
-			fractional = modf(boost::get<double>(m_Value), &integral);
+			fractional = std::modf(boost::get<double>(m_Value), &integral);
 
 			if (fractional != 0)
 				return boost::lexical_cast<std::string>(m_Value);
@@ -131,6 +131,16 @@ bool Value::operator!=(const String& rhs) const
 
 bool Value::operator==(const Value& rhs) const
 {
+	if (IsNumber() && rhs.IsNumber())
+		return Get<double>() == rhs.Get<double>();
+	else if ((IsNumber() || IsEmpty()) && (rhs.IsNumber() || rhs.IsEmpty()) && !(IsEmpty() && rhs.IsEmpty()))
+		return static_cast<double>(*this) == static_cast<double>(rhs);
+
+	if (IsString() && rhs.IsString())
+		return Get<String>() == rhs.Get<String>();
+	else if ((IsString() || IsEmpty()) && (rhs.IsString() || rhs.IsEmpty()) && !(IsEmpty() && rhs.IsEmpty()))
+		return static_cast<String>(*this) == static_cast<String>(rhs);
+
 	if (IsEmpty() != rhs.IsEmpty())
 		return false;
 
@@ -159,14 +169,8 @@ bool Value::operator==(const Value& rhs) const
 			return true;
 		}
 
-		return static_cast<Object::Ptr>(*this) == static_cast<Object::Ptr>(rhs);
+		return Get<Object::Ptr>() == rhs.Get<Object::Ptr>();
 	}
-
-	if ((IsNumber() || IsEmpty()) && (rhs.IsNumber() || rhs.IsEmpty()) && !(IsEmpty() && rhs.IsEmpty()))
-		return static_cast<double>(*this) == static_cast<double>(rhs);
-
-	if ((IsString() || IsEmpty()) && (rhs.IsString() || rhs.IsEmpty()) && !(IsEmpty() && rhs.IsEmpty()))
-		return static_cast<String>(*this) == static_cast<String>(rhs);
 
 	return false;
 }
@@ -203,14 +207,14 @@ Value icinga::operator+(const Value& lhs, const Value& rhs)
 	else if ((lhs.IsNumber() || lhs.IsEmpty()) && (rhs.IsNumber() || rhs.IsEmpty()) && !(lhs.IsEmpty() && rhs.IsEmpty()))
 		return static_cast<double>(lhs) + static_cast<double>(rhs);
 	else if ((lhs.IsObjectType<Array>() || lhs.IsEmpty()) && (rhs.IsObjectType<Array>() || rhs.IsEmpty()) && !(lhs.IsEmpty() && rhs.IsEmpty())) {
-		Array::Ptr result = make_shared<Array>();
+		Array::Ptr result = new Array();
 		if (!lhs.IsEmpty())
 			static_cast<Array::Ptr>(lhs)->CopyTo(result);
 		if (!rhs.IsEmpty())
 			static_cast<Array::Ptr>(rhs)->CopyTo(result);
 		return result;
 	} else if ((lhs.IsObjectType<Dictionary>() || lhs.IsEmpty()) && (rhs.IsObjectType<Dictionary>() || rhs.IsEmpty()) && !(lhs.IsEmpty() && rhs.IsEmpty())) {
-		Dictionary::Ptr result = make_shared<Dictionary>();
+		Dictionary::Ptr result = new Dictionary();
 		if (!lhs.IsEmpty())
 			static_cast<Dictionary::Ptr>(lhs)->CopyTo(result);
 		if (!rhs.IsEmpty())
@@ -247,9 +251,9 @@ Value icinga::operator-(const Value& lhs, const Value& rhs)
 		return static_cast<double>(lhs) - static_cast<double>(rhs);
 	else if ((lhs.IsObjectType<Array>() || lhs.IsEmpty()) && (rhs.IsObjectType<Array>() || rhs.IsEmpty()) && !(lhs.IsEmpty() && rhs.IsEmpty())) {
 		if (lhs.IsEmpty())
-			return make_shared<Array>();
+			return new Array();
 
-		Array::Ptr result = make_shared<Array>();
+		Array::Ptr result = new Array();
 		Array::Ptr left = lhs;
 		Array::Ptr right = rhs;
 

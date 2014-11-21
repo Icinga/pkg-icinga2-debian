@@ -20,10 +20,11 @@
 #include "icinga/icingastatuswriter.hpp"
 #include "icinga/cib.hpp"
 #include "base/dynamictype.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/exception.hpp"
 #include "base/application.hpp"
 #include "base/statsfunction.hpp"
+#include "base/json.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <fstream>
@@ -34,11 +35,11 @@ REGISTER_TYPE(IcingaStatusWriter);
 
 REGISTER_STATSFUNCTION(IcingaStatusWriterStats, &IcingaStatusWriter::StatsFunc);
 
-Value IcingaStatusWriter::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata)
+Value IcingaStatusWriter::StatsFunc(Dictionary::Ptr& status, Array::Ptr& perfdata)
 {
-	Dictionary::Ptr nodes = make_shared<Dictionary>();
+	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const IcingaStatusWriter::Ptr& icingastatuswriter, DynamicType::GetObjects<IcingaStatusWriter>()) {
+	BOOST_FOREACH(const IcingaStatusWriter::Ptr& icingastatuswriter, DynamicType::GetObjectsByType<IcingaStatusWriter>()) {
 		nodes->Set(icingastatuswriter->GetName(), 1); //add more stats
 	}
 
@@ -60,7 +61,7 @@ void IcingaStatusWriter::Start(void)
 {
 	DynamicObject::Start();
 
-	m_StatusTimer = make_shared<Timer>();
+	m_StatusTimer = new Timer();
 	m_StatusTimer->SetInterval(GetUpdateInterval());
 	m_StatusTimer->OnTimerExpired.connect(boost::bind(&IcingaStatusWriter::StatusTimerHandler, this));
 	m_StatusTimer->Start();
@@ -69,16 +70,16 @@ void IcingaStatusWriter::Start(void)
 
 Dictionary::Ptr IcingaStatusWriter::GetStatusData(void)
 {
-	Dictionary::Ptr bag = make_shared<Dictionary>();
+	Dictionary::Ptr bag = new Dictionary();
 
 	/* features */
-	std::pair<Dictionary::Ptr, Dictionary::Ptr> stats = CIB::GetFeatureStats();
+	std::pair<Dictionary::Ptr, Array::Ptr> stats = CIB::GetFeatureStats();
 
 	bag->Set("feature_status", stats.first);
 	bag->Set("feature_perfdata", stats.second);
 
 	/* icinga stats */
-	Dictionary::Ptr icinga_stats = make_shared<Dictionary>();
+	Dictionary::Ptr icinga_stats = new Dictionary();
 
 	double interval = Utility::GetTime() - Application::GetStartTime();
 
@@ -143,29 +144,29 @@ void IcingaStatusWriter::StatusTimerHandler(void)
 {
 	Log(LogNotice, "IcingaStatusWriter", "Writing status.json file");
 
-        String statuspath = GetStatusPath();
-        String statuspathtmp = statuspath + ".tmp"; /* XXX make this a global definition */
+	String statuspath = GetStatusPath();
+	String statuspathtmp = statuspath + ".tmp"; /* XXX make this a global definition */
 
-        std::ofstream statusfp;
-        statusfp.open(statuspathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
+	std::ofstream statusfp;
+	statusfp.open(statuspathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
 
-        statusfp << std::fixed;
+	statusfp << std::fixed;
 
-	statusfp << JsonSerialize(GetStatusData());
+	statusfp << JsonEncode(GetStatusData());
 
-        statusfp.close();
+	statusfp.close();
 
 #ifdef _WIN32
-        _unlink(statuspath.CStr());
+	_unlink(statuspath.CStr());
 #endif /* _WIN32 */
 
-        if (rename(statuspathtmp.CStr(), statuspath.CStr()) < 0) {
-                BOOST_THROW_EXCEPTION(posix_error()
-                    << boost::errinfo_api_function("rename")
-                    << boost::errinfo_errno(errno)
-                    << boost::errinfo_file_name(statuspathtmp));
-        }
+	if (rename(statuspathtmp.CStr(), statuspath.CStr()) < 0) {
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("rename")
+		    << boost::errinfo_errno(errno)
+		    << boost::errinfo_file_name(statuspathtmp));
+	}
 
-        Log(LogNotice, "IcingaStatusWriter", "Finished writing status.json file");
+	Log(LogNotice, "IcingaStatusWriter", "Finished writing status.json file");
 }
 

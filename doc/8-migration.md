@@ -20,7 +20,7 @@ Some specific migration steps will be still required to be done manually,
 especially if you want to preserve your existing file layout, or any other
 object specific policies.
 
-If you encounter a bug, please open an issue at https://dev.icinga.org
+If you encounter a bug, please open an issue at https://dev.icinga.org.
 
 ### <a id="manual-config-migration"></a> Manual Config Migration
 
@@ -1028,7 +1028,7 @@ Changes to service runtime macros
 
   Icinga 1.x             | Icinga 2
   -----------------------|----------------------
-  SERVICEDESC            | service.description
+  SERVICEDESC            | service.name
   SERVICEDISPLAYNAME     | service.display_name
   SERVICECHECKCOMMAND    | service.check_command
   SERVICESTATE           | service.state
@@ -1244,9 +1244,20 @@ as array to the `command_line` attribute i.e. for better readability.
 It's also possible to define default custom attributes for the command itself which can be
 overridden by a service macro.
 
+#### <a id="differences-1x-2-commands-timeouts"></a> Command Timeouts
+
+In Icinga 1.x there were two global options defining a host and service check
+timeout. This was essentially bad when there only was a couple of check plugins
+requiring some command timeouts to be extended.
+
+Icinga 2 allows you to specify the command timeout directly on the command. So
+if your VMVware check plugin takes 15 minutes, [increase the timeout](#objecttype-checkcommand)
+accordingly.
+
+
 ### <a id="differences-1x-2-groups"></a> Groups
 
-In Icinga 2 hosts, services and users are added to groups using the `groups`
+In Icinga 2 hosts, services, and users are added to groups using the `groups`
 attribute in the object. The old way of listing all group members in the group's
 `members` attribute is available through `assign where` and `ignore where`
 conditions.
@@ -1353,7 +1364,7 @@ All state and type filter use long names OR'd with a pipe together
     states = [ Warning, Unknown, Critical ]
     filters = [ Problem, Recovery, FlappingStart, FlappingEnd, DowntimeStart, DowntimeEnd, DowntimeRemoved ]
 
-Icinga 2 adds more fine-grained type filters for acknowledgements, downtime
+Icinga 2 adds more fine-grained type filters for acknowledgements, downtime,
 and flapping type (start, end, ...).
 
 ### <a id="differences-1x-2-dependencies-parents"></a> Dependencies and Parents
@@ -1427,7 +1438,7 @@ Unlike Icinga 1.x the Icinga 2 daemon reload happens asynchronously.
 * validation NOT ok: child process terminates, parent process continues with old configuration state
 (this is ESSENTIAL for the [cluster config synchronisation](#cluster-zone-config-sync))
 * validation ok: child process signals parent process to terminate and save its current state
-(all events til now) into the icinga2 state file
+(all events until now) into the icinga2 state file
 * parent process shuts down writing icinga2.state file
 * child process waits for parent process gone, reads the icinga2 state file and synchronizes all historical and status data
 * child becomes the new session leader
@@ -1476,7 +1487,7 @@ popular broker modules was implemented for Icinga 2:
 Icinga 1.x uses the native "obsess over host/service" method which requires the NSCA addon
 passing the slave's check results passively onto the master's external command pipe.
 While this method may be used for check load distribution, it does not provide any configuration
-distribution out-of-the-box. Furthermore comments, downtimes and other stateful runtime data is
+distribution out-of-the-box. Furthermore comments, downtimes, and other stateful runtime data is
 not synced between the master and slave nodes. There are addons available solving the check
 and configuration distribution problems Icinga 1.x distributed monitoring currently suffers from.
 

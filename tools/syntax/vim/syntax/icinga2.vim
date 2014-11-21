@@ -62,21 +62,21 @@ syn match		icinga2ApplyDef		"apply[ \t]\+\(Service\|Dependency\|Notification\|Sc
 
 " objects attributes
 
-syn keyword		icinga2ObjAttr		contained	accept_config action_url address address6 arguments author bind_host
+syn keyword		icinga2ObjAttr		contained	accept_commands accept_config action_url address address6 arguments author bind_host
 syn keyword		icinga2ObjAttr		contained	bind_port ca_path categories cert_path check_command check_interval
-syn keyword		icinga2ObjAttr		contained	check_period child_host_name child_service_name cleanup command command_path
+syn keyword		icinga2ObjAttr		contained	check_period child_host_name child_service_name cleanup command command_endpoint command_path
 syn keyword		icinga2ObjAttr		contained	comment compat_log_path crl_path database disable_checks disable_notifications
 syn keyword		icinga2ObjAttr		contained	display_name duration email enable_active_checks enable_event_handler
-syn keyword		icinga2ObjAttr		contained	enable_flap_detection enable_notifications enable_passive_checks enable_perfdata
-syn keyword		icinga2ObjAttr		contained	endpoints env event_command fixed flapping_threshold groups host
-syn keyword		icinga2ObjAttr		contained	host_format_template host_name host_perfdata_path host_temp_path icon_image
+syn keyword		icinga2ObjAttr		contained	enable_flapping enable_ha enable_notifications enable_passive_checks enable_perfdata
+syn keyword		icinga2ObjAttr		contained	endpoints env event_command failover_timeout fixed flapping_threshold groups host
+syn keyword		icinga2ObjAttr		contained	host_format_template host_name host_name_template host_perfdata_path host_temp_path icon_image
 syn keyword		icinga2ObjAttr		contained	icon_image_alt instance_description instance_name interval key_path log_dir
 syn keyword		icinga2ObjAttr		contained	log_duration max_check_attempts methods name notes notes_url objects_path
 syn keyword		icinga2ObjAttr		contained	pager parent parent_host_name parent_service_name password path period
 syn keyword		icinga2ObjAttr		contained	port ranges retry_interval rotation_interval rotation_method
-syn keyword		icinga2ObjAttr		contained	service_format_template service_name service_perfdata_path service_temp_path
+syn keyword		icinga2ObjAttr		contained	service_format_template service_name service_name_template service_perfdata_path service_temp_path
 syn keyword		icinga2ObjAttr		contained	severity socket_path socket_type spool_dir states status_path table_prefix
-syn keyword		icinga2ObjAttr		contained	timeout times types update_interval user user_groups users volatile
+syn keyword		icinga2ObjAttr		contained	timeout times types update_interval user user_groups users volatile zone
 syn match		icinga2ObjAttr		contained	"\(vars.\w\+\)"
 
 
@@ -98,7 +98,7 @@ syn keyword		icinga2Function		contained	regex match len union intersection strin
 " global constats
 syn keyword		icinga2Gconst		PrefixDir SysconfDir ZonesDir LocalStateDir PkgDataDir RunDir StatePath PidPath
 syn keyword		icinga2Gconst		NodeName ApplicationType EnableNotifications EnableEventHandlers 
-syn keyword		icinga2Gconst		EnableFlapping EnableHostChecks EnableServiceChecks EnablePerfdata UseVfork
+syn keyword		icinga2Gconst		EnableFlapping EnableHostChecks EnableServiceChecks EnablePerfdata RunAsUser RunAsGroup UseVfork
 syn	match		icinga2Gconst		"\(Vars[ \t]\+\)"
 
 " values type

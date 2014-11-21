@@ -34,10 +34,12 @@ namespace icinga
 class I2_ICINGA_API CheckCommand : public ObjectImpl<CheckCommand>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(CheckCommand);
-	DECLARE_TYPENAME(CheckCommand);
+	DECLARE_OBJECT(CheckCommand);
+	DECLARE_OBJECTNAME(CheckCommand);
 
-	virtual void Execute(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr);
+	virtual void Execute(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr,
+	    const Dictionary::Ptr& resolvedMacros = Dictionary::Ptr(),
+	    bool useResolvedMacros = false);
 };
 
 }

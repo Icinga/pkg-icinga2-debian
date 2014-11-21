@@ -19,7 +19,7 @@
 
 #include "icinga/service.hpp"
 #include "icinga/dependency.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -63,7 +63,8 @@ std::set<Dependency::Ptr> Checkable::GetReverseDependencies(void) const
 bool Checkable::IsReachable(DependencyType dt, Dependency::Ptr *failedDependency, int rstack) const
 {
 	if (rstack > 20) {
-		Log(LogWarning, "Checkable", "Too many nested dependencies for service '" + GetName() + "': Dependency failed.");
+		Log(LogWarning, "Checkable")
+		    << "Too many nested dependencies for service '" << GetName() << "': Dependency failed.";
 
 		return false;
 	}
@@ -108,7 +109,7 @@ std::set<Checkable::Ptr> Checkable::GetParents(void) const
 	BOOST_FOREACH(const Dependency::Ptr& dep, GetDependencies()) {
 		Checkable::Ptr parent = dep->GetParent();
 
-		if (parent)
+		if (parent && parent.get() != this)
 			parents.insert(parent);
 	}
 
@@ -122,7 +123,7 @@ std::set<Checkable::Ptr> Checkable::GetChildren(void) const
 	BOOST_FOREACH(const Dependency::Ptr& dep, GetReverseDependencies()) {
 		Checkable::Ptr service = dep->GetChild();
 
-		if (service)
+		if (service && service.get() != this)
 			parents.insert(service);
 	}
 

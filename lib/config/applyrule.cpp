@@ -18,7 +18,7 @@
  ******************************************************************************/
 
 #include "config/applyrule.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include <boost/foreach.hpp>
 #include <set>
 
@@ -27,9 +27,11 @@ using namespace icinga;
 ApplyRule::RuleMap ApplyRule::m_Rules;
 ApplyRule::CallbackMap ApplyRule::m_Callbacks;
 
-ApplyRule::ApplyRule(const String& targetType, const String& name, const AExpression::Ptr& expression,
-    const AExpression::Ptr& filter, const DebugInfo& di, const Dictionary::Ptr& scope)
-	: m_TargetType(targetType), m_Name(name), m_Expression(expression), m_Filter(filter), m_DebugInfo(di), m_Scope(scope)
+ApplyRule::ApplyRule(const String& targetType, const String& name, const boost::shared_ptr<Expression>& expression,
+    const boost::shared_ptr<Expression>& filter, const String& fkvar, const String& fvvar, const boost::shared_ptr<Expression>& fterm,
+    const DebugInfo& di, const Object::Ptr& scope)
+	: m_TargetType(targetType), m_Name(name), m_Expression(expression), m_Filter(filter), m_FKVar(fkvar),
+	  m_FVVar(fvvar), m_FTerm(fterm), m_DebugInfo(di), m_Scope(scope)
 { }
 
 String ApplyRule::GetTargetType(void) const
@@ -42,14 +44,29 @@ String ApplyRule::GetName(void) const
 	return m_Name;
 }
 
-AExpression::Ptr ApplyRule::GetExpression(void) const
+boost::shared_ptr<Expression> ApplyRule::GetExpression(void) const
 {
 	return m_Expression;
 }
 
-AExpression::Ptr ApplyRule::GetFilter(void) const
+boost::shared_ptr<Expression> ApplyRule::GetFilter(void) const
 {
 	return m_Filter;
+}
+
+String ApplyRule::GetFKVar(void) const
+{
+	return m_FKVar;
+}
+
+String ApplyRule::GetFVVar(void) const
+{
+	return m_FVVar;
+}
+
+boost::shared_ptr<Expression> ApplyRule::GetFTerm(void) const
+{
+	return m_FTerm;
 }
 
 DebugInfo ApplyRule::GetDebugInfo(void) const
@@ -57,24 +74,21 @@ DebugInfo ApplyRule::GetDebugInfo(void) const
 	return m_DebugInfo;
 }
 
-Dictionary::Ptr ApplyRule::GetScope(void) const
+Object::Ptr ApplyRule::GetScope(void) const
 {
 	return m_Scope;
 }
 
 void ApplyRule::AddRule(const String& sourceType, const String& targetType, const String& name,
-    const AExpression::Ptr& expression, const AExpression::Ptr& filter,
-    const DebugInfo& di, const Dictionary::Ptr& scope)
+    const boost::shared_ptr<Expression>& expression, const boost::shared_ptr<Expression>& filter, const String& fkvar,
+    const String& fvvar, const boost::shared_ptr<Expression>& fterm, const DebugInfo& di, const Object::Ptr& scope)
 {
-	m_Rules[sourceType].push_back(ApplyRule(targetType, name, expression, filter, di, scope));
+	m_Rules[sourceType].push_back(ApplyRule(targetType, name, expression, filter, fkvar, fvvar, fterm, di, scope));
 }
 
-bool ApplyRule::EvaluateFilter(const Dictionary::Ptr& scope) const
+bool ApplyRule::EvaluateFilter(const Object::Ptr& scope) const
 {
-	scope->Set("__parent", m_Scope);
-	bool result = m_Filter->Evaluate(scope);
-	scope->Remove("__parent");
-	return result;
+	return m_Filter->Evaluate(scope).ToBool();
 }
 
 void ApplyRule::EvaluateRules(bool clear)

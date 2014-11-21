@@ -21,11 +21,13 @@
 #define UTILITY_H
 
 #include "base/i2-base.hpp"
-#include "base/qstring.hpp"
+#include "base/string.hpp"
+#include "base/array.hpp"
 #include <typeinfo>
 #include <boost/function.hpp>
 #include <boost/thread/tss.hpp>
 #include <vector>
+#include "base/threadpool.hpp"
 
 namespace icinga
 {
@@ -81,12 +83,14 @@ public:
 	static bool GlobRecursive(const String& path, const String& pattern, const boost::function<void (const String&)>& callback, int type = GlobFile | GlobDirectory);
 	static bool MkDir(const String& path, int flags);
 	static bool MkDirP(const String& path, int flags);
+	static bool SetFileOwnership(const String& file, const String& user, const String& group);
 
-	static void QueueAsyncCallback(const boost::function<void (void)>& callback);
+	static void QueueAsyncCallback(const boost::function<void (void)>& callback, SchedulerPolicy policy = DefaultScheduler);
 
 	static String NaturalJoin(const std::vector<String>& tokens);
+	static String Join(const Array::Ptr& tokens, char separator);
 
-	static String FormatDuration(int duration);
+	static String FormatDuration(double duration);
 	static String FormatDateTime(const char *format, double ts);
 	static String FormatErrorNumber(int code);
 
@@ -127,13 +131,19 @@ public:
 
 	static bool PathExists(const String& path);
 
+	static void CopyFile(const String& source, const String& target);
+
+	static Value LoadJsonFile(const String& path);
+	static void SaveJsonFile(const String& path, const Value& value);
+
 private:
 	Utility(void);
 
 	static boost::thread_specific_ptr<String> m_ThreadName;
 	static boost::thread_specific_ptr<unsigned int> m_RandSeed;
-	static boost::thread_specific_ptr<bool> m_LoadingLibrary;
-	static boost::thread_specific_ptr<std::vector<boost::function<void(void)> > > m_DeferredInitializers;
+
+	static boost::thread_specific_ptr<std::vector<boost::function<void(void)> > >& GetDeferredInitializers(void);
+
 };
 
 }

@@ -22,10 +22,21 @@
 
 #include "config/i2-config.hpp"
 #include "config/typerulelist.hpp"
-#include "config/debuginfo.hpp"
+#include "base/debuginfo.hpp"
 
 namespace icinga
 {
+
+/**
+ * Utilities for type rules.
+ *
+ * @ingroup config
+ */
+class I2_CONFIG_API TypeRuleUtilities
+{
+public:
+	virtual bool ValidateName(const String& type, const String& name, String *hint) const;
+};
 
 /**
  * The allowed type for a type rule.
@@ -58,7 +69,7 @@ public:
 	TypeRuleList::Ptr GetSubRules(void) const;
 
 	bool MatchName(const String& name) const;
-	bool MatchValue(const Value& value, String *hint) const;
+	bool MatchValue(const Value& value, String *hint, const TypeRuleUtilities *utils) const;
 
 private:
 	TypeSpecifier m_Type;

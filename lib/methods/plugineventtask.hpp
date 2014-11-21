@@ -35,12 +35,14 @@ namespace icinga
 class I2_METHODS_API PluginEventTask
 {
 public:
-	static void ScriptFunc(const Checkable::Ptr& service);
+	static void ScriptFunc(const Checkable::Ptr& service,
+            const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros);
 
 private:
 	PluginEventTask(void);
 
-        static void ProcessFinishedHandler(const Checkable::Ptr& checkable, const Value& command, const ProcessResult& pr);
+	static void ProcessFinishedHandler(const Checkable::Ptr& checkable,
+	    const Value& commandLine, const ProcessResult& pr);
 };
 
 }

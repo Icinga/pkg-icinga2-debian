@@ -21,7 +21,7 @@
 #include "config/objectrule.hpp"
 #include "base/dynamictype.hpp"
 #include "base/objectlock.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/context.hpp"
 #include "base/workqueue.hpp"
 #include <boost/foreach.hpp>
@@ -34,10 +34,10 @@ INITIALIZE_ONCE(&UserGroup::RegisterObjectRuleHandler);
 
 void UserGroup::RegisterObjectRuleHandler(void)
 {
-        ObjectRule::RegisterType("UserGroup", &UserGroup::EvaluateObjectRules);
+	ObjectRule::RegisterType("UserGroup", &UserGroup::EvaluateObjectRules);
 }
 
-bool UserGroup::EvaluateObjectRuleOne(const User::Ptr user, const ObjectRule& rule)
+bool UserGroup::EvaluateObjectRuleOne(const User::Ptr& user, const ObjectRule& rule)
 {
 	DebugInfo di = rule.GetDebugInfo();
 
@@ -45,36 +45,34 @@ bool UserGroup::EvaluateObjectRuleOne(const User::Ptr user, const ObjectRule& ru
 	msgbuf << "Evaluating 'object' rule (" << di << ")";
 	CONTEXT(msgbuf.str());
 
-	Dictionary::Ptr locals = make_shared<Dictionary>();
+	Dictionary::Ptr locals = new Dictionary();
+	locals->Set("__parent", rule.GetScope());
 	locals->Set("user", user);
 
 	if (!rule.EvaluateFilter(locals))
 		return false;
 
-	std::ostringstream msgbuf2;
-	msgbuf2 << "Assigning membership for group '" << rule.GetName() << "' to user '" << user->GetName() << "' for rule " << di;
-	Log(LogDebug, "UserGroup", msgbuf2.str());
+	Log(LogDebug, "UserGroup")
+	    << "Assigning membership for group '" << rule.GetName() << "' to user '" << user->GetName() << "' for rule " << di;
 
 	String group_name = rule.GetName();
 	UserGroup::Ptr group = UserGroup::GetByName(group_name);
 
 	if (!group) {
-		Log(LogCritical, "UserGroup", "Invalid membership assignment. Group '" + group_name + "' does not exist.");
+		Log(LogCritical, "UserGroup")
+		    << "Invalid membership assignment. Group '" << group_name << "' does not exist.";
 		return false;
 	}
 
 	/* assign user group membership */
 	group->ResolveGroupMembership(user, true);
 
-	/* update groups attribute for apply */
-	user->AddGroup(group_name);
-
 	return true;
 }
 
 void UserGroup::EvaluateObjectRule(const ObjectRule& rule)
 {
-	BOOST_FOREACH(const User::Ptr& user, DynamicType::GetObjects<User>()) {
+	BOOST_FOREACH(const User::Ptr& user, DynamicType::GetObjectsByType<User>()) {
 		CONTEXT("Evaluating group membership in '" + rule.GetName() + "' for user '" + user->GetName() + "'");
 
 		EvaluateObjectRuleOne(user, rule);
@@ -100,6 +98,8 @@ std::set<User::Ptr> UserGroup::GetMembers(void) const
 
 void UserGroup::AddMember(const User::Ptr& user)
 {
+	user->AddGroup(GetName());
+
 	boost::mutex::scoped_lock lock(m_UserGroupMutex);
 	m_Members.insert(user);
 }
@@ -110,11 +110,12 @@ void UserGroup::RemoveMember(const User::Ptr& user)
 	m_Members.erase(user);
 }
 
-bool UserGroup::ResolveGroupMembership(User::Ptr const& user, bool add, int rstack) {
+bool UserGroup::ResolveGroupMembership(const User::Ptr& user, bool add, int rstack) {
 
 	if (add && rstack > 20) {
-		Log(LogWarning, "UserGroup", "Too many nested groups for group '" + GetName() + "': User '" +
-		    user->GetName() + "' membership assignment failed.");
+		Log(LogWarning, "UserGroup")
+		    << "Too many nested groups for group '" << GetName() << "': User '"
+		    << user->GetName() << "' membership assignment failed.";
 
 		return false;
 	}

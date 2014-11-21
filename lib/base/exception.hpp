@@ -21,9 +21,10 @@
 #define EXCEPTION_H
 
 #include "base/i2-base.hpp"
-#include "base/qstring.hpp"
+#include "base/string.hpp"
 #include "base/stacktrace.hpp"
 #include "base/context.hpp"
+#include "base/utility.hpp"
 #include <sstream>
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/errinfo_errno.hpp>
@@ -38,7 +39,8 @@
 namespace icinga
 {
 
-class I2_BASE_API user_error : virtual public std::exception, virtual public boost::exception { };
+class I2_BASE_API user_error : virtual public std::exception, virtual public boost::exception
+{ };
 
 I2_BASE_API StackTrace *GetLastExceptionStack(void);
 I2_BASE_API void SetLastExceptionStack(const StackTrace& trace);
@@ -96,26 +98,7 @@ typedef boost::error_info<struct errinfo_win32_error_, int> errinfo_win32_error;
 
 inline std::string to_string(const errinfo_win32_error& e)
 {
-	std::ostringstream tmp;
-	int code = e.value();
-
-	char *message;
-	String result = "Unknown error.";
-
-	DWORD rc = FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER |
-		FORMAT_MESSAGE_FROM_SYSTEM, NULL, code, 0, (char *)&message,
-		0, NULL);
-
-	if (rc != 0) {
-		result = String(message);
-		LocalFree(message);
-
-		/* remove trailing new-line characters */
-		boost::algorithm::trim_right(result);
-	}
-
-	tmp << code << ", \"" << result << "\"";
-	return tmp.str();
+	return Utility::FormatErrorNumber(e.value());
 }
 #endif /* _WIN32 */
 

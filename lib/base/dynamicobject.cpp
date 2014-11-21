@@ -21,15 +21,17 @@
 #include "base/dynamictype.hpp"
 #include "base/serializer.hpp"
 #include "base/netstring.hpp"
+#include "base/json.hpp"
 #include "base/stdiostream.hpp"
 #include "base/debug.hpp"
 #include "base/objectlock.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/exception.hpp"
 #include "base/scriptfunction.hpp"
 #include "base/initialize.hpp"
 #include "base/scriptvariable.hpp"
 #include "base/workqueue.hpp"
+#include "base/context.hpp"
 #include <fstream>
 #include <boost/foreach.hpp>
 #include <boost/exception/errinfo_api_function.hpp>
@@ -54,6 +56,16 @@ DynamicType::Ptr DynamicObject::GetType(void) const
 	return DynamicType::GetByName(GetTypeName());
 }
 
+DebugInfo DynamicObject::GetDebugInfo(void) const
+{
+	return m_DebugInfo;
+}
+
+void DynamicObject::SetDebugInfo(const DebugInfo& di)
+{
+	m_DebugInfo = di;
+}
+
 bool DynamicObject::IsActive(void) const
 {
 	return GetActive();
@@ -64,24 +76,24 @@ bool DynamicObject::IsPaused(void) const
 	return GetPaused();
 }
 
-void DynamicObject::SetExtension(const String& key, const Object::Ptr& object)
+void DynamicObject::SetExtension(const String& key, const Value& value)
 {
 	Dictionary::Ptr extensions = GetExtensions();
 
 	if (!extensions) {
-		extensions = make_shared<Dictionary>();
+		extensions = new Dictionary();
 		SetExtensions(extensions);
 	}
 
-	extensions->Set(key, object);
+	extensions->Set(key, value);
 }
 
-Object::Ptr DynamicObject::GetExtension(const String& key)
+Value DynamicObject::GetExtension(const String& key)
 {
 	Dictionary::Ptr extensions = GetExtensions();
 
 	if (!extensions)
-		return Object::Ptr();
+		return Empty;
 
 	return extensions->Get(key);
 }
@@ -101,7 +113,7 @@ void DynamicObject::Register(void)
 	ASSERT(!OwnsLock());
 
 	DynamicType::Ptr dtype = GetType();
-	dtype->RegisterObject(GetSelf());
+	dtype->RegisterObject(this);
 }
 
 void DynamicObject::Start(void)
@@ -114,6 +126,8 @@ void DynamicObject::Start(void)
 
 void DynamicObject::Activate(void)
 {
+	CONTEXT("Activating object '" + GetName() + "' of type '" + GetType()->GetName() + "'");
+
 	ASSERT(!OwnsLock());
 
 	Start();
@@ -126,7 +140,7 @@ void DynamicObject::Activate(void)
 		SetActive(true);
 	}
 
-	OnStarted(GetSelf());
+	OnStarted(this);
 
 	SetAuthority(true);
 }
@@ -141,6 +155,8 @@ void DynamicObject::Stop(void)
 
 void DynamicObject::Deactivate(void)
 {
+	CONTEXT("Deactivating object '" + GetName() + "' of type '" + GetType()->GetName() + "'");
+
 	ASSERT(!OwnsLock());
 
 	SetAuthority(false);
@@ -158,7 +174,7 @@ void DynamicObject::Deactivate(void)
 
 	ASSERT(GetStopCalled());
 
-	OnStopped(GetSelf());
+	OnStopped(this);
 }
 
 void DynamicObject::OnConfigLoaded(void)
@@ -188,13 +204,13 @@ void DynamicObject::SetAuthority(bool authority)
 		Resume();
 		ASSERT(GetResumeCalled());
 		SetPaused(false);
-		OnResumed(GetSelf());
+		OnResumed(this);
 	} else if (!authority && !GetPaused()) {
 		SetPauseCalled(false);
 		Pause();
 		ASSERT(GetPauseCalled());
 		SetPaused(true);
-		OnPaused(GetSelf());
+		OnPaused(this);
 	}
 }
 
@@ -229,7 +245,8 @@ Value DynamicObject::InvokeMethod(const String& method,
 
 void DynamicObject::DumpObjects(const String& filename, int attributeTypes)
 {
-	Log(LogInformation, "DynamicObject", "Dumping program state to file '" + filename + "'");
+	Log(LogInformation, "DynamicObject")
+	    << "Dumping program state to file '" << filename << "'";
 
 	String tempFilename = filename + ".tmp";
 
@@ -239,11 +256,11 @@ void DynamicObject::DumpObjects(const String& filename, int attributeTypes)
 	if (!fp)
 		BOOST_THROW_EXCEPTION(std::runtime_error("Could not open '" + tempFilename + "' file"));
 
-	StdioStream::Ptr sfp = make_shared<StdioStream>(&fp, false);
+	StdioStream::Ptr sfp = new StdioStream(&fp, false);
 
 	BOOST_FOREACH(const DynamicType::Ptr& type, DynamicType::GetTypes()) {
 		BOOST_FOREACH(const DynamicObject::Ptr& object, type->GetObjects()) {
-			Dictionary::Ptr persistentObject = make_shared<Dictionary>();
+			Dictionary::Ptr persistentObject = new Dictionary();
 
 			persistentObject->Set("type", type->GetName());
 			persistentObject->Set("name", object->GetName());
@@ -255,7 +272,7 @@ void DynamicObject::DumpObjects(const String& filename, int attributeTypes)
 
 			persistentObject->Set("update", update);
 
-			String json = JsonSerialize(persistentObject);
+			String json = JsonEncode(persistentObject);
 
 			NetString::WriteStringToStream(sfp, json);
 		}
@@ -279,7 +296,7 @@ void DynamicObject::DumpObjects(const String& filename, int attributeTypes)
 
 void DynamicObject::RestoreObject(const String& message, int attributeTypes)
 {
-	Dictionary::Ptr persistentObject = JsonDeserialize(message);
+	Dictionary::Ptr persistentObject = JsonDecode(message);
 
 	String type = persistentObject->Get("type");
 
@@ -297,21 +314,24 @@ void DynamicObject::RestoreObject(const String& message, int attributeTypes)
 
 	ASSERT(!object->IsActive());
 #ifdef _DEBUG
-	Log(LogDebug, "DynamicObject", "Restoring object '" + name + "' of type '" + type + "'.");
+	Log(LogDebug, "DynamicObject")
+	    << "Restoring object '" << name << "' of type '" << type << "'.";
 #endif /* _DEBUG */
 	Dictionary::Ptr update = persistentObject->Get("update");
 	Deserialize(object, update, false, attributeTypes);
 	object->OnStateLoaded();
+	object->SetStateLoaded(true);
 }
 
 void DynamicObject::RestoreObjects(const String& filename, int attributeTypes)
 {
-	Log(LogInformation, "DynamicObject", "Restoring program state from file '" + filename + "'");
+	Log(LogInformation, "DynamicObject")
+	    << "Restoring program state from file '" << filename << "'";
 
 	std::fstream fp;
 	fp.open(filename.CStr(), std::ios_base::in);
 
-	StdioStream::Ptr sfp = make_shared<StdioStream>(&fp, false);
+	StdioStream::Ptr sfp = new StdioStream (&fp, false);
 
 	unsigned long restored = 0;
 
@@ -327,9 +347,21 @@ void DynamicObject::RestoreObjects(const String& filename, int attributeTypes)
 
 	upq.Join();
 
-	std::ostringstream msgbuf;
-	msgbuf << "Restored " << restored << " objects";
-	Log(LogInformation, "DynamicObject", msgbuf.str());
+	unsigned long no_state = 0;
+
+	BOOST_FOREACH(const DynamicType::Ptr& type, DynamicType::GetTypes()) {
+		BOOST_FOREACH(const DynamicObject::Ptr& object, type->GetObjects()) {
+			if (!object->GetStateLoaded()) {
+				object->OnStateLoaded();
+				object->SetStateLoaded(true);
+
+				no_state++;
+			}
+		}
+	}
+
+	Log(LogInformation, "DynamicObject")
+	    << "Restored " << restored << " objects. Loaded " << no_state << " new objects without state.";
 }
 
 void DynamicObject::StopObjects(void)

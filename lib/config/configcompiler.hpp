@@ -21,7 +21,7 @@
 #define CONFIGCOMPILER_H
 
 #include "config/i2-config.hpp"
-#include "config/debuginfo.hpp"
+#include "base/debuginfo.hpp"
 #include "base/registry.hpp"
 #include "base/initialize.hpp"
 #include "base/singleton.hpp"
@@ -80,10 +80,7 @@ private:
 class I2_CONFIG_API ConfigFragmentRegistry : public Registry<ConfigFragmentRegistry, String>
 {
 public:
-	static inline ConfigFragmentRegistry *GetInstance(void)
-	{
-		return Singleton<ConfigFragmentRegistry>::GetInstance();
-	}
+	static ConfigFragmentRegistry *GetInstance(void);
 };
 
 #define REGISTER_CONFIG_FRAGMENT(id, name, fragment) \

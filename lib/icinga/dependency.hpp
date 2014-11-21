@@ -37,11 +37,11 @@ class ApplyRule;
 class I2_ICINGA_API Dependency : public ObjectImpl<Dependency>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(Dependency);
-	DECLARE_TYPENAME(Dependency);
+	DECLARE_OBJECT(Dependency);
+	DECLARE_OBJECTNAME(Dependency);
 
-	shared_ptr<Checkable> GetParent(void) const;
-	shared_ptr<Checkable> GetChild(void) const;
+	intrusive_ptr<Checkable> GetParent(void) const;
+	intrusive_ptr<Checkable> GetChild(void) const;
 
 	TimePeriod::Ptr GetPeriod(void) const;
 
@@ -60,6 +60,7 @@ private:
 	Checkable::Ptr m_Parent;
 	Checkable::Ptr m_Child;
 
+	static void EvaluateApplyRuleOneInstance(const Checkable::Ptr& checkable, const String& name, const Dictionary::Ptr& locals, const ApplyRule& rule);
 	static bool EvaluateApplyRuleOne(const Checkable::Ptr& checkable, const ApplyRule& rule);
 	static void EvaluateApplyRule(const ApplyRule& rule);
 	static void EvaluateApplyRules(const std::vector<ApplyRule>& rules);

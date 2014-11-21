@@ -41,9 +41,9 @@ class I2_DB_IDO_API DbType : public Object
 public:
 	DECLARE_PTR_TYPEDEFS(DbType);
 
-	typedef boost::function<shared_ptr<DbObject> (const shared_ptr<DbType>&, const String&, const String&)> ObjectFactory;
+	typedef boost::function<intrusive_ptr<DbObject> (const intrusive_ptr<DbType>&, const String&, const String&)> ObjectFactory;
 	typedef std::map<String, DbType::Ptr> TypeMap;
-	typedef std::map<std::pair<String, String>, shared_ptr<DbObject> > ObjectMap;
+	typedef std::map<std::pair<String, String>, intrusive_ptr<DbObject> > ObjectMap;
 
 	DbType(const String& table, long tid, const String& idcolumn, const ObjectFactory& factory);
 
@@ -57,7 +57,7 @@ public:
 	static DbType::Ptr GetByName(const String& name);
 	static DbType::Ptr GetByID(long tid);
 
-	shared_ptr<DbObject> GetOrCreateObjectByName(const String& name1, const String& name2);
+	intrusive_ptr<DbObject> GetOrCreateObjectByName(const String& name1, const String& name2);
 
 	static std::set<DbType::Ptr> GetAllTypes(void);
 
@@ -82,31 +82,7 @@ private:
 class I2_DB_IDO_API DbTypeRegistry : public Registry<DbTypeRegistry, DbType::Ptr>
 {
 public:
-	static inline DbTypeRegistry *GetInstance(void)
-	{
-		return Singleton<DbTypeRegistry>::GetInstance();
-	}
-};
-
-/**
- * Helper class for registering DynamicObject implementation classes.
- *
- * @ingroup ido
- */
-class RegisterDbTypeHelper
-{
-public:
-	RegisterDbTypeHelper(const String& name, const String& table, long tid, const String& idcolumn, const DbType::ObjectFactory& factory)
-	{
-		DbType::Ptr dbtype;
-
-		dbtype = DbType::GetByID(tid);
-
-		if (!dbtype)
-			dbtype = make_shared<DbType>(table, tid, idcolumn, factory);
-
-		DbType::RegisterType(name, dbtype);
-	}
+	static DbTypeRegistry *GetInstance(void);
 };
 
 /**
@@ -115,13 +91,20 @@ public:
  * @ingroup ido
  */
 template<typename T>
-shared_ptr<T> DbObjectFactory(const DbType::Ptr& type, const String& name1, const String& name2)
+intrusive_ptr<T> DbObjectFactory(const DbType::Ptr& type, const String& name1, const String& name2)
 {
-	return make_shared<T>(type, name1, name2);
+	return new T(type, name1, name2);
 }
 
 #define REGISTER_DBTYPE(name, table, tid, idcolumn, type) \
-	I2_EXPORT icinga::RegisterDbTypeHelper g_RegisterDBT_ ## name(#name, table, tid, idcolumn, DbObjectFactory<type>);
+	namespace { namespace UNIQUE_NAME(ido) { namespace ido ## name { \
+		void RegisterDbType(void) \
+		{ \
+			DbType::Ptr dbtype = new DbType(table, tid, idcolumn, DbObjectFactory<type>); \
+			DbType::RegisterType(#name, dbtype); \
+		} \
+		INITIALIZE_ONCE(RegisterDbType); \
+	} } }
 
 }
 

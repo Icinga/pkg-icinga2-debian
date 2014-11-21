@@ -19,6 +19,11 @@
 
 %define revision 1
 
+# make sure that _rundir is working on older systems
+%if ! %{defined _rundir}
+%define _rundir %{_localstatedir}/run
+%endif
+
 %if "%{_vendor}" == "redhat"
 %define apachename httpd
 %define apacheconfdir %{_sysconfdir}/httpd/conf.d
@@ -26,6 +31,9 @@
 %define apachegroup apache
 %if 0%{?el5}%{?el6}
 %define use_systemd 0
+%if %(uname -m) != "x86_64"
+%define march_flag -march=i686
+%endif
 %else
 # fedora and el>=7
 %define use_systemd 1
@@ -56,17 +64,14 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.0.2
+Version: 2.2
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
 Source: https://github.com/Icinga/%{name}/archive/v%{version}.tar.gz
 URL: http://www.icinga.org/
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
-
-Requires: %{name}-bin = %{version}
-#Requires: %{name}-ido-mysql = %{version}
-#Requires: %{icingaweb2name} >= %{icingaweb2version}
+Requires: %{name}-bin = %{version}-%{release}
 
 %description
 Meta package for Icinga 2 Core, DB IDO and Web.
@@ -76,7 +81,9 @@ Summary:      Icinga 2 binaries and libraries
 Group:        Applications/System
 
 %if "%{_vendor}" == "suse"
-PreReq: permissions
+PreReq:        permissions
+Provides:      monitoring_daemon
+Recommends:    monitoring-plugins
 %endif
 BuildRequires: openssl-devel
 BuildRequires: gcc-c++
@@ -98,7 +105,7 @@ BuildRequires: systemd
 Requires: systemd
 %endif
 
-Requires: %{name}-common = %{version}
+Requires: %{name}-common = %{version}-%{release}
 
 %description bin
 Icinga 2 is a general-purpose network monitoring application.
@@ -160,6 +167,9 @@ Group:        Applications/System
 BuildRequires: %{apachename}
 Requires:     %{apachename}
 Requires:     %{name} = %{version}-%{release}
+%if "%{_vendor}" == "suse"
+Recommends:   icinga-www
+%endif
 Provides:     icinga-classicui-config
 Conflicts:    icinga-gui-config
 
@@ -176,10 +186,13 @@ CMAKE_OPTS="-DCMAKE_INSTALL_PREFIX=/usr \
          -DCMAKE_INSTALL_SYSCONFDIR=/etc \
          -DCMAKE_INSTALL_LOCALSTATEDIR=/var \
          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+         -DCMAKE_VERBOSE_MAKEFILE=ON \
+         -DBoost_NO_BOOST_CMAKE=ON \
+         -DICINGA2_RUNDIR=%{_rundir} \
          -DICINGA2_USER=%{icinga_user} \
          -DICINGA2_GROUP=%{icinga_group} \
-         -DICINGA2_COMMAND_USER=%{icinga_user} \
-         -DICINGA2_COMMAND_GROUP=%{icingacmd_group}"
+         -DICINGA2_COMMAND_GROUP=%{icingacmd_group} \
+         -DICINGA2_UNITY_BUILD=TRUE"
 %if "%{_vendor}" == "redhat"
 %if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5"
 # Boost_VERSION 1.41.0 vs 101400 - disable build tests
@@ -203,14 +216,12 @@ CMAKE_OPTS="$CMAKE_OPTS -DICINGA2_PLUGINDIR=%{_prefix}/lib/nagios/plugins"
 CMAKE_OPTS="$CMAKE_OPTS -DUSE_SYSTEMD=ON"
 %endif
 
-cmake $CMAKE_OPTS .
+cmake $CMAKE_OPTS -DCMAKE_C_FLAGS:STRING="%{optflags} %{?march_flag}" -DCMAKE_CXX_FLAGS:STRING="%{optflags} %{?march_flag}" .
 
 make %{?_smp_mflags}
 
-rm -f components/db_ido_*sql/schema/upgrade/.gitignore
 
 %install
-[ "%{buildroot}" != "/" ] && [ -d "%{buildroot}" ] && rm -rf %{buildroot}
 make install \
 	DESTDIR="%{buildroot}"
 
@@ -245,7 +256,7 @@ exit 0
 
 %if "%{_vendor}" == "suse"
 %verifyscript bin
-%verify_permissions -e /var/run/icinga2/cmd
+%verify_permissions -e %{_rundir}/%{name}/cmd
 %endif
 
 
@@ -256,13 +267,11 @@ exit 0
 %endif
 %endif
 
-
-# all restart/feature actions belong to icinga2-bin
-%post bin
+%post common
 # suse
-%if 0%{?suse_version}
+%if "%{_vendor}" == "suse"
 %if 0%{?suse_version} >= 1310
-%set_permissions /var/run/icinga2/cmd
+%set_permissions %{_rundir}/%{name}/cmd
 %endif
 %if 0%{?use_systemd}
 %fillup_only  %{name}
@@ -272,7 +281,9 @@ exit 0
 %endif
 
 # initial installation, enable default features
-%{_sbindir}/icinga2-enable-feature checker notification mainlog
+for feature in checker notification mainlog; do
+	ln -sf ../features-available/${feature}.conf %{_sysconfdir}/%{name}/features-enabled/${feature}.conf
+done
 
 exit 0
 
@@ -288,7 +299,9 @@ exit 0
 if [ ${1:-0} -eq 1 ]
 then
 	# initial installation, enable default features
-	%{_sbindir}/icinga2-enable-feature checker notification mainlog
+	for feature in checker notification mainlog; do
+		ln -sf ../features-available/${feature}.conf %{_sysconfdir}/%{name}/features-enabled/${feature}.conf
+	done
 fi
 
 exit 0
@@ -298,7 +311,7 @@ exit 0
 
 %postun bin
 # suse
-%if 0%{?suse_version}
+%if "%{_vendor}" == "suse"
 %if 0%{?using_systemd}
   %service_del_postun %{name}.service
 %else
@@ -329,7 +342,7 @@ exit 0
 
 %preun bin
 # suse
-%if 0%{?suse_version}
+%if "%{_vendor}" == "suse"
 
 %if 0%{?use_systemd}
   %service_del_preun %{name}.service
@@ -360,7 +373,7 @@ exit 0
 if [ ${1:-0} -eq 1 ]
 then
 	# initial installation, enable ido-mysql feature
-	%{_sbindir}/icinga2-enable-feature ido-mysql
+	ln -sf ../features-available/ido-mysql.conf %{_sysconfdir}/%{name}/features-enabled/ido-mysql.conf
 fi
 
 exit 0
@@ -368,7 +381,7 @@ exit 0
 %postun ido-mysql
 if [ "$1" = "0" ]; then
 	# deinstallation of the package - remove feature
-	test -x %{_sbindir}/icinga2-disable-feature && %{_sbindir}/icinga2-disable-feature ido-mysql
+	rm -f %{_sysconfdir}/%{name}/features-enabled/ido-mysql.conf
 fi
 
 exit 0
@@ -377,7 +390,7 @@ exit 0
 if [ ${1:-0} -eq 1 ]
 then
 	# initial installation, enable ido-pgsql feature
-	%{_sbindir}/icinga2-enable-feature ido-pgsql
+	ln -sf ../features-available/ido-pgsql.conf %{_sysconfdir}/%{name}/features-enabled/ido-pgsql.conf
 fi
 
 exit 0
@@ -385,7 +398,7 @@ exit 0
 %postun ido-pgsql
 if [ "$1" = "0" ]; then
 	# deinstallation of the package - remove feature
-	test -x %{_sbindir}/icinga2-disable-feature && %{_sbindir}/icinga2-disable-feature ido-pgsql
+	rm -f %{_sysconfdir}/%{name}/features-enabled/ido-pgsql.conf
 fi
 
 exit 0
@@ -394,7 +407,9 @@ exit 0
 if [ ${1:-0} -eq 1 ]
 then
         # initial installation, enable features
-        %{_sbindir}/icinga2-enable-feature statusdata compatlog command
+	for feature in statusdata compatlog command; do
+		ln -sf ../features-available/${feature}.conf %{_sysconfdir}/%{name}/features-enabled/${feature}.conf
+	done
 fi
 
 exit 0
@@ -402,9 +417,9 @@ exit 0
 %postun classicui-config
 if [ "$1" = "0" ]; then
         # deinstallation of the package - remove feature
-        test -x %{_sbindir}/icinga2-disable-feature && %{_sbindir}/icinga2-disable-feature statusdata
-        test -x %{_sbindir}/icinga2-disable-feature && %{_sbindir}/icinga2-disable-feature compatlog
-        test -x %{_sbindir}/icinga2-disable-feature && %{_sbindir}/icinga2-disable-feature command
+	for feature in statusdata compatlog command; do
+		rm -f %{_sysconfdir}/%{name}/features-enabled/${feature}.conf
+	done
 fi
 
 exit 0
@@ -416,6 +431,30 @@ exit 0
 %files bin
 %defattr(-,root,root,-)
 %doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
+%{_sbindir}/%{name}
+%{_sbindir}/%{name}-prepare-dirs
+%exclude %{_libdir}/%{name}/libdb_ido_mysql*
+%exclude %{_libdir}/%{name}/libdb_ido_pgsql*
+%{_libdir}/%{name}
+%{_datadir}/%{name}
+%exclude %{_datadir}/%{name}/include
+%{_mandir}/man8/%{name}.8.gz
+
+%attr(0750,%{icinga_user},%{icingacmd_group}) %{_localstatedir}/cache/%{name}
+%attr(0750,%{icinga_user},%{icingacmd_group}) %dir %{_localstatedir}/log/%{name}
+%attr(0750,%{icinga_user},%{icingacmd_group}) %dir %{_localstatedir}/log/%{name}/compat
+%attr(0750,%{icinga_user},%{icingacmd_group}) %dir %{_localstatedir}/log/%{name}/compat/archives
+%attr(0750,%{icinga_user},%{icinga_group}) %{_localstatedir}/lib/%{name}
+
+%attr(0750,%{icinga_user},%{icingacmd_group}) %ghost %{_rundir}/%{name}
+%attr(2750,%{icinga_user},%{icingacmd_group}) %ghost %{_rundir}/%{name}/cmd
+
+%files common
+%defattr(-,root,root,-)
+%doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog tools/syntax
+%attr(0750,%{icinga_user},%{icingacmd_group}) %dir %{_localstatedir}/log/%{name}
+%config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
+%{_sysconfdir}/bash_completion.d/%{name}
 %if 0%{?use_systemd}
 %attr(644,root,root) %{_unitdir}/%{name}.service
 %else
@@ -429,55 +468,23 @@ exit 0
 %endif
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d
-%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d/hosts
-%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d/hosts/localhost
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/features-available
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/features-enabled
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/repository.d
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/scripts
+%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/repository.d
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/zones.d
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/%{name}.conf
+%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/init.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/constants.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/zones.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/conf.d/*.conf
-%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/conf.d/hosts/*.conf
-%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/conf.d/hosts/localhost/*.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/features-available/*.conf
+%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/repository.d/*
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/zones.d/*
 %config(noreplace) %{_sysconfdir}/%{name}/scripts/*
-%{_sbindir}/%{name}
-%{_bindir}/%{name}-build-ca
-%{_bindir}/%{name}-build-key
-%{_bindir}/%{name}-sign-key
-%{_sbindir}/%{name}-enable-feature
-%{_sbindir}/%{name}-disable-feature
 %{_sbindir}/%{name}-prepare-dirs
-%exclude %{_libdir}/%{name}/libdb_ido_mysql*
-%exclude %{_libdir}/%{name}/libdb_ido_pgsql*
-%{_libdir}/%{name}
-%{_datadir}/%{name}
-%exclude %{_datadir}/%{name}/include
-%{_mandir}/man8/%{name}.8.gz
-%{_mandir}/man8/%{name}-enable-feature.8.gz
-%{_mandir}/man8/%{name}-disable-feature.8.gz
-%{_mandir}/man8/%{name}-build-ca.8.gz
-%{_mandir}/man8/%{name}-build-key.8.gz
-%{_mandir}/man8/%{name}-sign-key.8.gz
 %{_mandir}/man8/%{name}-prepare-dirs.8.gz
-
-%attr(0755,%{icinga_user},%{icinga_group}) %{_localstatedir}/cache/%{name}
-%attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}
-%attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}/compat
-%attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}/compat/archives
-%attr(0755,%{icinga_user},%{icinga_group}) %ghost %{_localstatedir}/run/%{name}
-%attr(0750,%{icinga_user},%{icinga_group}) %{_localstatedir}/lib/%{name}
-
-%attr(2755,%{icinga_user},%{icingacmd_group}) %ghost %{_localstatedir}/run/icinga2/cmd
-
-%files common
-%defattr(-,root,root,-)
-%doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog tools/syntax
-%attr(0755,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/log/%{name}
-%config(noreplace) %{_sysconfdir}/logrotate.d/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/perfdata
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/tmp
@@ -491,13 +498,15 @@ exit 0
 
 %files ido-mysql
 %defattr(-,root,root,-)
-%doc components/db_ido_mysql/schema COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
+%doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
 %{_libdir}/%{name}/libdb_ido_mysql*
+%{_datadir}/icinga2-ido-mysql
 
 %files ido-pgsql
 %defattr(-,root,root,-)
-%doc components/db_ido_pgsql/schema COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
+%doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
 %{_libdir}/%{name}/libdb_ido_pgsql*
+%{_datadir}/icinga2-ido-pgsql
 
 %files classicui-config
 %defattr(-,root,root,-)
@@ -505,6 +514,5 @@ exit 0
 %config(noreplace) %{icingaclassicconfdir}/cgi.cfg
 %config(noreplace) %{apacheconfdir}/icinga.conf
 %config(noreplace) %attr(0640,root,%{apachegroup}) %{icingaclassicconfdir}/passwd
-
 
 %changelog

@@ -19,19 +19,29 @@ find_package(BISON 2.3.0 REQUIRED)
 find_package(FLEX 2.5.31 REQUIRED)
 
 bison_target(config_parser config_parser.yy ${CMAKE_CURRENT_BINARY_DIR}/config_parser.cc)
+set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_parser.cc PROPERTY EXCLUDE_UNITY_BUILD TRUE)
+
 flex_target(config_lexer config_lexer.ll ${CMAKE_CURRENT_BINARY_DIR}/config_lexer.cc)
+set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_lexer.cc PROPERTY EXCLUDE_UNITY_BUILD TRUE)
+
 add_flex_bison_dependency(config_lexer config_parser)
 
 mkembedconfig_target(base-type.conf base-type.cpp)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library(config SHARED
-  aexpression.cpp applyrule.cpp base-type.conf base-type.cpp
-  configcompilercontext.cpp configcompiler.cpp configerror.cpp configitembuilder.cpp
+set(config_SOURCES
+  applyrule.cpp base-type.conf base-type.cpp
+  configcompilercontext.cpp configcompiler.cpp configitembuilder.cpp
   configitem.cpp ${FLEX_config_lexer_OUTPUTS} ${BISON_config_parser_OUTPUTS}
-  configtype.cpp debuginfo.cpp objectrule.cpp typerule.cpp typerulelist.cpp
+  configtype.cpp expression.cpp objectrule.cpp typerule.cpp typerulelist.cpp
 )
+
+if(ICINGA2_UNITY_BUILD)
+    mkunity_target(config config_SOURCES)
+endif()
+
+add_library(config SHARED ${config_SOURCES})
 
 target_link_libraries(config ${Boost_LIBRARIES} base) 
 

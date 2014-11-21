@@ -28,6 +28,9 @@ if(NOT CMAKE_BUILD_TYPE)
       FORCE)
 endif()
 
+option(ICINGA2_WITH_MYSQL "MySQL support" ON)
+option(ICINGA2_WITH_PGSQL "PostgreSQL support" ON)
+
 file(STRINGS icinga2.spec VERSION_LINE REGEX "^Version: ")
 string(REPLACE "Version: " "" ICINGA2_VERSION ${VERSION_LINE})
 
@@ -35,11 +38,11 @@ include(GNUInstallDirs)
 
 set(ICINGA2_USER "icinga" CACHE STRING "Icinga 2 user")
 set(ICINGA2_GROUP "icinga" CACHE STRING "Icinga 2 group")
-set(ICINGA2_COMMAND_USER "icinga" CACHE STRING "Icinga 2 command user")
 set(ICINGA2_COMMAND_GROUP "icingacmd" CACHE STRING "Icinga 2 command group")
 set(ICINGA2_RUNDIR "${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/run" CACHE STRING "/run directory")
 set(ICINGA2_PLUGINDIR "/usr/lib/nagios/plugins" CACHE STRING "Path for the check plugins")
 set(ICINGA2_GIT_VERSION_INFO ON CACHE BOOL "Whether to use git describe")
+set(ICINGA2_UNITY_BUILD OFF CACHE BOOL "Whether to perform a unity build")
 
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/COPYING" ICINGA2_LICENSE_GPL)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/COPYING.Exceptions" ICINGA2_LICENSE_ADDITIONS)
@@ -80,20 +83,34 @@ include_directories(${Boost_INCLUDE_DIRS})
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
 
+find_package(YAJL)
+
+if(NOT YAJL_FOUND)
+  include_directories(${icinga2_BINARY_DIR}/third-party/yajl/include)
+  link_directories(${icinga2_BINARY_DIR}/third-party/yajl)
+  set(YAJL_LIBRARIES "yajl")
+endif()
+
 include_directories(
-  ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/lib ${CMAKE_CURRENT_SOURCE_DIR}/components
-  ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/lib ${CMAKE_CURRENT_BINARY_DIR}/components
+  ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/lib
+  ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/lib
 )
 
 #set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 if(APPLE)
   set(CMAKE_INSTALL_NAME_DIR "@executable_path/../lib/icinga2")
+  set(CMAKE_MACOSX_RPATH 0)
 endif(APPLE)
 
 if("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Qunused-arguments -g")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments -g")
+endif()
+
+if("${CMAKE_C_COMPILER_ID}" STREQUAL "SunPro")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mt")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mt -library=stlport4")
 endif()
 
 if("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
@@ -112,13 +129,30 @@ endif()
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/Bin/${CMAKE_BUILD_TYPE} CACHE PATH "Library output path")
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/Bin/${CMAKE_BUILD_TYPE} CACHE PATH "Executable output path")
 
+include(CheckSymbolExists)
 include(CheckFunctionExists)
 include(CheckLibraryExists)
+include(CheckIncludeFileCXX)
+
+check_symbol_exists(__COUNTER__ "" HAVE_COUNTER_MACRO)
+
+if(NOT HAVE_COUNTER_MACRO AND ICINGA2_UNITY_BUILD)
+  message(STATUS "Your C/C++ compiler does not support the __COUNTER__ macro. Disabling unity build.")
+  set(ICINGA2_UNITY_BUILD FALSE)
+endif()
+
+if(NOT MSVC)
+  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -D_DEBUG")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_DEBUG")
+endif()
+
 check_function_exists(vfork HAVE_VFORK)
 check_function_exists(backtrace_symbols HAVE_BACKTRACE_SYMBOLS)
 check_function_exists(pipe2 HAVE_PIPE2)
+check_function_exists(nice HAVE_NICE)
 check_library_exists(dl dladdr "dlfcn.h" HAVE_DLADDR)
 check_library_exists(execinfo backtrace_symbols "" HAVE_LIBEXECINFO)
+check_include_file_cxx(cxxabi.h HAVE_CXXABI_H)
 
 if(HAVE_LIBEXECINFO)
   set(HAVE_BACKTRACE_SYMBOLS TRUE)
@@ -139,14 +173,13 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 add_subdirectory(third-party)
 add_subdirectory(tools)
 add_subdirectory(lib)
-add_subdirectory(components)
 add_subdirectory(icinga-app)
 add_subdirectory(etc)
 add_subdirectory(itl)
 add_subdirectory(doc)
 add_subdirectory(test)
-add_subdirectory(pki)
-add_subdirectory(contrib)
+add_subdirectory(agent)
+add_subdirectory(plugins)
 
 set(CPACK_PACKAGE_NAME "Icinga2")
 set(CPACK_PACKAGE_VENDOR "Icinga Development Team")

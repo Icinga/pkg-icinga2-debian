@@ -19,8 +19,9 @@
 
 #include "base/workqueue.hpp"
 #include "base/utility.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/convert.hpp"
+#include "base/application.hpp"
 #include <boost/bind.hpp>
 #include <boost/foreach.hpp>
 
@@ -32,7 +33,7 @@ WorkQueue::WorkQueue(size_t maxItems)
 	: m_ID(m_NextID++), m_MaxItems(maxItems), m_Stopped(false),
 	  m_Processing(false), m_ExceptionCallback(WorkQueue::DefaultExceptionCallback)
 {
-	m_StatusTimer = make_shared<Timer>();
+	m_StatusTimer = new Timer();
 	m_StatusTimer->SetInterval(10);
 	m_StatusTimer->OnTimerExpired.connect(boost::bind(&WorkQueue::StatusTimerHandler, this));
 	m_StatusTimer->Start();
@@ -124,7 +125,8 @@ void WorkQueue::StatusTimerHandler(void)
 {
 	boost::mutex::scoped_lock lock(m_Mutex);
 
-	Log(LogNotice, "WorkQueue", "#" + Convert::ToString(m_ID) + " items: " + Convert::ToString(m_Items.size()));
+	Log(LogNotice, "WorkQueue")
+	    << "#" << m_ID << " items: " << m_Items.size();
 }
 
 void WorkQueue::WorkerThreadProc(void)
@@ -176,7 +178,7 @@ void WorkQueue::WorkerThreadProc(void)
 }
 
 ParallelWorkQueue::ParallelWorkQueue(void)
-	: m_QueueCount(boost::thread::hardware_concurrency()),
+	: m_QueueCount(Application::GetConcurrency()),
 	  m_Queues(new WorkQueue[m_QueueCount]),
 	  m_Index(0)
 { }

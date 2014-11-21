@@ -24,6 +24,7 @@
 #include "base/dynamictype.hpp"
 #include "base/utility.hpp"
 #include "base/exception.hpp"
+#include "base/convert.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -37,13 +38,13 @@ void Endpoint::OnConfigLoaded(void)
 {
 	DynamicObject::OnConfigLoaded();
 
-	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjects<Zone>()) {
+	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
 		const std::set<Endpoint::Ptr> members = zone->GetEndpoints();
 
 		if (members.empty())
 			continue;
 
-		if (members.find(GetSelf()) != members.end()) {
+		if (members.find(this) != members.end()) {
 			if (m_Zone)
 				BOOST_THROW_EXCEPTION(std::runtime_error("Endpoint '" + GetName() + "' is in more than one zone."));
 
@@ -69,7 +70,7 @@ void Endpoint::AddClient(const ApiClient::Ptr& client)
 	if (was_master != is_master)
 		ApiListener::OnMasterChanged(is_master);
 
-	OnConnected(GetSelf(), client);
+	OnConnected(this, client);
 }
 
 void Endpoint::RemoveClient(const ApiClient::Ptr& client)
@@ -79,6 +80,9 @@ void Endpoint::RemoveClient(const ApiClient::Ptr& client)
 	{
 		boost::mutex::scoped_lock lock(m_ClientsLock);
 		m_Clients.erase(client);
+
+		Log(LogWarning, "ApiListener")
+		    << "Removing API client for endpoint '" << GetName() << "'. " << m_Clients.size() << " API clients left.";
 	}
 
 	bool is_master = ApiListener::GetInstance()->IsMaster();
@@ -86,7 +90,7 @@ void Endpoint::RemoveClient(const ApiClient::Ptr& client)
 	if (was_master != is_master)
 		ApiListener::OnMasterChanged(is_master);
 
-	OnDisconnected(GetSelf(), client);
+	OnDisconnected(this, client);
 }
 
 std::set<ApiClient::Ptr> Endpoint::GetClients(void) const

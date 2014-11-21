@@ -19,19 +19,19 @@
 
 #include "base/object.hpp"
 #include "base/value.hpp"
+#include "base/primitivetype.hpp"
 
 using namespace icinga;
 
-#ifdef _DEBUG
-boost::mutex Object::m_DebugMutex;
-#endif /* _DEBUG */
+REGISTER_PRIMITIVE_TYPE(Object);
 
 /**
  * Default constructor for the Object class.
  */
 Object::Object(void)
+	: m_References(0)
 #ifdef _DEBUG
-	: m_Locked(false)
+	, m_LockOwner(0)
 #endif /* _DEBUG */
 { }
 
@@ -41,16 +41,6 @@ Object::Object(void)
 Object::~Object(void)
 { }
 
-/**
- * Returns a reference-counted pointer to this object.
- *
- * @returns A shared_ptr object that points to this object
- */
-Object::SharedPtrHolder Object::GetSelf(void)
-{
-	return Object::SharedPtrHolder(shared_from_this());
-}
-
 #ifdef _DEBUG
 /**
  * Checks if the calling thread owns the lock on this object.
@@ -59,20 +49,21 @@ Object::SharedPtrHolder Object::GetSelf(void)
  */
 bool Object::OwnsLock(void) const
 {
-	boost::mutex::scoped_lock lock(m_DebugMutex);
+#ifdef _WIN32
+	DWORD tid = InterlockedExchangeAdd(&m_LockOwner, 0);
 
-	return (m_Locked && m_LockOwner == boost::this_thread::get_id());
+	return (tid == GetCurrentThreadId());
+#else /* _WIN32 */
+	pthread_t tid = __sync_fetch_and_add(&m_LockOwner, 0);
+
+	return (tid == pthread_self());
+#endif /* _WIN32 */
 }
 #endif /* _DEBUG */
 
-Object::SharedPtrHolder::operator Value(void) const
+void Object::InflateMutex(void)
 {
-	return m_Object;
-}
-
-const Type *Object::GetReflectionType(void) const
-{
-	return NULL;
+	m_Mutex.Inflate();
 }
 
 void Object::SetField(int, const Value&)

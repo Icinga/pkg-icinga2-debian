@@ -17,6 +17,7 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
+#include "cli/clicommand.hpp"
 #include "config/configcompilercontext.hpp"
 #include "config/configcompiler.hpp"
 #include "config/configitembuilder.hpp"
@@ -28,11 +29,11 @@
 #include "base/convert.hpp"
 #include "base/scriptvariable.hpp"
 #include "base/context.hpp"
+#include "base/console.hpp"
 #include "config.h"
 #include <boost/program_options.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <boost/foreach.hpp>
-#include <iostream>
 
 #ifndef _WIN32
 #	include <sys/types.h>
@@ -43,231 +44,46 @@
 using namespace icinga;
 namespace po = boost::program_options;
 
-static po::variables_map g_AppParams;
-
 #ifdef _WIN32
 SERVICE_STATUS l_SvcStatus;
 SERVICE_STATUS_HANDLE l_SvcStatusHandle;
 #endif /* _WIN32 */
 
-static String LoadAppType(const String& typeSpec)
+static std::vector<String> GetLogLevelCompletionSuggestions(const String& arg)
 {
-	Log(LogInformation, "icinga-app", "Loading application type: " + typeSpec);
+	std::vector<String> result;
+	
+	String debugLevel = "debug";
+	if (debugLevel.Find(arg) == 0)
+		result.push_back(debugLevel);
 
-	String::SizeType index = typeSpec.FindFirstOf('/');
+	String noticeLevel = "notice";
+	if (noticeLevel.Find(arg) == 0)
+		result.push_back(noticeLevel);
 
-	if (index == String::NPos)
-		return typeSpec;
+	String informationLevel = "information";
+	if (informationLevel.Find(arg) == 0)
+		result.push_back(informationLevel);
 
-	String library = typeSpec.SubStr(0, index);
+	String warningLevel = "warning";
+	if (warningLevel.Find(arg) == 0)
+		result.push_back(warningLevel);
 
-	(void) Utility::LoadExtensionLibrary(library);
+	String criticalLevel = "critical";
+	if (criticalLevel.Find(arg) == 0)
+		result.push_back(criticalLevel);
 
-	return typeSpec.SubStr(index + 1);
+	return result;
 }
 
-static void IncludeZoneDirRecursive(const String& path)
+static std::vector<String> GlobalArgumentCompletion(const String& argument, const String& word)
 {
-	String zoneName = Utility::BaseName(path);
-	Utility::GlobRecursive(path, "*.conf", boost::bind(&ConfigCompiler::CompileFile, _1, zoneName), GlobFile);
-}
-
-static void IncludeNonLocalZone(const String& zonePath)
-{
-	String etcPath = Application::GetZonesDir() + "/" + Utility::BaseName(zonePath);
-
-	if (Utility::PathExists(etcPath))
-		return;
-
-	IncludeZoneDirRecursive(zonePath);
-}
-
-static bool LoadConfigFiles(const String& appType)
-{
-	ConfigCompilerContext::GetInstance()->Reset();
-
-	if (g_AppParams.count("config") > 0) {
-		BOOST_FOREACH(const String& configPath, g_AppParams["config"].as<std::vector<std::string> >()) {
-			ConfigCompiler::CompileFile(configPath);
-		}
-	}
-
-	/* Load cluster config files - this should probably be in libremote but
-	* unfortunately moving it there is somewhat non-trivial. */
-	String zonesEtcDir = Application::GetZonesDir();
-	if (!zonesEtcDir.IsEmpty() && Utility::PathExists(zonesEtcDir))
-		Utility::Glob(zonesEtcDir + "/*", &IncludeZoneDirRecursive, GlobDirectory);
-
-	String zonesVarDir = Application::GetLocalStateDir() + "/lib/icinga2/api/zones";
-	if (Utility::PathExists(zonesVarDir))
-		Utility::Glob(zonesVarDir + "/*", &IncludeNonLocalZone, GlobDirectory);
-
-	String name, fragment;
-	BOOST_FOREACH(boost::tie(name, fragment), ConfigFragmentRegistry::GetInstance()->GetItems()) {
-		ConfigCompiler::CompileText(name, fragment);
-	}
-
-	ConfigItemBuilder::Ptr builder = make_shared<ConfigItemBuilder>();
-	builder->SetType(appType);
-	builder->SetName("application");
-	ConfigItem::Ptr item = builder->Compile();
-	item->Register();
-
-	bool result = ConfigItem::ValidateItems();
-
-	int warnings = 0, errors = 0;
-
-	BOOST_FOREACH(const ConfigCompilerMessage& message, ConfigCompilerContext::GetInstance()->GetMessages()) {
-		std::ostringstream locbuf;
-		ShowCodeFragment(locbuf, message.Location, true);
-		String location = locbuf.str();
-
-		String logmsg;
-
-		if (!location.IsEmpty())
-			logmsg = "Location:\n" + location;
-
-		logmsg += String("\nConfig ") + (message.Error ? "error" : "warning") + ": " + message.Text;
-
-		if (message.Error) {
-			Log(LogCritical, "config", logmsg);
-			errors++;
-		} else {
-			Log(LogWarning, "config", logmsg);
-			warnings++;
-		}
-	}
-
-	if (warnings > 0 || errors > 0) {
-		LogSeverity severity;
-
-		if (errors == 0)
-			severity = LogWarning;
-		else
-			severity = LogCritical;
-
-		Log(severity, "config", Convert::ToString(errors) + " errors, " + Convert::ToString(warnings) + " warnings.");
-	}
-
-	if (!result)
-		return false;
-
-	return true;
-}
-
-#ifndef _WIN32
-static void SigHupHandler(int)
-{
-	Application::RequestRestart();
-}
-#endif /* _WIN32 */
-
-static bool Daemonize(void)
-{
-#ifndef _WIN32
-	pid_t pid = fork();
-	if (pid == -1) {
-		return false;
-	}
-
-	if (pid) {
-		// systemd requires that the pidfile of the daemon is written before the forking
-		// process terminates. So wait till either the forked daemon has written a pidfile or died.
-
-		int status;
-		int ret;
-		pid_t readpid;
-		do {
-			Utility::Sleep(0.1);
-
-			readpid = Application::ReadPidFile(Application::GetPidPath());
-			ret = waitpid(pid, &status, WNOHANG);
-		} while (readpid != pid && ret == 0);
-
-		if (ret == pid) {
-			Log(LogCritical, "icinga-app", "The daemon could not be started. See log output for details.");
-			exit(EXIT_FAILURE);
-		} else if (ret == -1) {
-			std::ostringstream msgbuf;
-			msgbuf << "waitpid() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-			Log(LogCritical, "icinga-app",  msgbuf.str());
-			exit(EXIT_FAILURE);
-		}
-
-		exit(0);
-	}
-#endif /* _WIN32 */
-
-	return true;
-}
-
-static bool SetDaemonIO(const String& stderrFile)
-{
-#ifndef _WIN32
-	int fdnull = open("/dev/null", O_RDWR);
-	if (fdnull >= 0) {
-		if (fdnull != 0)
-			dup2(fdnull, 0);
-
-		if (fdnull != 1)
-			dup2(fdnull, 1);
-
-		if (fdnull > 1)
-			close(fdnull);
-	}
-
-	const char *errPath = "/dev/null";
-
-	if (!stderrFile.IsEmpty())
-		errPath = stderrFile.CStr();
-
-	int fderr = open(errPath, O_WRONLY | O_APPEND);
-
-	if (fderr < 0 && errno == ENOENT)
-		fderr = open(errPath, O_CREAT | O_WRONLY | O_APPEND, 0600);
-
-	if (fderr > 0) {
-		if (fderr != 2)
-			dup2(fderr, 2);
-
-		if (fderr > 2)
-			close(fderr);
-	}
-
-	pid_t sid = setsid();
-	if (sid == -1) {
-		return false;
-	}
-#endif
-
-	return true;
-}
-
-/**
- * Terminate another process and wait till it has ended
- *
- * @params target PID of the process to end
- */
-static void TerminateAndWaitForEnd(pid_t target)
-{
-#ifndef _WIN32
-	// allow 30 seconds timeout
-	double timeout = Utility::GetTime() + 30;
-
-	int ret = kill(target, SIGTERM);
-
-	while (Utility::GetTime() < timeout && (ret == 0 || errno != ESRCH)) {
-		Utility::Sleep(0.1);
-		ret = kill(target, 0);
-	}
-
-	// timeout and the process still seems to live: kill it
-	if (ret == 0 || errno != ESRCH)
-		kill(target, SIGKILL);
-
-#else
-	// TODO: implement this for Win32
-#endif /* _WIN32 */
+	if (argument == "include")
+		return GetBashCompletionSuggestions("directory", word);
+	else if (argument == "log-level")
+		return GetLogLevelCompletionSuggestions(word);
+	else
+		return std::vector<String>();
 }
 
 int Main(void)
@@ -275,9 +91,20 @@ int Main(void)
 	int argc = Application::GetArgC();
 	char **argv = Application::GetArgV();
 
+	bool autocomplete = false;
+	int autoindex = 0;
+
+	if (argc >= 4 && strcmp(argv[1], "--autocomplete") == 0) {
+		autocomplete = true;
+		autoindex = Convert::ToLong(argv[2]);
+		argc -= 3;
+		argv += 3;
+	}
+
 	Application::SetStartTime(Utility::GetTime());
 
-	Application::SetResourceLimits();
+	if (!autocomplete)
+		Application::SetResourceLimits();
 
 	/* Set thread title. */
 	Utility::SetThreadName("Main Thread", false);
@@ -327,47 +154,70 @@ int Main(void)
 
 	Application::DeclareZonesDir(Application::GetSysconfDir() + "/icinga2/zones.d");
 	Application::DeclareApplicationType("icinga/IcingaApplication");
+	Application::DeclareRunAsUser(ICINGA_USER);
+	Application::DeclareRunAsGroup(ICINGA_GROUP);
+	Application::DeclareConcurrency(boost::thread::hardware_concurrency());
 
-	po::options_description desc("Supported options");
-	desc.add_options()
-		("help", "show this help message")
+	LogSeverity logLevel = Logger::GetConsoleLogSeverity();
+	Logger::SetConsoleLogSeverity(LogWarning);
+
+	Utility::LoadExtensionLibrary("cli");
+
+	po::options_description visibleDesc("Global options");
+
+	visibleDesc.add_options()
+		("help,h", "show this help message")
 		("version,V", "show version information")
+#ifndef _WIN32
+		("color", "use VT100 color codes even when stdout is not a terminal")
+#endif /* _WIN32 */
+		("define,D", po::value<std::vector<std::string> >(), "define a constant")
 		("library,l", po::value<std::vector<std::string> >(), "load a library")
 		("include,I", po::value<std::vector<std::string> >(), "add include search directory")
-		("define,D", po::value<std::vector<std::string> >(), "define a constant")
-		("config,c", po::value<std::vector<std::string> >(), "parse a configuration file")
-		("no-config,z", "start without a configuration file")
-		("validate,C", "exit after validating the configuration")
-		("log-level,x", po::value<std::string>(), "specify the log level for the console log")
-		("errorlog,e", po::value<std::string>(), "log fatal errors to the specified log file (only works in combination with --daemonize)")
+		("log-level,x", po::value<std::string>(), "specify the log level for the console log");
+
+	po::options_description hiddenDesc("Hidden options");
+
+	hiddenDesc.add_options()
 #ifndef _WIN32
-		("reload-internal", po::value<int>(), "used internally to implement config reload: do not call manually, send SIGHUP instead")
-		("daemonize,d", "detach from the controlling terminal")
-		("user,u", po::value<std::string>(), "user to run Icinga as")
-		("group,g", po::value<std::string>(), "group to run Icinga as")
-#	ifdef RLIMIT_STACK
-		("no-stack-rlimit", "don't attempt to set RLIMIT_STACK")
-#	endif /* RLIMIT_STACK */
+		("no-stack-rlimit", "used internally, do not specify manually")
 #else /* _WIN32 */
-		("scm", "run as a Windows service (must be the first argument if specified)")
-		("scm-install", "installs Icinga 2 as a Windows service (must be the first argument if specified")
-		("scm-uninstall", "uninstalls the Icinga 2 Windows service (must be the first argument if specified")
+		("no-stack-rlimit", "used internally, do not specify manually")
 #endif /* _WIN32 */
-	;
+		("arg", po::value<std::vector<std::string> >(), "positional argument");
+
+	po::positional_options_description positionalDesc;
+	positionalDesc.add("arg", -1);
+
+	String cmdname;
+	CLICommand::Ptr command;
+	po::variables_map vm;
 
 	try {
-		po::store(po::parse_command_line(argc, argv, desc), g_AppParams);
+		CLICommand::ParseCommand(argc, argv, visibleDesc, hiddenDesc, positionalDesc,
+		    vm, cmdname, command, autocomplete);
 	} catch (const std::exception& ex) {
-		std::ostringstream msgbuf;
-		msgbuf << "Error while parsing command-line options: " << ex.what();
-		Log(LogCritical, "icinga-app", msgbuf.str());
+		Log(LogCritical, "icinga-app")
+		    << "Error while parsing command-line options: " << ex.what();
 		return EXIT_FAILURE;
 	}
 
-	po::notify(g_AppParams);
+	String initconfig = Application::GetSysconfDir() + "/icinga2/init.conf";
 
-	if (g_AppParams.count("define")) {
-		BOOST_FOREACH(const String& define, g_AppParams["define"].as<std::vector<std::string> >()) {
+	if (Utility::PathExists(initconfig)) {
+		ConfigCompilerContext::GetInstance()->Reset();
+		ConfigCompiler::CompileFile(initconfig);
+	}
+
+#ifndef _WIN32
+	if (vm.count("color")) {
+		Console::SetType(std::cout, Console_VT100);
+		Console::SetType(std::cerr, Console_VT100);
+	}
+#endif /* _WIN32 */
+
+	if (vm.count("define")) {
+		BOOST_FOREACH(const String& define, vm["define"].as<std::vector<std::string> >()) {
 			String key, value;
 			size_t pos = define.FindFirstOf('=');
 			if (pos != String::NPos) {
@@ -382,221 +232,200 @@ int Main(void)
 	}
 
 	Application::DeclareStatePath(Application::GetLocalStateDir() + "/lib/icinga2/icinga2.state");
+	Application::DeclareObjectsPath(Application::GetLocalStateDir() + "/cache/icinga2/icinga2.debug");
+	Application::DeclareVarsPath(Application::GetLocalStateDir() + "/cache/icinga2/icinga2.vars");
 	Application::DeclarePidPath(Application::GetRunDir() + "/icinga2/icinga2.pid");
-
-#ifndef _WIN32
-	if (g_AppParams.count("group")) {
-		String group = g_AppParams["group"].as<std::string>();
-
-		errno = 0;
-		struct group *gr = getgrnam(group.CStr());
-
-		if (!gr) {
-			if (errno == 0) {
-				std::ostringstream msgbuf;
-				msgbuf << "Invalid group specified: " + group;
-				Log(LogCritical, "icinga-app",  msgbuf.str());
-				return EXIT_FAILURE;
-			} else {
-				std::ostringstream msgbuf;
-				msgbuf << "getgrnam() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-				Log(LogCritical, "icinga-app",  msgbuf.str());
-				return EXIT_FAILURE;
-			}
-		}
-
-		if (!g_AppParams.count("reload-internal") && setgroups(0, NULL) < 0) {
-			std::ostringstream msgbuf;
-			msgbuf << "setgroups() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-			Log(LogCritical, "icinga-app",  msgbuf.str());
-			return EXIT_FAILURE;
-		}
-
-		if (setgid(gr->gr_gid) < 0) {
-			std::ostringstream msgbuf;
-			msgbuf << "setgid() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-			Log(LogCritical, "icinga-app",  msgbuf.str());
-			return EXIT_FAILURE;
-		}
-	}
-
-	if (g_AppParams.count("user")) {
-		String user = g_AppParams["user"].as<std::string>();
-
-		errno = 0;
-		struct passwd *pw = getpwnam(user.CStr());
-
-		if (!pw) {
-			if (errno == 0) {
-				std::ostringstream msgbuf;
-				msgbuf << "Invalid user specified: " + user;
-				Log(LogCritical, "icinga-app",  msgbuf.str());
-				return EXIT_FAILURE;
-			} else {
-				std::ostringstream msgbuf;
-				msgbuf << "getpwnam() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-				Log(LogCritical, "icinga-app",  msgbuf.str());
-				return EXIT_FAILURE;
-			}
-		}
-
-		// also activate the additional groups the configured user is member of
-		if (!g_AppParams.count("reload-internal") && initgroups(user.CStr(), pw->pw_gid) < 0) {
-			std::ostringstream msgbuf;
-			msgbuf << "initgroups() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-			Log(LogCritical, "icinga-app",  msgbuf.str());
-			return EXIT_FAILURE;
-		}
-
-		if (setuid(pw->pw_uid) < 0) {
-			std::ostringstream msgbuf;
-			msgbuf << "setuid() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-			Log(LogCritical, "icinga-app",  msgbuf.str());
-			return EXIT_FAILURE;
-		}
-	}
-#endif /* _WIN32 */
-
-	if (g_AppParams.count("log-level")) {
-		String severity = g_AppParams["log-level"].as<std::string>();
-
-		LogSeverity logLevel = LogInformation;
-		try {
-			logLevel = Logger::StringToSeverity(severity);
-		} catch (std::exception&) {
-			/* use the default */
-			Log(LogWarning, "icinga", "Invalid log level set. Using default 'information'.");
-		}
-
-		Logger::SetConsoleLogSeverity(logLevel);
-	}
-
-	if (g_AppParams.count("help") || g_AppParams.count("version")) {
-		String appName = Utility::BaseName(argv[0]);
-
-		if (appName.GetLength() > 3 && appName.SubStr(0, 3) == "lt-")
-			appName = appName.SubStr(3, appName.GetLength() - 3);
-
-		std::cout << appName << " " << "- The Icinga 2 network monitoring daemon.";
-
-		if (g_AppParams.count("version")) {
-			std::cout << " (Version: " << Application::GetVersion() << ")";
-			std::cout << std::endl
-				<< "Copyright (c) 2012-2014 Icinga Development Team (http://www.icinga.org)" << std::endl
-				<< "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl2.html>" << std::endl
-				<< "This is free software: you are free to change and redistribute it." << std::endl
-				<< "There is NO WARRANTY, to the extent permitted by law.";
-		}
-
-		std::cout << std::endl;
-
-		if (g_AppParams.count("version")) {
-			std::cout << std::endl;
-
-			Application::DisplayInfoMessage(true);
-
-			return EXIT_SUCCESS;
-		}
-	}
-
-	if (g_AppParams.count("help")) {
-		std::cout << std::endl
-			<< desc << std::endl
-			<< "Report bugs at <https://dev.icinga.org/>" << std::endl
-			<< "Icinga home page: <http://www.icinga.org/>" << std::endl;
-		return EXIT_SUCCESS;
-	}
-
-	ScriptVariable::Set("UseVfork", true, false, true);
-
-	Application::MakeVariablesConstant();
-
-	Log(LogInformation, "icinga-app", "Icinga application loader (version: " + Application::GetVersion() + ")");
-
-	String appType = LoadAppType(Application::GetApplicationType());
-
-	if (g_AppParams.count("library")) {
-		BOOST_FOREACH(const String& libraryName, g_AppParams["library"].as<std::vector<std::string> >()) {
-			(void)Utility::LoadExtensionLibrary(libraryName);
-		}
-	}
 
 	ConfigCompiler::AddIncludeSearchDir(Application::GetIncludeConfDir());
 
-	if (g_AppParams.count("include")) {
-		BOOST_FOREACH(const String& includePath, g_AppParams["include"].as<std::vector<std::string> >()) {
+	if (!autocomplete && vm.count("include")) {
+		BOOST_FOREACH(const String& includePath, vm["include"].as<std::vector<std::string> >()) {
 			ConfigCompiler::AddIncludeSearchDir(includePath);
 		}
 	}
 
-	if (g_AppParams.count("no-config") == 0 && g_AppParams.count("config") == 0) {
-		Log(LogCritical, "icinga-app", "You need to specify at least one config file (using the --config option).");
+	if (!autocomplete) {
+		Logger::SetConsoleLogSeverity(logLevel);
 
-		return EXIT_FAILURE;
-	}
+		if (vm.count("log-level")) {
+			String severity = vm["log-level"].as<std::string>();
 
-	if (!g_AppParams.count("validate") && !g_AppParams.count("reload-internal")) {
-		pid_t runningpid = Application::ReadPidFile(Application::GetPidPath());
-		if (runningpid > 0) {
-			Log(LogCritical, "icinga-app", "Another instance of Icinga already running with PID " + Convert::ToString(runningpid));
-			return EXIT_FAILURE;
-		}
-	}
-
-	if (!LoadConfigFiles(appType))
-		return EXIT_FAILURE;
-
-	if (g_AppParams.count("validate")) {
-		Log(LogInformation, "icinga-app", "Finished validating the configuration file(s).");
-		return EXIT_SUCCESS;
-	}
-
-	if(g_AppParams.count("reload-internal")) {
-		int parentpid = g_AppParams["reload-internal"].as<int>();
-		Log(LogInformation, "icinga-app", "Terminating previous instance of Icinga (PID " + Convert::ToString(parentpid) + ")");
-		TerminateAndWaitForEnd(parentpid);
-		Log(LogInformation, "icinga-app", "Previous instance has ended, taking over now.");
-	}
-
-	if (g_AppParams.count("daemonize")) {
-		if (!g_AppParams.count("reload-internal")) {
-			// no additional fork neccessary on reload
+			LogSeverity logLevel = LogInformation;
 			try {
-				Daemonize();
+				logLevel = Logger::StringToSeverity(severity);
 			} catch (std::exception&) {
-				Log(LogCritical, "icinga-app", "Daemonize failed. Exiting.");
-				return EXIT_FAILURE;
+				/* use the default */
+				Log(LogWarning, "icinga", "Invalid log level set. Using default 'information'.");
+			}
+
+			Logger::SetConsoleLogSeverity(logLevel);
+		}
+
+		if (vm.count("library")) {
+			BOOST_FOREACH(const String& libraryName, vm["library"].as<std::vector<std::string> >()) {
+				(void)Utility::LoadExtensionLibrary(libraryName);
 			}
 		}
+
+		if (!command || vm.count("help") || vm.count("version")) {
+			String appName = Utility::BaseName(Application::GetArgV()[0]);
+
+			if (appName.GetLength() > 3 && appName.SubStr(0, 3) == "lt-")
+				appName = appName.SubStr(3, appName.GetLength() - 3);
+
+			std::cout << appName << " " << "- The Icinga 2 network monitoring daemon (version: "
+			    << Application::GetVersion()
+#ifdef _DEBUG
+			    << "; debug"
+#endif /* _DEBUG */
+			    << ")" << std::endl << std::endl;
+
+			if (!command || vm.count("help")) {
+				std::cout << "Usage:" << std::endl
+				    << "  " << argv[0] << " ";
+
+				if (cmdname.IsEmpty())
+					std::cout << "<command>";
+				else
+					std::cout << cmdname;
+
+				std::cout << " [<arguments>]" << std::endl;
+
+				if (command) {
+					std::cout << std::endl
+						  << command->GetDescription() << std::endl;
+				}
+			}
+
+			if (vm.count("version")) {
+				std::cout << "Copyright (c) 2012-2014 Icinga Development Team (http://www.icinga.org)" << std::endl
+					<< "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl2.html>" << std::endl
+					<< "This is free software: you are free to change and redistribute it." << std::endl
+					<< "There is NO WARRANTY, to the extent permitted by law.";
+			}
+
+			std::cout << std::endl;
+
+			if (vm.count("version")) {
+				std::cout << std::endl;
+
+				Application::DisplayInfoMessage(true);
+
+				return EXIT_SUCCESS;
+			}
+		}
+
+		if (!command || vm.count("help")) {
+			if (!command)
+				CLICommand::ShowCommands(argc, argv, NULL);
+
+			std::cout << visibleDesc << std::endl
+				<< "Report bugs at <https://dev.icinga.org/>" << std::endl
+				<< "Icinga home page: <http://www.icinga.org/>" << std::endl;
+			return EXIT_SUCCESS;
+		}
 	}
 
-	// activate config only after daemonization: it starts threads and that is not compatible with fork()
-	if (!ConfigItem::ActivateItems()) {
-		Log(LogCritical, "icinga-app", "Error activating configuration.");
-		return EXIT_FAILURE;
-	}
+	int rc = 1;
 
-	if (g_AppParams.count("daemonize")) {
-		String errorLog;
-		if (g_AppParams.count("errorlog"))
-			errorLog = g_AppParams["errorlog"].as<std::string>();
-
-		SetDaemonIO(errorLog);
-		Logger::DisableConsoleLog();
-	}
-	
+	if (autocomplete) {
+		CLICommand::ShowCommands(argc, argv, &visibleDesc, &hiddenDesc,
+		    &GlobalArgumentCompletion, true, autoindex);
+		rc = 0;
+	} else if (command) {
+		Logger::DisableTimestamp(true);
 #ifndef _WIN32
-	struct sigaction sa;
-	memset(&sa, 0, sizeof(sa));
-	sa.sa_handler = &SigHupHandler;
-	sigaction(SIGHUP, &sa, NULL);
+		if (command->GetImpersonationLevel() == ImpersonateRoot) {
+			if (getuid() != 0) {
+				Log(LogCritical, "cli", "This command must be run as root.");
+				return 0;
+			}
+		} else if (command && command->GetImpersonationLevel() == ImpersonateIcinga) {
+			String group = Application::GetRunAsGroup();
+	
+			errno = 0;
+			struct group *gr = getgrnam(group.CStr());
+	
+			if (!gr) {
+				if (errno == 0) {
+					Log(LogCritical, "cli")
+					    << "Invalid group specified: " << group;
+					return EXIT_FAILURE;
+				} else {
+					Log(LogCritical, "cli")
+					    << "getgrnam() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+					return EXIT_FAILURE;
+				}
+			}
+	
+			if (getgid() != gr->gr_gid) {
+				if (!vm.count("reload-internal") && setgroups(0, NULL) < 0) {
+					Log(LogCritical, "cli")
+					    << "setgroups() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+					return EXIT_FAILURE;
+				}
+	
+				if (setgid(gr->gr_gid) < 0) {
+					Log(LogCritical, "cli")
+					    << "setgid() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+					return EXIT_FAILURE;
+				}
+			}
+	
+			String user = Application::GetRunAsUser();
+	
+			errno = 0;
+			struct passwd *pw = getpwnam(user.CStr());
+	
+			if (!pw) {
+				if (errno == 0) {
+					Log(LogCritical, "cli")
+					    << "Invalid user specified: " << user;
+					return EXIT_FAILURE;
+				} else {
+					Log(LogCritical, "cli")
+					    << "getpwnam() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+					return EXIT_FAILURE;
+				}
+			}
+	
+			// also activate the additional groups the configured user is member of
+			if (getuid() != pw->pw_uid) {
+				if (!vm.count("reload-internal") && initgroups(user.CStr(), pw->pw_gid) < 0) {
+					Log(LogCritical, "cli")
+					    << "initgroups() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+					return EXIT_FAILURE;
+				}
+	
+				if (setuid(pw->pw_uid) < 0) {
+					Log(LogCritical, "cli")
+					    << "setuid() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+					return EXIT_FAILURE;
+				}
+			}
+		}
 #endif /* _WIN32 */
 
-	int rc = Application::GetInstance()->Run();
+		std::vector<std::string> args;
+		if (vm.count("arg"))
+			args = vm["arg"].as<std::vector<std::string> >();
 
-#ifndef _DEBUG
-	Application::Exit(rc);
-#endif /* _DEBUG */
+		if (args.size() < command->GetMinArguments()) {
+			Log(LogCritical, "cli")
+			    << "Too few arguments. Command needs at least " << command->GetMinArguments()
+			    << " argument" << (command->GetMinArguments() != 1 ? "s" : "") << ".";
+			return EXIT_FAILURE;
+		}
+
+		if (command->GetMaxArguments() >= 0 && args.size() > command->GetMaxArguments()) {
+			Log(LogCritical, "cli")
+			    << "Too many arguments. At most " << command->GetMaxArguments()
+			    << " argument" << (command->GetMaxArguments() != 1 ? "s" : "") << " may be specified.";
+			return EXIT_FAILURE;
+		}
+
+		rc = command->Run(vm, args);
+	}
 
 	return rc;
 }
@@ -753,6 +582,8 @@ VOID WINAPI ServiceMain(DWORD argc, LPSTR *argv)
 	int rc = Main();
 
 	ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, rc);
+
+	Application::Exit(rc);
 }
 #endif /* _WIN32 */
 
