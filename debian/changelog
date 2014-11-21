@@ -1,4 +1,10 @@
-icinga2 (2.2.0-1~ppa1~trusty2) trusty; urgency=medium
+icinga2 (2.2.0-1~ppa1~lucid3) lucid; urgency=medium
+
+  * Fix multi-arch path 
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 15:54:36 +0100
+
+icinga2 (2.2.0-1~ppa1~lucid2) lucid; urgency=medium
 
   * no systemd for ubuntu 
 
