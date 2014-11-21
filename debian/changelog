@@ -1,3 +1,15 @@
+icinga2 (2.2.0-1~debmon70+3) debmon-wheezy; urgency=medium
+
+  * lower dpkg pre-depends version
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 23:28:58 +0100
+
+icinga2 (2.2.0-1~debmon70+2) debmon-wheezy; urgency=medium
+
+  * Remove systemd related stuff 
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 16:24:41 +0100
+
 icinga2 (2.2.0-1~debmon70+1) debmon-wheezy; urgency=medium
 
   * Rebuild for debmon-wheezy.
