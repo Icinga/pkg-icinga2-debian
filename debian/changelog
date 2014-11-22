@@ -1,3 +1,11 @@
+icinga2 (2.2.0-2) unstable; urgency=medium
+
+  * [cf28c7d] Fix indentation in apache config
+  * [d608338] Lower needed dpkg version in pre-depends
+  * [b42c495] Let icinga2-common depend on icinga2-bin (Closes: #770534)
+
+ -- Alexander Wirt <formorer@debian.org>  Sat, 22 Nov 2014 13:29:20 +0100
+
 icinga2 (2.2.0-1) unstable; urgency=medium
 
   [ Jan Wagner ]
