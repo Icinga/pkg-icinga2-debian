@@ -21,9 +21,12 @@
 #include "cli/nodeutility.hpp"
 #include "cli/repositoryutility.hpp"
 #include "base/logger.hpp"
+#include "base/console.hpp"
 #include "base/application.hpp"
-#include "base/objectlock.hpp"
+#include "base/tlsutility.hpp"
+#include "base/scriptvariable.hpp"
 #include "base/json.hpp"
+#include "base/objectlock.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -325,7 +328,7 @@ int NodeUpdateConfigCommand::Run(const boost::program_options::variables_map& vm
 
 				if (old_host == "localhost") {
 					Log(LogWarning, "cli")
-					    << "Ignoring host '" << old_host << "'. Please make sure to configure a unique name on your node '" << old_node << "'.";
+					    << "Ignoring host '" << old_host << "'. Please make sure to configure a unique name on your node '" << old_node_name << "'.";
 					continue;
 				}
 
@@ -383,6 +386,7 @@ int NodeUpdateConfigCommand::Run(const boost::program_options::variables_map& vm
 	RepositoryUtility::CommitChangeLog();
 
 	/* store the new inventory for next run */
+	NodeUtility::CreateRepositoryPath();
 	Utility::SaveJsonFile(inventory_path, inventory);
 
 	std::cout << "Make sure to reload Icinga 2 for these changes to take effect." << std::endl;
