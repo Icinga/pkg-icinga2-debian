@@ -3,6 +3,14 @@
 
 set -e
 
+is_fresh_install()
+{
+    if [ -z "$2" ] ; then
+        return 0
+    fi
+    return 1
+}
+
 enable_default_features() {
     FIX_VERSION="0.0.5+icingasnap201312070000"
     if is_fresh_install $@ \
