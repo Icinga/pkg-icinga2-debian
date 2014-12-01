@@ -78,7 +78,7 @@ case "$1" in
         elif [ "$COMMON_STATE" = "installed" ] || [ "$COMMON_STATE" = "unpacked" ] ; then
             a2enmod cgi
             # create symlink if not existing
-            [ -f /etc/apache2/conf.d/icinga2-classicui.conf ] || ln -vs $en/apache2.conf /etc/apache2/conf.d/icinga2-classicui.conf
+            [ -e /etc/apache2/conf.d/icinga2-classicui.conf ] || ln -vs $en/apache2.conf /etc/apache2/conf.d/icinga2-classicui.conf
 
             # reload webserver
             [ -x $(which invoke-rc.d) ] && invoke-rc.d apache2 reload
