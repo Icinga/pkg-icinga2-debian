@@ -1,32 +1,32 @@
-icinga2 (2.2.0-1~ppa1~vivid6) vivid; urgency=medium
-
-  * lower dpkg version in pre-depends
-
- -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 23:40:05 +0100
-
-icinga2 (2.2.0-1~ppa1~trusty5) trusty; urgency=medium
-
-  * Rebuild for trusty 
-
- -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 16:18:44 +0100
-
-icinga2 (2.2.0-1~ppa1~vivid3) vivid; urgency=medium
-
-  * remove unused systemd files 
-
- -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 16:10:39 +0100
-
-icinga2 (2.2.0-1~ppa1~vivid2) vivid; urgency=medium
-
-  * No systemd for ubuntu  
-
- -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 15:39:26 +0100
-
-icinga2 (2.2.0-1~ppa1~trusty1) trusty; urgency=medium
+icinga2 (2.2.1-1~ppa1~trusty1) trusty; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
- -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 15:35:04 +0100
+ -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+
+icinga2 (2.2.1-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [e73d057] Links are tested with -L
+  * [d605522] Just to be safe, use -e to check for the old apache configfile.
+    (Closes: #770743)
+  * [05f8f54] Move enable-feature to icinga2-bin (Closes: #770534)
+  * [c6fd841] Imported Upstream version 2.2.1
+  * [1135583] Add is_fresh_install to icinga2-bin postinst
+  * [1deb08b] icinga2-prepare-dirs was renamed to prepare-dirs
+
+  [ Gunnar Beutner ]
+  * [c3d13b5] Fix support for Apache 2.4
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 20:48:59 +0100
+
+icinga2 (2.2.0-2) unstable; urgency=medium
+
+  * [cf28c7d] Fix indentation in apache config
+  * [d608338] Lower needed dpkg version in pre-depends
+  * [b42c495] Let icinga2-common depend on icinga2-bin (Closes: #770534)
+
+ -- Alexander Wirt <formorer@debian.org>  Sat, 22 Nov 2014 13:29:20 +0100
 
 icinga2 (2.2.0-1) unstable; urgency=medium
 

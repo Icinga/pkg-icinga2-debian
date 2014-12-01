@@ -64,7 +64,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.2
+Version: 2.2.1
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
@@ -84,6 +84,9 @@ Group:        Applications/System
 PreReq:        permissions
 Provides:      monitoring_daemon
 Recommends:    monitoring-plugins
+%if 0%{?suse_version} >= 1310
+BuildRequires: libyajl-devel
+%endif
 %endif
 BuildRequires: openssl-devel
 BuildRequires: gcc-c++
@@ -252,19 +255,17 @@ mv "%{buildroot}%{_sysconfdir}/sysconfig/%{name}" "%{buildroot}%{_localstatedir}
 getent group %{icinga_group} >/dev/null || %{_sbindir}/groupadd -r %{icinga_group}
 getent group %{icingacmd_group} >/dev/null || %{_sbindir}/groupadd -r %{icingacmd_group}
 getent passwd %{icinga_user} >/dev/null || %{_sbindir}/useradd -c "icinga" -s /sbin/nologin -r -d %{_localstatedir}/spool/%{name} -G %{icingacmd_group} -g %{icinga_group} %{icinga_user}
+
+%if "%{_vendor}" == "suse"
+%if 0%{?use_systemd}
+  %service_add_pre %{name}.service
+%endif
+%endif
 exit 0
 
 %if "%{_vendor}" == "suse"
 %verifyscript bin
 %verify_permissions -e %{_rundir}/%{name}/cmd
-%endif
-
-
-%if "%{_vendor}" == "suse"
-%if 0%{?use_systemd}
-%pre bin
-  %service_add_pre %{name}.service
-%endif
 %endif
 
 %post common
@@ -309,7 +310,7 @@ exit 0
 %endif
 # suse/rhel
 
-%postun bin
+%postun common
 # suse
 %if "%{_vendor}" == "suse"
 %if 0%{?using_systemd}
@@ -340,7 +341,7 @@ fi
 
 exit 0
 
-%preun bin
+%preun common
 # suse
 %if "%{_vendor}" == "suse"
 
@@ -432,7 +433,6 @@ exit 0
 %defattr(-,root,root,-)
 %doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
 %{_sbindir}/%{name}
-%{_sbindir}/%{name}-prepare-dirs
 %exclude %{_libdir}/%{name}/libdb_ido_mysql*
 %exclude %{_libdir}/%{name}/libdb_ido_pgsql*
 %{_libdir}/%{name}
@@ -483,8 +483,7 @@ exit 0
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/repository.d/*
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/zones.d/*
 %config(noreplace) %{_sysconfdir}/%{name}/scripts/*
-%{_sbindir}/%{name}-prepare-dirs
-%{_mandir}/man8/%{name}-prepare-dirs.8.gz
+/usr/lib/icinga2/prepare-dirs
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/perfdata
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/tmp
