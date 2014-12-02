@@ -1,3 +1,9 @@
+icinga2 (2.2.1-1~ppa1~saucy2) saucy; urgency=medium
+
+  * Don't install prepare-dirs 
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 02 Dec 2014 08:30:40 +0100
+
 icinga2 (2.2.1-1~ppa1~saucy1) saucy; urgency=medium
 
   * Rebuild for my ubuntu ppa
