@@ -1,8 +1,22 @@
-icinga2 (2.2.1-1~debmon70+1) debmon-wheezy; urgency=medium
+icinga2 (2.2.2-1~debmon70+1) debmon-wheezy; urgency=medium
 
   * Rebuild for debmon-wheezy.
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 18 Sep 2014 08:12:04 +0200
+
+icinga2 (2.2.2-1) unstable; urgency=medium
+
+  * [89b506f] Imported Upstream version 2.2.2
+  * [b04381a] Let icinga2-classicui depend on icinga2-bin (Closes: #770534)
+  * [8928097] Add dutch debconf translation (Closes: #766173)
+  * [7973e4e] Remove unsupported options from default file
+  * [d8e832f] Also install upgrade files to /usr/share
+  * [3b08f9d] Remove obsolete configuration option
+  * [adde104] Fix intendation in rules file
+  * [bb53657] python-icinga2 is no more, cleanup copyright and gitignore file
+  * [a1478f3] Remove some debug from icinga2-classicui.postinst
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 18 Dec 2014 13:11:04 +0100
 
 icinga2 (2.2.1-1) unstable; urgency=medium
 

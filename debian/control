@@ -133,6 +133,7 @@ Architecture: all
 Pre-Depends: dpkg (>= 1.15.7.2)
 Depends: apache2-utils,
          icinga-cgi-bin (>= 1.11.5~),
+         icinga2-bin (>= 2.2.0~),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
 Recommends: apache2 | httpd
