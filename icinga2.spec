@@ -24,6 +24,8 @@
 %define _rundir %{_localstatedir}/run
 %endif
 
+%define _libexecdir %{_prefix}/lib/
+
 %if "%{_vendor}" == "redhat"
 %define apachename httpd
 %define apacheconfdir %{_sysconfdir}/httpd/conf.d
@@ -64,7 +66,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.2.1
+Version: 2.2.2
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
@@ -97,10 +99,15 @@ BuildRequires: bison
 BuildRequires: make
 
 %if "%{_vendor}" == "redhat" && (0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5")
-# el5 requires EPEL
-BuildRequires: boost141-devel
+# el5 requires packages.icinga.org
+BuildRequires: boost153-devel
+%else
+%if "%{_vendor}" == "suse" && 0%{?suse_version} < 1310
+# sles 11 sp3 requires packages.icinga.org
+BuildRequires: boost153-devel
 %else
 BuildRequires: boost-devel >= 1.41
+%endif
 %endif
 
 %if 0%{?use_systemd}
@@ -150,7 +157,7 @@ Requires: %{name} = %{version}-%{release}
 
 %description ido-mysql
 Icinga 2 IDO mysql database backend. Compatible with Icinga 1.x
-IDOUtils schema >= 1.10
+IDOUtils schema >= 1.12
 
 
 %package ido-pgsql
@@ -161,7 +168,7 @@ Requires: %{name} = %{version}-%{release}
 
 %description ido-pgsql
 Icinga 2 IDO PostgreSQL database backend. Compatible with Icinga 1.x
-IDOUtils schema >= 1.10
+IDOUtils schema >= 1.12
 
 
 %package classicui-config
@@ -200,9 +207,9 @@ CMAKE_OPTS="-DCMAKE_INSTALL_PREFIX=/usr \
 %if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5"
 # Boost_VERSION 1.41.0 vs 101400 - disable build tests
 # details in https://dev.icinga.org/issues/5033
-CMAKE_OPTS="$CMAKE_OPTS -DBOOST_LIBRARYDIR=/usr/lib/boost141 \
- -DBOOST_INCLUDEDIR=/usr/include/boost141 \
- -DBoost_ADDITIONAL_VERSIONS='1.41;1.41.0' \
+CMAKE_OPTS="$CMAKE_OPTS -DBOOST_LIBRARYDIR=/usr/lib/boost153 \
+ -DBOOST_INCLUDEDIR=/usr/include/boost153 \
+ -DBoost_ADDITIONAL_VERSIONS='1.53;1.53.0' \
  -DBoost_NO_SYSTEM_PATHS=TRUE \
  -DBUILD_TESTING=FALSE \
  -DBoost_NO_BOOST_CMAKE=TRUE"
@@ -212,6 +219,14 @@ CMAKE_OPTS="$CMAKE_OPTS -DBOOST_LIBRARYDIR=/usr/lib/boost141 \
 %if "%{_vendor}" != "suse"
 CMAKE_OPTS="$CMAKE_OPTS -DICINGA2_PLUGINDIR=%{_libdir}/nagios/plugins"
 %else
+%if 0%{?suse_version} < 1310
+CMAKE_OPTS="$CMAKE_OPTS -DBOOST_LIBRARYDIR=/usr/lib/boost153 \
+ -DBOOST_INCLUDEDIR=/usr/include/boost153 \
+ -DBoost_ADDITIONAL_VERSIONS='1.53;1.53.0' \
+ -DBoost_NO_SYSTEM_PATHS=TRUE \
+ -DBUILD_TESTING=FALSE \
+ -DBoost_NO_BOOST_CMAKE=TRUE"
+%endif
 CMAKE_OPTS="$CMAKE_OPTS -DICINGA2_PLUGINDIR=%{_prefix}/lib/nagios/plugins"
 %endif
 
@@ -266,14 +281,16 @@ exit 0
 %if "%{_vendor}" == "suse"
 %verifyscript bin
 %verify_permissions -e %{_rundir}/%{name}/cmd
+
+%if 0%{?suse_version} >= 1310
+%post bin
+%set_permissions %{_rundir}/%{name}/cmd
+%endif
 %endif
 
 %post common
 # suse
 %if "%{_vendor}" == "suse"
-%if 0%{?suse_version} >= 1310
-%set_permissions %{_rundir}/%{name}/cmd
-%endif
 %if 0%{?use_systemd}
 %fillup_only  %{name}
 %service_add_post %{name}.service
@@ -483,7 +500,9 @@ exit 0
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/repository.d/*
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/zones.d/*
 %config(noreplace) %{_sysconfdir}/%{name}/scripts/*
-/usr/lib/icinga2/prepare-dirs
+%dir %{_libexecdir}/%{name}
+%{_libexecdir}/%{name}/prepare-dirs
+%{_libexecdir}/%{name}/safe-reload
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/perfdata
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/tmp

@@ -25,6 +25,7 @@
 #include "base/logger.hpp"
 #include "base/application.hpp"
 #include "base/convert.hpp"
+#include "base/scriptvariable.hpp"
 #include "base/json.hpp"
 #include "base/netstring.hpp"
 #include "base/tlsutility.hpp"
@@ -84,7 +85,7 @@ String RepositoryUtility::GetRepositoryObjectConfigPath(const String& type, cons
 	if (type == "Host")
 		path += "hosts";
 	else if (type == "Service")
-		path += "hosts/" + object->Get("host_name");
+		path += "hosts/" + EscapeName(object->Get("host_name"));
 	else if (type == "Zone")
 		path += "zones";
 	else if (type == "Endpoint")
@@ -114,7 +115,7 @@ String RepositoryUtility::GetRepositoryObjectConfigFilePath(const String& type, 
 {
 	String path = GetRepositoryObjectConfigPath(type, object);
 
-	path += "/" + object->Get("name") + ".conf";
+	path += "/" + EscapeName(object->Get("name")) + ".conf";
 
 	return path;
 }
@@ -122,6 +123,20 @@ String RepositoryUtility::GetRepositoryObjectConfigFilePath(const String& type, 
 String RepositoryUtility::GetRepositoryChangeLogPath(void)
 {
 	return Application::GetLocalStateDir() + "/lib/icinga2/repository/changes";
+}
+
+void RepositoryUtility::CreateRepositoryPath(const String& path)
+{
+	if (!Utility::PathExists(path))
+		Utility::MkDirP(path, 0750);
+
+	String user = ScriptVariable::Get("RunAsUser");
+        String group = ScriptVariable::Get("RunAsGroup");
+
+        if (!Utility::SetFileOwnership(path, user, group)) {
+                Log(LogWarning, "cli")
+                    << "Cannot set ownership for user '" << user << "' group '" << group << "' on path '" << path << "'. Verify it yourself!";
+	}
 }
 
 /* printers */
@@ -138,6 +153,7 @@ void RepositoryUtility::PrintObjects(std::ostream& fp, const String& type)
 
 		String file = Utility::BaseName(object);
 		boost::algorithm::replace_all(file, ".conf", "");
+		file = UnescapeName(file);
 
 		fp << ConsoleColorTag(Console_ForegroundMagenta | Console_Bold) << type << ConsoleColorTag(Console_Normal)
 		   << " '" << ConsoleColorTag(Console_ForegroundBlue | Console_Bold) << file << ConsoleColorTag(Console_Normal) << "'";
@@ -148,7 +164,7 @@ void RepositoryUtility::PrintObjects(std::ostream& fp, const String& type)
 			std::vector<String> tokens;
 			boost::algorithm::split(tokens, prefix, boost::is_any_of("/"));
 
-			String host_name = tokens[tokens.size()-1];
+			String host_name = UnescapeName(tokens[tokens.size()-1]);
 			fp << " (on " << ConsoleColorTag(Console_ForegroundMagenta | Console_Bold) << "Host" << ConsoleColorTag(Console_Normal)
 			   << " '" << ConsoleColorTag(Console_ForegroundBlue | Console_Bold) << host_name << ConsoleColorTag(Console_Normal) << "')";
 
@@ -189,9 +205,9 @@ bool RepositoryUtility::AddObject(const String& name, const String& type, const 
 	String pattern;
 
 	if (type == "Service")
-		pattern = attrs->Get("host_name") + "/" + name + ".conf";
+		pattern = EscapeName(attrs->Get("host_name")) + "/" + EscapeName(name) + ".conf";
 	else
-		pattern = name + ".conf";
+		pattern = EscapeName(name) + ".conf";
 
 	BOOST_FOREACH(const String& object_path, object_paths) {
 		if (object_path.Contains(pattern)) {
@@ -355,7 +371,7 @@ bool RepositoryUtility::WriteObjectToRepositoryChangeLog(const String& path, con
 {
 	Log(LogInformation, "cli", "Dumping changelog items to file '" + path + "'");
 
-	Utility::MkDirP(Utility::DirName(path), 0750);
+	CreateRepositoryPath(Utility::DirName(path));
 
 	String tempPath = path + ".tmp";
 
@@ -395,14 +411,14 @@ Dictionary::Ptr RepositoryUtility::GetObjectFromRepositoryChangeLog(const String
 /* internal implementation when changes are committed */
 bool RepositoryUtility::AddObjectInternal(const String& name, const String& type, const Dictionary::Ptr& attrs)
 {
-	String path = GetRepositoryObjectConfigPath(type, attrs) + "/" + name + ".conf";
+	String path = GetRepositoryObjectConfigPath(type, attrs) + "/" + EscapeName(name) + ".conf";
 
 	return WriteObjectToRepository(path, name, type, attrs);
 }
 
 bool RepositoryUtility::RemoveObjectInternal(const String& name, const String& type, const Dictionary::Ptr& attrs)
 {
-	String path = GetRepositoryObjectConfigPath(type, attrs) + "/" + name + ".conf";
+	String path = GetRepositoryObjectConfigPath(type, attrs) + "/" + EscapeName(name) + ".conf";
 
 	if (!Utility::PathExists(path)) {
 		Log(LogWarning, "cli")
@@ -466,7 +482,7 @@ bool RepositoryUtility::RemoveObjectFileInternal(const String& path)
 bool RepositoryUtility::SetObjectAttributeInternal(const String& name, const String& type, const String& key, const Value& val, const Dictionary::Ptr& attrs)
 {
 	//TODO
-	String path = GetRepositoryObjectConfigPath(type, attrs) + "/" + name + ".conf";
+	String path = GetRepositoryObjectConfigPath(type, attrs) + "/" + EscapeName(name) + ".conf";
 
 	Dictionary::Ptr obj = GetObjectFromRepository(path); //TODO
 
@@ -495,7 +511,7 @@ bool RepositoryUtility::WriteObjectToRepository(const String& path, const String
 	Log(LogInformation, "cli")
 	    << "Writing config object '" << name << "' to file '" << path << "'";
 
-	Utility::MkDirP(Utility::DirName(path), 0755);
+	CreateRepositoryPath(Utility::DirName(path));
 
 	String tempPath = path + ".tmp";
 
@@ -524,6 +540,15 @@ Dictionary::Ptr RepositoryUtility::GetObjectFromRepository(const String& filenam
 	return Dictionary::Ptr();
 }
 
+String RepositoryUtility::EscapeName(const String& name)
+{
+	return Utility::EscapeString(name, "<>:\"/\\|?*");
+}
+
+String RepositoryUtility::UnescapeName(const String& name)
+{
+	return Utility::UnescapeString(name);
+}
 
 /*
  * collect functions
@@ -656,6 +681,7 @@ void RepositoryUtility::FormatChangelogEntry(std::ostream& fp, const Dictionary:
 	fp << " " << ConsoleColorTag(Console_ForegroundMagenta | Console_Bold) << type << ConsoleColorTag(Console_Normal) << " '";
 	fp << ConsoleColorTag(Console_ForegroundBlue | Console_Bold) << change->Get("name") << ConsoleColorTag(Console_Normal) << "'\n";
 
+	ObjectLock olock(attrs);
 	BOOST_FOREACH(const Dictionary::Pair& kv, attrs) {
 		/* skip the name */
 		if (kv.first == "name" || kv.first == "__name")
@@ -689,6 +715,7 @@ void RepositoryUtility::SerializeObject(std::ostream& fp, const String& name, co
 		}
 	}
 
+	ObjectLock xlock(object);
 	BOOST_FOREACH(const Dictionary::Pair& kv, object) {
 		if (kv.first == "import" || kv.first == "name" || kv.first == "__name") {
 			continue;
