@@ -102,10 +102,8 @@ case "$1" in
         if [ -n "$admpass" ]; then
             #unfortunatly that method only works with 2.4
             if htpasswd 2>&1 | grep -q ' -i'; then
-                echo "$admpass to $htpw"
                 echo "$admpass" | htpasswd -i "$htpw" icingaadmin
             else
-                echo "$admpass to $htpw"
                 htpasswd -b "$htpw" icingaadmin "$admpass"
             fi
         fi
