@@ -3,8 +3,6 @@ icinga2 (2.2.2-1) unstable; urgency=medium
   * [89b506f] Imported Upstream version 2.2.2
   * [b04381a] Let icinga2-classicui depend on icinga2-bin (Closes: #770534)
   * [8928097] Add dutch debconf translation (Closes: #766173)
-  * [b04381a] Let icinga2-classicui depend on icinga2-bin (Closes: #770534)
-  * [8928097] Add dutch debconf translation (Closes: #766173)
   * [7973e4e] Remove unsupported options from default file
   * [d8e832f] Also install upgrade files to /usr/share
   * [3b08f9d] Remove obsolete configuration option
