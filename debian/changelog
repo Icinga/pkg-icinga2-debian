@@ -1,14 +1,22 @@
-icinga2 (2.2.1-1~ppa1~saucy2) saucy; urgency=medium
-
-  * Don't install prepare-dirs 
-
- -- Alexander Wirt <formorer@debian.org>  Tue, 02 Dec 2014 08:30:40 +0100
-
-icinga2 (2.2.1-1~ppa1~saucy1) saucy; urgency=medium
+icinga2 (2.2.2-1~ppa1~saucy1) saucy; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+
+icinga2 (2.2.2-1) unstable; urgency=medium
+
+  * [89b506f] Imported Upstream version 2.2.2
+  * [b04381a] Let icinga2-classicui depend on icinga2-bin (Closes: #770534)
+  * [8928097] Add dutch debconf translation (Closes: #766173)
+  * [7973e4e] Remove unsupported options from default file
+  * [d8e832f] Also install upgrade files to /usr/share
+  * [3b08f9d] Remove obsolete configuration option
+  * [adde104] Fix intendation in rules file
+  * [bb53657] python-icinga2 is no more, cleanup copyright and gitignore file
+  * [a1478f3] Remove some debug from icinga2-classicui.postinst
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 18 Dec 2014 13:11:04 +0100
 
 icinga2 (2.2.1-1) unstable; urgency=medium
 
