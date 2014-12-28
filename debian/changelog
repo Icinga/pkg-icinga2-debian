@@ -1,3 +1,9 @@
+icinga2 (2.2.2-2) unstable; urgency=medium
+
+  * [ec8d305] Fix binary-only builds
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Sun, 28 Dec 2014 17:24:06 +0100
+
 icinga2 (2.2.2-1) unstable; urgency=medium
 
   * [89b506f] Imported Upstream version 2.2.2
