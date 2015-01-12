@@ -30,7 +30,8 @@ using namespace icinga;
 
 REGISTER_SCRIPTFUNCTION(ClusterZoneCheck, &ClusterZoneCheckTask::ScriptFunc);
 
-void ClusterZoneCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
+void ClusterZoneCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr,
+    const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)
 {
 	ApiListener::Ptr listener = ApiListener::GetInstance();
 
@@ -55,7 +56,11 @@ void ClusterZoneCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const Che
 	resolvers.push_back(std::make_pair("command", commandObj));
 	resolvers.push_back(std::make_pair("icinga", IcingaApplication::GetInstance()));
 
-	String zoneName = MacroProcessor::ResolveMacros("$cluster_zone$", resolvers, checkable->GetLastCheckResult());
+	String zoneName = MacroProcessor::ResolveMacros("$cluster_zone$", resolvers, checkable->GetLastCheckResult(),
+	    NULL, MacroProcessor::EscapeCallback(), resolvedMacros, useResolvedMacros);
+
+	if (resolvedMacros && !useResolvedMacros)
+		return;
 
 	if (zoneName.IsEmpty()) {
 		cr->SetOutput("Macro 'cluster_zone' must be set.");
@@ -92,4 +97,3 @@ void ClusterZoneCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const Che
 
 	checkable->ProcessCheckResult(cr);
 }
-

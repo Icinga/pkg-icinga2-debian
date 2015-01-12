@@ -115,7 +115,7 @@ String CompatUtility::GetCheckableCommandArgs(const Checkable::Ptr& checkable)
 {
 	CheckCommand::Ptr command = checkable->GetCheckCommand();
 
-	Dictionary::Ptr args = make_shared<Dictionary>();
+	Dictionary::Ptr args = new Dictionary();
 
 	if (command) {
 		Host::Ptr host;
@@ -126,7 +126,8 @@ String CompatUtility::GetCheckableCommandArgs(const Checkable::Ptr& checkable)
 		Dictionary::Ptr command_vars = command->GetVars();
 
 		if (command_vars) {
-			BOOST_FOREACH(Dictionary::Pair kv, command_vars) {
+			ObjectLock olock(command_vars);
+			BOOST_FOREACH(const Dictionary::Pair& kv, command_vars) {
 				String macro = "$" + kv.first + "$"; // this is too simple
 				if (command_line.Contains(macro))
 					args->Set(kv.first, kv.second);
@@ -137,7 +138,8 @@ String CompatUtility::GetCheckableCommandArgs(const Checkable::Ptr& checkable)
 		Dictionary::Ptr host_vars = host->GetVars();
 
 		if (host_vars) {
-			BOOST_FOREACH(Dictionary::Pair kv, host_vars) {
+			ObjectLock olock(host_vars);
+			BOOST_FOREACH(const Dictionary::Pair& kv, host_vars) {
 				String macro = "$" + kv.first + "$"; // this is too simple
 				if (command_line.Contains(macro))
 					args->Set(kv.first, kv.second);
@@ -151,7 +153,8 @@ String CompatUtility::GetCheckableCommandArgs(const Checkable::Ptr& checkable)
 			Dictionary::Ptr service_vars = service->GetVars();
 
 			if (service_vars) {
-				BOOST_FOREACH(Dictionary::Pair kv, service_vars) {
+				ObjectLock olock(service_vars);
+				BOOST_FOREACH(const Dictionary::Pair& kv, service_vars) {
 					String macro = "$" + kv.first + "$"; // this is too simple
 					if (command_line.Contains(macro))
 						args->Set(kv.first, kv.second);
@@ -163,7 +166,8 @@ String CompatUtility::GetCheckableCommandArgs(const Checkable::Ptr& checkable)
 		}
 
 		String arg_string;
-		BOOST_FOREACH(Dictionary::Pair kv, args) {
+		ObjectLock olock(args);
+		BOOST_FOREACH(const Dictionary::Pair& kv, args) {
 			arg_string += Convert::ToString(kv.first) + "=" + Convert::ToString(kv.second) + "!";
 		}
 		return arg_string;
@@ -224,7 +228,7 @@ int CompatUtility::GetCheckableActiveChecksEnabled(const Checkable::Ptr& checkab
 
 int CompatUtility::GetCheckableEventHandlerEnabled(const Checkable::Ptr& checkable)
 {
-	return (checkable->GetEventCommand() ? 1 : 0);
+	return (checkable->GetEnableEventHandler() ? 1 : 0);
 }
 
 int CompatUtility::GetCheckableFlapDetectionEnabled(const Checkable::Ptr& checkable)
@@ -349,7 +353,7 @@ int CompatUtility::GetCheckableInNotificationPeriod(const Checkable::Ptr& checka
 
 /* vars attr */
 
-bool CompatUtility::IsLegacyAttribute(CustomVarObject::Ptr const& object, const String& name)
+bool CompatUtility::IsLegacyAttribute(const CustomVarObject::Ptr& object, const String& name)
 {
 	if ((name == "address" ||
 	    name == "address6") &&
@@ -383,17 +387,20 @@ Dictionary::Ptr CompatUtility::GetCustomAttributeConfig(const CustomVarObject::P
 {
 	Dictionary::Ptr vars = object->GetVars();
 
-	Dictionary::Ptr varsvars = make_shared<Dictionary>();
+	Dictionary::Ptr varsvars = new Dictionary();
 
 	if (!vars)
 		return Dictionary::Ptr();
 
+	String key;
+	Value value;
+
 	ObjectLock olock(vars);
 	BOOST_FOREACH(const Dictionary::Pair& kv, vars) {
-		if (!kv.first.IsEmpty()) {
-			if (!IsLegacyAttribute(object, kv.first))
-				varsvars->Set(kv.first, kv.second);
-		}
+		if (kv.first.IsEmpty() || IsLegacyAttribute(object, kv.first))
+			continue;
+
+		varsvars->Set(kv.first, kv.second);
 	}
 
 	return varsvars;
@@ -411,7 +418,7 @@ String CompatUtility::GetCustomAttributeConfig(const CustomVarObject::Ptr& objec
 
 Array::Ptr CompatUtility::GetModifiedAttributesList(const CustomVarObject::Ptr& object)
 {
-	Array::Ptr mod_attr_list = make_shared<Array>();
+	Array::Ptr mod_attr_list = new Array();
 
 	if (object->GetType() != DynamicType::GetByName("Host") &&
 	    object->GetType() != DynamicType::GetByName("Service") &&

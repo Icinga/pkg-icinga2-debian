@@ -24,23 +24,27 @@
 #include "base/dynamictype.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/exception.hpp"
 
 using namespace icinga;
 
 static Value SetLogPositionHandler(const MessageOrigin& origin, const Dictionary::Ptr& params);
 REGISTER_APIFUNCTION(SetLogPosition, log, &SetLogPositionHandler);
+static Value RequestCertificateHandler(const MessageOrigin& origin, const Dictionary::Ptr& params);
+REGISTER_APIFUNCTION(RequestCertificate, pki, &RequestCertificateHandler);
 
-ApiClient::ApiClient(const String& identity, const Stream::Ptr& stream, ConnectionRole role)
-	: m_Identity(identity), m_Stream(stream), m_Role(role), m_Seen(Utility::GetTime())
+ApiClient::ApiClient(const String& identity, bool authenticated, const TlsStream::Ptr& stream, ConnectionRole role)
+	: m_Identity(identity), m_Authenticated(authenticated), m_Stream(stream), m_Role(role), m_Seen(Utility::GetTime()),
+	  m_NextHeartbeat(0)
 {
-	m_Endpoint = Endpoint::GetByName(identity);
+	if (authenticated)
+		m_Endpoint = Endpoint::GetByName(identity);
 }
 
 void ApiClient::Start(void)
 {
-	boost::thread thread(boost::bind(&ApiClient::MessageThreadProc, static_cast<ApiClient::Ptr>(GetSelf())));
+	boost::thread thread(boost::bind(&ApiClient::MessageThreadProc, ApiClient::Ptr(this)));
 	thread.detach();
 }
 
@@ -49,12 +53,17 @@ String ApiClient::GetIdentity(void) const
 	return m_Identity;
 }
 
+bool ApiClient::IsAuthenticated(void) const
+{
+	return m_Authenticated;
+}
+
 Endpoint::Ptr ApiClient::GetEndpoint(void) const
 {
 	return m_Endpoint;
 }
 
-Stream::Ptr ApiClient::GetStream(void) const
+TlsStream::Ptr ApiClient::GetStream(void) const
 {
 	return m_Stream;
 }
@@ -67,12 +76,13 @@ ConnectionRole ApiClient::GetRole(void) const
 void ApiClient::SendMessage(const Dictionary::Ptr& message)
 {
 	if (m_WriteQueue.GetLength() > 20000) {
-		Log(LogWarning, "remote", "Closing connection for API identity '" + m_Identity + "': Too many queued messages.");
+		Log(LogWarning, "remote")
+		    << "Closing connection for API identity '" << m_Identity << "': Too many queued messages.";
 		Disconnect();
 		return;
 	}
 
-	m_WriteQueue.Enqueue(boost::bind(&ApiClient::SendMessageSync, static_cast<ApiClient::Ptr>(GetSelf()), message));
+	m_WriteQueue.Enqueue(boost::bind(&ApiClient::SendMessageSync, ApiClient::Ptr(this), message));
 }
 
 void ApiClient::SendMessageSync(const Dictionary::Ptr& message)
@@ -85,11 +95,12 @@ void ApiClient::SendMessageSync(const Dictionary::Ptr& message)
 		if (message->Get("method") != "log::SetLogPosition")
 			m_Seen = Utility::GetTime();
 	} catch (const std::exception& ex) {
-		std::ostringstream info, debug;
+		std::ostringstream info;
 		info << "Error while sending JSON-RPC message for identity '" << m_Identity << "'";
-		debug << info.str() << std::endl << DiagnosticInformation(ex);
-		Log(LogWarning, "ApiClient", info.str());
-		Log(LogDebug, "ApiClient", debug.str());
+		Log(LogWarning, "ApiClient")
+		    << info.str();
+		Log(LogDebug, "ApiClient")
+		    << info.str() << "\n" << DiagnosticInformation(ex);
 
 		Disconnect();
 	}
@@ -97,18 +108,19 @@ void ApiClient::SendMessageSync(const Dictionary::Ptr& message)
 
 void ApiClient::Disconnect(void)
 {
-	Utility::QueueAsyncCallback(boost::bind(&ApiClient::DisconnectSync, static_cast<ApiClient::Ptr>(GetSelf())));
+	Utility::QueueAsyncCallback(boost::bind(&ApiClient::DisconnectSync, ApiClient::Ptr(this)));
 }
 
 void ApiClient::DisconnectSync(void)
 {
-	Log(LogWarning, "ApiClient", "API client disconnected for identity '" + m_Identity + "'");
+	Log(LogWarning, "ApiClient")
+	    << "API client disconnected for identity '" << m_Identity << "'";
 
 	if (m_Endpoint)
-		m_Endpoint->RemoveClient(GetSelf());
+		m_Endpoint->RemoveClient(this);
 	else {
 		ApiListener::Ptr listener = ApiListener::GetInstance();
-		listener->RemoveAnonymousClient(GetSelf());
+		listener->RemoveAnonymousClient(this);
 	}
 
 	m_Stream->Close();
@@ -149,7 +161,7 @@ bool ApiClient::ProcessMessage(void)
 	}
 
 	MessageOrigin origin;
-	origin.FromClient = GetSelf();
+	origin.FromClient = this;
 
 	if (m_Endpoint) {
 		if (m_Endpoint->GetZone() != Zone::GetLocalZone())
@@ -160,9 +172,10 @@ bool ApiClient::ProcessMessage(void)
 
 	String method = message->Get("method");
 
-	Log(LogNotice, "ApiClient", "Received '" + method + "' message from '" + m_Identity + "'");
+	Log(LogNotice, "ApiClient")
+	    << "Received '" << method << "' message from '" << m_Identity << "'";
 
-	Dictionary::Ptr resultMessage = make_shared<Dictionary>();
+	Dictionary::Ptr resultMessage = new Dictionary();
 
 	try {
 		ApiFunction::Ptr afunc = ApiFunction::GetByName(method);
@@ -172,7 +185,14 @@ bool ApiClient::ProcessMessage(void)
 
 		resultMessage->Set("result", afunc->Invoke(origin, message->Get("params")));
 	} catch (const std::exception& ex) {
+		//TODO: Add a user readable error message for the remote caller
 		resultMessage->Set("error", DiagnosticInformation(ex));
+		std::ostringstream info;
+		info << "Error while processing message for identity '" << m_Identity << "'";
+		Log(LogWarning, "ApiClient")
+		    << info.str();
+		Log(LogDebug, "ApiClient")
+		    << info.str() << "\n" << DiagnosticInformation(ex);
 	}
 
 	if (message->Contains("id")) {
@@ -192,7 +212,8 @@ void ApiClient::MessageThreadProc(void)
 		while (ProcessMessage())
 			; /* empty loop body */
 	} catch (const std::exception& ex) {
-		Log(LogWarning, "ApiClient", "Error while reading JSON-RPC message for identity '" + m_Identity + "': " + DiagnosticInformation(ex));
+		Log(LogWarning, "ApiClient")
+		    << "Error while reading JSON-RPC message for identity '" << m_Identity << "': " << DiagnosticInformation(ex);
 	}
 
 	Disconnect();
@@ -213,4 +234,42 @@ Value SetLogPositionHandler(const MessageOrigin& origin, const Dictionary::Ptr& 
 		endpoint->SetLocalLogPosition(log_position);
 
 	return Empty;
+}
+
+Value RequestCertificateHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
+{
+	if (!params)
+		return Empty;
+
+	ApiListener::Ptr listener = ApiListener::GetInstance();
+	String salt = listener->GetTicketSalt();
+
+	Dictionary::Ptr result = new Dictionary();
+
+	if (salt.IsEmpty()) {
+		result->Set("error", "Ticket salt is not configured.");
+		return result;
+	}
+
+	String ticket = params->Get("ticket");
+	String realTicket = PBKDF2_SHA1(origin.FromClient->GetIdentity(), salt, 50000);
+
+	if (ticket != realTicket) {
+		result->Set("error", "Invalid ticket.");
+		return result;
+	}
+
+	boost::shared_ptr<X509> cert = origin.FromClient->GetStream()->GetPeerCertificate();
+
+	EVP_PKEY *pubkey = X509_get_pubkey(cert.get());
+	X509_NAME *subject = X509_get_subject_name(cert.get());
+
+	boost::shared_ptr<X509> newcert = CreateCertIcingaCA(pubkey, subject);
+	result->Set("cert", CertificateToString(newcert));
+
+	String cacertfile = GetIcingaCADir() + "/ca.crt";
+	boost::shared_ptr<X509> cacert = GetX509Certificate(cacertfile);
+	result->Set("ca", CertificateToString(cacert));
+
+	return result;
 }

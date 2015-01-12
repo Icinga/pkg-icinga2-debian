@@ -35,14 +35,14 @@ namespace icinga
 class I2_ICINGA_API IcingaApplication : public ObjectImpl<IcingaApplication>, public MacroResolver
 {
 public:
-	DECLARE_PTR_TYPEDEFS(IcingaApplication);
-	DECLARE_TYPENAME(IcingaApplication);
+	DECLARE_OBJECT(IcingaApplication);
+	DECLARE_OBJECTNAME(IcingaApplication);
 
 	static void StaticInitialize(void);
 
 	int Main(void);
 
-	static Value StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata);
+	static Value StatsFunc(Dictionary::Ptr& status, Array::Ptr& perfdata);
 
 	static IcingaApplication::Ptr GetInstance(void);
 
@@ -50,7 +50,7 @@ public:
 	Dictionary::Ptr GetVars(void) const;
 	String GetNodeName(void) const;
 
-	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, String *result) const;
+	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Value *result) const;
 
 	bool GetEnableNotifications(void) const;
 	void SetEnableNotifications(bool enabled);

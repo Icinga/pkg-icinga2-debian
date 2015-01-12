@@ -25,7 +25,7 @@
 #include "base/convert.hpp"
 #include "base/utility.hpp"
 #include "base/debug.hpp"
-#include "base/serializer.hpp"
+#include "base/json.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -41,13 +41,15 @@ void Host::OnConfigLoaded(void)
 	Array::Ptr groups = GetGroups();
 
 	if (groups) {
+		groups = groups->ShallowClone();
+
 		ObjectLock olock(groups);
 
 		BOOST_FOREACH(const String& name, groups) {
 			HostGroup::Ptr hg = HostGroup::GetByName(name);
 
 			if (hg)
-				hg->ResolveGroupMembership(GetSelf(), true);
+				hg->ResolveGroupMembership(this, true);
 		}
 	}
 }
@@ -65,7 +67,7 @@ void Host::Stop(void)
 			HostGroup::Ptr hg = HostGroup::GetByName(name);
 
 			if (hg)
-				hg->ResolveGroupMembership(GetSelf(), false);
+				hg->ResolveGroupMembership(this, false);
 		}
 	}
 
@@ -123,7 +125,7 @@ Service::Ptr Host::GetServiceByShortName(const Value& name)
 
 		return Service::GetByNamePair(dict->Get("host"), dict->Get("service"));
 	} else {
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Host/Service name pair is invalid: " + JsonSerialize(name)));
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Host/Service name pair is invalid: " + JsonEncode(name)));
 	}
 }
 
@@ -202,7 +204,7 @@ String Host::StateTypeToString(StateType type)
 		return "HARD";
 }
 
-bool Host::ResolveMacro(const String& macro, const CheckResult::Ptr&, String *result) const
+bool Host::ResolveMacro(const String& macro, const CheckResult::Ptr&, Value *result) const
 {
 	if (macro == "state") {
 		*result = StateToString(GetState());

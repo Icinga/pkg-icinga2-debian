@@ -22,6 +22,7 @@
 
 #include "base/i2-base.hpp"
 #include "base/object.hpp"
+#include "base/string.hpp"
 
 namespace icinga
 {
@@ -38,6 +39,11 @@ struct ReadLineContext
 {
 	ReadLineContext(void) : Buffer(NULL), Size(0), Eof(false), MustRead(true)
 	{ }
+
+	~ReadLineContext(void)
+	{
+		free(Buffer);
+	}
 
 	char *Buffer;
 	size_t Size;

@@ -1,3 +1,22 @@
+/******************************************************************************
+ * Icinga 2                                                                   *
+ * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ *                                                                            *
+ * This program is free software; you can redistribute it and/or              *
+ * modify it under the terms of the GNU General Public License                *
+ * as published by the Free Software Foundation; either version 2             *
+ * of the License, or (at your option) any later version.                     *
+ *                                                                            *
+ * This program is distributed in the hope that it will be useful,            *
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of             *
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              *
+ * GNU General Public License for more details.                               *
+ *                                                                            *
+ * You should have received a copy of the GNU General Public License          *
+ * along with this program; if not, write to the Free Software Foundation     *
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
+ ******************************************************************************/
+
 #include "icinga/customvarobject.hpp"
 
 namespace icinga
@@ -7,7 +26,7 @@ code {{{
 class I2_ICINGA_API NotificationNameComposer : public NameComposer
 {
 public:
-	virtual String MakeName(const String& shortName, const Dictionary::Ptr& props) const;
+	virtual String MakeName(const String& shortName, const Object::Ptr& context) const;
 };
 }}}
 
@@ -18,7 +37,6 @@ class Notification : CustomVarObject < NotificationNameComposer
 		default {{{ return 1800; }}}
 	};
 	[config] String period (PeriodRaw);
-	[config] Dictionary::Ptr macros;
 	[config, protected] Array::Ptr users (UsersRaw);
 	[config, protected] Array::Ptr user_groups (UserGroupsRaw);
 	[config] Dictionary::Ptr times;
@@ -29,10 +47,16 @@ class Notification : CustomVarObject < NotificationNameComposer
 	[config, protected] String host_name;
 	[config, protected] String service_name;
 
+	[state] Array::Ptr notified_users {
+		default {{{ return new Array(); }}}
+	};
+
 	[state] double last_notification;
 	[state, set_protected] double next_notification (NextNotificationRaw);
 	[state, set_protected] Value notification_number;
 	[state] double last_problem_notification;
+
+	[config] String command_endpoint (CommandEndpointRaw);
 };
 
 }

@@ -20,7 +20,7 @@
 #include "icinga/pluginutility.hpp"
 #include "icinga/macroprocessor.hpp"
 #include "icinga/perfdatavalue.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/utility.hpp"
 #include "base/convert.hpp"
 #include "base/process.hpp"
@@ -36,12 +36,13 @@ struct CommandArgument
 {
 	int Order;
 	bool SkipKey;
+	bool RepeatKey;
 	bool SkipValue;
 	String Key;
-	String Value;
+	Value AValue;
 
 	CommandArgument(void)
-		: Order(0), SkipKey(false), SkipValue(false)
+		: Order(0), SkipKey(false), RepeatKey(true), SkipValue(false)
 	{ }
 
 	bool operator<(const CommandArgument& rhs) const
@@ -50,8 +51,38 @@ struct CommandArgument
 	}
 };
 
+void PluginUtility::AddArgumentHelper(const Array::Ptr& args, const String& key, const String& value, bool add_key, bool add_value)
+{
+	if (add_key)
+		args->Add(key);
+
+	if (add_value)
+		args->Add(value);
+}
+
+Value PluginUtility::EscapeMacroShellArg(const Value& value)
+{
+	String result;
+
+	if (value.IsObjectType<Array>()) {
+		Array::Ptr arr = value;
+
+		ObjectLock olock(arr);
+		BOOST_FOREACH(const Value& arg, arr) {
+			if (result.GetLength() > 0)
+				result += " ";
+
+			result += Utility::EscapeShellArg(arg);
+		}	
+	} else
+		result = Utility::EscapeShellArg(value);
+
+	return result;
+}
+
 void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkable::Ptr& checkable,
     const CheckResult::Ptr& cr, const MacroProcessor::ResolverList& macroResolvers,
+    const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros,
     const boost::function<void(const Value& commandLine, const ProcessResult&)>& callback)
 {
 	Value raw_command = commandObj->GetCommandLine();
@@ -59,9 +90,10 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 
 	Value command;
 	if (!raw_arguments || raw_command.IsObjectType<Array>())
-		command = MacroProcessor::ResolveMacros(raw_command, macroResolvers, cr, NULL, Utility::EscapeShellArg);
+		command = MacroProcessor::ResolveMacros(raw_command, macroResolvers, cr, NULL,
+		    PluginUtility::EscapeMacroShellArg, resolvedMacros, useResolvedMacros);
 	else {
-		Array::Ptr arr = make_shared<Array>();
+		Array::Ptr arr = new Array();
 		arr->Add(raw_command);
 		command = arr;
 	}
@@ -81,10 +113,14 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 
 			if (arginfo.IsObjectType<Dictionary>()) {
 				Dictionary::Ptr argdict = arginfo;
+				if (argdict->Contains("key"))
+					arg.Key = argdict->Get("key");
 				argval = argdict->Get("value");
 				if (argdict->Contains("required"))
 					required = argdict->Get("required");
 				arg.SkipKey = argdict->Get("skip_key");
+				if (argdict->Contains("repeat_key"))
+					arg.RepeatKey = argdict->Get("repeat_key");
 				arg.Order = argdict->Get("order");
 
 				String set_if = argdict->Get("set_if");
@@ -92,7 +128,8 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 				if (!set_if.IsEmpty()) {
 					String missingMacro;
 					String set_if_resolved = MacroProcessor::ResolveMacros(set_if, macroResolvers,
-						cr, &missingMacro);
+					    cr, &missingMacro, MacroProcessor::EscapeCallback(), resolvedMacros,
+					    useResolvedMacros);
 
 					if (!missingMacro.IsEmpty())
 						continue;
@@ -102,7 +139,8 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 							continue;
 					} catch (const std::exception& ex) {
 						/* tried to convert a string */
-						Log(LogWarning, "PluginUtility", "Error evaluating set_if value '" + set_if_resolved + "': " + ex.what());
+						Log(LogWarning, "PluginUtility")
+						    << "Error evaluating set_if value '" << set_if_resolved << "': " << ex.what();
 						continue;
 					}
 				}
@@ -114,8 +152,9 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 				arg.SkipValue = true;
 
 			String missingMacro;
-			arg.Value = MacroProcessor::ResolveMacros(argval, macroResolvers,
-			    cr, &missingMacro);
+			arg.AValue = MacroProcessor::ResolveMacros(argval, macroResolvers,
+			    cr, &missingMacro, MacroProcessor::EscapeCallback(), resolvedMacros,
+			    useResolvedMacros);
 
 			if (!missingMacro.IsEmpty()) {
 				if (required) {
@@ -147,15 +186,36 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 
 		Array::Ptr command_arr = command;
 		BOOST_FOREACH(const CommandArgument& arg, args) {
-			if (!arg.SkipKey)
-				command_arr->Add(arg.Key);
+			Array::Ptr arr;
 
-			if (!arg.SkipValue)
-				command_arr->Add(arg.Value);
+			if (arg.AValue.IsString())
+				AddArgumentHelper(command_arr, arg.Key, arg.AValue, !arg.SkipKey, !arg.SkipValue);
+			else if (arg.AValue.IsObjectType<Array>())
+				arr = static_cast<Array::Ptr>(arg.AValue);
+			else
+				continue;
+
+			if (arr) {
+				bool first = true;
+
+				ObjectLock olock(arr);
+				BOOST_FOREACH(const Value& value, arr) {
+					bool add_key;
+
+					if (first) {
+						first = false;
+						add_key = !arg.SkipKey;
+					} else
+						add_key = !arg.SkipKey && arg.RepeatKey;
+						
+
+					AddArgumentHelper(command_arr, arg.Key, value, add_key, !arg.SkipValue);
+				}
+			}
 		}
 	}
 
-	Dictionary::Ptr envMacros = make_shared<Dictionary>();
+	Dictionary::Ptr envMacros = new Dictionary();
 
 	Dictionary::Ptr env = commandObj->GetEnv();
 
@@ -164,13 +224,21 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 		BOOST_FOREACH(const Dictionary::Pair& kv, env) {
 			String name = kv.second;
 
-			Value value = MacroProcessor::ResolveMacros(name, macroResolvers, cr);
+			Value value = MacroProcessor::ResolveMacros(name, macroResolvers, cr,
+			    NULL, MacroProcessor::EscapeCallback(), resolvedMacros,
+			    useResolvedMacros);
+
+			if (value.IsObjectType<Array>())
+				value = Utility::Join(value, ';');
 
 			envMacros->Set(kv.first, value);
 		}
 	}
 
-	Process::Ptr process = make_shared<Process>(Process::PrepareCommand(command), envMacros);
+	if (resolvedMacros && !useResolvedMacros)
+		return;
+
+	Process::Ptr process = new Process(Process::PrepareCommand(command), envMacros);
 	process->SetTimeout(commandObj->GetTimeout());
 	process->Run(boost::bind(callback, command, _1));
 }
@@ -220,80 +288,76 @@ std::pair<String, String> PluginUtility::ParseCheckOutput(const String& output)
 	return std::make_pair(text, perfdata);
 }
 
-Value PluginUtility::ParsePerfdata(const String& perfdata)
+Array::Ptr PluginUtility::SplitPerfdata(const String& perfdata)
 {
-	try {
-		Dictionary::Ptr result = make_shared<Dictionary>();
+	Array::Ptr result = new Array();
 
-		size_t begin = 0;
-		String multi_prefix;
+	size_t begin = 0;
+	String multi_prefix;
 
-		for (;;) {
-			size_t eqp = perfdata.FindFirstOf('=', begin);
+	for (;;) {
+		size_t eqp = perfdata.FindFirstOf('=', begin);
 
-			if (eqp == String::NPos)
-				break;
+		if (eqp == String::NPos)
+			break;
 
-			String key = perfdata.SubStr(begin, eqp - begin);
+		String label = perfdata.SubStr(begin, eqp - begin);
 
-			if (key.GetLength() > 2 && key[0] == '\'' && key[key.GetLength() - 1] == '\'')
-				key = key.SubStr(1, key.GetLength() - 2);
+		if (label.GetLength() > 2 && label[0] == '\'' && label[label.GetLength() - 1] == '\'')
+			label = label.SubStr(1, label.GetLength() - 2);
 
-			size_t multi_index = key.RFind("::");
+		size_t multi_index = label.RFind("::");
 
-			if (multi_index != String::NPos)
-				multi_prefix = "";
+		if (multi_index != String::NPos)
+			multi_prefix = "";
 
-			size_t spq = perfdata.FindFirstOf(' ', eqp);
+		size_t spq = perfdata.FindFirstOf(' ', eqp);
 
-			if (spq == String::NPos)
-				spq = perfdata.GetLength();
+		if (spq == String::NPos)
+			spq = perfdata.GetLength();
 
-			String value = perfdata.SubStr(eqp + 1, spq - eqp - 1);
+		String value = perfdata.SubStr(eqp + 1, spq - eqp - 1);
 
-			if (!multi_prefix.IsEmpty())
-				key = multi_prefix + "::" + key;
+		if (!multi_prefix.IsEmpty())
+			label = multi_prefix + "::" + label;
 
-			result->Set(key, PerfdataValue::Parse(value));
+		String pdv;
+		if (label.FindFirstOf(" ") != String::NPos)
+			pdv = "'" + label + "'=" + value;
+		else
+			pdv = label + "=" + value;
 
-			if (multi_index != String::NPos)
-				multi_prefix = key.SubStr(0, multi_index);
+		result->Add(pdv);
 
-			begin = spq + 1;
-		}
+		if (multi_index != String::NPos)
+			multi_prefix = label.SubStr(0, multi_index);
 
-		return result;
-	} catch (const std::exception& ex) {
-		Log(LogWarning, "PluginUtility", "Error parsing performance data '" + perfdata + "': " + ex.what());
-		return perfdata;
+		begin = spq + 1;
 	}
+
+	return result;
 }
 
-String PluginUtility::FormatPerfdata(const Value& perfdata)
+String PluginUtility::FormatPerfdata(const Array::Ptr& perfdata)
 {
+	if (!perfdata)
+		return "";
+
 	std::ostringstream result;
 
-	if (!perfdata.IsObjectType<Dictionary>())
-		return perfdata;
-
-	Dictionary::Ptr dict = perfdata;
-
-	ObjectLock olock(dict);
+	ObjectLock olock(perfdata);
 
 	bool first = true;
-	BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
-		String key;
-		if (kv.first.FindFirstOf(" ") != String::NPos)
-			key = "'" + kv.first + "'";
-		else
-			key = kv.first;
-
+	BOOST_FOREACH(const Value& pdv, perfdata) {
 		if (!first)
 			result << " ";
 		else
 			first = false;
 
-		result << key << "=" << PerfdataValue::Format(kv.second);
+		if (pdv.IsObjectType<PerfdataValue>())
+			result << static_cast<PerfdataValue::Ptr>(pdv)->Format();
+		else
+			result << pdv;
 	}
 
 	return result.str();

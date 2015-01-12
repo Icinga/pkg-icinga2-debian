@@ -23,7 +23,7 @@
 #include "icinga/i2-icinga.hpp"
 #include "icinga/checkresult.hpp"
 #include "base/dictionary.hpp"
-#include "base/qstring.hpp"
+#include "base/string.hpp"
 
 namespace icinga
 {
@@ -38,7 +38,7 @@ class I2_ICINGA_API MacroResolver
 public:
 	DECLARE_PTR_TYPEDEFS(MacroResolver);
 
-	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, String *result) const = 0;
+	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Value *result) const = 0;
 };
 
 }

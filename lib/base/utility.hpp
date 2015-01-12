@@ -21,7 +21,8 @@
 #define UTILITY_H
 
 #include "base/i2-base.hpp"
-#include "base/qstring.hpp"
+#include "base/string.hpp"
+#include "base/array.hpp"
 #include <typeinfo>
 #include <boost/function.hpp>
 #include <boost/thread/tss.hpp>
@@ -30,15 +31,6 @@
 
 namespace icinga
 {
-
-#define TOKENPASTE(x, y) x ## y
-#define TOKENPASTE2(x, y) TOKENPASTE(x, y)
-
-#ifdef HAVE_COUNTER_MACRO
-#	define UNIQUE_NAME(prefix) TOKENPASTE2(prefix, __COUNTER__)
-#else /* HAVE_COUNTER_MACRO */
-#	define UNIQUE_NAME(prefix) prefix
-#endif /* HAVE_COUNTER_MACRO */
 
 #ifdef _WIN32
 #define MS_VC_EXCEPTION 0x406D1388
@@ -91,10 +83,12 @@ public:
 	static bool GlobRecursive(const String& path, const String& pattern, const boost::function<void (const String&)>& callback, int type = GlobFile | GlobDirectory);
 	static bool MkDir(const String& path, int flags);
 	static bool MkDirP(const String& path, int flags);
+	static bool SetFileOwnership(const String& file, const String& user, const String& group);
 
 	static void QueueAsyncCallback(const boost::function<void (void)>& callback, SchedulerPolicy policy = DefaultScheduler);
 
 	static String NaturalJoin(const std::vector<String>& tokens);
+	static String Join(const Array::Ptr& tokens, char separator);
 
 	static String FormatDuration(double duration);
 	static String FormatDateTime(const char *format, double ts);
@@ -121,6 +115,9 @@ public:
 	static String EscapeShellCmd(const String& s);
 	static String EscapeShellArg(const String& s);
 
+	static String EscapeString(const String& s, const String& chars);
+	static String UnescapeString(const String& s);
+
 	static void SetThreadName(const String& name, bool os = true);
 	static String GetThreadName(void);
 
@@ -137,13 +134,19 @@ public:
 
 	static bool PathExists(const String& path);
 
+	static void CopyFile(const String& source, const String& target);
+
+	static Value LoadJsonFile(const String& path);
+	static void SaveJsonFile(const String& path, const Value& value);
+
 private:
 	Utility(void);
 
 	static boost::thread_specific_ptr<String> m_ThreadName;
 	static boost::thread_specific_ptr<unsigned int> m_RandSeed;
-	static boost::thread_specific_ptr<bool> m_LoadingLibrary;
-	static boost::thread_specific_ptr<std::vector<boost::function<void(void)> > > m_DeferredInitializers;
+
+	static boost::thread_specific_ptr<std::vector<boost::function<void(void)> > >& GetDeferredInitializers(void);
+
 };
 
 }

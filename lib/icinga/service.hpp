@@ -36,14 +36,14 @@ namespace icinga
 class I2_ICINGA_API Service : public ObjectImpl<Service>, public MacroResolver
 {
 public:
-	DECLARE_PTR_TYPEDEFS(Service);
-	DECLARE_TYPENAME(Service);
+	DECLARE_OBJECT(Service);
+	DECLARE_OBJECTNAME(Service);
 
 	static Service::Ptr GetByNamePair(const String& hostName, const String& serviceName);
 
 	Host::Ptr GetHost(void) const;
 
-	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, String *result) const;
+	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Value *result) const;
 
 	static ServiceState StateFromString(const String& state);
 	static String StateToString(ServiceState state);
@@ -59,6 +59,7 @@ protected:
 private:
 	Host::Ptr m_Host;
 
+	static void EvaluateApplyRuleOneInstance(const Host::Ptr& host, const String& name, const Dictionary::Ptr& locals, const ApplyRule& rule);
 	static bool EvaluateApplyRuleOne(const Host::Ptr& host, const ApplyRule& rule);
 	static void EvaluateApplyRule(const ApplyRule& rule);
 	static void EvaluateApplyRules(const std::vector<ApplyRule>& rules);

@@ -38,14 +38,14 @@ class Service;
 class I2_ICINGA_API Host : public ObjectImpl<Host>, public MacroResolver
 {
 public:
-	DECLARE_PTR_TYPEDEFS(Host);
-	DECLARE_TYPENAME(Host);
+	DECLARE_OBJECT(Host);
+	DECLARE_OBJECTNAME(Host);
 
-	shared_ptr<Service> GetServiceByShortName(const Value& name);
+	intrusive_ptr<Service> GetServiceByShortName(const Value& name);
 
-	std::set<shared_ptr<Service> > GetServices(void) const;
-	void AddService(const shared_ptr<Service>& service);
-	void RemoveService(const shared_ptr<Service>& service);
+	std::set<intrusive_ptr<Service> > GetServices(void) const;
+	void AddService(const intrusive_ptr<Service>& service);
+	void RemoveService(const intrusive_ptr<Service>& service);
 
 	int GetTotalServices(void) const;
 
@@ -63,7 +63,7 @@ public:
 	static StateType StateTypeFromString(const String& state);
 	static String StateTypeToString(StateType state);
 
-	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, String *result) const;
+	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Value *result) const;
 
 protected:
 	virtual void Stop(void);
@@ -72,7 +72,7 @@ protected:
 
 private:
 	mutable boost::mutex m_ServicesMutex;
-	std::map<String, shared_ptr<Service> > m_Services;
+	std::map<String, intrusive_ptr<Service> > m_Services;
 
 	static void RefreshServicesCache(void);
 };
@@ -80,3 +80,5 @@ private:
 }
 
 #endif /* HOST_H */
+
+#include "icinga/service.hpp"

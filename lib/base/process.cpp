@@ -24,7 +24,7 @@
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
 #include "base/initialize.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/utility.hpp"
 #include "base/scriptvariable.hpp"
 #include <boost/foreach.hpp>
@@ -319,7 +319,7 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 			<< boost::errinfo_api_function("DuplicateHandle")
 			<< errinfo_win32_error(GetLastError()));
 
-	LPPROC_THREAD_ATTRIBUTE_LIST lpAttributeList;
+/*	LPPROC_THREAD_ATTRIBUTE_LIST lpAttributeList;
 	SIZE_T cbSize;
 
 	if (!InitializeProcThreadAttributeList(NULL, 1, 0, &cbSize) && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
@@ -344,6 +344,7 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 		BOOST_THROW_EXCEPTION(win32_error()
 			<< boost::errinfo_api_function("UpdateProcThreadAttribute")
 			<< errinfo_win32_error(GetLastError()));
+*/
 
 	STARTUPINFOEX si = {};
 	si.StartupInfo.cb = sizeof(si);
@@ -351,7 +352,7 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 	si.StartupInfo.hStdOutput = outWritePipeDup;
 	si.StartupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
 	si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-	si.lpAttributeList = lpAttributeList;
+//	si.lpAttributeList = lpAttributeList;
 
 	PROCESS_INFORMATION pi;
 
@@ -412,22 +413,31 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 	envp[offset] = '\0';
 
 	if (!CreateProcess(NULL, args, NULL, NULL, TRUE,
-	    EXTENDED_STARTUPINFO_PRESENT, envp, NULL, &si.StartupInfo, &pi)) {
+	    0 /*EXTENDED_STARTUPINFO_PRESENT*/, envp, NULL, &si.StartupInfo, &pi)) {
+		DWORD error = GetLastError();
 		CloseHandle(outWritePipe);
 		CloseHandle(outWritePipeDup);
-		delete args;
 		free(envp);
-		DeleteProcThreadAttributeList(lpAttributeList);
-		delete [] reinterpret_cast<char *>(lpAttributeList);
-		BOOST_THROW_EXCEPTION(win32_error()
-			<< boost::errinfo_api_function("CreateProcess")
-			<< errinfo_win32_error(GetLastError()));
+/*		DeleteProcThreadAttributeList(lpAttributeList);
+		delete [] reinterpret_cast<char *>(lpAttributeList); */
+
+		m_Result.PID = 0;
+		m_Result.ExecutionEnd = Utility::GetTime();
+		m_Result.ExitStatus = 127;
+		m_Result.Output = "Command " + String(args) + " failed to execute: " + Utility::FormatErrorNumber(error);
+
+		delete [] args;
+
+		if (callback)
+			Utility::QueueAsyncCallback(boost::bind(callback, m_Result));
+
+		return;
 	}
 
-	delete args;
+	delete [] args;
 	free(envp);
-	DeleteProcThreadAttributeList(lpAttributeList);
-	delete[] reinterpret_cast<char *>(lpAttributeList);
+/*	DeleteProcThreadAttributeList(lpAttributeList);
+	delete [] reinterpret_cast<char *>(lpAttributeList); */
 
 	CloseHandle(outWritePipe);
 	CloseHandle(outWritePipeDup);
@@ -437,8 +447,8 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 	m_FD = outReadPipe;
 	m_PID = pi.dwProcessId;
 
-	Log(LogNotice, "Process", "Running command " + PrettyPrintArguments(m_Arguments) +
-	    ": PID " + Convert::ToString(m_PID));
+	Log(LogNotice, "Process")
+	    << "Running command " << PrettyPrintArguments(m_Arguments) << ": PID " << m_PID;
 
 #else /* _WIN32 */
 	int fds[2];
@@ -549,8 +559,8 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 
 	m_PID = m_Process;
 
-	Log(LogNotice, "Process", "Running command " + PrettyPrintArguments(m_Arguments) +
-	    ": PID " + Convert::ToString(m_PID));
+	Log(LogNotice, "Process")
+	    << "Running command " << PrettyPrintArguments(m_Arguments) <<": PID " << m_PID;
 
 	// free arguments
 	for (int i = 0; argv[i] != NULL; i++)
@@ -577,7 +587,7 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 
 	{
 		boost::mutex::scoped_lock lock(l_ProcessMutex[tid]);
-		l_Processes[tid][m_Process] = GetSelf();
+		l_Processes[tid][m_Process] = this;
 #ifndef _WIN32
 		l_FDs[tid][m_FD] = m_Process;
 #endif /* _WIN32 */
@@ -599,9 +609,9 @@ bool Process::DoEvents(void)
 		double timeout = m_Result.ExecutionStart + m_Timeout;
 
 		if (timeout < Utility::GetTime()) {
-			Log(LogWarning, "Process", "Killing process " + Convert::ToString(m_PID) +
-			    " (" + PrettyPrintArguments(m_Arguments) + ") after timeout of " +
-			    Convert::ToString(m_Timeout) + " seconds");
+			Log(LogWarning, "Process")
+			    << "Killing process " << m_PID << " (" << PrettyPrintArguments(m_Arguments)
+			    << ") after timeout of " << m_Timeout << " seconds";
 
 			m_OutputStream << "<Timeout exceeded.>";
 #ifdef _WIN32
@@ -649,9 +659,8 @@ bool Process::DoEvents(void)
 	DWORD exitcode;
 	GetExitCodeProcess(m_Process, &exitcode);
 
-	Log(LogNotice, "Process", "PID " + Convert::ToString(m_PID) +
-	    " (" + PrettyPrintArguments(m_Arguments) + ") terminated with exit code " +
-	    Convert::ToString(exitcode));
+	Log(LogNotice, "Process")
+	    << "PID " << m_PID << " (" << PrettyPrintArguments(m_Arguments) << ") terminated with exit code " << exitcode;
 #else /* _WIN32 */
 	int status, exitcode;
 	if (waitpid(m_Process, &status, 0) != m_Process) {
@@ -663,15 +672,25 @@ bool Process::DoEvents(void)
 	if (WIFEXITED(status)) {
 		exitcode = WEXITSTATUS(status);
 
-		Log(LogNotice, "Process", "PID " + Convert::ToString(m_PID) +
-		    " (" + PrettyPrintArguments(m_Arguments) + ") terminated with exit code " +
-		    Convert::ToString(exitcode));
+		Log(LogNotice, "Process")
+		    << "PID " << m_PID << " (" << PrettyPrintArguments(m_Arguments) << ") terminated with exit code " << exitcode;
 	} else if (WIFSIGNALED(status)) {
-		Log(LogWarning, "Process", "PID " + Convert::ToString(m_PID) + " was terminated by signal " +
-		    Convert::ToString(WTERMSIG(status)));
+		int signum = WTERMSIG(status);
+		char *zsigname = strsignal(signum);
+
+		String signame = Convert::ToString(signum);
+
+		if (zsigname) {
+			signame += " (";
+			signame += zsigname;
+			signame += ")";
+		}
+
+		Log(LogWarning, "Process")
+		    << "PID " << m_PID << " was terminated by signal " << signame;
 
 		std::ostringstream outputbuf;
-		outputbuf << "<Terminated by signal " << WTERMSIG(status) << ".>";
+		outputbuf << "<Terminated by signal " << signame << ".>";
 		output = output + outputbuf.str();
 		exitcode = 128;
 	} else {

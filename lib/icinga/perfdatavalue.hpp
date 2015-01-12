@@ -29,16 +29,16 @@ namespace icinga
 class I2_ICINGA_API PerfdataValue : public ObjectImpl<PerfdataValue>
 {
 public:
-	DECLARE_PTR_TYPEDEFS(PerfdataValue);
+	DECLARE_OBJECT(PerfdataValue);
 
 	PerfdataValue(void);
 
-	PerfdataValue(double value, bool counter = false, const String& unit = "",
+	PerfdataValue(String label, double value, bool counter = false, const String& unit = "",
 	    const Value& warn = Empty, const Value& crit = Empty,
 	    const Value& min = Empty, const Value& max = Empty);
 
-	static Value Parse(const String& perfdata);
-	static String Format(const Value& perfdata);
+	static PerfdataValue::Ptr Parse(const String& perfdata);
+	String Format(void) const;
 };
 
 }

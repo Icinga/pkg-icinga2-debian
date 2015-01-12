@@ -34,7 +34,7 @@
 #include "base/initialize.hpp"
 #include "base/dynamictype.hpp"
 #include "base/utility.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 
@@ -48,7 +48,7 @@ ServiceDbObject::ServiceDbObject(const DbType::Ptr& type, const String& name1, c
 
 Dictionary::Ptr ServiceDbObject::GetConfigFields(void) const
 {
-	Dictionary::Ptr fields = make_shared<Dictionary>();
+	Dictionary::Ptr fields = new Dictionary();
 	Service::Ptr service = static_pointer_cast<Service>(GetObject());
 	Host::Ptr host = service->GetHost();
 
@@ -106,7 +106,7 @@ Dictionary::Ptr ServiceDbObject::GetConfigFields(void) const
 
 Dictionary::Ptr ServiceDbObject::GetStatusFields(void) const
 {
-	Dictionary::Ptr fields = make_shared<Dictionary>();
+	Dictionary::Ptr fields = new Dictionary();
 	Service::Ptr service = static_pointer_cast<Service>(GetObject());
 	CheckResult::Ptr cr = service->GetLastCheckResult();
 
@@ -130,6 +130,7 @@ Dictionary::Ptr ServiceDbObject::GetStatusFields(void) const
 	fields->Set("check_type", CompatUtility::GetCheckableCheckType(service));
 	fields->Set("last_state_change", DbValue::FromTimestamp(service->GetLastStateChange()));
 	fields->Set("last_hard_state_change", DbValue::FromTimestamp(service->GetLastHardStateChange()));
+	fields->Set("last_hard_state", service->GetLastHardState());
 	fields->Set("last_time_ok", DbValue::FromTimestamp(static_cast<int>(service->GetLastStateOK())));
 	fields->Set("last_time_warning", DbValue::FromTimestamp(static_cast<int>(service->GetLastStateWarning())));
 	fields->Set("last_time_critical", DbValue::FromTimestamp(static_cast<int>(service->GetLastStateCritical())));
@@ -139,8 +140,11 @@ Dictionary::Ptr ServiceDbObject::GetStatusFields(void) const
 	fields->Set("next_notification", DbValue::FromTimestamp(CompatUtility::GetCheckableNotificationNextNotification(service)));
 	fields->Set("no_more_notifications", Empty);
 	fields->Set("notifications_enabled", CompatUtility::GetCheckableNotificationsEnabled(service));
-	fields->Set("problem_has_been_acknowledged", CompatUtility::GetCheckableProblemHasBeenAcknowledged(service));
-	fields->Set("acknowledgement_type", CompatUtility::GetCheckableAcknowledgementType(service));
+	{
+		ObjectLock olock(service);
+		fields->Set("problem_has_been_acknowledged", CompatUtility::GetCheckableProblemHasBeenAcknowledged(service));
+		fields->Set("acknowledgement_type", CompatUtility::GetCheckableAcknowledgementType(service));
+	}
 	fields->Set("current_notification_number", CompatUtility::GetCheckableNotificationNotificationNumber(service));
 	fields->Set("passive_checks_enabled", CompatUtility::GetCheckablePassiveChecksEnabled(service));
 	fields->Set("active_checks_enabled", CompatUtility::GetCheckableActiveChecksEnabled(service));
@@ -177,22 +181,25 @@ void ServiceDbObject::OnConfigUpdate(void)
 	Service::Ptr service = static_pointer_cast<Service>(GetObject());
 
 	/* service dependencies */
-	Log(LogDebug, "ServiceDbObject", "service dependencies for '" + service->GetName() + "'");
+	Log(LogDebug, "ServiceDbObject")
+	    << "service dependencies for '" << service->GetName() << "'";
 
 	BOOST_FOREACH(const Dependency::Ptr& dep, service->GetDependencies()) {
 		Checkable::Ptr parent = dep->GetParent();
 
 		if (!parent) {
-			Log(LogDebug, "ServiceDbObject", "Missing parent for dependency '" + dep->GetName() + "'.");
+			Log(LogDebug, "ServiceDbObject")
+			    << "Missing parent for dependency '" << dep->GetName() << "'.";
 			continue;
 		}
 
-		Log(LogDebug, "ServiceDbObject", "service parents: " + parent->GetName());
+		Log(LogDebug, "ServiceDbObject")
+		    << "service parents: " << parent->GetName();
 
 		int state_filter = dep->GetStateFilter();
 
 		/* service dependencies */
-		Dictionary::Ptr fields1 = make_shared<Dictionary>();
+		Dictionary::Ptr fields1 = new Dictionary();
 		fields1->Set("service_object_id", parent);
 		fields1->Set("dependent_service_object_id", service);
 		fields1->Set("inherits_parent", 1);
@@ -212,12 +219,14 @@ void ServiceDbObject::OnConfigUpdate(void)
 	}
 
 	/* service contacts, contactgroups */
-	Log(LogDebug, "ServiceDbObject", "service contacts: " + service->GetName());
+	Log(LogDebug, "ServiceDbObject")
+	    << "service contacts: " << service->GetName();
 
 	BOOST_FOREACH(const User::Ptr& user, CompatUtility::GetCheckableNotificationUsers(service)) {
-		Log(LogDebug, "ServiceDbObject", "service contacts: " + user->GetName());
+		Log(LogDebug, "ServiceDbObject")
+		    << "service contacts: " << user->GetName();
 
-		Dictionary::Ptr fields_contact = make_shared<Dictionary>();
+		Dictionary::Ptr fields_contact = new Dictionary();
 		fields_contact->Set("service_id", DbValue::FromObjectInsertID(service));
 		fields_contact->Set("contact_object_id", user);
 		fields_contact->Set("instance_id", 0); /* DbConnection class fills in real ID */
@@ -230,12 +239,14 @@ void ServiceDbObject::OnConfigUpdate(void)
 		OnQuery(query_contact);
 	}
 
-	Log(LogDebug, "ServiceDbObject", "service contactgroups: " + service->GetName());
+	Log(LogDebug, "ServiceDbObject")
+	    << "service contactgroups: " << service->GetName();
 
 	BOOST_FOREACH(const UserGroup::Ptr& usergroup, CompatUtility::GetCheckableNotificationUserGroups(service)) {
-		Log(LogDebug, "ServiceDbObject", "service contactgroups: " + usergroup->GetName());
+		Log(LogDebug, "ServiceDbObject")
+		    << "service contactgroups: " << usergroup->GetName();
 
-		Dictionary::Ptr fields_contact = make_shared<Dictionary>();
+		Dictionary::Ptr fields_contact = new Dictionary();
 		fields_contact->Set("service_id", DbValue::FromObjectInsertID(service));
 		fields_contact->Set("contactgroup_object_id", usergroup);
 		fields_contact->Set("instance_id", 0); /* DbConnection class fills in real ID */

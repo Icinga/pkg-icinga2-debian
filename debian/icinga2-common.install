@@ -1,9 +1,8 @@
-debian/config/apt.conf        etc/icinga2/conf.d/hosts/localhost
+debian/config/apt.conf        etc/icinga2/conf.d
 debian/tmp/etc/icinga2
 debian/tmp/etc/logrotate.d
 tools/syntax/* 		      usr/share/icinga2-common/syntax
-usr/bin/icinga2-build*
-usr/bin/icinga2-sign-key
-usr/sbin/icinga2-*-feature
-usr/sbin/icinga2-list-objects
 usr/share/icinga2
+debian/tmp/etc/bash_completion.d
+etc/sysconfig/icinga2 usr/lib/icinga2
+usr/lib/icinga2/prepare-dirs

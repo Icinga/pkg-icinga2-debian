@@ -92,8 +92,10 @@ static char *lb_steal(lex_buf *lb)
 %option reentrant noyywrap yylineno
 %option bison-bridge bison-locations
 %option never-interactive nounistd
+%option noinput nounput
 
 %x HEREDOC
+%x C_COMMENT
 
 %%
 	lex_buf string_buf;
@@ -112,6 +114,19 @@ static char *lb_steal(lex_buf *lb)
 
 <HEREDOC>(.|\n)			{ lb_append_char(&string_buf, yytext[0]); }
 
+"/*"				{ BEGIN(C_COMMENT); }
+
+<C_COMMENT>{
+"*/"				{ BEGIN(INITIAL); }
+[^*]				/* ignore comment */
+"*"				/* ignore star */
+}
+
+<C_COMMENT><<EOF>>              {
+	fprintf(stderr, "End-of-file while in comment.\n");
+	yyterminate();
+				}
+\/\/[^\n]*                      /* ignore C++-style comments */
 [ \t\r\n]			/* ignore whitespace */
 
 #include			{ return T_INCLUDE; }
@@ -119,18 +134,18 @@ class				{ return T_CLASS; }
 namespace			{ return T_NAMESPACE; }
 code				{ return T_CODE; }
 abstract			{ yylval->num = TAAbstract; return T_CLASS_ATTRIBUTE; }
-safe				{ yylval->num = TASafe; return T_CLASS_ATTRIBUTE; }
 config				{ yylval->num = FAConfig; return T_FIELD_ATTRIBUTE; }
 state				{ yylval->num = FAState; return T_FIELD_ATTRIBUTE; }
 enum				{ yylval->num = FAEnum; return T_FIELD_ATTRIBUTE; }
-get_protected		{ yylval->num = FAGetProtected; return T_FIELD_ATTRIBUTE; }
-set_protected		{ yylval->num = FASetProtected; return T_FIELD_ATTRIBUTE; }
+get_protected			{ yylval->num = FAGetProtected; return T_FIELD_ATTRIBUTE; }
+set_protected			{ yylval->num = FASetProtected; return T_FIELD_ATTRIBUTE; }
 protected			{ yylval->num = FAGetProtected | FASetProtected; return T_FIELD_ATTRIBUTE; }
+internal			{ yylval->num = FAInternal; return T_FIELD_ATTRIBUTE; }
 default				{ yylval->num = FTDefault; return T_FIELD_ACCESSOR_TYPE; }
-get					{ yylval->num = FTGet; return T_FIELD_ACCESSOR_TYPE; }
-set					{ yylval->num = FTSet; return T_FIELD_ACCESSOR_TYPE; }
+get				{ yylval->num = FTGet; return T_FIELD_ACCESSOR_TYPE; }
+set				{ yylval->num = FTSet; return T_FIELD_ACCESSOR_TYPE; }
 \"[^\"]+\"			{ yylval->text = strdup(yytext + 1); yylval->text[strlen(yylval->text) - 1] = '\0'; return T_STRING; }
-\<[^>]+\>				{ yylval->text = strdup(yytext + 1); yylval->text[strlen(yylval->text) - 1] = '\0'; return T_ANGLE_STRING; }
+\<[^>]+\>			{ yylval->text = strdup(yytext + 1); yylval->text[strlen(yylval->text) - 1] = '\0'; return T_ANGLE_STRING; }
 [a-zA-Z_][:a-zA-Z0-9\-_]*	{ yylval->text = strdup(yytext); return T_IDENTIFIER; }
 
 .				return yytext[0];

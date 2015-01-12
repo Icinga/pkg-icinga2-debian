@@ -21,11 +21,9 @@
 #define VALUE_H
 
 #include "base/object.hpp"
-#include "base/qstring.hpp"
+#include "base/string.hpp"
 #include <boost/variant/variant.hpp>
 #include <boost/variant/get.hpp>
-
-struct cJSON;
 
 namespace icinga
 {
@@ -51,17 +49,53 @@ enum ValueType
 class I2_BASE_API Value
 {
 public:
-	Value(void);
-	Value(int value);
-	Value(unsigned int value);
-	Value(long value);
-	Value(unsigned long value);
-	Value(double value);
-	Value(const String& value);
-	Value(const char *value);
+	inline Value(void)
+		: m_Value()
+	{ }
+
+	inline Value(int value)
+		: m_Value(double(value))
+	{ }
+
+	inline Value(unsigned int value)
+		: m_Value(double(value))
+	{ }
+
+	inline Value(long value)
+		: m_Value(double(value))
+	{ }
+
+	inline Value(unsigned long value)
+		: m_Value(double(value))
+	{ }
+
+	inline Value(double value)
+		: m_Value(value)
+	{ }
+
+	inline Value(const String& value)
+		: m_Value(value)
+	{ }
+
+	inline Value(const char *value)
+		: m_Value(String(value))
+	{ }
+
+	inline Value(const Value& other)
+		: m_Value(other.m_Value)
+	{ }
+
+	inline Value(Object *value)
+		: m_Value()
+	{
+		if (!value)
+			return;
+
+		m_Value = Object::Ptr(value);
+	}
 
 	template<typename T>
-	inline Value(const shared_ptr<T>& value)
+	inline Value(const intrusive_ptr<T>& value)
 		: m_Value()
 	{
 		if (!value)
@@ -94,28 +128,75 @@ public:
 	bool operator!=(const Value& rhs) const;
 
 	template<typename T>
-	operator shared_ptr<T>(void) const
+	operator intrusive_ptr<T>(void) const
 	{
 		if (IsEmpty())
-			return shared_ptr<T>();
+			return intrusive_ptr<T>();
 
-#ifdef _DEBUG
-		shared_ptr<T> object = dynamic_pointer_cast<T>(boost::get<Object::Ptr>(m_Value));
+		if (!IsObject())
+			BOOST_THROW_EXCEPTION(std::runtime_error("Cannot convert value to object."));
 
-		if (!object)
+		Object::Ptr object = boost::get<Object::Ptr>(m_Value);
+
+		ASSERT(object);
+
+		intrusive_ptr<T> tobject = dynamic_pointer_cast<T>(object);
+
+		if (!tobject)
 			BOOST_THROW_EXCEPTION(std::bad_cast());
-#else /* _DEBUG */
-		shared_ptr<T> object = static_pointer_cast<T>(boost::get<Object::Ptr>(m_Value));
-#endif /* _DEBUG */
 
-		return object;
+		return tobject;
 	}
 
-	bool IsEmpty(void) const;
-	bool IsScalar(void) const;
-	bool IsNumber(void) const;
-	bool IsString(void) const;
-	bool IsObject(void) const;
+	/**
+	* Checks whether the variant is empty.
+	*
+	* @returns true if the variant is empty, false otherwise.
+	*/
+	inline bool IsEmpty(void) const
+	{
+		return (GetType() == ValueEmpty);
+	}
+
+	/**
+	* Checks whether the variant is scalar (i.e. not an object and not empty).
+	*
+	* @returns true if the variant is scalar, false otherwise.
+	*/
+	inline bool IsScalar(void) const
+	{
+		return !IsEmpty() && !IsObject();
+	}
+
+	/**
+	* Checks whether the variant is a number.
+	*
+	* @returns true if the variant is a number.
+	*/
+	inline bool IsNumber(void) const
+	{
+		return (GetType() == ValueNumber);
+	}
+
+	/**
+	* Checks whether the variant is a string.
+	*
+	* @returns true if the variant is a string.
+	*/
+	inline bool IsString(void) const
+	{
+		return (GetType() == ValueString);
+	}
+
+	/**
+	* Checks whether the variant is a non-null object.
+	*
+	* @returns true if the variant is a non-null object, false otherwise.
+	*/
+	inline bool IsObject(void) const
+	{
+		return !IsEmpty() && (GetType() == ValueObject);
+	}
 
 	template<typename T>
 	bool IsObjectType(void) const
@@ -126,14 +207,26 @@ public:
 		return (dynamic_pointer_cast<T>(boost::get<Object::Ptr>(m_Value)) != NULL);
 	}
 
-	static Value FromJson(cJSON *json);
-	cJSON *ToJson(void) const;
+	/**
+	* Returns the type of the value.
+	*
+	* @returns The type.
+	*/
+	ValueType GetType(void) const
+	{
+		return static_cast<ValueType>(m_Value.which());
+	}
 
-	ValueType GetType(void) const;
 	String GetTypeName(void) const;
 
 private:
 	boost::variant<boost::blank, double, String, Object::Ptr> m_Value;
+
+	template<typename T>
+	const T& Get(void) const
+	{
+		return boost::get<T>(m_Value);
+	}
 };
 
 static Value Empty;

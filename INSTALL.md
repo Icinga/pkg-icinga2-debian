@@ -25,10 +25,13 @@ parentheses):
 * Boost library and header files (boost-devel on RHEL, libboost-all-dev on Debian)
 * GNU bison (bison)
 * GNU flex (flex) >= 2.5.35
-* Python (python-devel on RHEL, python-dev on Debian)
-* recommended: libexecinfo on FreeBSD
-* optional: MySQL (mysql-devel on RHEL, libmysqlclient-dev on Debian)
-* optional: PostgreSQL (postgresql-devel on RHEL, libpq-dev on Debian)
+* recommended: libexecinfo on FreeBSD (automatically used when Icinga 2 is
+               installed via port or package)
+* optional: MySQL (mysql-devel on RHEL, libmysqlclient-dev on Debian); set CMake
+             variable `ICINGA2_WITH_MYSQL` to disable this module
+* optional: PostgreSQL (postgresql-devel on RHEL, libpq-dev on Debian); set CMake
+            variable `ICINGA2_WITH_PGSQL` to disable this module
+* optional: YAJL (yajl-devel on RHEL, libyajl-dev on Debian)
 
 Note: RHEL5 ships an ancient flex version. Updated packages are available for
 example from the repoforge buildtools repository.
@@ -91,11 +94,11 @@ Push the tag.
 
     $ git push --tags
     
-Merge the "master" branch into the "support/2.1" branch (using --ff-only).
+Merge the "master" branch into the "support/2.2" branch (using --ff-only).
 
-    $ git checkout support/2.1
+    $ git checkout support/2.2
     $ git merge --ff-only master
-    $ git push origin support/2.1
+    $ git push origin support/2.2
 
 Note: CMake determines the Icinga 2 version number using `git describe` if the
 source directory is contained in a Git repository. Otherwise the version number
@@ -108,12 +111,12 @@ disable the usage of `git describe`.
 
 Use `git archive` to build the release tarball:
 
-    $ VERSION=2.1.0
+    $ VERSION=2.2.2
     $ git archive --format=tar --prefix=icinga2-$VERSION/ tags/v$VERSION | gzip >icinga2-$VERSION.tar.gz
 
 Finally you should verify that the tarball only contains the files it should contain:
 
-    $ VERSION=2.1.0
+    $ VERSION=2.2.2
     $ tar ztf icinga2-$VERSION.tar.gz | less
 
 
@@ -136,10 +139,9 @@ variables are supported:
 
 - `ICINGA2_USER`: The user Icinga 2 should run as; defaults to `icinga`
 - `ICINGA2_GROUP`: The group Icinga 2 should run as; defaults to `icinga`
-- `ICINGA2_COMMAND_USER`: The command user Icinga 2 should use; defaults to `icinga`
 - `ICINGA2_GIT_VERSION_INFO`: Whether to use Git to determine the version number; defaults to `ON`
 - `ICINGA2_COMMAND_GROUP`: The command group Icinga 2 should use; defaults to `icingacmd`
-- `ICINGA2_UNITY_BUILD`: Whether to perform a unity build
+- `ICINGA2_UNITY_BUILD`: Whether to perform a unity build; defaults to `OFF`
 - `ICINGA2_PLUGINDIR`: The path for the Monitoring Plugins project binaries; defaults to `/usr/lib/nagios/plugins`
 - `ICINGA2_RUNDIR`: The location of the "run" directory; defaults to `CMAKE_INSTALL_LOCALSTATEDIR/run`
 - `CMAKE_INSTALL_SYSCONFDIR`: The configuration directory; defaults to `CMAKE_INSTALL_PREFIX/etc`
@@ -151,6 +153,8 @@ defaults to `CMAKE_INSTALL_PREFIX/etc/sysconfig/icinga2`
 and the SysV initscript in parallel, regardless of how `USE_SYSTEMD` is set. 
 Only use this for special packaging purposes and if you know what you are doing.
 Defaults to `OFF`.
+- `ICINGA2_WITH_MYSQL`: Determines whether the MySQL IDO module is built; defaults to `ON`
+- `ICINGA2_WITH_PGSQL`: Determines whether the PostgreSQL IDO module is built; defaults to `ON`
 
 ### Building Icinga 2 RPMs
 
@@ -172,12 +176,13 @@ the git repository checkout:
 Icinga 2 comes with a single binary that takes care of loading all the relevant
 components (e.g. for check execution, notifications, etc.):
 
-    # /usr/sbin/icinga2
-    [2014-06-13 15:29:16 +0200] information/icinga-app: Icinga application loader (version: v2.0.0-beta2-17-gd9289ad)
-    [2014-06-13 15:29:16 +0200] information/icinga-app: Loading application type: icinga/IcingaApplication
-    [2014-06-13 15:29:16 +0200] information/Utility: Loading library 'libicinga.so'
-    [2014-06-13 15:29:16 +0200] information/ConfigCompiler: Adding include search dir: /usr/share/icinga2/include
-    [2014-06-13 15:29:16 +0200] critical/icinga-app: You need to specify at least one config file (using the --config option).
+    # /usr/sbin/icinga2 daemon
+    [2014-12-18 10:20:49 +0100] information/cli: Icinga application loader (version: v2.2.2)
+    [2014-12-18 10:20:49 +0100] information/cli: Loading application type: icinga/IcingaApplication
+    [2014-12-18 10:20:49 +0100] information/Utility: Loading library 'libicinga.so'
+    [2014-12-18 10:20:49 +0100] information/ConfigCompiler: Compiling config file: /home/gbeutner/i2/etc/icinga2/icinga2.conf
+    [2014-12-18 10:20:49 +0100] information/ConfigCompiler: Compiling config file: /home/gbeutner/i2/etc/icinga2/constants.conf
+    ...
 
 Icinga 2 can be started as daemon using the provided init script:
 

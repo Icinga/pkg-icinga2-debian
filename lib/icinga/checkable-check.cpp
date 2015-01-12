@@ -23,9 +23,11 @@
 #include "icinga/checkcommand.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "icinga/cib.hpp"
+#include "icinga/apievents.hpp"
 #include "remote/messageorigin.hpp"
+#include "remote/apilistener.hpp"
 #include "base/objectlock.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/convert.hpp"
 #include "base/utility.hpp"
 #include "base/context.hpp"
@@ -35,6 +37,7 @@ using namespace icinga;
 
 boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, const MessageOrigin&)> Checkable::OnNewCheckResult;
 boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, StateType, const MessageOrigin&)> Checkable::OnStateChange;
+boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, std::set<Checkable::Ptr>, const MessageOrigin&)> Checkable::OnReachabilityChanged;
 boost::signals2::signal<void (const Checkable::Ptr&, NotificationType, const CheckResult::Ptr&, const String&, const String&)> Checkable::OnNotificationsRequested;
 boost::signals2::signal<void (const Checkable::Ptr&, double, const MessageOrigin&)> Checkable::OnNextCheckChanged;
 boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> Checkable::OnForceNextCheckChanged;
@@ -66,7 +69,7 @@ void Checkable::SetCheckCommand(const CheckCommand::Ptr& command, const MessageO
 {
 	SetOverrideCheckCommand(command->GetName());
 
-	OnCheckCommandChanged(GetSelf(), command, origin);
+	OnCheckCommandChanged(this, command, origin);
 }
 
 TimePeriod::Ptr Checkable::GetCheckPeriod(void) const
@@ -85,7 +88,7 @@ void Checkable::SetCheckPeriod(const TimePeriod::Ptr& tp, const MessageOrigin& o
 {
 	SetOverrideCheckPeriod(tp->GetName());
 
-	OnCheckPeriodChanged(GetSelf(), tp, origin);
+	OnCheckPeriodChanged(this, tp, origin);
 }
 
 double Checkable::GetCheckInterval(void) const
@@ -100,7 +103,7 @@ void Checkable::SetCheckInterval(double interval, const MessageOrigin& origin)
 {
 	SetOverrideCheckInterval(interval);
 
-	OnCheckIntervalChanged(GetSelf(), interval, origin);
+	OnCheckIntervalChanged(this, interval, origin);
 }
 
 double Checkable::GetRetryInterval(void) const
@@ -115,7 +118,7 @@ void Checkable::SetRetryInterval(double interval, const MessageOrigin& origin)
 {
 	SetOverrideRetryInterval(interval);
 
-	OnRetryIntervalChanged(GetSelf(), interval, origin);
+	OnRetryIntervalChanged(this, interval, origin);
 }
 
 void Checkable::SetSchedulingOffset(long offset)
@@ -132,7 +135,7 @@ void Checkable::SetNextCheck(double nextCheck, const MessageOrigin& origin)
 {
 	SetNextCheckRaw(nextCheck);
 
-	OnNextCheckChanged(GetSelf(), nextCheck, origin);
+	OnNextCheckChanged(this, nextCheck, origin);
 }
 
 double Checkable::GetNextCheck(void)
@@ -186,7 +189,7 @@ void Checkable::SetEnableActiveChecks(bool enabled, const MessageOrigin& origin)
 {
 	SetOverrideEnableActiveChecks(enabled);
 
-	OnEnableActiveChecksChanged(GetSelf(), enabled, origin);
+	OnEnableActiveChecksChanged(this, enabled, origin);
 }
 
 bool Checkable::GetEnablePassiveChecks(void) const
@@ -201,7 +204,7 @@ void Checkable::SetEnablePassiveChecks(bool enabled, const MessageOrigin& origin
 {
 	SetOverrideEnablePassiveChecks(enabled);
 
-	OnEnablePassiveChecksChanged(GetSelf(), enabled, origin);
+	OnEnablePassiveChecksChanged(this, enabled, origin);
 }
 
 bool Checkable::GetForceNextCheck(void) const
@@ -213,7 +216,7 @@ void Checkable::SetForceNextCheck(bool forced, const MessageOrigin& origin)
 {
 	SetForceNextCheckRaw(forced);
 
-	OnForceNextCheckChanged(GetSelf(), forced, origin);
+	OnForceNextCheckChanged(this, forced, origin);
 }
 
 int Checkable::GetMaxCheckAttempts(void) const
@@ -228,7 +231,7 @@ void Checkable::SetMaxCheckAttempts(int attempts, const MessageOrigin& origin)
 {
 	SetOverrideMaxCheckAttempts(attempts);
 
-	OnMaxCheckAttemptsChanged(GetSelf(), attempts, origin);
+	OnMaxCheckAttemptsChanged(this, attempts, origin);
 }
 
 void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrigin& origin)
@@ -255,6 +258,19 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 	if (origin.IsLocal())
 		cr->SetCheckSource(IcingaApplication::GetInstance()->GetNodeName());
 
+	Endpoint::Ptr command_endpoint = GetCommandEndpoint();
+
+	if (command_endpoint && (Endpoint::GetLocalEndpoint() != command_endpoint) && GetExtension("agent_check")) {
+		ApiListener::Ptr listener = ApiListener::GetInstance();
+
+		if (listener) {
+			Dictionary::Ptr message = ApiEvents::MakeCheckResultMessage(this, cr);
+			listener->SyncSendMessage(command_endpoint, message);
+		}
+
+		return;
+	}
+
 	bool reachable = IsReachable();
 	bool notification_reachable = IsReachable(DependencyNotification);
 
@@ -278,6 +294,8 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 
 	long attempt = 1;
 
+	std::set<Checkable::Ptr> children = GetChildren();
+
 	if (!old_cr) {
 		SetStateType(StateTypeHard);
 	} else if (cr->GetState() == ServiceOK) {
@@ -291,6 +309,10 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 
 		ResetNotificationNumbers();
 		SetLastStateOK(Utility::GetTime());
+
+		/* update reachability for child objects in OK state */
+		if (!children.empty())
+			OnReachabilityChanged(this, cr, children, origin);
 	} else {
 		if (old_attempt >= GetMaxCheckAttempts()) {
 			SetStateType(StateTypeHard);
@@ -315,6 +337,10 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 				SetLastStateUnknown(Utility::GetTime());
 				break;
 		}
+
+		/* update reachability for child objects in NOT-OK state */
+		if (!children.empty())
+			OnReachabilityChanged(this, cr, children, origin);
 	}
 
 	if (!reachable)
@@ -368,7 +394,7 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 
 	Host::Ptr host;
 	Service::Ptr service;
-	tie(host, service) = GetHostService(GetSelf());
+	tie(host, service) = GetHostService(this);
 
 	CheckableType checkable_type = CheckableHost;
 	if (service)
@@ -394,7 +420,7 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 	if (remove_acknowledgement_comments)
 		RemoveCommentsByType(CommentAcknowledgement);
 
-	Dictionary::Ptr vars_after = make_shared<Dictionary>();
+	Dictionary::Ptr vars_after = new Dictionary();
 	vars_after->Set("state", new_state);
 	vars_after->Set("state_type", GetStateType());
 	vars_after->Set("attempt", GetCheckAttempt());
@@ -417,46 +443,51 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 
 	olock.Unlock();
 
-//	Log(LogDebug, "Checkable", "Flapping: Checkable " + GetName() +
-//			" was: " + Convert::ToString(was_flapping) +
-//			" is: " + Convert::ToString(is_flapping) +
-//			" threshold: " + Convert::ToString(GetFlappingThreshold()) +
-//			"% current: " +	Convert::ToString(GetFlappingCurrent()) + "%.");
+//	Log(LogDebug, "Checkable")
+//	    << "Flapping: Checkable " << GetName()
+//	    << " was: " << (was_flapping)
+//	    << " is: " << is_flapping)
+//	    << " threshold: " << GetFlappingThreshold()
+//	    << "% current: " + GetFlappingCurrent()) << "%.";
 
-	OnNewCheckResult(GetSelf(), cr, origin);
+	OnNewCheckResult(this, cr, origin);
 
 	/* signal status updates to for example db_ido */
-	OnStateChanged(GetSelf());
+	OnStateChanged(this);
 
 	String old_state_str = (service ? Service::StateToString(old_state) : Host::StateToString(Host::CalculateState(old_state)));
 	String new_state_str = (service ? Service::StateToString(new_state) : Host::StateToString(Host::CalculateState(new_state)));
 
 	if (hardChange) {
-		OnStateChange(GetSelf(), cr, StateTypeHard, origin);
-		Log(LogNotice, "Checkable", "State Change: Checkable " + GetName() + " hard state change from " + old_state_str + " to " + new_state_str + " detected.");
+		OnStateChange(this, cr, StateTypeHard, origin);
+		Log(LogNotice, "Checkable")
+		    << "State Change: Checkable " << GetName() << " hard state change from " << old_state_str << " to " << new_state_str << " detected.";
 	} else if (stateChange) {
-		OnStateChange(GetSelf(), cr, StateTypeSoft, origin);
-		Log(LogNotice, "Checkable", "State Change: Checkable " + GetName() + " soft state change from " + old_state_str + " to " + new_state_str + " detected.");
+		OnStateChange(this, cr, StateTypeSoft, origin);
+		Log(LogNotice, "Checkable")
+		    << "State Change: Checkable " << GetName() << " soft state change from " << old_state_str << " to " << new_state_str << " detected.";
 	}
 
 	if (GetStateType() == StateTypeSoft || hardChange || recovery)
 		ExecuteEventHandler();
 
 	if (send_downtime_notification)
-		OnNotificationsRequested(GetSelf(), in_downtime ? NotificationDowntimeStart : NotificationDowntimeEnd, cr, "", "");
+		OnNotificationsRequested(this, in_downtime ? NotificationDowntimeStart : NotificationDowntimeEnd, cr, "", "");
 
 	if (!was_flapping && is_flapping) {
-		OnNotificationsRequested(GetSelf(), NotificationFlappingStart, cr, "", "");
+		OnNotificationsRequested(this, NotificationFlappingStart, cr, "", "");
 
-		Log(LogNotice, "Checkable", "Flapping: Checkable " + GetName() + " started flapping (" + Convert::ToString(GetFlappingThreshold()) + "% < " + Convert::ToString(GetFlappingCurrent()) + "%).");
-		OnFlappingChanged(GetSelf(), FlappingStarted);
+		Log(LogNotice, "Checkable")
+		    << "Flapping: Checkable " << GetName() << " started flapping (" << GetFlappingThreshold() << "% < " << GetFlappingCurrent() << "%).";
+		OnFlappingChanged(this, FlappingStarted);
 	} else if (was_flapping && !is_flapping) {
-		OnNotificationsRequested(GetSelf(), NotificationFlappingEnd, cr, "", "");
+		OnNotificationsRequested(this, NotificationFlappingEnd, cr, "", "");
 
-		Log(LogNotice, "Checkable", "Flapping: Checkable " + GetName() + " stopped flapping (" + Convert::ToString(GetFlappingThreshold()) + "% >= " + Convert::ToString(GetFlappingCurrent()) + "%).");
-		OnFlappingChanged(GetSelf(), FlappingStopped);
+		Log(LogNotice, "Checkable")
+		    << "Flapping: Checkable " << GetName() << " stopped flapping (" << GetFlappingThreshold() << "% >= " << GetFlappingCurrent() << "%).";
+		OnFlappingChanged(this, FlappingStopped);
 	} else if (send_notification)
-		OnNotificationsRequested(GetSelf(), recovery ? NotificationRecovery : NotificationProblem, cr, "", "");
+		OnNotificationsRequested(this, recovery ? NotificationRecovery : NotificationProblem, cr, "", "");
 }
 
 bool Checkable::IsCheckPending(void) const
@@ -465,7 +496,7 @@ bool Checkable::IsCheckPending(void) const
 	return m_CheckRunning;
 }
 
-void Checkable::ExecuteCheck(void)
+void Checkable::ExecuteCheck(const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)
 {
 	CONTEXT("Executing check for object '" + GetName() + "'");
 
@@ -493,14 +524,57 @@ void Checkable::ExecuteCheck(void)
 	double scheduled_start = GetNextCheck();
 	double before_check = Utility::GetTime();
 
-	Checkable::Ptr self = GetSelf();
-
-	CheckResult::Ptr result = make_shared<CheckResult>();
+	CheckResult::Ptr result = new CheckResult();
 
 	result->SetScheduleStart(scheduled_start);
 	result->SetExecutionStart(before_check);
 
-	GetCheckCommand()->Execute(GetSelf(), result);
+	Dictionary::Ptr macros;
+	Endpoint::Ptr endpoint = GetCommandEndpoint();
+
+	if (endpoint && !useResolvedMacros)
+		macros = new Dictionary();
+	else
+		macros = resolvedMacros;
+
+	GetCheckCommand()->Execute(this, result, macros, useResolvedMacros);
+
+	if (endpoint && !useResolvedMacros) {
+		if (endpoint->IsConnected()) {
+			Dictionary::Ptr message = new Dictionary();
+			message->Set("jsonrpc", "2.0");
+			message->Set("method", "event::ExecuteCommand");
+
+			Host::Ptr host;
+			Service::Ptr service;
+			tie(host, service) = GetHostService(this);
+
+			Dictionary::Ptr params = new Dictionary();
+			message->Set("params", params);
+			params->Set("command_type", "check_command");
+			params->Set("command", GetCheckCommand()->GetName());
+			params->Set("host", host->GetName());
+
+			if (service)
+				params->Set("service", service->GetShortName());
+
+			params->Set("macros", macros);
+
+			ApiListener::Ptr listener = ApiListener::GetInstance();
+
+			if (listener)
+				listener->SyncSendMessage(endpoint, message);
+		} else if (Application::GetInstance()->GetStartTime() < Utility::GetTime() - 30) {
+			result->SetState(ServiceUnknown);
+			result->SetOutput("Remote Icinga instance '" + endpoint->GetName() + "' is not connected.");
+			ProcessCheckResult(result);
+		}
+
+		{
+			ObjectLock olock(this);
+			m_CheckRunning = false;
+		}
+	}
 }
 
 void Checkable::UpdateStatistics(const CheckResult::Ptr& cr, CheckableType type)

@@ -18,14 +18,17 @@
  ******************************************************************************/
 
 #include "icinga/checkable.hpp"
+#include "config/configcompilercontext.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
+#include "base/scriptfunction.hpp"
 #include <boost/foreach.hpp>
 #include <boost/bind/apply.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(Checkable);
+REGISTER_SCRIPTFUNCTION(ValidateCheckableCheckInterval, &Checkable::ValidateCheckInterval);
 
 boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> Checkable::OnEnablePerfdataChanged;
 boost::signals2::signal<void (const Checkable::Ptr&, const String&, const String&, AcknowledgementType, double, const MessageOrigin&)> Checkable::OnAcknowledgementSet;
@@ -90,7 +93,7 @@ void Checkable::AddGroup(const String& name)
 		return;
 
 	if (!groups)
-		groups = make_shared<Array>();
+		groups = new Array();
 
 	groups->Add(name);
 }
@@ -127,9 +130,9 @@ void Checkable::AcknowledgeProblem(const String& author, const String& comment, 
 		SetAcknowledgementExpiry(expiry);
 	}
 
-	OnNotificationsRequested(GetSelf(), NotificationAcknowledgement, GetLastCheckResult(), author, comment);
+	OnNotificationsRequested(this, NotificationAcknowledgement, GetLastCheckResult(), author, comment);
 
-	OnAcknowledgementSet(GetSelf(), author, comment, type, expiry, origin);
+	OnAcknowledgementSet(this, author, comment, type, expiry, origin);
 }
 
 void Checkable::ClearAcknowledgement(const MessageOrigin& origin)
@@ -139,7 +142,7 @@ void Checkable::ClearAcknowledgement(const MessageOrigin& origin)
 	SetAcknowledgementRaw(AcknowledgementNone);
 	SetAcknowledgementExpiry(0);
 
-	OnAcknowledgementCleared(GetSelf(), origin);
+	OnAcknowledgementCleared(this, origin);
 }
 
 bool Checkable::GetEnablePerfdata(void) const
@@ -154,7 +157,7 @@ void Checkable::SetEnablePerfdata(bool enabled, const MessageOrigin& origin)
 {
 	SetOverrideEnablePerfdata(enabled);
 
-	OnEnablePerfdataChanged(GetSelf(), enabled, origin);
+	OnEnablePerfdataChanged(this, enabled, origin);
 }
 
 int Checkable::GetModifiedAttributes(void) const
@@ -197,7 +200,7 @@ int Checkable::GetModifiedAttributes(void) const
 	if (!GetOverrideCheckPeriod().IsEmpty())
 		attrs |= ModAttrCheckTimeperiod;
 
-	if (!GetOverrideVars().IsEmpty())
+	if (GetOverrideVars())
 		attrs |= ModAttrCustomVariable;
 
 	// TODO: finish
@@ -209,22 +212,22 @@ void Checkable::SetModifiedAttributes(int flags, const MessageOrigin& origin)
 {
 	if ((flags & ModAttrNotificationsEnabled) == 0) {
 		SetOverrideEnableNotifications(Empty);
-		OnEnableNotificationsChanged(GetSelf(), GetEnableNotifications(), origin);
+		OnEnableNotificationsChanged(this, GetEnableNotifications(), origin);
 	}
 
 	if ((flags & ModAttrActiveChecksEnabled) == 0) {
 		SetOverrideEnableActiveChecks(Empty);
-		OnEnableActiveChecksChanged(GetSelf(), GetEnableActiveChecks(), origin);
+		OnEnableActiveChecksChanged(this, GetEnableActiveChecks(), origin);
 	}
 
 	if ((flags & ModAttrPassiveChecksEnabled) == 0) {
 		SetOverrideEnablePassiveChecks(Empty);
-		OnEnablePassiveChecksChanged(GetSelf(), GetEnablePassiveChecks(), origin);
+		OnEnablePassiveChecksChanged(this, GetEnablePassiveChecks(), origin);
 	}
 
 	if ((flags & ModAttrFlapDetectionEnabled) == 0) {
 		SetOverrideEnableFlapping(Empty);
-		OnEnableFlappingChanged(GetSelf(), GetEnableFlapping(), origin);
+		OnEnableFlappingChanged(this, GetEnableFlapping(), origin);
 	}
 
 	if ((flags & ModAttrEventHandlerEnabled) == 0)
@@ -232,7 +235,7 @@ void Checkable::SetModifiedAttributes(int flags, const MessageOrigin& origin)
 
 	if ((flags & ModAttrPerformanceDataEnabled) == 0) {
 		SetOverrideEnablePerfdata(Empty);
-		OnEnablePerfdataChanged(GetSelf(), GetEnablePerfdata(), origin);
+		OnEnablePerfdataChanged(this, GetEnablePerfdata(), origin);
 	}
 
 	if ((flags & ModAttrNormalCheckInterval) == 0)
@@ -255,6 +258,19 @@ void Checkable::SetModifiedAttributes(int flags, const MessageOrigin& origin)
 
 	if ((flags & ModAttrCustomVariable) == 0) {
 		SetOverrideVars(Empty);
-		OnVarsChanged(GetSelf(), GetVars(), origin);
+		OnVarsChanged(this, GetVars(), origin);
+	}
+}
+
+Endpoint::Ptr Checkable::GetCommandEndpoint(void) const
+{
+	return Endpoint::GetByName(GetCommandEndpointRaw());
+}
+
+void Checkable::ValidateCheckInterval(const String& location, const Dictionary::Ptr& attrs)
+{
+	if (attrs->Get("check_interval") <= 0) {
+		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
+		    location + ": check_interval must be greater than 0.");
 	}
 }

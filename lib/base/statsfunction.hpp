@@ -24,6 +24,7 @@
 #include "base/registry.hpp"
 #include "base/value.hpp"
 #include "base/dictionary.hpp"
+#include "base/array.hpp"
 #include <boost/function.hpp>
 
 namespace icinga
@@ -39,11 +40,11 @@ class I2_BASE_API StatsFunction : public Object
 public:
 	DECLARE_PTR_TYPEDEFS(StatsFunction);
 
-	typedef boost::function<Value (Dictionary::Ptr& status, Dictionary::Ptr& perfdata)> Callback;
+	typedef boost::function<Value (Dictionary::Ptr& status, Array::Ptr& perfdata)> Callback;
 
 	StatsFunction(const Callback& function);
 
-	Value Invoke(Dictionary::Ptr& status, Dictionary::Ptr& perfdata);
+	Value Invoke(Dictionary::Ptr& status, Array::Ptr& perfdata);
 
 private:
 	Callback m_Callback;
@@ -60,19 +61,15 @@ public:
 	static StatsFunctionRegistry *GetInstance(void);
 };
 
-/**
- * Helper class for registering StatsFunction implementation classes.
- *
- * @ingroup base
- */
-class I2_BASE_API RegisterStatsFunctionHelper
-{
-public:
-	RegisterStatsFunctionHelper(const String& name, const StatsFunction::Callback& function);
-};
-
 #define REGISTER_STATSFUNCTION(name, callback) \
-	I2_EXPORT icinga::RegisterStatsFunctionHelper g_RegisterStF_ ## name(#name, callback)
+	namespace { namespace UNIQUE_NAME(stf) { namespace stf ## name { \
+		void RegisterStatsFunction(void) \
+		{ \
+			StatsFunction::Ptr stf = new StatsFunction(callback); \
+			StatsFunctionRegistry::GetInstance()->Register(#name, stf); \
+		} \
+		INITIALIZE_ONCE(RegisterStatsFunction); \
+	} } }
 
 }
 

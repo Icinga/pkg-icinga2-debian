@@ -22,7 +22,7 @@
 #include "icinga/service.hpp"
 #include "config/configcompilercontext.hpp"
 #include "base/objectlock.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/utility.hpp"
 #include "base/convert.hpp"
 #include "base/exception.hpp"
@@ -39,15 +39,17 @@ INITIALIZE_ONCE(&Notification::StaticInitialize);
 
 boost::signals2::signal<void (const Notification::Ptr&, double, const MessageOrigin&)> Notification::OnNextNotificationChanged;
 
-String NotificationNameComposer::MakeName(const String& shortName, const Dictionary::Ptr& props) const
+String NotificationNameComposer::MakeName(const String& shortName, const Object::Ptr& context) const
 {
-	if (!props)
+	Notification::Ptr notification = dynamic_pointer_cast<Notification>(context);
+
+	if (!notification)
 		return "";
 
-	String name = props->Get("host_name");
+	String name = notification->GetHostName();
 
-	if (props->Contains("service_name"))
-		name += "!" + props->Get("service_name");
+	if (!notification->GetServiceName().IsEmpty())
+		name += "!" + notification->GetServiceName();
 
 	name += "!" + shortName;
 
@@ -82,7 +84,7 @@ void Notification::OnConfigLoaded(void)
 	Checkable::Ptr obj = GetCheckable();
 
 	if (obj)
-		obj->AddNotification(GetSelf());
+		obj->AddNotification(this);
 }
 
 void Notification::Start(void)
@@ -92,7 +94,7 @@ void Notification::Start(void)
 	Checkable::Ptr obj = GetCheckable();
 
 	if (obj)
-		obj->AddNotification(GetSelf());
+		obj->AddNotification(this);
 }
 
 void Notification::Stop(void)
@@ -102,7 +104,7 @@ void Notification::Stop(void)
 	Checkable::Ptr obj = GetCheckable();
 
 	if (obj)
-		obj->RemoveNotification(GetSelf());
+		obj->RemoveNotification(this);
 }
 
 Checkable::Ptr Notification::GetCheckable(void) const
@@ -182,7 +184,7 @@ void Notification::SetNextNotification(double time, const MessageOrigin& origin)
 {
 	SetNextNotificationRaw(time);
 
-	OnNextNotificationChanged(GetSelf(), time, origin);
+	OnNextNotificationChanged(this, time, origin);
 }
 
 void Notification::UpdateNotificationNumber(void)
@@ -231,7 +233,8 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 		TimePeriod::Ptr tp = GetPeriod();
 
 		if (tp && !tp->IsInside(Utility::GetTime())) {
-			Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': not in timeperiod");
+			Log(LogNotice, "Notification")
+			    << "Not sending notifications for notification object '" << GetName() << "': not in timeperiod";
 			return;
 		}
 
@@ -240,39 +243,56 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 
 		if (type == NotificationProblem) {
 			if (times && times->Contains("begin") && now < checkable->GetLastHardStateChange() + times->Get("begin")) {
-				Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': before escalation range");
+				Log(LogNotice, "Notification")
+				    << "Not sending notifications for notification object '" << GetName() << "': before escalation range";
+
+				/* we need to adjust the next notification time
+ 				 * to now + begin delaying the first notification
+ 				 */
+				double nextProposedNotification = now + times->Get("begin") + 1.0;
+				if (GetNextNotification() > nextProposedNotification)
+					SetNextNotification(nextProposedNotification);
+
 				return;
 			}
 
 			if (times && times->Contains("end") && now > checkable->GetLastHardStateChange() + times->Get("end")) {
-				Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': after escalation range");
+				Log(LogNotice, "Notification")
+				    << "Not sending notifications for notification object '" << GetName() << "': after escalation range";
 				return;
 			}
 		}
 
 		unsigned long ftype = 1 << type;
 
-		Log(LogDebug, "Notification", "FType=" + Convert::ToString(ftype) + ", TypeFilter=" + Convert::ToString(GetTypeFilter()));
+		Log(LogDebug, "Notification")
+		    << "FType=" << ftype << ", TypeFilter=" << GetTypeFilter();
 
 		if (!(ftype & GetTypeFilter())) {
-			Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': type filter does not match");
+			Log(LogNotice, "Notification")
+			    << "Not sending notifications for notification object '" << GetName() << "': type filter does not match '"
+			    << NotificationTypeToString(type) << "'";
 			return;
 		}
 
-		Host::Ptr host;
-		Service::Ptr service;
-		tie(host, service) = GetHostService(checkable);
+		/* ensure that recovery notifications are always sent, no state filter checks necessary */
+		if (type != NotificationRecovery) {
+			Host::Ptr host;
+			Service::Ptr service;
+			tie(host, service) = GetHostService(checkable);
 
-		unsigned long fstate;
+			unsigned long fstate;
 
-		if (service)
-			fstate = ServiceStateToFilter(service->GetState());
-		else
-			fstate = HostStateToFilter(host->GetState());
+			if (service)
+				fstate = ServiceStateToFilter(service->GetState());
+			else
+				fstate = HostStateToFilter(host->GetState());
 
-		if (!(fstate & GetStateFilter())) {
-			Log(LogNotice, "Notification", "Not sending notifications for notification object '" + GetName() + "': state filter does not match");
-			return;
+			if (!(fstate & GetStateFilter())) {
+				Log(LogNotice, "Notification")
+				    << "Not sending notifications for notification object '" << GetName() << "': state filter does not match";
+				return;
+			}
 		}
 	}
 
@@ -296,22 +316,54 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 		std::copy(members.begin(), members.end(), std::inserter(allUsers, allUsers.begin()));
 	}
 
-	Service::OnNotificationSendStart(GetSelf(), checkable, allUsers, type, cr, author, text);
+	Service::OnNotificationSendStart(this, checkable, allUsers, type, cr, author, text);
 
 	std::set<User::Ptr> allNotifiedUsers;
-	BOOST_FOREACH(const User::Ptr& user, allUsers) {
-		if (!user->GetEnableNotifications() || !CheckNotificationUserFilters(type, user, force))
-			continue;
+	Array::Ptr notifiedUsers = GetNotifiedUsers();
 
-		Log(LogInformation, "Notification", "Sending notification for user '" + user->GetName() + "'");
+	BOOST_FOREACH(const User::Ptr& user, allUsers) {
+		String userName = user->GetName();
+
+		if (!user->GetEnableNotifications()) {
+			Log(LogNotice, "Notification")
+			    << "Disabled notifications for user '" << userName << "'. Not sending notification.";
+			continue;
+		}
+
+		if (!CheckNotificationUserFilters(type, user, force)) {
+			Log(LogNotice, "Notification")
+			    << "Notification filters for user '" << userName << "' not matched. Not sending notification.";
+			continue;
+		}
+
+		/* on recovery, check if user was notified before */
+		if (type == NotificationRecovery) {
+			if (!notifiedUsers->Contains(userName)) {
+				Log(LogNotice, "Notification")
+				    << "We did not notify user '" << userName << "' before. Not sending recovery notification.";
+				continue;
+			}
+		}
+
+		Log(LogInformation, "Notification")
+		    << "Sending notification for user '" << userName << "'";
+
 		Utility::QueueAsyncCallback(boost::bind(&Notification::ExecuteNotificationHelper, this, type, user, cr, force, author, text));
 
 		/* collect all notified users */
 		allNotifiedUsers.insert(user);
+
+		/* store all notified users for later recovery checks */
+		if (!notifiedUsers->Contains(userName))
+			notifiedUsers->Add(userName);
 	}
 
+	/* if this was a recovery notification, reset all notified users */
+	if (type == NotificationRecovery)
+		notifiedUsers->Clear();
+
 	/* used in db_ido for notification history */
-	Service::OnNotificationSentToAllUsers(GetSelf(), checkable, allNotifiedUsers, type, cr, author, text);
+	Service::OnNotificationSentToAllUsers(this, checkable, allNotifiedUsers, type, cr, author, text);
 }
 
 bool Notification::CheckNotificationUserFilters(NotificationType type, const User::Ptr& user, bool force)
@@ -322,35 +374,41 @@ bool Notification::CheckNotificationUserFilters(NotificationType type, const Use
 		TimePeriod::Ptr tp = user->GetPeriod();
 
 		if (tp && !tp->IsInside(Utility::GetTime())) {
-			Log(LogNotice, "Notification", "Not sending notifications for notification object '" +
-			    GetName() + " and user '" + user->GetName() + "': user not in timeperiod");
+			Log(LogNotice, "Notification")
+			    << "Not sending notifications for notification object '"
+			    << GetName() << " and user '" << user->GetName() << "': user not in timeperiod";
 			return false;
 		}
 
 		unsigned long ftype = 1 << type;
 
 		if (!(ftype & user->GetTypeFilter())) {
-			Log(LogNotice, "Notification", "Not sending notifications for notification object '" +
-			    GetName() + " and user '" + user->GetName() + "': type filter does not match");
+			Log(LogNotice, "Notification")
+			    << "Not sending notifications for notification object '"
+			    << GetName() << " and user '" << user->GetName() << "': type filter does not match";
 			return false;
 		}
 
-		Checkable::Ptr checkable = GetCheckable();
-		Host::Ptr host;
-		Service::Ptr service;
-		tie(host, service) = GetHostService(checkable);
+		/* check state filters it this is not a recovery notification */
+		if (type != NotificationRecovery) {
+			Checkable::Ptr checkable = GetCheckable();
+			Host::Ptr host;
+			Service::Ptr service;
+			tie(host, service) = GetHostService(checkable);
 
-		unsigned long fstate;
+			unsigned long fstate;
 
-		if (service)
-				fstate = ServiceStateToFilter(service->GetState());
-		else
-				fstate = HostStateToFilter(host->GetState());
+			if (service)
+					fstate = ServiceStateToFilter(service->GetState());
+			else
+					fstate = HostStateToFilter(host->GetState());
 
-		if (!(fstate & user->GetStateFilter())) {
-			Log(LogNotice, "Notification", "Not sending notifications for notification object '" +
-			    GetName() + " and user '" + user->GetName() + "': state filter does not match");
-			return false;
+			if (!(fstate & user->GetStateFilter())) {
+				Log(LogNotice, "Notification")
+				    << "Not sending notifications for notification object '"
+				    << GetName() << " and user '" << user->GetName() << "': state filter does not match";
+				return false;
+			}
 		}
 	}
 
@@ -365,11 +423,12 @@ void Notification::ExecuteNotificationHelper(NotificationType type, const User::
 		NotificationCommand::Ptr command = GetCommand();
 
 		if (!command) {
-			Log(LogDebug, "Notification", "No notification_command found for notification '" + GetName() + "'. Skipping execution.");
+			Log(LogDebug, "Notification")
+			    << "No notification_command found for notification '" << GetName() << "'. Skipping execution.";
 			return;
 		}
 
-		command->Execute(GetSelf(), user, cr, type, author, text);
+		command->Execute(this, user, cr, type, author, text);
 
 		{
 			ObjectLock olock(this);
@@ -378,14 +437,14 @@ void Notification::ExecuteNotificationHelper(NotificationType type, const User::
 		}
 
 		/* required by compatlogger */
-		Service::OnNotificationSentToUser(GetSelf(), GetCheckable(), user, type, cr, author, text, command->GetName());
+		Service::OnNotificationSentToUser(this, GetCheckable(), user, type, cr, author, text, command->GetName());
 
-		Log(LogInformation, "Notification", "Completed sending notification for object '" + GetCheckable()->GetName() + "'");
+		Log(LogInformation, "Notification")
+		    << "Completed sending notification for object '" << GetCheckable()->GetName() << "'";
 	} catch (const std::exception& ex) {
-		std::ostringstream msgbuf;
-		msgbuf << "Exception occured during notification for object '"
-		       << GetCheckable()->GetName() << "': " << DiagnosticInformation(ex);
-		Log(LogWarning, "Notification", msgbuf.str());
+		Log(LogWarning, "Notification")
+		    << "Exception occured during notification for object '"
+		    << GetCheckable()->GetName() << "': " << DiagnosticInformation(ex);
 	}
 }
 
@@ -438,12 +497,12 @@ void Notification::ValidateFilters(const String& location, const Dictionary::Ptr
 {
 	int sfilter = FilterArrayToInt(attrs->Get("states"), 0);
 
-	if (!attrs->Contains("service_name") && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0) {
+	if (attrs->Get("service_name") == Empty && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0) {
 		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
 		    location + ": State filter is invalid.");
 	}
 
-	if (attrs->Contains("service_name") && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
+	if (attrs->Get("service_name") != Empty && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
 		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
 		    location + ": State filter is invalid.");
 	}
@@ -456,5 +515,10 @@ void Notification::ValidateFilters(const String& location, const Dictionary::Ptr
 		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
 		    location + ": Type filter is invalid.");
 	}
+}
+
+Endpoint::Ptr Notification::GetCommandEndpoint(void) const
+{
+	return Endpoint::GetByName(GetCommandEndpointRaw());
 }
 

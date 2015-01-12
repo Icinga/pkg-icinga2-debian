@@ -27,9 +27,25 @@ fi
 test -x $DAEMON || exit 5
 
 if [ ! -e $ICINGA2_CONFIG_FILE ]; then
-        echo "Config file '$ICINGA2_CONFIG_FILE' does not exist."
+	echo "Config file '$ICINGA2_CONFIG_FILE' does not exist."
+	exit 6
+fi
+
+ICINGA2_USER=`$DAEMON variable get --current RunAsUser`
+if [ $? != 0 ]; then
+        echo "Could not fetch RunAsUser variable. Error '$ICINGA2_USER'. Exiting."
         exit 6
 fi
+
+ICINGA2_GROUP=`$DAEMON variable get --current RunAsGroup`
+if [ $? != 0 ]; then
+        echo "Could not fetch RunAsGroup variable. Error '$ICINGA2_GROUP'. Exiting."
+        exit 6
+fi
+
+getent passwd $ICINGA2_USER >/dev/null 2>&1 || (echo "Icinga user '$ICINGA2_USER' does not exist. Exiting." && exit 6)
+getent group $ICINGA2_GROUP >/dev/null 2>&1 || (echo "Icinga group '$ICINGA2_GROUP' does not exist. Exiting." && exit 6)
+getent group $ICINGA2_COMMAND_GROUP >/dev/null 2>&1 || (echo "Icinga command group '$ICINGA2_COMMAND_GROUP' does not exist. Exiting." && exit 6)
 
 # Get function from functions library
 if [ -f /etc/rc.d/init.d/functions ]; then
@@ -46,9 +62,9 @@ fi
 # Start Icinga 2
 start() {
 	printf "Starting Icinga 2: "
-	@CMAKE_INSTALL_FULL_SBINDIR@/icinga2-prepare-dirs $SYSCONFIGFILE
+	@CMAKE_INSTALL_PREFIX@/lib/icinga2/prepare-dirs $SYSCONFIGFILE
 
-	if ! $DAEMON -c $ICINGA2_CONFIG_FILE -d -e $ICINGA2_ERROR_LOG -u $ICINGA2_USER -g $ICINGA2_GROUP > $ICINGA2_STARTUP_LOG 2>&1; then
+	if ! $DAEMON daemon -c $ICINGA2_CONFIG_FILE -d -e $ICINGA2_ERROR_LOG > $ICINGA2_STARTUP_LOG 2>&1; then
 		echo "Error starting Icinga. Check '$ICINGA2_STARTUP_LOG' for details."
 		exit 1
 	else
@@ -92,26 +108,14 @@ stop() {
 
 # Reload Icinga 2
 reload() {
-	printf "Reloading Icinga 2: "
-
-	if [ ! -e $ICINGA2_PID_FILE ]; then
-		exit 7
-	fi
-
-	pid=`cat $ICINGA2_PID_FILE`
-	if kill -HUP $pid >/dev/null 2>&1; then
-		echo "Done"
-	else
-		echo "Error: Icinga not running"
-		exit 7
-	fi
+	exec @CMAKE_INSTALL_PREFIX@/lib/icinga2/safe-reload $SYSCONFIGFILE
 }
 
 # Check the Icinga 2 configuration
 checkconfig() {
 	printf "Checking configuration: "
 
-	if ! $DAEMON -c $ICINGA2_CONFIG_FILE -C -u $ICINGA2_USER -g $ICINGA2_GROUP > $ICINGA2_STARTUP_LOG 2>&1; then
+	if ! $DAEMON daemon -c $ICINGA2_CONFIG_FILE -C > $ICINGA2_STARTUP_LOG 2>&1; then
                 if [ "x$1" = "x" ]; then
 			cat $ICINGA2_STARTUP_LOG
 			echo "Icinga 2 detected configuration errors. Check '$ICINGA2_STARTUP_LOG' for details."

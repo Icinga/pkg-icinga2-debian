@@ -20,7 +20,7 @@
 #include "icinga/icingaapplication.hpp"
 #include "icinga/cib.hpp"
 #include "base/dynamictype.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
 #include "base/debug.hpp"
@@ -63,12 +63,12 @@ void IcingaApplication::StaticInitialize(void)
 
 REGISTER_STATSFUNCTION(IcingaApplicationStats, &IcingaApplication::StatsFunc);
 
-Value IcingaApplication::StatsFunc(Dictionary::Ptr& status, Dictionary::Ptr& perfdata)
+Value IcingaApplication::StatsFunc(Dictionary::Ptr& status, Array::Ptr& perfdata)
 {
-	Dictionary::Ptr nodes = make_shared<Dictionary>();
+	Dictionary::Ptr nodes = new Dictionary();
 
 	BOOST_FOREACH(const IcingaApplication::Ptr& icingaapplication, DynamicType::GetObjectsByType<IcingaApplication>()) {
-		Dictionary::Ptr stats = make_shared<Dictionary>();
+		Dictionary::Ptr stats = new Dictionary();
 		stats->Set("node_name", icingaapplication->GetNodeName());
 		stats->Set("enable_notifications", icingaapplication->GetEnableNotifications());
 		stats->Set("enable_event_handlers", icingaapplication->GetEnableEventHandlers());
@@ -98,7 +98,7 @@ int IcingaApplication::Main(void)
 	Log(LogDebug, "IcingaApplication", "In IcingaApplication::Main()");
 
 	/* periodically dump the program state */
-	l_RetentionTimer = make_shared<Timer>();
+	l_RetentionTimer = new Timer();
 	l_RetentionTimer->SetInterval(300);
 	l_RetentionTimer->OnTimerExpired.connect(boost::bind(&IcingaApplication::DumpProgramState, this));
 	l_RetentionTimer->Start();
@@ -147,7 +147,7 @@ String IcingaApplication::GetNodeName(void) const
 	return ScriptVariable::Get("NodeName");
 }
 
-bool IcingaApplication::ResolveMacro(const String& macro, const CheckResult::Ptr&, String *result) const
+bool IcingaApplication::ResolveMacro(const String& macro, const CheckResult::Ptr&, Value *result) const
 {
 	double now = Utility::GetTime();
 

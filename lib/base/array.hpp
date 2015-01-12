@@ -36,7 +36,7 @@ namespace icinga
 class I2_BASE_API Array : public Object
 {
 public:
-	DECLARE_PTR_TYPEDEFS(Array);
+	DECLARE_OBJECT(Array);
 
 	/**
 	 * An iterator that can be used to iterate over array elements.
@@ -53,7 +53,7 @@ public:
 	Iterator End(void);
 
 	size_t GetLength(void) const;
-	bool Contains(const String& value) const;
+	bool Contains(const Value& value) const;
 
 	void Insert(unsigned int index, const Value& value);
 	void Remove(unsigned int index);
@@ -64,9 +64,6 @@ public:
 
 	void CopyTo(const Array::Ptr& dest) const;
 	Array::Ptr ShallowClone(void) const;
-
-	static Array::Ptr FromJson(cJSON *json);
-	cJSON *ToJson(void) const;
 
 private:
 	std::vector<Value> m_Data; /**< The data for the array. */
@@ -81,6 +78,11 @@ inline Array::Iterator range_end(Array::Ptr x)
 {
 	return x->End();
 }
+
+I2_BASE_API Array::Ptr MakeArray(const Value& val1);
+I2_BASE_API Array::Ptr MakeArray(const Value& val1, const Value& val2);
+I2_BASE_API Array::Ptr MakeArray(const Value& val1, const Value& val2, const Value& val3);
+I2_BASE_API Array::Ptr MakeArray(const Value& val1, const Value& val2, const Value& val3, const Value& val4);
 
 }
 

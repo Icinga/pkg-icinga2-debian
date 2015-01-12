@@ -21,39 +21,47 @@
 #define TYPE_H
 
 #include "base/i2-base.hpp"
-#include "base/qstring.hpp"
+#include "base/string.hpp"
 #include "base/object.hpp"
 #include "base/initialize.hpp"
-#include "base/utility.hpp"
 #include <boost/function.hpp>
 
 namespace icinga
 {
 
+enum FieldAttribute
+{
+	FAConfig = 1,
+	FAState = 2,
+	FAInternal = 32
+}; 
+
+class Type;
+
 struct Field
 {
 	int ID;
+	const char *TypeName;
 	const char *Name;
 	int Attributes;
 
-	Field(int id, const char *name, int attributes)
-		: ID(id), Name(name), Attributes(attributes)
+	Field(int id, const char *type, const char *name, int attributes)
+		: ID(id), TypeName(type), Name(name), Attributes(attributes)
 	{ }
 };
 
 enum TypeAttribute
 {
-	TAAbstract = 1,
-	TASafe = 2
+	TAAbstract = 1
 };
 
-class I2_BASE_API Type
+class I2_BASE_API Type : public Object
 {
 public:
-	typedef boost::function<Object::Ptr (void)> Factory;
+	DECLARE_PTR_TYPEDEFS(Type);
 
 	virtual String GetName(void) const = 0;
-	virtual const Type *GetBaseType(void) const = 0;
+	virtual Type::Ptr GetBaseType(void) const = 0;
 	virtual int GetAttributes(void) const = 0;
 	virtual int GetFieldId(const String& name) const = 0;
 	virtual Field GetFieldInfo(int id) const = 0;
@@ -61,22 +69,20 @@ public:
 
 	Object::Ptr Instantiate(void) const;
 
-	bool IsAssignableFrom(const Type *other) const;
+	bool IsAssignableFrom(const Type::Ptr& other) const;
 
 	bool IsAbstract(void) const;
-	bool IsSafe(void) const;
 
-	static void Register(const Type *type);
-	static const Type *GetByName(const String& name);
+	static void Register(const Type::Ptr& type);
+	static Type::Ptr GetByName(const String& name);
 
-	void SetFactory(const Factory& factory);
+protected:
+	virtual ObjectFactory GetFactory(void) const = 0;
 
 private:
-	typedef std::map<String, const Type *> TypeMap;
+	typedef std::map<String, Type::Ptr> TypeMap;
 
 	static TypeMap& GetTypes(void);
-
-	Factory m_Factory;
 };
 
 template<typename T>
@@ -84,32 +90,21 @@ class TypeImpl
 {
 };
 
-template<typename T>
-shared_ptr<T> ObjectFactory(void)
-{
-	return make_shared<T>();
-}
-
-template<typename T>
-struct FactoryHelper
-{
-	Type::Factory GetFactory(void)
-	{
-		return ObjectFactory<T>;
-	}
-};
-
 #define REGISTER_TYPE(type) \
 	namespace { namespace UNIQUE_NAME(rt) { \
-		void RegisterType(void) \
+		void RegisterType ## type(void) \
 		{ \
-			icinga::Type *t = new TypeImpl<type>(); \
-			t->SetFactory(FactoryHelper<type>().GetFactory()); \
+			icinga::Type::Ptr t = new TypeImpl<type>(); \
+			type::TypeInstance = t; \
 			icinga::Type::Register(t); \
 		} \
 		\
-		INITIALIZE_ONCE(RegisterType); \
-	} }
+		INITIALIZE_ONCE(RegisterType ## type); \
+	} } \
+	DEFINE_TYPE_INSTANCE(type)
+
+#define DEFINE_TYPE_INSTANCE(type) \
+	Type::Ptr type::TypeInstance
 
 }
 

@@ -24,7 +24,7 @@
 #include "base/application.thpp"
 #include "base/threadpool.hpp"
 #include "base/utility.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 
 namespace icinga
 {
@@ -36,13 +36,14 @@ namespace icinga
  */
 class I2_BASE_API Application : public ObjectImpl<Application> {
 public:
-	DECLARE_PTR_TYPEDEFS(Application);
+	DECLARE_OBJECT(Application);
 
 	static boost::signals2::signal<void (void)> OnReopenLogs;
 
 	~Application(void);
 
 	static void InitializeBase(void);
+	static void UninitializeBase(void);
 
 	static Application::Ptr GetInstance(void);
 
@@ -107,11 +108,23 @@ public:
 	static String GetObjectsPath(void);
 	static void DeclareObjectsPath(const String& path);
 
+	static String GetVarsPath(void);
+	static void DeclareVarsPath(const String& path);
+
 	static String GetPidPath(void);
 	static void DeclarePidPath(const String& path);
 
 	static String GetApplicationType(void);
 	static void DeclareApplicationType(const String& type);
+
+	static String GetRunAsUser(void);
+	static void DeclareRunAsUser(const String& user);
+
+	static String GetRunAsGroup(void);
+	static void DeclareRunAsGroup(const String& group);
+
+	static int GetConcurrency(void);
+	static void DeclareConcurrency(int ncpus);
 
 	static void MakeVariablesConstant(void);
 
@@ -135,7 +148,7 @@ protected:
 	virtual void OnShutdown(void);
 
 private:
-	static Application *m_Instance; /**< The application instance. */
+	static Application::Ptr m_Instance; /**< The application instance. */
 
 	static bool m_ShuttingDown; /**< Whether the application is in the process of
 				  shutting down. */

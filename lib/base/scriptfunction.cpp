@@ -19,8 +19,11 @@
 
 #include "base/scriptfunction.hpp"
 #include "base/scriptvariable.hpp"
+#include "base/primitivetype.hpp"
 
 using namespace icinga;
+
+REGISTER_PRIMITIVE_TYPE(ScriptFunction);
 
 ScriptFunction::ScriptFunction(const Callback& function)
 	: m_Callback(function)
@@ -52,8 +55,4 @@ void ScriptFunction::Unregister(const String& name)
 	ScriptVariable::Unregister(name);
 }
 
-RegisterFunctionHelper::RegisterFunctionHelper(const String& name, const ScriptFunction::Callback& function)
-{
-	ScriptFunction::Register(name, make_shared<ScriptFunction>(function));
-}
 

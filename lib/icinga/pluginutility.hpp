@@ -41,16 +41,20 @@ class I2_ICINGA_API PluginUtility
 public:
 	static void ExecuteCommand(const Command::Ptr& commandObj, const Checkable::Ptr& checkable,
 	    const CheckResult::Ptr& cr, const MacroProcessor::ResolverList& macroResolvers,
+	    const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros,
 	    const boost::function<void(const Value& commandLine, const ProcessResult&)>& callback = boost::function<void(const Value& commandLine, const ProcessResult&)>());
 
 	static ServiceState ExitStatusToState(int exitStatus);
 	static std::pair<String, String> ParseCheckOutput(const String& output);
 
-	static Value ParsePerfdata(const String& perfdata);
-	static String FormatPerfdata(const Value& perfdata);
+	static Array::Ptr SplitPerfdata(const String& perfdata);
+	static String FormatPerfdata(const Array::Ptr& perfdata);
 
 private:
 	PluginUtility(void);
+
+	static void AddArgumentHelper(const Array::Ptr& args, const String& key, const String& value, bool add_key, bool add_value);
+	static Value EscapeMacroShellArg(const Value& value);
 };
 
 }

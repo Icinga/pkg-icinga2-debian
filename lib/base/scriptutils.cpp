@@ -21,10 +21,11 @@
 #include "base/scriptfunction.hpp"
 #include "base/utility.hpp"
 #include "base/convert.hpp"
-#include "base/array.hpp"
-#include "base/dictionary.hpp"
-#include "base/serializer.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/json.hpp"
+#include "base/logger.hpp"
+#include "base/objectlock.hpp"
+#include "base/dynamictype.hpp"
+#include "base/application.hpp"
 #include <boost/foreach.hpp>
 #include <boost/regex.hpp>
 #include <algorithm>
@@ -39,7 +40,11 @@ REGISTER_SCRIPTFUNCTION(union, &ScriptUtils::Union);
 REGISTER_SCRIPTFUNCTION(intersection, &ScriptUtils::Intersection);
 REGISTER_SCRIPTFUNCTION(log, &ScriptUtils::Log);
 REGISTER_SCRIPTFUNCTION(range, &ScriptUtils::Range);
-REGISTER_SCRIPTFUNCTION(exit, &ScriptUtils::Exit);
+REGISTER_SCRIPTFUNCTION(exit, &Application::Exit);
+REGISTER_SCRIPTFUNCTION(typeof, &ScriptUtils::TypeOf);
+REGISTER_SCRIPTFUNCTION(keys, &ScriptUtils::Keys);
+REGISTER_SCRIPTFUNCTION(random, &Utility::Random);
+REGISTER_SCRIPTFUNCTION(__get_object, &ScriptUtils::GetObject);
 
 bool ScriptUtils::Regex(const String& pattern, const String& text)
 {
@@ -75,12 +80,14 @@ Array::Ptr ScriptUtils::Union(const std::vector<Value>& arguments)
 	BOOST_FOREACH(const Value& varr, arguments) {
 		Array::Ptr arr = varr;
 
-		BOOST_FOREACH(const Value& value, arr) {
-			values.insert(value);
+		if (arr) {
+			BOOST_FOREACH(const Value& value, arr) {
+				values.insert(value);
+			}
 		}
 	}
 
-	Array::Ptr result = make_shared<Array>();
+	Array::Ptr result = new Array();
 	BOOST_FOREACH(const Value& value, values) {
 		result->Add(value);
 	}
@@ -91,16 +98,26 @@ Array::Ptr ScriptUtils::Union(const std::vector<Value>& arguments)
 Array::Ptr ScriptUtils::Intersection(const std::vector<Value>& arguments)
 {
 	if (arguments.size() == 0)
-		return make_shared<Array>();
+		return new Array();
 
-	Array::Ptr result = make_shared<Array>();
+	Array::Ptr result = new Array();
 
-	Array::Ptr arr1 = static_cast<Array::Ptr>(arguments[0])->ShallowClone();
+	Array::Ptr arg1 = arguments[0];
+
+	if (!arg1)
+		return result;
+
+	Array::Ptr arr1 = arg1->ShallowClone();
 
 	for (std::vector<Value>::size_type i = 1; i < arguments.size(); i++) {
 		std::sort(arr1->Begin(), arr1->End());
 
-		Array::Ptr arr2 = static_cast<Array::Ptr>(arguments[i])->ShallowClone();
+		Array::Ptr arg2 = arguments[i];
+
+		if (!arg2)
+			return result;
+
+		Array::Ptr arr2 = arg2->ShallowClone();
 		std::sort(arr2->Begin(), arr2->End());
 
 		result->Resize(std::max(arr1->GetLength(), arr2->GetLength()));
@@ -135,7 +152,7 @@ void ScriptUtils::Log(const std::vector<Value>& arguments)
 	if (message.IsString())
 		::Log(severity, facility, message);
 	else
-		::Log(severity, facility, JsonSerialize(message));
+		::Log(severity, facility, JsonEncode(message));
 }
 
 Array::Ptr ScriptUtils::Range(const std::vector<Value>& arguments)
@@ -162,7 +179,7 @@ Array::Ptr ScriptUtils::Range(const std::vector<Value>& arguments)
 			BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid number of arguments for range()"));
 	}
 
-	Array::Ptr result = make_shared<Array>();
+	Array::Ptr result = new Array();
 
 	if ((start < end && increment <= 0) ||
 	    (start > end && increment >= 0))
@@ -175,7 +192,43 @@ Array::Ptr ScriptUtils::Range(const std::vector<Value>& arguments)
 	return result;
 }
 
-void ScriptUtils::Exit(int code)
+Type::Ptr ScriptUtils::TypeOf(const Value& value)
 {
-	exit(code);
+	switch (value.GetType()) {
+		case ValueEmpty:
+			return Type::GetByName("Object");
+		case ValueNumber:
+			return Type::GetByName("Number");
+		case ValueString:
+			return Type::GetByName("String");
+		case ValueObject:
+			return static_cast<Object::Ptr>(value)->GetReflectionType();
+		default:
+			VERIFY(!"Invalid value type.");
+	}
 }
+
+Array::Ptr ScriptUtils::Keys(const Dictionary::Ptr& dict)
+{
+	Array::Ptr result = new Array();
+
+	if (dict) {
+		ObjectLock olock(dict);
+		BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+			result->Add(kv.first);
+		}
+	}
+
+	return result;
+}
+
+DynamicObject::Ptr ScriptUtils::GetObject(const String& type, const String& name)
+{
+	DynamicType::Ptr dtype = DynamicType::GetByName(type);
+
+	if (!dtype)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid type name"));
+
+	return dtype->GetObject(name);
+}
+

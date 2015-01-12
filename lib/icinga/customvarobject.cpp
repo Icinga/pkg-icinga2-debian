@@ -18,7 +18,7 @@
  ******************************************************************************/
 
 #include "icinga/customvarobject.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 
 using namespace icinga;
 
@@ -28,7 +28,7 @@ boost::signals2::signal<void (const CustomVarObject::Ptr&, const Dictionary::Ptr
 
 Dictionary::Ptr CustomVarObject::GetVars(void) const
 {
-	if (!GetOverrideVars().IsEmpty())
+	if (GetOverrideVars())
 		return GetOverrideVars();
 	else
 		return GetVarsRaw();
@@ -38,7 +38,7 @@ void CustomVarObject::SetVars(const Dictionary::Ptr& vars, const MessageOrigin& 
 {
 	SetOverrideVars(vars);
 
-	OnVarsChanged(GetSelf(), vars, origin);
+	OnVarsChanged(this, vars, origin);
 }
 
 int CustomVarObject::GetModifiedAttributes(void) const

@@ -37,22 +37,25 @@ namespace icinga
 class I2_ICINGA_API MacroProcessor
 {
 public:
-	typedef boost::function<String (const String&)> EscapeCallback;
+	typedef boost::function<Value (const Value&)> EscapeCallback;
 	typedef std::pair<String, Object::Ptr> ResolverSpec;
 	typedef std::vector<ResolverSpec> ResolverList;
 
 	static Value ResolveMacros(const Value& str, const ResolverList& resolvers,
 	    const CheckResult::Ptr& cr = CheckResult::Ptr(), String *missingMacro = NULL,
-	    const EscapeCallback& escapeFn = EscapeCallback());
+	    const EscapeCallback& escapeFn = EscapeCallback(),
+	    const Dictionary::Ptr& resolvedMacros = Dictionary::Ptr(),
+	    bool useResolvedMacros = false);
 
 private:
 	MacroProcessor(void);
 
 	static bool ResolveMacro(const String& macro, const ResolverList& resolvers,
-		const CheckResult::Ptr& cr, String *result, bool *recursive_macro);
-	static String InternalResolveMacros(const String& str,
+		const CheckResult::Ptr& cr, Value *result, bool *recursive_macro);
+	static Value InternalResolveMacros(const String& str,
 	    const ResolverList& resolvers, const CheckResult::Ptr& cr,
 	    String *missingMacro, const EscapeCallback& escapeFn,
+	    const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros,
 	    int recursionLevel = 0);
 };
 

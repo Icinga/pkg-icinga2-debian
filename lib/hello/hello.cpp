@@ -18,8 +18,7 @@
  ******************************************************************************/
 
 #include "hello/hello.hpp"
-#include "base/dynamictype.hpp"
-#include "base/logger_fwd.hpp"
+#include "base/logger.hpp"
 
 using namespace icinga;
 

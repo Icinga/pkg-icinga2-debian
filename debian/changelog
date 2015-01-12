@@ -4,6 +4,89 @@ icinga2 (2.1.1-1~ppa1~utopic1) utopic; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
 
+icinga2 (2.2.2-1~ppa1~vivid1) vivid; urgency=medium
+
+  * Rebuild for my ubuntu ppa
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+
+icinga2 (2.2.2-1) unstable; urgency=medium
+
+  * [89b506f] Imported Upstream version 2.2.2
+  * [b04381a] Let icinga2-classicui depend on icinga2-bin (Closes: #770534)
+  * [8928097] Add dutch debconf translation (Closes: #766173)
+  * [7973e4e] Remove unsupported options from default file
+  * [d8e832f] Also install upgrade files to /usr/share
+  * [3b08f9d] Remove obsolete configuration option
+  * [adde104] Fix intendation in rules file
+  * [bb53657] python-icinga2 is no more, cleanup copyright and gitignore file
+  * [a1478f3] Remove some debug from icinga2-classicui.postinst
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 18 Dec 2014 13:11:04 +0100
+
+icinga2 (2.2.1-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [e73d057] Links are tested with -L
+  * [d605522] Just to be safe, use -e to check for the old apache configfile.
+    (Closes: #770743)
+  * [05f8f54] Move enable-feature to icinga2-bin (Closes: #770534)
+  * [c6fd841] Imported Upstream version 2.2.1
+  * [1135583] Add is_fresh_install to icinga2-bin postinst
+  * [1deb08b] icinga2-prepare-dirs was renamed to prepare-dirs
+
+  [ Gunnar Beutner ]
+  * [c3d13b5] Fix support for Apache 2.4
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 20:48:59 +0100
+
+icinga2 (2.2.0-2) unstable; urgency=medium
+
+  * [cf28c7d] Fix indentation in apache config
+  * [d608338] Lower needed dpkg version in pre-depends
+  * [b42c495] Let icinga2-common depend on icinga2-bin (Closes: #770534)
+
+ -- Alexander Wirt <formorer@debian.org>  Sat, 22 Nov 2014 13:29:20 +0100
+
+icinga2 (2.2.0-1) unstable; urgency=medium
+
+  [ Jan Wagner ]
+  * [cc6aad5] Fixing threshold for snmp-load check command
+
+  [ Alexander Wirt ]
+  * [9a53b6f] Imported Upstream version 2.2.0
+  * [74a5438] Remove obsolete snmp threshold patch
+  * [cd0954a] Fix path of sql upgrade files
+  * [0609016] Move sql files to a new location
+  * [dced984] The python package does not exist anymore
+  * [945985d] Reflect the new icinga cli tool
+  * [418ba11] Python is no more
+  * [5f880bb] dh-python is not needed anymore
+  * [e3c6d8d] Bump standards version (no changes)
+  * [5db6146] Update example configuration
+  * [cd040c6] Build-depend on libyajl-dev
+  * [f004624] Add yajl license
+  * [62b4c4b] Update initscript to new cli command style
+  * [f7183e3] Change filename of apt.conf and install bash-completion 
+              for new cli
+  * [87415d0] Update postinst script to new cli command style
+  * [8dd43b4] Allow the nagios user to write to /etc/icinga2
+  * [ea389c7] Use new cli command style
+  * [42e1c2d] Use new command line style interface for debconf templates
+  * [4833cee] Use new commandline interface in classicui postinst
+  * [6c4485d] Allow parallel builds
+  * [4723043] Update translations for new command
+  * [83a2c2a] Add support for systemd
+  * [e104007] Enhance apache 2.4 support
+  * [4fecd7b] Fix apache config with 2.4
+  * [27bc54b] Move icinga2-classicui to its own configuration directory.
+  * [e6fe02e] Replace python-icinga2
+  * [434cbef] Add a pre-depends to dpkg for dpkg-maintscript-helper
+  * [28e9995] Fix indenting in apache config
+  * [eaec113] Replace/Break/Conflict with deprecated python-icinga2
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 13:48:18 +0100
+
 icinga2 (2.1.1-1) unstable; urgency=medium
 
   * [4a0350e] Imported Upstream version 2.1.1
@@ -102,7 +185,6 @@ icinga2 (2.0.1-1) unstable; urgency=medium
   * [5aaa17c] Fix some lintian warnings
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 14 Jul 2014 20:33:58 +0200
->>>>>>> master
 
 icinga2 (2.0.0-1) unstable; urgency=low
 

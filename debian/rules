@@ -3,7 +3,12 @@
 #export DH_VERBOSE=1
 
 %:
-	dh $@ --with python2
+	dh $@
+
+override_dh_systemd_enable:
+	dh_systemd_enable --name=icinga2
+override_dh_auto_build:
+	dh_auto_build --parallel
 
 override_dh_auto_clean:
 	dh_auto_clean
@@ -19,7 +24,6 @@ override_dh_auto_configure:
 		-DICINGA2_RUNDIR=/run \
 		-DICINGA2_USER=nagios \
 		-DICINGA2_GROUP=nagios \
-		-DICINGA2_COMMAND_USER=nagios \
 		-DICINGA2_COMMAND_GROUP=www-data \
 		-DICINGA2_GIT_VERSION_INFO=false \
 		-DICINGA2_PLUGINDIR=/usr/lib/nagios/plugins
@@ -37,8 +41,8 @@ override_dh_install:
 	for dbms in mysql pgsql; do \
 		mkdir -p debian/icinga2-ido-$$dbms/usr/share/dbconfig-common/data/icinga2-ido-$$dbms/install ; \
 		mkdir -p debian/icinga2-ido-$$dbms/usr/share/dbconfig-common/data/icinga2-ido-$$dbms/upgrade/$$dbms; \
-		cp components/db_ido_$$dbms/schema/$$dbms.sql debian/icinga2-ido-$$dbms/usr/share/dbconfig-common/data/icinga2-ido-$$dbms/install/$$dbms ; \
-		for file in components/db_ido_$$dbms/schema/upgrade/* ; do \
+		cp lib/db_ido_$$dbms/schema/$$dbms.sql debian/icinga2-ido-$$dbms/usr/share/dbconfig-common/data/icinga2-ido-$$dbms/install/$$dbms ; \
+		for file in lib/db_ido_$$dbms/schema/upgrade/* ; do \
 			cp $$file debian/icinga2-ido-$$dbms/usr/share/dbconfig-common/data/icinga2-ido-$$dbms/upgrade/$$dbms/`basename $$file .sql`; \
 		done; \
 	done
