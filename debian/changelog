@@ -1,3 +1,9 @@
+icinga2 (2.2.3-1) unstable; urgency=medium
+
+  * [c33e9ae] Imported Upstream version 2.2.3
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 12 Jan 2015 10:38:27 +0100
+
 icinga2 (2.2.2-2) unstable; urgency=medium
 
   * [ec8d305] Fix binary-only builds
