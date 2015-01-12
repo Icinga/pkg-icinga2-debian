@@ -66,7 +66,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.2.2
+Version: 2.2.3
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
@@ -452,7 +452,8 @@ exit 0
 %{_sbindir}/%{name}
 %exclude %{_libdir}/%{name}/libdb_ido_mysql*
 %exclude %{_libdir}/%{name}/libdb_ido_pgsql*
-%{_libdir}/%{name}
+%dir %{_libdir}/%{name}
+%{_libdir}/%{name}/*.so*
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/include
 %{_mandir}/man8/%{name}.8.gz
