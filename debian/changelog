@@ -1,3 +1,9 @@
+icinga2 (2.2.3-1~ppa1~saucy2) saucy; urgency=medium
+
+  * [8952536] This file doesn't exist in noma build
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 12 Jan 2015 21:03:49 +0100
+
 icinga2 (2.2.3-1~ppa1~saucy1) saucy; urgency=medium
 
   * Rebuild for my ubuntu ppa
