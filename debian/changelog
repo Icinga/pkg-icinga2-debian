@@ -1,14 +1,20 @@
-icinga2 (2.1.1-1~ppa1~utopic1) utopic; urgency=medium
+icinga2 (2.2.3-1~ppa1~utopic1) utopic; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
 
-icinga2 (2.2.2-1~ppa1~vivid1) vivid; urgency=medium
+icinga2 (2.2.3-1) unstable; urgency=medium
 
-  * Rebuild for my ubuntu ppa
+  * [c33e9ae] Imported Upstream version 2.2.3
 
- -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+ -- Alexander Wirt <formorer@debian.org>  Mon, 12 Jan 2015 10:38:27 +0100
+
+icinga2 (2.2.2-2) unstable; urgency=medium
+
+  * [ec8d305] Fix binary-only builds
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Sun, 28 Dec 2014 17:24:06 +0100
 
 icinga2 (2.2.2-1) unstable; urgency=medium
 
