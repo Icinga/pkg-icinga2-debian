@@ -35,7 +35,6 @@ override_dh_auto_install:
 
 override_dh_install:
 	dh_install
-	if [ -d debian/icinga2-common/ ]; then chmod +x debian/icinga2-common/usr/lib/icinga2/prepare-dirs; fi
 	# remove ido files from other packages
 	if [ -d debian/icinga2-common/ ]; then rm debian/icinga2-common/etc/icinga2/features-available/ido-*; fi
 	rm debian/icinga2-bin/usr/lib/*/icinga2/libdb_ido_*
