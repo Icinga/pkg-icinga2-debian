@@ -167,7 +167,7 @@ Depends: dbconfig-common,
          ucf,
          ${misc:Depends},
          ${shlibs:Depends}
-Recommends: mysql-client
+Recommends: mysql-client | virtual-mysql-client
 Suggests: mysql-server
 Description: host and network monitoring system - MySQL support
  Icinga 2 is a general-purpose monitoring application to fit the needs of
