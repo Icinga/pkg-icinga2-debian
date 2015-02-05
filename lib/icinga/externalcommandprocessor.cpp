@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -1078,6 +1078,13 @@ void ExternalCommandProcessor::ScheduleHostSvcDowntime(double, const std::vector
 	int triggeredByLegacy = Convert::ToLong(arguments[4]);
 	if (triggeredByLegacy != 0)
 		triggeredBy = Service::GetDowntimeIDFromLegacyID(triggeredByLegacy);
+
+	Log(LogNotice, "ExternalCommandProcessor")
+	    << "Creating downtime for host " << host->GetName();
+
+	(void) host->AddDowntime(arguments[6], arguments[7],
+	    Convert::ToDouble(arguments[1]), Convert::ToDouble(arguments[2]),
+	    Convert::ToBool(arguments[3]), triggeredBy, Convert::ToDouble(arguments[5]));
 
 	BOOST_FOREACH(const Service::Ptr& service, host->GetServices()) {
 		Log(LogNotice, "ExternalCommandProcessor")

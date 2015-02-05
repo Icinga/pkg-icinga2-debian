@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -403,7 +403,8 @@ void ApiListener::ApiTimerHandler(void)
 				if (endpoint->GetConnecting())
 					continue;
 
-				Utility::QueueAsyncCallback(boost::bind(&ApiListener::AddConnection, this, endpoint));
+				boost::thread thread(boost::bind(&ApiListener::AddConnection, this, endpoint));
+				thread.detach();
 			}
 		}
 	}

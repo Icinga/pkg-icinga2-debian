@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -234,7 +234,7 @@ void LegacyTimePeriod::ParseTimeSpec(const String& timespec, tm *begin, tm *end,
 			if (tokens.size() > 1)
 				FindNthWeekday(wday, n, begin);
 			else
-				begin->tm_mday += - begin->tm_wday + wday;
+				begin->tm_mday += (7 - begin->tm_wday + wday) % 7;
 
 			begin->tm_hour = 0;
 			begin->tm_min = 0;
@@ -247,7 +247,7 @@ void LegacyTimePeriod::ParseTimeSpec(const String& timespec, tm *begin, tm *end,
 			if (tokens.size() > 1)
 				FindNthWeekday(wday, n, end);
 			else
-				end->tm_mday += - end->tm_wday + wday;
+				end->tm_mday += (7 - end->tm_wday + wday) % 7;
 
 			end->tm_hour = 0;
 			end->tm_min = 0;
