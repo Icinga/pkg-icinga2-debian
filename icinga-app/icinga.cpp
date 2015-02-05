@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -254,16 +254,33 @@ int Main(void)
 			try {
 				logLevel = Logger::StringToSeverity(severity);
 			} catch (std::exception&) {
-				/* use the default */
-				Log(LogWarning, "icinga", "Invalid log level set. Using default 'information'.");
+				/* Inform user and exit */
+				Log(LogCritical, "icinga-app", "Invalid log level set. Default is 'information'.");
+				return EXIT_FAILURE;
 			}
 
 			Logger::SetConsoleLogSeverity(logLevel);
 		}
 
 		if (vm.count("library")) {
-			BOOST_FOREACH(const String& libraryName, vm["library"].as<std::vector<std::string> >()) {
-				(void)Utility::LoadExtensionLibrary(libraryName);
+			BOOST_FOREACH(const String& libraryName, vm["library"].as<std::vector<std::string> >())
+			{
+				try {
+					(void)Utility::LoadExtensionLibrary(libraryName);
+				}
+#ifdef _WIN32	
+				catch (win32_error &ex) {
+					if (int const * err = boost::get_error_info<errinfo_win32_error>(ex)) {
+						Log(LogCritical, "icinga-app", "Could not load library \"" + libraryName + "\"");
+						return EXIT_FAILURE;
+					}
+				}
+#else /*_WIN32*/
+				catch (std::runtime_error &ex) {
+					Log(LogCritical, "icinga-app", "Could not load library \"" + libraryName + "\"");
+					return EXIT_FAILURE;
+				}
+#endif /*_WIN32*/
 			}
 		}
 
@@ -300,7 +317,7 @@ int Main(void)
 			}
 
 			if (vm.count("version")) {
-				std::cout << "Copyright (c) 2012-2014 Icinga Development Team (http://www.icinga.org)" << std::endl
+				std::cout << "Copyright (c) 2012-2015 Icinga Development Team (https://www.icinga.org)" << std::endl
 					<< "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl2.html>" << std::endl
 					<< "This is free software: you are free to change and redistribute it." << std::endl
 					<< "There is NO WARRANTY, to the extent permitted by law.";
@@ -323,7 +340,7 @@ int Main(void)
 
 			std::cout << visibleDesc << std::endl
 				<< "Report bugs at <https://dev.icinga.org/>" << std::endl
-				<< "Icinga home page: <http://www.icinga.org/>" << std::endl;
+				<< "Icinga home page: <https://www.icinga.org/>" << std::endl;
 			return EXIT_SUCCESS;
 		}
 	}

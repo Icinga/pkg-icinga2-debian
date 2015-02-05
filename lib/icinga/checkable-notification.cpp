@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -84,16 +84,19 @@ void Checkable::SendNotifications(NotificationType type, const CheckResult::Ptr&
 
 std::set<Notification::Ptr> Checkable::GetNotifications(void) const
 {
+	boost::mutex::scoped_lock lock(m_NotificationMutex);
 	return m_Notifications;
 }
 
 void Checkable::AddNotification(const Notification::Ptr& notification)
 {
+	boost::mutex::scoped_lock lock(m_NotificationMutex);
 	m_Notifications.insert(notification);
 }
 
 void Checkable::RemoveNotification(const Notification::Ptr& notification)
 {
+	boost::mutex::scoped_lock lock(m_NotificationMutex);
 	m_Notifications.erase(notification);
 }
 
