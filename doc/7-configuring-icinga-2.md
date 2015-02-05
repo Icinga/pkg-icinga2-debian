@@ -1811,7 +1811,7 @@ Attributes:
 
   Name            |Description
   ----------------|----------------
-  host            |**Required.** The hostname/IP address of the remote Icinga 2 instance.
+  host            |**Optional.** The hostname/IP address of the remote Icinga 2 instance.
   port            |**Optional.** The service name/port of the remote Icinga 2 instance. Defaults to `5665`.
   log_duration    |**Optional.** Duration for keeping replay logs on connection loss. Defaults to `1d`.
 
@@ -2141,7 +2141,6 @@ Name            | Description
 ----------------|--------------
 ssmtp_address   | **Required.** The host's address. Defaults to "$address$".
 ssmtp_port      | **Optional.** The port that should be checked. Defaults to 465.
-ssmtp_mail_from | **Optional.** Test a MAIL FROM command with the given email address.
 
 #### <a id="plugin-check-command-imap"></a> imap
 

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -274,7 +274,7 @@ wizard_master_host:
 
 wizard_ticket:
 		std::cout << ConsoleColorTag(Console_Bold) << "Please specify the request ticket generated on your Icinga 2 master." << ConsoleColorTag(Console_Normal) << "\n"
-		    << " (Hint: '# icinga2 pki ticket --cn '" << cn << "'): ";
+		    << " (Hint: # icinga2 pki ticket --cn '" << cn << "'): ";
 
 		std::getline(std::cin, answer);
 		boost::algorithm::to_lower(answer);
@@ -389,7 +389,7 @@ wizard_ticket:
 		NodeUtility::CreateBackupFile(constants_file);
 
 		NodeUtility::UpdateConstant("NodeName", cn);
-
+		NodeUtility::UpdateConstant("ZoneName", local_zone);
 	} else {
 		/* master setup */
 		std::cout << ConsoleColorTag(Console_Bold) << "Starting the Master setup routine...\n";

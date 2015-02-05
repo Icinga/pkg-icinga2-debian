@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -62,8 +62,7 @@ int wmain(int argc, wchar_t **argv)
 	if (ret != -1)
 		return ret;
 		
-	printOutput(printInfo, vInterfaces);
-	return 1;
+	return printOutput(printInfo, vInterfaces);
 }
 
 int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct& printInfo) 
