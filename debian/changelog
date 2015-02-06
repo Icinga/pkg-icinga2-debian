@@ -1,8 +1,18 @@
-icinga2 (2.2.3-1~ppa1~vivid1) vivid; urgency=medium
+icinga2 (2.2.4-1~ppa1~vivid1) vivid; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
+
+icinga2 (2.2.4-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [9f05d5b] Imported Upstream version 2.2.4
+  * [7cfdc48] Update dutch debconf translation (Closes: #775782)
+  * [2a36397] Alternate to virtual-mysql-client in ido-mysql package
+    (Closes: #769278)
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 05 Feb 2015 16:05:57 +0100
 
 icinga2 (2.2.3-1) unstable; urgency=medium
 

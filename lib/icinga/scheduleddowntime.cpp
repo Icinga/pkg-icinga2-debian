@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -106,10 +106,16 @@ std::pair<double, double> ScheduledDowntime::FindNextSegment(void)
 
 	ObjectLock olock(ranges);
 	BOOST_FOREACH(const Dictionary::Pair& kv, ranges) {
+		Log(LogDebug, "ScheduledDowntime")
+		    << "Evaluating segment: " << kv.first << ": " << kv.second << " at ";
+
 		Dictionary::Ptr segment = LegacyTimePeriod::FindNextSegment(kv.first, kv.second, &reference);
 
 		if (!segment)
 			continue;
+
+		Log(LogDebug, "ScheduledDowntime")
+		    << "Considering segment: " << Utility::FormatDateTime("%c", segment->Get("begin")) << " -> " << Utility::FormatDateTime("%c", segment->Get("end"));
 
 		double begin = segment->Get("begin");
 

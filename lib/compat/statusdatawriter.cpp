@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -270,7 +270,7 @@ void StatusDataWriter::DumpHostObject(std::ostream& fp, const Host::Ptr& host)
 	      "\t" "active_checks_enabled" "\t" << CompatUtility::GetCheckableActiveChecksEnabled(host) << "\n"
 	      "\t" "passive_checks_enabled" "\t" << CompatUtility::GetCheckablePassiveChecksEnabled(host) << "\n"
 	      "\t" "notifications_enabled" "\t" << CompatUtility::GetCheckableNotificationsEnabled(host) << "\n"
-	      "\t" "notification_options" "\t" << "d,u,r" << "\n"
+              "\t" "notification_options" "\t" << CompatUtility::GetCheckableNotificationNotificationOptions(host) << "\n"
 	      "\t" "notification_interval" "\t" << CompatUtility::GetCheckableNotificationNotificationInterval(host) << "\n"
 	      "\t" "event_handler_enabled" "\t" << CompatUtility::GetCheckableEventHandlerEnabled(host) << "\n";
 
@@ -818,6 +818,7 @@ void StatusDataWriter::StatusTimerHandler(void)
 		    "\t" "check_service_freshness=1" "\n"
 		    "\t" "check_host_freshness=1" "\n"
 		    "\t" "enable_notifications=" << (IcingaApplication::GetInstance()->GetEnableNotifications() ? 1 : 0) << "\n"
+		    "\t" "enable_event_handlers=" << (IcingaApplication::GetInstance()->GetEnableEventHandlers() ? 1 : 0) << "\n"
 		    "\t" "enable_flap_detection=" << (IcingaApplication::GetInstance()->GetEnableFlapping() ? 1 : 0) << "\n"
 		    "\t" "enable_failure_prediction=0" "\n"
 		    "\t" "process_performance_data=" << (IcingaApplication::GetInstance()->GetEnablePerfdata() ? 1 : 0) << "\n"

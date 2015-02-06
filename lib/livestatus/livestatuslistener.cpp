@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -71,6 +71,7 @@ void LivestatusListener::Start(void)
 
 	if (GetSocketType() == "tcp") {
 		TcpSocket::Ptr socket = new TcpSocket();
+
 		try {
 			socket->Bind(GetBindHost(), GetBindPort(), AF_UNSPEC);
 		} catch (std::exception&) {
@@ -78,6 +79,8 @@ void LivestatusListener::Start(void)
 			    << "Cannot bind TCP socket on host '" << GetBindHost() << "' port '" << GetBindPort() << "'.";
 			return;
 		}
+
+		m_Listener = socket;
 
 		boost::thread thread(boost::bind(&LivestatusListener::ServerThreadProc, this, socket));
 		thread.detach();
@@ -87,6 +90,7 @@ void LivestatusListener::Start(void)
 	else if (GetSocketType() == "unix") {
 #ifndef _WIN32
 		UnixSocket::Ptr socket = new UnixSocket();
+
 		try {
 			socket->Bind(GetSocketPath());
 		} catch (std::exception&) {
@@ -104,6 +108,8 @@ void LivestatusListener::Start(void)
 			return;
 		}
 
+		m_Listener = socket;
+
 		boost::thread thread(boost::bind(&LivestatusListener::ServerThreadProc, this, socket));
 		thread.detach();
 		Log(LogInformation, "LivestatusListener")
@@ -114,6 +120,13 @@ void LivestatusListener::Start(void)
 		return;
 #endif
 	}
+}
+
+void LivestatusListener::Stop(void)
+{
+	DynamicObject::Stop();
+
+	m_Listener->Close();
 }
 
 int LivestatusListener::GetClientsConnected(void)
@@ -134,15 +147,24 @@ void LivestatusListener::ServerThreadProc(const Socket::Ptr& server)
 {
 	server->Listen();
 
-	for (;;) {
-		try {
-			Socket::Ptr client = server->Accept();
-			Log(LogNotice, "LivestatusListener", "Client connected");
-			Utility::QueueAsyncCallback(boost::bind(&LivestatusListener::ClientHandler, this, client), LowLatencyScheduler);
-		} catch (std::exception&) {
-			Log(LogCritical, "ListenerListener", "Cannot accept new connection.");
+	try {
+		for (;;) {
+			timeval tv = { 0, 500000 };
+
+			if (m_Listener->Poll(true, false, &tv)) {
+				Socket::Ptr client = m_Listener->Accept();
+				Log(LogNotice, "LivestatusListener", "Client connected");
+				Utility::QueueAsyncCallback(boost::bind(&LivestatusListener::ClientHandler, this, client), LowLatencyScheduler);
+			}
+
+			if (!IsActive())
+				break;
 		}
+	} catch (std::exception&) {
+		Log(LogCritical, "ListenerListener", "Cannot accept new connection.");
 	}
+
+	m_Listener->Close();
 }
 
 void LivestatusListener::ClientHandler(const Socket::Ptr& client)

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -70,7 +70,7 @@ static void IncludeNonLocalZone(const String& zonePath)
 {
 	String etcPath = Application::GetZonesDir() + "/" + Utility::BaseName(zonePath);
 
-	if (Utility::PathExists(etcPath))
+	if (Utility::PathExists(etcPath) || Utility::PathExists(zonePath + "/.authoritative"))
 		return;
 
 	IncludeZoneDirRecursive(zonePath);
@@ -324,7 +324,11 @@ int DaemonCommand::Run(const po::variables_map& vm, const std::vector<std::strin
 	if (!vm.count("validate"))
 		Logger::DisableTimestamp(false);
 
+#ifdef __APPLE__
+	ScriptVariable::Set("UseVfork", false, false, true);
+#else /* __APPLE__ */
 	ScriptVariable::Set("UseVfork", true, false, true);
+#endif /* __APPLE__ */
 
 	Application::MakeVariablesConstant();
 
