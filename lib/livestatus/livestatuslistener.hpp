@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -48,10 +48,13 @@ public:
 
 protected:
 	virtual void Start(void);
+	virtual void Stop(void);
 
 private:
 	void ServerThreadProc(const Socket::Ptr& server);
 	void ClientHandler(const Socket::Ptr& client);
+
+	Socket::Ptr m_Listener;
 };
 
 }

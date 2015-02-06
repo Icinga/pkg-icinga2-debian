@@ -1,14 +1,18 @@
-icinga2 (2.2.3-1~ppa1~saucy2) saucy; urgency=medium
-
-  * [8952536] This file doesn't exist in noma build
-
- -- Alexander Wirt <formorer@debian.org>  Mon, 12 Jan 2015 21:03:49 +0100
-
-icinga2 (2.2.3-1~ppa1~saucy1) saucy; urgency=medium
+icinga2 (2.2.4-1~ppa1~saucy1) saucy; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+
+icinga2 (2.2.4-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [9f05d5b] Imported Upstream version 2.2.4
+  * [7cfdc48] Update dutch debconf translation (Closes: #775782)
+  * [2a36397] Alternate to virtual-mysql-client in ido-mysql package
+    (Closes: #769278)
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 05 Feb 2015 16:05:57 +0100
 
 icinga2 (2.2.3-1) unstable; urgency=medium
 

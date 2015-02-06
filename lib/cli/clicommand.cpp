@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2014 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -166,7 +166,7 @@ bool CLICommand::ParseCommand(int argc, char **argv, po::options_description& vi
 	typedef std::map<std::vector<String>, CLICommand::Ptr>::value_type CLIKeyValue;
 
 	std::vector<String> best_match;
-	int arg_end = 1;
+	int arg_end = 0;
 
 	BOOST_FOREACH(const CLIKeyValue& kv, GetRegistry()) {
 		const std::vector<String>& vname = kv.first;
