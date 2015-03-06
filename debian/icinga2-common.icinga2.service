@@ -7,6 +7,7 @@ Type=simple
 ExecStartPre=/usr/lib/icinga2/prepare-dirs /usr/lib/icinga2/icinga2
 ExecStart=/usr/sbin/icinga2 daemon 
 ExecReload=/bin/kill -HUP $MAINPID
+PIDFile=/run/icinga2/icinga2.pid
 
 [Install]
 WantedBy=multi-user.target
