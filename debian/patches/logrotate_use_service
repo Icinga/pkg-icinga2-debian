@@ -1,0 +1,13 @@
+--- a/etc/logrotate.d/icinga2.cmake
++++ b/etc/logrotate.d/icinga2.cmake
+@@ -9,8 +9,8 @@
+        	create 644 @ICINGA2_USER@ @ICINGA2_GROUP@
+ 	copytruncate
+ 	postrotate
+-		if ! killall -q -USR1 icinga2; then
+-			exit 1
++		if service icinga2 status > /dev/null; then
++            service icinga2 reload > /dev/null
+ 		fi
+        	endscript
+ }
