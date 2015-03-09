@@ -18,33 +18,39 @@
  ******************************************************************************/
 
 #include "base/type.hpp"
+#include "base/scriptglobal.hpp"
 
 using namespace icinga;
 
-Type::TypeMap& Type::GetTypes(void)
+static void RegisterTypeType(void)
 {
-	static TypeMap types;
+	Type::Ptr type = new TypeType();
+	Type::TypeInstance = type;
+	Type::Register(type);
+}
 
-	return types;
+INITIALIZE_ONCE(RegisterTypeType);
+
+String Type::ToString(void) const
+{
+	return "type '" + GetName() + "'";
 }
 
 void Type::Register(const Type::Ptr& type)
 {
 	VERIFY(GetByName(type->GetName()) == NULL);
 
-	GetTypes()[type->GetName()] = type;
+	ScriptGlobal::Set(type->GetName(), type);
 }
 
 Type::Ptr Type::GetByName(const String& name)
 {
-	std::map<String, Type::Ptr>::const_iterator it;
+	Value ptype = ScriptGlobal::Get(name, &Empty);
 
-	it = GetTypes().find(name);
-
-	if (it == GetTypes().end())
+	if (!ptype.IsObjectType<Type>())
 		return Type::Ptr();
 
-	return it->second;
+	return ptype;
 }
 
 Object::Ptr Type::Instantiate(void) const
@@ -70,5 +76,79 @@ bool Type::IsAssignableFrom(const Type::Ptr& other) const
 	}
 
 	return false;
+}
+
+Object::Ptr Type::GetPrototype(void) const
+{
+	return m_Prototype;
+}
+
+void Type::SetPrototype(const Object::Ptr& object)
+{
+	m_Prototype = object;
+}
+
+void Type::SetField(int id, const Value& value)
+{
+	if (id == 0) {
+		SetPrototype(value);
+		return;
+	}
+
+	Object::SetField(id, value);
+}
+
+Value Type::GetField(int id) const
+{
+	if (id == 0)
+		return GetPrototype();
+
+	return Object::GetField(id);
+}
+
+std::vector<String> Type::GetLoadDependencies(void) const
+{
+	return std::vector<String>();
+}
+
+String TypeType::GetName(void) const
+{
+	return "Type";
+}
+
+Type::Ptr TypeType::GetBaseType(void) const
+{
+	return Type::Ptr();
+}
+
+int TypeType::GetAttributes(void) const
+{
+	return 0;
+}
+
+int TypeType::GetFieldId(const String& name) const
+{
+	if (name == "prototype")
+		return 0;
+
+	return -1;
+}
+
+Field TypeType::GetFieldInfo(int id) const
+{
+	if (id == 0)
+		return Field(0, "Object", "prototype", 0);
+
+	throw std::runtime_error("Invalid field ID.");
+}
+
+int TypeType::GetFieldCount(void) const
+{
+	return 1;
+}
+
+ObjectFactory TypeType::GetFactory(void) const
+{
+	return NULL;
 }
 

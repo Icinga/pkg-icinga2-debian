@@ -17,12 +17,13 @@
 
 mkclass_target(gelfwriter.ti gelfwriter.thpp)
 mkclass_target(graphitewriter.ti graphitewriter.thpp)
+mkclass_target(opentsdbwriter.ti opentsdbwriter.thpp)
 mkclass_target(perfdatawriter.ti perfdatawriter.thpp)
 
 mkembedconfig_target(perfdata-type.conf perfdata-type.cpp)
 
 set(perfdata_SOURCES
-  gelfwriter.cpp gelfwriter.thpp graphitewriter.cpp graphitewriter.thpp perfdatawriter.cpp perfdatawriter.thpp perfdata-type.cpp
+  gelfwriter.cpp gelfwriter.thpp graphitewriter.cpp graphitewriter.thpp opentsdbwriter.cpp opentsdbwriter.thpp perfdatawriter.cpp perfdatawriter.thpp perfdata-type.cpp
 )
 
 if(ICINGA2_UNITY_BUILD)
@@ -39,6 +40,26 @@ set_target_properties (
   FOLDER Components
 )
 
+install_if_not_exists(
+  ${PROJECT_SOURCE_DIR}/etc/icinga2/features-available/gelf.conf
+  ${CMAKE_INSTALL_SYSCONFDIR}/icinga2/features-available
+)
+
+install_if_not_exists(
+  ${PROJECT_SOURCE_DIR}/etc/icinga2/features-available/graphite.conf
+  ${CMAKE_INSTALL_SYSCONFDIR}/icinga2/features-available
+)
+
+install_if_not_exists(
+  ${PROJECT_SOURCE_DIR}/etc/icinga2/features-available/opentsdb.conf
+  ${CMAKE_INSTALL_SYSCONFDIR}/icinga2/features-available
+)
+
+install_if_not_exists(
+  ${PROJECT_SOURCE_DIR}/etc/icinga2/features-available/perfdata.conf
+  ${CMAKE_INSTALL_SYSCONFDIR}/icinga2/features-available
+)
+
 install(
   TARGETS perfdata
   RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}
@@ -47,3 +68,5 @@ install(
 
 install(CODE "file(MAKE_DIRECTORY \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/spool/icinga2/perfdata\")")
 install(CODE "file(MAKE_DIRECTORY \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/spool/icinga2/tmp\")")
+
+set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "${CPACK_NSIS_EXTRA_INSTALL_COMMANDS}" PARENT_SCOPE)

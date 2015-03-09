@@ -19,6 +19,7 @@
 
 #include "icinga/service.hpp"
 #include "icinga/servicegroup.hpp"
+#include "icinga/scheduleddowntime.hpp"
 #include "icinga/pluginutility.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
@@ -40,8 +41,17 @@ String ServiceNameComposer::MakeName(const String& shortName, const Object::Ptr&
 	return service->GetHostName() + "!" + shortName;
 }
 
-void Service::OnConfigLoaded(void)
+void Service::OnAllConfigLoaded(void)
 {
+	Checkable::OnAllConfigLoaded();
+
+	m_Host = Host::GetByName(GetHostName());
+
+	if (m_Host)
+		m_Host->AddService(this);
+
+	ServiceGroup::EvaluateObjectRules(this);
+
 	Array::Ptr groups = GetGroups();
 
 	if (groups) {
@@ -57,14 +67,9 @@ void Service::OnConfigLoaded(void)
 		}
 	}
 
-	m_Host = Host::GetByName(GetHostName());
-
-	if (m_Host)
-		m_Host->AddService(this);
-
-	SetSchedulingOffset(Utility::Random());
-
-	Checkable::OnConfigLoaded();
+	ScheduledDowntime::EvaluateApplyRules(this);
+	Notification::EvaluateApplyRules(this);
+	Dependency::EvaluateApplyRules(this);
 }
 
 Service::Ptr Service::GetByNamePair(const String& hostName, const String& serviceName)
@@ -152,6 +157,9 @@ bool Service::ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Valu
 	} else if (macro == "last_state_change") {
 		*result = Convert::ToString((long)GetLastStateChange());
 		return true;
+	} else if (macro == "downtime_depth") {
+		*result = Convert::ToString((long)GetDowntimeDepth());
+		return true;
 	} else if (macro == "duration_sec") {
 		*result = Convert::ToString((long)(Utility::GetTime() - GetLastStateChange()));
 		return true;
@@ -172,6 +180,9 @@ bool Service::ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Valu
 			return true;
 		} else if (macro == "last_check") {
 			*result = Convert::ToString((long)cr->GetExecutionEnd());
+			return true;
+		} else if (macro == "check_source") {
+			*result = cr->GetCheckSource();
 			return true;
 		}
 	}

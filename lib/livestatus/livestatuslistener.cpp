@@ -19,7 +19,6 @@
 
 #include "livestatus/livestatuslistener.hpp"
 #include "icinga/perfdatavalue.hpp"
-#include "config/configcompilercontext.hpp"
 #include "base/utility.hpp"
 #include "base/objectlock.hpp"
 #include "base/dynamictype.hpp"
@@ -29,7 +28,7 @@
 #include "base/unixsocket.hpp"
 #include "base/networkstream.hpp"
 #include "base/application.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/function.hpp"
 #include "base/statsfunction.hpp"
 #include "base/convert.hpp"
 
@@ -44,7 +43,7 @@ static boost::mutex l_ComponentMutex;
 
 REGISTER_STATSFUNCTION(LivestatusListenerStats, &LivestatusListener::StatsFunc);
 
-Value LivestatusListener::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
+void LivestatusListener::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
@@ -58,8 +57,6 @@ Value LivestatusListener::StatsFunc(const Dictionary::Ptr& status, const Array::
 	}
 
 	status->Set("livestatuslistener", nodes);
-
-	return 0;
 }
 
 /**
@@ -82,8 +79,8 @@ void LivestatusListener::Start(void)
 
 		m_Listener = socket;
 
-		boost::thread thread(boost::bind(&LivestatusListener::ServerThreadProc, this, socket));
-		thread.detach();
+		m_Thread = boost::thread(boost::bind(&LivestatusListener::ServerThreadProc, this));
+
 		Log(LogInformation, "LivestatusListener")
 		    << "Created TCP socket listening on host '" << GetBindHost() << "' port '" << GetBindPort() << "'.";
 	}
@@ -110,8 +107,8 @@ void LivestatusListener::Start(void)
 
 		m_Listener = socket;
 
-		boost::thread thread(boost::bind(&LivestatusListener::ServerThreadProc, this, socket));
-		thread.detach();
+		m_Thread = boost::thread(boost::bind(&LivestatusListener::ServerThreadProc, this));
+
 		Log(LogInformation, "LivestatusListener")
 		    << "Created UNIX socket in '" << GetSocketPath() << "'.";
 #else
@@ -127,6 +124,9 @@ void LivestatusListener::Stop(void)
 	DynamicObject::Stop();
 
 	m_Listener->Close();
+
+	if (m_Thread.joinable())
+		m_Thread.join();
 }
 
 int LivestatusListener::GetClientsConnected(void)
@@ -143,9 +143,9 @@ int LivestatusListener::GetConnections(void)
 	return l_Connections;
 }
 
-void LivestatusListener::ServerThreadProc(const Socket::Ptr& server)
+void LivestatusListener::ServerThreadProc(void)
 {
-	server->Listen();
+	m_Listener->Listen();
 
 	try {
 		for (;;) {
@@ -179,11 +179,19 @@ void LivestatusListener::ClientHandler(const Socket::Ptr& client)
 
 	for (;;) {
 		String line;
-		ReadLineContext context;
+		StreamReadContext context;
 
 		std::vector<String> lines;
 
-		while (stream->ReadLine(&line, context)) {
+		for (;;) {
+			StreamReadStatus srs = stream->ReadLine(&line, context);
+
+			if (srs == StatusEof)
+				break;
+
+			if (srs != StatusNewItem)
+				continue;
+
 			if (line.GetLength() > 0)
 				lines.push_back(line);
 			else
@@ -205,12 +213,12 @@ void LivestatusListener::ClientHandler(const Socket::Ptr& client)
 }
 
 
-void LivestatusListener::ValidateSocketType(const String& location, const Dictionary::Ptr& attrs)
+void LivestatusListener::ValidateSocketType(const String& location, const LivestatusListener::Ptr& object)
 {
-	Value socket_type = attrs->Get("socket_type");
+	String socket_type = object->GetSocketType();
 
-	if (!socket_type.IsEmpty() && socket_type != "unix" && socket_type != "tcp") {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": Socket type '" + socket_type + "' is invalid.");
+	if (socket_type != "unix" && socket_type != "tcp") {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": Socket type '" + socket_type + "' is invalid.", object->GetDebugInfo()));
 	}
 }

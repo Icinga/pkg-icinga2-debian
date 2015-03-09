@@ -22,23 +22,34 @@
 
 #include "base/i2-base.hpp"
 #include "base/socket.hpp"
+#include "base/socketevents.hpp"
 #include "base/stream.hpp"
 #include "base/tlsutility.hpp"
+#include "base/fifo.hpp"
 
 namespace icinga
 {
+
+enum TlsAction
+{
+	TlsActionNone,
+	TlsActionRead,
+	TlsActionWrite,
+	TlsActionHandshake
+};
 
 /**
  * A TLS stream.
  *
  * @ingroup base
  */
-class I2_BASE_API TlsStream : public Stream
+class I2_BASE_API TlsStream : public Stream, private SocketEvents
 {
 public:
 	DECLARE_PTR_TYPEDEFS(TlsStream);
 
-	TlsStream(const Socket::Ptr& socket, ConnectionRole role, const boost::shared_ptr<SSL_CTX>& sslContext);
+	TlsStream(const Socket::Ptr& socket, const String& hostname, ConnectionRole role, const boost::shared_ptr<SSL_CTX>& sslContext);
+	~TlsStream(void);
 
 	boost::shared_ptr<X509> GetClientCertificate(void) const;
 	boost::shared_ptr<X509> GetPeerCertificate(void) const;
@@ -47,27 +58,41 @@ public:
 
 	virtual void Close(void);
 
-	virtual size_t Read(void *buffer, size_t count);
+	virtual size_t Read(void *buffer, size_t count, bool allow_partial = false);
 	virtual void Write(const void *buffer, size_t count);
 
 	virtual bool IsEof(void) const;
+
+	virtual bool SupportsWaiting(void) const;
+	virtual bool IsDataAvailable(void) const;
 
 	bool IsVerifyOK(void) const;
 
 private:
 	boost::shared_ptr<SSL> m_SSL;
 	bool m_Eof;
-	mutable boost::mutex m_SSLLock;
-	mutable boost::mutex m_IOActionLock;
+	mutable boost::mutex m_Mutex;
+	mutable boost::condition_variable m_CV;
+	bool m_HandshakeOK;
 	bool m_VerifyOK;
+	int m_ErrorCode;
+	bool m_ErrorOccurred;
 
 	Socket::Ptr m_Socket;
 	ConnectionRole m_Role;
 
+	FIFO::Ptr m_SendQ;
+	FIFO::Ptr m_RecvQ;
+
+	TlsAction m_CurrentAction;
+	bool m_Retry;
+
 	static int m_SSLIndex;
 	static bool m_SSLIndexInitialized;
 
-	void CloseUnlocked(void);
+	virtual void OnEvent(int revents);
+
+	void HandleError(void) const;
 
 	static int ValidateCertificate(int preverify_ok, X509_STORE_CTX *ctx);
 	static void NullCertificateDeleter(X509 *certificate);

@@ -21,7 +21,7 @@
 #define SOCKET_H
 
 #include "base/i2-base.hpp"
-#include "base/stream.hpp"
+#include "base/object.hpp"
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
@@ -60,6 +60,8 @@ public:
 	bool Poll(bool read, bool write, struct timeval *timeout = NULL);
 
 	void MakeNonBlocking(void);
+
+	static void SocketPair(SOCKET s[2]);
 
 protected:
 	void SetFD(SOCKET fd);

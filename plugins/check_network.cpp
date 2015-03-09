@@ -31,6 +31,9 @@ namespace po = boost::program_options;
 
 using std::endl; using std::vector; using std::wstring;
 using std::wcout; using std::cout;
+
+static BOOL debug = FALSE;
+
 struct nInterface 
 {
 	wstring name;
@@ -74,9 +77,9 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 	po::options_description desc("Options");
 
 	desc.add_options()
-		(",h", "print usage and exit")
-		("help", "print help message and exit")
-		("version,v", "print version and exit")
+		("help,h", "print usage and exit")
+		("version,V", "print version and exit")
+		("debug,d", "Verbose/Debug output")
 		("warning,w", po::wvalue<wstring>(), "warning value")
 		("critical,c", po::wvalue<wstring>(), "critical value")
 		;
@@ -98,11 +101,6 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		return 3;
 	}
 
-	if (vm.count("h")) {
-		cout << desc << endl;
-		return 0;
-	}
-
 	if (vm.count("help")) {
 		wcout << progName << " Help\n\tVersion: " << VERSION << endl;
 		wprintf(
@@ -111,7 +109,7 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		cout << desc;
 		wprintf(
 			L"\nIt will then output a string looking something like this:\n\n"
-			L"\tNETWORK WARNING 1131B/s|network=1131B/s;1000;7000;0\n\n"
+			L"\tNETWORK WARNING 1131B/s | network=1131B/s;1000;7000;0\n\n"
 			L"\"DISK\" being the type of the check, \"WARNING\" the returned status\n"
 			L"and \"1131B/s\" is the returned value.\n"
 			L"The performance data is found behind the \"|\", in order:\n"
@@ -166,11 +164,17 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		}
 	}
 	
+	if (vm.count("debug"))
+		debug = TRUE;
+
 	return -1;
 }
 
 int printOutput(printInfoStruct& printInfo, const vector<nInterface>& vInterfaces) 
 {
+	if (debug)
+		wcout << L"Constructing output string" << endl;
+
 	long tIn = 0, tOut = 0;
 	std::wstringstream tss, perfDataFirst;
 	state state = OK;
@@ -186,17 +190,17 @@ int printOutput(printInfoStruct& printInfo, const vector<nInterface>& vInterface
 	if (printInfo.crit.rend(tIn + tOut))
 		state = CRITICAL;
 	
-	perfDataFirst << L"network=" << tIn + tOut << L"B/s;" << printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";" << L"0 ";
+	perfDataFirst << L"network=" << tIn + tOut << L"B/s;" << printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";" << L"0; ";
 
 	switch (state) {
 	case OK:
-		wcout << L"NETWORK OK " << tIn + tOut << L"B/s|" << perfDataFirst.str() << tss.str() << endl;
+		wcout << L"NETWORK OK " << tIn + tOut << L"B/s | " << perfDataFirst.str() << tss.str() << endl;
 		break;
 	case WARNING:
-		wcout << L"NETWORK WARNING " << tIn + tOut << L"B/s|" << perfDataFirst.str() << tss.str() << endl;
+		wcout << L"NETWORK WARNING " << tIn + tOut << L"B/s | " << perfDataFirst.str() << tss.str() << endl;
 		break;
 	case CRITICAL:
-		wcout << L"NETWORK CRITICAL " << tIn + tOut << L"B/s|" << perfDataFirst.str() << tss.str() << endl;
+		wcout << L"NETWORK CRITICAL " << tIn + tOut << L"B/s | " << perfDataFirst.str() << tss.str() << endl;
 		break;
 	}
 
@@ -214,6 +218,9 @@ int check_network(vector <nInterface>& vInterfaces)
 	PDH_FMT_COUNTERVALUE_ITEM *pDisplayValuesIn = NULL, *pDisplayValuesOut = NULL;
 	PDH_STATUS err;
 
+	if (debug)
+		wcout << L"Creating Query and adding counters" << endl;
+
 	err = PdhOpenQuery(NULL, NULL, &phQuery);
 	if (!SUCCEEDED(err))
 		goto die;
@@ -226,16 +233,28 @@ int check_network(vector <nInterface>& vInterfaces)
 	if (!SUCCEEDED(err)) 
 		goto die;
 	
+	if (debug)
+		wcout << L"Collecting first batch of query data" << endl;
+
 	err = PdhCollectQueryData(phQuery);
 	if (!SUCCEEDED(err))
 		goto die;
-	
+
+	if (debug)
+		wcout << L"Sleep for one second" << endl;
+
 	Sleep(1000);
 
+	if (debug)
+		wcout << L"Collecting second batch of query data" << endl;
+
 	err = PdhCollectQueryData(phQuery);
 	if (!SUCCEEDED(err))
 		goto die;
 
+	if (debug)
+		wcout << L"Creating formatted counter arrays" << endl;
+	
 	err = PdhGetFormattedCounterArray(phCounterIn, PDH_FMT_LONG, &dwBufferSizeIn, &dwItemCount, pDisplayValuesIn);
 	if (err == PDH_MORE_DATA || SUCCEEDED(err))
 		pDisplayValuesIn = reinterpret_cast<PDH_FMT_COUNTERVALUE_ITEM*>(new BYTE[dwItemCount*dwBufferSizeIn]);
@@ -256,16 +275,27 @@ int check_network(vector <nInterface>& vInterfaces)
 	if (!SUCCEEDED(err))
 		goto die;
 
+	if (debug)
+		wcout << L"Going over counter array" << endl;
+
 	for (DWORD i = 0; i < dwItemCount; i++) {
 		nInterface *iface = new nInterface(wstring(pDisplayValuesIn[i].szName));
 		iface->BytesInSec = pDisplayValuesIn[i].FmtValue.longValue;
 		iface->BytesOutSec = pDisplayValuesOut[i].FmtValue.longValue;
 		vInterfaces.push_back(*iface);
+		if (debug)
+			wcout << L"Collected interface " << pDisplayValuesIn[i].szName << endl;
 	}
+	if (debug)
+		wcout << L"Finished collection. Cleaning up and returning" << endl;
+
+	if (phQuery)
 		PdhCloseQuery(phQuery);
-		delete pDisplayValuesIn;
-		delete pDisplayValuesOut;
-		return -1;
+	if (pDisplayValuesIn)
+		delete reinterpret_cast<PDH_FMT_COUNTERVALUE_ITEM*>(pDisplayValuesIn);
+	if (pDisplayValuesOut)
+		delete reinterpret_cast<PDH_FMT_COUNTERVALUE_ITEM*>(pDisplayValuesOut);
+	return -1;
 die:
 	die(err);
 	if (phQuery)

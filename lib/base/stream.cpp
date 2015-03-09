@@ -22,54 +22,114 @@
 
 using namespace icinga;
 
-bool Stream::ReadLine(String *line, ReadLineContext& context)
+void Stream::RegisterDataHandler(const boost::function<void(void)>& handler)
+{
+	if (SupportsWaiting())
+		OnDataAvailable.connect(handler);
+	else
+		BOOST_THROW_EXCEPTION(std::runtime_error("Stream does not support waiting."));
+}
+
+bool Stream::SupportsWaiting(void) const
+{
+	return false;
+}
+
+bool Stream::IsDataAvailable(void) const
+{
+	return false;
+}
+
+void Stream::SignalDataAvailable(void)
+{
+	OnDataAvailable();
+
+	{
+		boost::mutex::scoped_lock lock(m_Mutex);
+		m_CV.notify_all();
+	}
+}
+
+void Stream::WaitForData(void)
+{
+	if (!SupportsWaiting())
+		BOOST_THROW_EXCEPTION(std::runtime_error("Stream does not support waiting."));
+
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	while (!IsDataAvailable())
+		m_CV.wait(lock);
+}
+
+StreamReadStatus Stream::ReadLine(String *line, StreamReadContext& context)
 {
 	if (context.Eof)
-		return false;
+		return StatusEof;
 
-	for (;;) {
-		if (context.MustRead) {
-			context.Buffer = (char *)realloc(context.Buffer, context.Size + 4096);
+	if (context.MustRead) {
+		if (!context.FillFromStream(this)) {
+			context.Eof = true;
 
-			if (!context.Buffer)
-				throw std::bad_alloc();
-
-			size_t rc = Read(context.Buffer + context.Size, 4096);
-
-			if (rc == 0) {
-				*line = String(context.Buffer, &(context.Buffer[context.Size]));
-				boost::algorithm::trim_right(*line);
-
-				context.Eof = true;
-
-				return true;
-			}
-
-			context.Size += rc;
-		}
-
-		int count = 0;
-		size_t first_newline;
-
-		for (size_t i = 0; i < context.Size; i++) {
-			if (context.Buffer[i] == '\n') {
-				count++;
-
-				if (count == 1)
-					first_newline = i;
-			}
-		}
-
-		context.MustRead = (count <= 1);
-
-		if (count > 0) {
-			*line = String(context.Buffer, &(context.Buffer[first_newline]));
+			*line = String(context.Buffer, &(context.Buffer[context.Size]));
 			boost::algorithm::trim_right(*line);
 
-			memmove(context.Buffer, context.Buffer + first_newline + 1, context.Size - first_newline - 1);
-			context.Size -= first_newline + 1;
-
-			return true;
+			return StatusNewItem;
 		}
 	}
+
+	int count = 0;
+	size_t first_newline;
+
+	for (size_t i = 0; i < context.Size; i++) {
+		if (context.Buffer[i] == '\n') {
+			count++;
+
+			if (count == 1)
+				first_newline = i;
+		}
+	}
+
+	context.MustRead = (count <= 1);
+
+	if (count > 0) {
+		*line = String(context.Buffer, &(context.Buffer[first_newline]));
+		boost::algorithm::trim_right(*line);
+
+		context.DropData(first_newline + 1);
+
+		return StatusNewItem;
+	}
+
+	return StatusNeedData;
+}
+
+bool StreamReadContext::FillFromStream(const Stream::Ptr& stream)
+{
+	if (Wait && stream->SupportsWaiting())
+		stream->WaitForData();
+
+	size_t count = 0;
+
+	do {
+		Buffer = (char *)realloc(Buffer, Size + 4096);
+
+		if (!Buffer)
+			throw std::bad_alloc();
+
+		size_t rc = stream->Read(Buffer + Size, 4096, true);
+
+		Size += rc;
+		count += rc;
+	} while (stream->IsDataAvailable());
+
+	if (count == 0 && stream->IsEof())
+		return false;
+	else
+		return true;
+}
+
+void StreamReadContext::DropData(size_t count)
+{
+	memmove(Buffer, Buffer + count, Size - count);
+	Size -= count;
 }

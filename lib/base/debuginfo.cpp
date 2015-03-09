@@ -23,6 +23,10 @@
 
 using namespace icinga;
 
+DebugInfo::DebugInfo(void)
+	: FirstLine(0), FirstColumn(0), LastLine(0), LastColumn(0)
+{ }
+
 /**
  * Outputs a DebugInfo struct to a stream.
  *
@@ -106,13 +110,5 @@ void icinga::ShowCodeFragment(std::ostream& out, const DebugInfo& di, bool verbo
 			out << "\n";
 		}
 	}
-}
-
-std::string icinga::to_string(const errinfo_debuginfo& e)
-{
-	std::ostringstream msgbuf;
-	msgbuf << "Config location: " << e.value() << "\n";
-	ShowCodeFragment(msgbuf, e.value(), true);
-	return msgbuf.str();
 }
 

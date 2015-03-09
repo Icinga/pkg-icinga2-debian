@@ -33,6 +33,9 @@ public:
 
 class Dependency : CustomVarObject < DependencyNameComposer
 {
+	load_after Host;
+	load_after Service;
+
 	[config] String child_host_name;
 	[config] String child_service_name;
 
@@ -43,6 +46,10 @@ class Dependency : CustomVarObject < DependencyNameComposer
 
 	[config] Array::Ptr states;
 	int state_filter_real (StateFilter);
+
+	[config] bool ignore_soft_states {
+		default {{{ return true; }}}
+	};
 
 	[config] bool disable_checks;
 	[config] bool disable_notifications {

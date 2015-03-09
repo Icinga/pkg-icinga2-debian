@@ -22,14 +22,16 @@
 #include "base/dynamictype.hpp"
 #include "base/logger.hpp"
 #include "base/convert.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 #include <fstream>
+#include <iomanip>
 
 using namespace icinga;
 
 REGISTER_APIFUNCTION(Update, config, &ApiListener::ConfigUpdateHandler);
 
-bool ApiListener::IsConfigMaster(const Zone::Ptr& zone) const
+bool ApiListener::IsConfigMaster(const Zone::Ptr& zone)
 {
 	String path = Application::GetZonesDir() + "/" + zone->GetName();
 	return Utility::PathExists(path);
@@ -42,7 +44,7 @@ void ApiListener::ConfigGlobHandler(Dictionary::Ptr& config, const String& path,
 	Log(LogNotice, "ApiListener")
 	    << "Creating config update for file '" << file << "'";
 
-	std::ifstream fp(file.CStr());
+	std::ifstream fp(file.CStr(), std::ifstream::binary);
 	if (!fp)
 		return;
 
@@ -70,22 +72,26 @@ bool ApiListener::UpdateConfigDir(const Dictionary::Ptr& oldConfig, const Dictio
 			return false;
 	}
 
-	BOOST_FOREACH(const Dictionary::Pair& kv, newConfig) {
-		if (oldConfig->Get(kv.first) != kv.second) {
-			configChange = true;
+	{
+		ObjectLock olock(newConfig);
+		BOOST_FOREACH(const Dictionary::Pair& kv, newConfig) {
+			if (oldConfig->Get(kv.first) != kv.second) {
+				configChange = true;
 
-			String path = configDir + "/" + kv.first;
-			Log(LogInformation, "ApiListener")
-			    << "Updating configuration file: " << path;
+				String path = configDir + "/" + kv.first;
+				Log(LogInformation, "ApiListener")
+				    << "Updating configuration file: " << path;
 
-			//pass the directory and generate a dir tree, if not existing already
-			Utility::MkDirP(Utility::DirName(path), 0755);
-			std::ofstream fp(path.CStr(), std::ofstream::out | std::ostream::trunc);
-			fp << kv.second;
-			fp.close();
+				//pass the directory and generate a dir tree, if not existing already
+				Utility::MkDirP(Utility::DirName(path), 0755);
+				std::ofstream fp(path.CStr(), std::ofstream::out | std::ostream::binary | std::ostream::trunc);
+				fp << kv.second;
+				fp.close();
+			}
 		}
 	}
 
+	ObjectLock xlock(oldConfig);
 	BOOST_FOREACH(const Dictionary::Pair& kv, oldConfig) {
 		if (!newConfig->Contains(kv.first)) {
 			configChange = true;
@@ -98,14 +104,14 @@ bool ApiListener::UpdateConfigDir(const Dictionary::Ptr& oldConfig, const Dictio
 	String tsPath = configDir + "/.timestamp";
 	if (!Utility::PathExists(tsPath)) {
 		std::ofstream fp(tsPath.CStr(), std::ofstream::out | std::ostream::trunc);
-		fp << Utility::GetTime();
+		fp << std::fixed << Utility::GetTime();
 		fp.close();
 	}
 
 	if (authoritative) {
 		String authPath = configDir + "/.authoritative";
-		if (!Utility::PathExists(tsPath)) {
-			std::ofstream fp(tsPath.CStr(), std::ofstream::out | std::ostream::trunc);
+		if (!Utility::PathExists(authPath)) {
+			std::ofstream fp(authPath.CStr(), std::ofstream::out | std::ostream::trunc);
 			fp.close();
 		}
 	}
@@ -123,7 +129,7 @@ void ApiListener::SyncZoneDir(const Zone::Ptr& zone) const
 
 	if (!Utility::MkDir(oldDir, 0700)) {
 		Log(LogCritical, "ApiListener")
-		    << "mkdir() for path '" << oldDir << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+		    << "mkdir() for path '" << oldDir << "' failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
 
 		BOOST_THROW_EXCEPTION(posix_error()
 			<< boost::errinfo_api_function("mkdir")
@@ -227,7 +233,13 @@ Value ApiListener::ConfigUpdateHandler(const MessageOrigin& origin, const Dictio
 
 		if (!zone) {
 			Log(LogWarning, "ApiListener")
-			    << "Ignoring config update for unknown zone: " << kv.first;
+			    << "Ignoring config update for unknown zone '" << kv.first << "'.";
+			continue;
+		}
+
+		if (IsConfigMaster(zone)) {
+			Log(LogWarning, "ApiListener")
+			    << "Ignoring config update for zone '" << kv.first << "' because we have an authoritative version of the zone's config.";
 			continue;
 		}
 
@@ -235,7 +247,7 @@ Value ApiListener::ConfigUpdateHandler(const MessageOrigin& origin, const Dictio
 
 		if (!Utility::MkDir(oldDir, 0700)) {
 			Log(LogCritical, "ApiListener")
-			    << "mkdir() for path '" << oldDir << "'failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+			    << "mkdir() for path '" << oldDir << "' failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
 
 			BOOST_THROW_EXCEPTION(posix_error()
 				<< boost::errinfo_api_function("mkdir")

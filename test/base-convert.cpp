@@ -49,6 +49,9 @@ BOOST_AUTO_TEST_CASE(tostring)
 	BOOST_CHECK(Convert::ToString(7.5) == "7.5");
 	BOOST_CHECK(Convert::ToString("hello") == "hello");
 
+	String str = "hello";
+	BOOST_CHECK(Convert::ToString(str) == "hello");
+
 	BOOST_CHECK(Convert::ToString(Value(7)) == "7");
 	BOOST_CHECK(Convert::ToString(Value(7.5)) == "7.5");
 	BOOST_CHECK(Convert::ToString(Value("hello")) == "hello");
@@ -57,10 +60,12 @@ BOOST_AUTO_TEST_CASE(tostring)
 
 BOOST_AUTO_TEST_CASE(tobool)
 {
-	BOOST_CHECK_THROW(Convert::ToBool("a"), boost::exception);
-	BOOST_CHECK(Convert::ToBool("0") == false);
+	BOOST_CHECK(Convert::ToBool("a") == true);
+	BOOST_CHECK(Convert::ToBool("0") == true);
 	BOOST_CHECK(Convert::ToBool("1") == true);
 	BOOST_CHECK(Convert::ToBool("2") == true);
+	BOOST_CHECK(Convert::ToBool(1) == true);
+	BOOST_CHECK(Convert::ToBool(0) == false);
 	BOOST_CHECK(Convert::ToBool(Value(true)) == true);
 	BOOST_CHECK(Convert::ToBool(Value(false)) == false);
 }

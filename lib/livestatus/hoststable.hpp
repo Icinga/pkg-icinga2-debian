@@ -30,12 +30,12 @@ namespace icinga
 /**
  * @ingroup livestatus
  */
-class HostsTable : public Table
+class I2_LIVESTATUS_API HostsTable : public Table
 {
 public:
 	DECLARE_PTR_TYPEDEFS(HostsTable);
 
-	HostsTable(void);
+	HostsTable(LivestatusGroupByType type = LivestatusGroupByNone);
 
 	static void AddColumns(Table *table, const String& prefix = String(),
 	    const Column::ObjectAccessor& objectAccessor = Column::ObjectAccessor());
@@ -45,6 +45,8 @@ public:
 
 protected:
 	virtual void FetchRows(const AddRowFunction& addRowFn);
+
+	static Object::Ptr HostGroupAccessor(const Value& row, LivestatusGroupByType groupByType, const Object::Ptr& groupByObject);
 
 	static Value NameAccessor(const Value& row);
 	static Value DisplayNameAccessor(const Value& row);

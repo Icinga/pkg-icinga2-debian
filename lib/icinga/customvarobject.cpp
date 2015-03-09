@@ -18,11 +18,17 @@
  ******************************************************************************/
 
 #include "icinga/customvarobject.hpp"
+#include "icinga/macroprocessor.hpp"
 #include "base/logger.hpp"
+#include "base/function.hpp"
+#include "base/exception.hpp"
+#include "base/objectlock.hpp"
+#include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(CustomVarObject);
+REGISTER_SCRIPTFUNCTION(ValidateCustomAttributes, &CustomVarObject::ValidateCustomAttributes);
 
 boost::signals2::signal<void (const CustomVarObject::Ptr&, const Dictionary::Ptr& vars, const MessageOrigin&)> CustomVarObject::OnVarsChanged;
 
@@ -60,4 +66,58 @@ bool CustomVarObject::IsVarOverridden(const String& name) const
 		return false;
 
 	return vars_override->Contains(name);
+}
+
+void CustomVarObject::ValidateCustomAttributes(const String& location, const CustomVarObject::Ptr& object)
+{
+	Dictionary::Ptr vars = object->GetVars();
+
+	if (!vars)
+		return;
+
+	/* string, array, dictionary */
+	ObjectLock olock(vars);
+	BOOST_FOREACH(const Dictionary::Pair& kv, vars) {
+		const Value& varval = kv.second;
+
+		if (varval.IsObjectType<Dictionary>()) {
+			/* only one dictonary level */
+			Dictionary::Ptr varval_dict = varval;
+
+			ObjectLock xlock(varval_dict);
+			BOOST_FOREACH(const Dictionary::Pair& kv_var, varval_dict) {
+				if (kv_var.second.IsEmpty())
+					continue;
+
+				if (!MacroProcessor::ValidateMacroString(kv_var.second)) {
+					BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+					    location + ": Closing $ not found in macro format string '" + kv_var.second + "'.", object->GetDebugInfo()));
+				}
+			}
+		} else if (varval.IsObjectType<Array>()) {
+			/* check all array entries */
+			Array::Ptr varval_arr = varval;
+
+			ObjectLock ylock (varval_arr);
+			BOOST_FOREACH(const Value& arrval, varval_arr) {
+				if (arrval.IsEmpty())
+					continue;
+
+				if (!MacroProcessor::ValidateMacroString(arrval)) {
+					BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+					    location + ": Closing $ not found in macro format string '" + arrval + "'.", object->GetDebugInfo()));
+				}
+			}
+		} else {
+			if (varval.IsEmpty())
+				continue;
+
+			String varstr = varval;
+
+			if (!MacroProcessor::ValidateMacroString(varstr)) {
+				BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+				    location + ": Closing $ not found in macro format string '" + varstr + "'.", object->GetDebugInfo()));
+			}
+		}
+	}
 }

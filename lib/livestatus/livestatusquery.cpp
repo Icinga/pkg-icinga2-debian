@@ -31,6 +31,7 @@
 #include "livestatus/orfilter.hpp"
 #include "livestatus/andfilter.hpp"
 #include "icinga/externalcommandprocessor.hpp"
+#include "config/configcompiler.hpp"
 #include "base/debug.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
@@ -38,18 +39,52 @@
 #include "base/exception.hpp"
 #include "base/utility.hpp"
 #include "base/json.hpp"
+#include "base/serializer.hpp"
+#include "base/timer.hpp"
+#include "base/initialize.hpp"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/join.hpp>
 
 using namespace icinga;
 
 static int l_ExternalCommands = 0;
 static boost::mutex l_QueryMutex;
+static std::map<String, LivestatusScriptFrame> l_LivestatusScriptFrames;
+static Timer::Ptr l_FrameCleanupTimer;
+static boost::mutex l_LivestatusScriptMutex;
+
+static void ScriptFrameCleanupHandler(void)
+{
+	boost::mutex::scoped_lock lock(l_LivestatusScriptMutex);
+
+	std::vector<String> cleanup_keys;
+
+	typedef std::pair<String, LivestatusScriptFrame> KVPair;
+
+	BOOST_FOREACH(const KVPair& kv, l_LivestatusScriptFrames) {
+		if (kv.second.Seen < Utility::GetTime() - 1800)
+			cleanup_keys.push_back(kv.first);
+	}
+
+	BOOST_FOREACH(const String& key, cleanup_keys)
+		l_LivestatusScriptFrames.erase(key);
+}
+
+static void InitScriptFrameCleanup(void)
+{
+	l_FrameCleanupTimer = new Timer();
+	l_FrameCleanupTimer->OnTimerExpired.connect(boost::bind(ScriptFrameCleanupHandler));
+	l_FrameCleanupTimer->SetInterval(30);
+	l_FrameCleanupTimer->Start();
+}
+
+INITIALIZE_ONCE(InitScriptFrameCleanup);
 
 LivestatusQuery::LivestatusQuery(const std::vector<String>& lines, const String& compat_log_path)
-	: m_KeepAlive(false), m_OutputFormat("csv"), m_ColumnHeaders(true),
+	: m_KeepAlive(false), m_OutputFormat("csv"), m_ColumnHeaders(true), m_Limit(-1), m_ErrorCode(0),
 	  m_LogTimeFrom(0), m_LogTimeUntil(static_cast<long>(Utility::GetTime()))
 {
 	if (lines.size() == 0) {
@@ -88,6 +123,16 @@ LivestatusQuery::LivestatusQuery(const std::vector<String>& lines, const String&
 	if (m_Verb == "COMMAND") {
 		m_KeepAlive = true;
 		m_Command = target;
+	} else if (m_Verb == "SCRIPT") {
+		m_Session = target;
+
+		for (unsigned int i = 1; i < lines.size(); i++) {
+			if (m_Command != "")
+				m_Command += "\n";
+			m_Command += lines[i];
+		}
+
+		return;
 	} else if (m_Verb == "GET") {
 		m_Table = target;
 	} else {
@@ -137,6 +182,8 @@ LivestatusQuery::LivestatusQuery(const std::vector<String>& lines, const String&
 				m_Separators[3] = String(1, static_cast<char>(Convert::ToLong(separators[3])));
 		} else if (header == "ColumnHeaders")
 			m_ColumnHeaders = (params == "on");
+		else if (header == "Limit")
+			m_Limit = Convert::ToLong(params);
 		else if (header == "Filter") {
 			Filter::Ptr filter = ParseFilter(params, m_LogTimeFrom, m_LogTimeUntil);
 
@@ -401,6 +448,8 @@ void LivestatusQuery::PrintCsvArray(std::ostream& fp, const Array::Ptr& array, i
 
 		if (value.IsObjectType<Array>())
 			PrintCsvArray(fp, value, level + 1);
+		else if (value.IsBoolean())
+			fp << Convert::ToLong(value);
 		else
 			fp << value;
 	}
@@ -437,7 +486,7 @@ String LivestatusQuery::QuoteStringPython(const String& str) {
 
 void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 {
-	Log(LogInformation, "LivestatusQuery")
+	Log(LogNotice, "LivestatusQuery")
 	    << "Table: " << m_Table;
 
 	Table::Ptr table = Table::GetByName(m_Table, m_CompatLogPath, m_LogTimeFrom, m_LogTimeUntil);
@@ -448,7 +497,7 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 		return;
 	}
 
-	std::vector<Value> objects = table->FilterRows(m_Filter);
+	std::vector<LivestatusRowValue> objects = table->FilterRows(m_Filter, m_Limit);
 	std::vector<String> columns;
 
 	if (m_Columns.size() > 0)
@@ -461,16 +510,26 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 	if (m_Aggregators.empty()) {
 		Array::Ptr header = new Array();
 
-		BOOST_FOREACH(const Value& object, objects) {
+		typedef std::pair<String, Column> ColumnPair;
+
+		std::vector<ColumnPair> column_objs;
+		column_objs.reserve(columns.size());
+
+		BOOST_FOREACH(const String& columnName, columns)
+			column_objs.push_back(std::make_pair(columnName, table->GetColumn(columnName)));
+
+		rs->Reserve(1 + objects.size());
+
+		BOOST_FOREACH(const LivestatusRowValue& object, objects) {
 			Array::Ptr row = new Array();
 
-			BOOST_FOREACH(const String& columnName, columns) {
-				Column column = table->GetColumn(columnName);
+			row->Reserve(column_objs.size());
 
+			BOOST_FOREACH(const ColumnPair& cv, column_objs) {
 				if (m_ColumnHeaders)
-					header->Add(columnName);
+					header->Add(cv.first);
 
-				row->Add(column.ExtractValue(object));
+				row->Add(cv.second.ExtractValue(object.Row, object.GroupByType, object.GroupByObject));
 			}
 
 			if (m_ColumnHeaders) {
@@ -486,8 +545,8 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 
 		/* add aggregated stats */
 		BOOST_FOREACH(const Aggregator::Ptr aggregator, m_Aggregators) {
-			BOOST_FOREACH(const Value& object, objects) {
-				aggregator->Apply(table, object);
+			BOOST_FOREACH(const LivestatusRowValue& object, objects) {
+				aggregator->Apply(table, object.Row);
 			}
 
 			stats[index] = aggregator->GetResult();
@@ -511,6 +570,8 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 
 		Array::Ptr row = new Array();
 
+		row->Reserve(m_Columns.size() + m_Aggregators.size());
+
 		/*
 		 * add selected columns next to stats
 		 * may not be accurate for grouping!
@@ -519,7 +580,9 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 			BOOST_FOREACH(const String& columnName, m_Columns) {
 				Column column = table->GetColumn(columnName);
 
-				row->Add(column.ExtractValue(objects[0])); // first object wins
+				LivestatusRowValue object = objects[0]; //first object wins
+
+				row->Add(column.ExtractValue(object.Row, object.GroupByType, object.GroupByObject));
 			}
 		}
 
@@ -543,10 +606,56 @@ void LivestatusQuery::ExecuteCommandHelper(const Stream::Ptr& stream)
 		l_ExternalCommands++;
 	}
 
-	Log(LogInformation, "LivestatusQuery")
+	Log(LogNotice, "LivestatusQuery")
 	    << "Executing command: " << m_Command;
 	ExternalCommandProcessor::Execute(m_Command);
 	SendResponse(stream, LivestatusErrorOK, "");
+}
+
+void LivestatusQuery::ExecuteScriptHelper(const Stream::Ptr& stream)
+{
+	Log(LogInformation, "LivestatusQuery")
+	    << "Executing expression: " << m_Command;
+
+	m_ResponseHeader = "fixed16";
+
+	LivestatusScriptFrame& lsf = l_LivestatusScriptFrames[m_Session];
+	lsf.Seen = Utility::GetTime();
+
+	if (!lsf.Locals)
+		lsf.Locals = new Dictionary();
+
+	String fileName = "<" + Convert::ToString(lsf.NextLine) + ">";
+	lsf.NextLine++;
+
+	lsf.Lines[fileName] = m_Command;
+
+	Expression *expr = ConfigCompiler::CompileText(fileName, m_Command);
+	Value result;
+	try {
+		ScriptFrame frame;
+		frame.Locals = lsf.Locals;
+		result = expr->Evaluate(frame);
+	} catch (const ScriptError& ex) {
+		delete expr;
+
+		DebugInfo di = ex.GetDebugInfo();
+
+		std::ostringstream msgbuf;
+
+		msgbuf << di.Path << ": " << lsf.Lines[di.Path] << "\n"
+		    << String(di.Path.GetLength() + 2, ' ')
+		    << String(di.FirstColumn, ' ') << String(di.LastColumn - di.FirstColumn + 1, '^') << "\n"
+		    << ex.what() << "\n";
+
+		SendResponse(stream, LivestatusErrorQuery, msgbuf.str());
+		return;
+	} catch (...) {
+		delete expr;
+		throw;
+	}
+	delete expr;
+	SendResponse(stream, LivestatusErrorOK, JsonEncode(Serialize(result, FAState | FAConfig), true));
 }
 
 void LivestatusQuery::ExecuteErrorHelper(const Stream::Ptr& stream)
@@ -589,13 +698,15 @@ void LivestatusQuery::PrintFixed16(const Stream::Ptr& stream, int code, const St
 bool LivestatusQuery::Execute(const Stream::Ptr& stream)
 {
 	try {
-		Log(LogInformation, "LivestatusQuery")
+		Log(LogNotice, "LivestatusQuery")
 		    << "Executing livestatus query: " << m_Verb;
 
 		if (m_Verb == "GET")
 			ExecuteGetHelper(stream);
 		else if (m_Verb == "COMMAND")
 			ExecuteCommandHelper(stream);
+		else if (m_Verb == "SCRIPT")
+			ExecuteScriptHelper(stream);
 		else if (m_Verb == "ERROR")
 			ExecuteErrorHelper(stream);
 		else

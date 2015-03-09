@@ -50,7 +50,8 @@ String ContactGroupsTable::GetPrefix(void) const
 void ContactGroupsTable::FetchRows(const AddRowFunction& addRowFn)
 {
 	BOOST_FOREACH(const UserGroup::Ptr& ug, DynamicType::GetObjectsByType<UserGroup>()) {
-		addRowFn(ug);
+		if (!addRowFn(ug, LivestatusGroupByNone, Empty))
+			return;
 	}
 }
 
@@ -58,7 +59,7 @@ Value ContactGroupsTable::NameAccessor(const Value& row)
 {
 	UserGroup::Ptr user_group = static_cast<UserGroup::Ptr>(row);
 
-	if(!user_group)
+	if (!user_group)
 		return Empty;
 
 	return user_group->GetName();
@@ -68,7 +69,7 @@ Value ContactGroupsTable::AliasAccessor(const Value& row)
 {
 	UserGroup::Ptr user_group = static_cast<UserGroup::Ptr>(row);
 
-	if(!user_group)
+	if (!user_group)
 		return Empty;
 
 	return user_group->GetName();
@@ -78,7 +79,7 @@ Value ContactGroupsTable::MembersAccessor(const Value& row)
 {
 	UserGroup::Ptr user_group = static_cast<UserGroup::Ptr>(row);
 
-	if(!user_group)
+	if (!user_group)
 		return Empty;
 
 	Array::Ptr members = new Array();

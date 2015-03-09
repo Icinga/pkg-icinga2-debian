@@ -36,15 +36,20 @@ namespace icinga
 class I2_BASE_API ScriptUtils
 {
 public:
+	static String CastString(const Value& value);
+	static double CastNumber(const Value& value);
+	static bool CastBool(const Value& value);
 	static bool Regex(const String& pattern, const String& text);
-	static int Len(const Value& value);
+	static double Len(const Value& value);
 	static Array::Ptr Union(const std::vector<Value>& arguments);
 	static Array::Ptr Intersection(const std::vector<Value>& arguments);
 	static void Log(const std::vector<Value>& arguments);
 	static Array::Ptr Range(const std::vector<Value>& arguments);
 	static Type::Ptr TypeOf(const Value& value);
 	static Array::Ptr Keys(const Dictionary::Ptr& dict);
-	static DynamicObject::Ptr GetObject(const String& type, const String& name);
+	static DynamicObject::Ptr GetObject(const Type::Ptr& type, const String& name);
+	static Array::Ptr GetObjects(const Type::Ptr& type);
+	static void Assert(const Value& arg);
 
 private:
 	ScriptUtils(void);

@@ -25,6 +25,7 @@
 #include "base/logger.hpp"
 #include "base/context.hpp"
 #include "base/dynamicobject.hpp"
+#include "base/scriptframe.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -58,8 +59,23 @@ Value MacroProcessor::ResolveMacros(const Value& str, const ResolverList& resolv
 		}
 
 		result = resultArr;
+	} else if (str.IsObjectType<Dictionary>()) {
+		Dictionary::Ptr resultDict = new Dictionary();
+		Dictionary::Ptr dict = str;
+
+		ObjectLock olock(dict);
+
+		BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+			/* Note: don't escape macros here. */
+			resultDict->Set(kv.first, InternalResolveMacros(kv.second, resolvers, cr, missingMacro,
+			    EscapeCallback(), resolvedMacros, useResolvedMacros));
+		}
+
+		result = resultDict;
+	} else if (str.IsObjectType<Function>()) {
+		result = EvaluateFunction(str, resolvers, cr, missingMacro, escapeFn, resolvedMacros, useResolvedMacros, 0);
 	} else {
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Command is not a string or array."));
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Macro is not a string or array."));
 	}
 
 	return result;
@@ -153,6 +169,37 @@ bool MacroProcessor::ResolveMacro(const String& macro, const ResolverList& resol
 	return false;
 }
 
+Value MacroProcessor::InternalResolveMacrosShim(const std::vector<Value>& args, const ResolverList& resolvers,
+    const CheckResult::Ptr& cr, String *missingMacro,
+    const MacroProcessor::EscapeCallback& escapeFn, const Dictionary::Ptr& resolvedMacros,
+    bool useResolvedMacros, int recursionLevel)
+{
+	if (args.size() < 1)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Too few arguments for function"));
+
+	return MacroProcessor::InternalResolveMacros(args[0], resolvers, cr, missingMacro, escapeFn,
+	    resolvedMacros, useResolvedMacros, recursionLevel);
+}
+
+Value MacroProcessor::EvaluateFunction(const Function::Ptr& func, const ResolverList& resolvers,
+    const CheckResult::Ptr& cr, String *missingMacro,
+    const MacroProcessor::EscapeCallback& escapeFn, const Dictionary::Ptr& resolvedMacros,
+    bool useResolvedMacros, int recursionLevel)
+{
+	Dictionary::Ptr resolvers_this = new Dictionary();
+
+	BOOST_FOREACH(const ResolverSpec& resolver, resolvers) {
+		resolvers_this->Set(resolver.first, resolver.second);
+	}
+
+	resolvers_this->Set("macro", new Function(boost::bind(&MacroProcessor::InternalResolveMacrosShim,
+	    _1, boost::cref(resolvers), cr, missingMacro, MacroProcessor::EscapeCallback(), resolvedMacros, useResolvedMacros,
+	    recursionLevel)));
+
+	ScriptFrame frame(resolvers_this);
+	return func->Invoke();
+}
+
 Value MacroProcessor::InternalResolveMacros(const String& str, const ResolverList& resolvers,
     const CheckResult::Ptr& cr, String *missingMacro,
     const MacroProcessor::EscapeCallback& escapeFn, const Dictionary::Ptr& resolvedMacros,
@@ -165,6 +212,8 @@ Value MacroProcessor::InternalResolveMacros(const String& str, const ResolverLis
 
 	size_t offset, pos_first, pos_second;
 	offset = 0;
+
+	Dictionary::Ptr resolvers_this;
 
 	String result = str;
 	while ((pos_first = result.FindFirstOf("$", offset)) != String::NPos) {
@@ -194,6 +243,11 @@ Value MacroProcessor::InternalResolveMacros(const String& str, const ResolverLis
 			found = true;
 		}
 
+		if (resolved_macro.IsObjectType<Function>()) {
+			resolved_macro = EvaluateFunction(resolved_macro, resolvers, cr, missingMacro, escapeFn,
+			    resolvedMacros, useResolvedMacros, recursionLevel);
+		}
+
 		if (!found) {
 			if (!missingMacro)
 				Log(LogWarning, "MacroProcessor")
@@ -206,16 +260,19 @@ Value MacroProcessor::InternalResolveMacros(const String& str, const ResolverLis
 		if (recursive_macro) {
 			if (resolved_macro.IsObjectType<Array>()) {
 				Array::Ptr arr = resolved_macro;
-				Array::Ptr result = new Array();
+				Array::Ptr resolved_arr = new Array();
 
 				ObjectLock olock(arr);
-				BOOST_FOREACH(Value& value, arr) {
-					result->Add(InternalResolveMacros(value,
-						resolvers, cr, missingMacro, EscapeCallback(), Dictionary::Ptr(),
-						false, recursionLevel + 1));
+				BOOST_FOREACH(const Value& value, arr) {
+					if (value.IsScalar()) {
+						resolved_arr->Add(InternalResolveMacros(value,
+							resolvers, cr, missingMacro, EscapeCallback(), Dictionary::Ptr(),
+							false, recursionLevel + 1));
+					} else
+						resolved_arr->Add(value);
 				}
 
-				resolved_macro = result;
+				resolved_macro = resolved_arr;
 			} else
 				resolved_macro = InternalResolveMacros(resolved_macro,
 					resolvers, cr, missingMacro, EscapeCallback(), Dictionary::Ptr(),
@@ -244,4 +301,25 @@ Value MacroProcessor::InternalResolveMacros(const String& str, const ResolverLis
 	}
 
 	return result;
+}
+
+
+bool MacroProcessor::ValidateMacroString(const String& macro)
+{
+	if (macro.IsEmpty())
+		return true;
+
+	size_t pos_first, pos_second, offset;
+	offset = 0;
+
+	while((pos_first = macro.FindFirstOf("$", offset)) != String::NPos) {
+		pos_second = macro.FindFirstOf("$", pos_first + 1);
+
+		if (pos_second == String::NPos)
+			return false;
+
+		offset = pos_second + 1;
+	}
+
+	return true;
 }

@@ -22,12 +22,14 @@
 
 #include "icinga/i2-icinga.hpp"
 #include "icinga/dependency.thpp"
-#include "base/dictionary.hpp"
 
 namespace icinga
 {
 
 class ApplyRule;
+struct ScriptFrame;
+class Host;
+class Service;
 
 /**
  * A service dependency..
@@ -49,21 +51,22 @@ public:
 
 	static void RegisterApplyRuleHandler(void);
 
-	static void ValidateFilters(const String& location, const Dictionary::Ptr& attrs);
+	static void ValidateFilters(const String& location, const Dependency::Ptr& object);
+
+	static void EvaluateApplyRules(const intrusive_ptr<Host>& host);
+	static void EvaluateApplyRules(const intrusive_ptr<Service>& service);
 
 protected:
 	virtual void OnConfigLoaded(void);
-	virtual void OnStateLoaded(void);
+	virtual void OnAllConfigLoaded(void);
 	virtual void Stop(void);
 
 private:
 	Checkable::Ptr m_Parent;
 	Checkable::Ptr m_Child;
 
-	static void EvaluateApplyRuleOneInstance(const Checkable::Ptr& checkable, const String& name, const Dictionary::Ptr& locals, const ApplyRule& rule);
-	static bool EvaluateApplyRuleOne(const Checkable::Ptr& checkable, const ApplyRule& rule);
-	static void EvaluateApplyRule(const ApplyRule& rule);
-	static void EvaluateApplyRules(const std::vector<ApplyRule>& rules);
+	static bool EvaluateApplyRuleInstance(const Checkable::Ptr& checkable, const String& name, ScriptFrame& frame, const ApplyRule& rule);
+	static bool EvaluateApplyRule(const Checkable::Ptr& checkable, const ApplyRule& rule);
 };
 
 }

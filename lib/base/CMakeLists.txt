@@ -23,17 +23,19 @@ mkclass_target(streamlogger.ti streamlogger.thpp)
 mkclass_target(sysloglogger.ti sysloglogger.thpp)
 
 set(base_SOURCES
-  application.cpp application.thpp array.cpp configerror.cpp console.cpp context.cpp
-  convert.cpp debuginfo.cpp dictionary.cpp dynamicobject.cpp dynamicobject.thpp dynamictype.cpp
-  exception.cpp fifo.cpp filelogger.cpp filelogger.thpp initialize.cpp json.cpp logger.cpp logger.thpp
-  netstring.cpp networkstream.cpp object.cpp primitivetype.cpp process.cpp
-  ringbuffer.cpp scriptfunction.cpp scriptfunctionwrapper.cpp
-  scriptutils.cpp scriptvariable.cpp serializer.cpp socket.cpp stacktrace.cpp
-  statsfunction.cpp stdiostream.cpp stream.cpp streamlogger.cpp streamlogger.thpp string.cpp 
+  application.cpp application-version.cpp application.thpp array.cpp array-script.cpp boolean.cpp boolean-script.cpp console.cpp context.cpp
+  convert.cpp debuginfo.cpp dictionary.cpp dictionary-script.cpp dynamicobject.cpp dynamicobject.thpp dynamictype.cpp
+  exception.cpp fifo.cpp filelogger.cpp filelogger.thpp initialize.cpp json.cpp json-script.cpp logger.cpp logger.thpp math-script.cpp
+  netstring.cpp networkstream.cpp number.cpp number-script.cpp object.cpp object-script.cpp primitivetype.cpp process.cpp
+  ringbuffer.cpp scriptframe.cpp function.cpp function-script.cpp functionwrapper.cpp scriptglobal.cpp
+  scriptutils.cpp serializer.cpp socket.cpp socketevents.cpp stacktrace.cpp
+  statsfunction.cpp stdiostream.cpp stream.cpp streamlogger.cpp streamlogger.thpp string.cpp string-script.cpp
   sysloglogger.cpp sysloglogger.thpp tcpsocket.cpp thinmutex.cpp threadpool.cpp timer.cpp
   tlsstream.cpp tlsutility.cpp type.cpp unixsocket.cpp utility.cpp value.cpp
   value-operators.cpp workqueue.cpp
 )
+
+set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/application-version.cpp PROPERTY EXCLUDE_UNITY_BUILD TRUE)
 
 if(ICINGA2_UNITY_BUILD)
     mkunity_target(base base_SOURCES)
@@ -41,7 +43,7 @@ endif()
 
 add_library(base SHARED ${base_SOURCES})
 
-target_link_libraries(base ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${YAJL_LIBRARIES} mmatch)
+target_link_libraries(base ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${OPENSSL_LIBRARIES} ${YAJL_LIBRARIES} mmatch socketpair)
 
 if(HAVE_LIBEXECINFO)
     target_link_libraries(base execinfo)
@@ -52,6 +54,9 @@ link_directories(${icinga2_BINARY_DIR}/third-party/execvpe)
 
 include_directories(${icinga2_SOURCE_DIR}/third-party/mmatch)
 link_directories(${icinga2_BINARY_DIR}/third-party/mmatch)
+
+include_directories(${icinga2_SOURCE_DIR}/third-party/socketpair)
+link_directories(${icinga2_BINARY_DIR}/third-party/socketpair)
 
 if(UNIX OR CYGWIN)
   target_link_libraries(base execvpe)
@@ -68,8 +73,13 @@ set_target_properties (
   FOLDER Lib
 )
 
+install(CODE "file(MAKE_DIRECTORY \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/cache/icinga2\")")
+install(CODE "file(MAKE_DIRECTORY \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/log/icinga2/crash\")")
+
 install(
   TARGETS base
   RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/icinga2
 )
+
+set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "${CPACK_NSIS_EXTRA_INSTALL_COMMANDS}" PARENT_SCOPE)

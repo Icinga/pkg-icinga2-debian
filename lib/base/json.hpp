@@ -21,12 +21,14 @@
 #define JSON_H
 
 #include "base/i2-base.hpp"
-#include "base/value.hpp"
 
 namespace icinga
 {
 
-I2_BASE_API String JsonEncode(const Value& value);
+class String;
+class Value;
+
+I2_BASE_API String JsonEncode(const Value& value, bool pretty_print = false);
 I2_BASE_API Value JsonDecode(const String& data);
 
 }

@@ -27,7 +27,7 @@
 #include "base/utility.hpp"
 #include "base/exception.hpp"
 #include "base/convert.hpp"
-#include "base/scriptvariable.hpp"
+#include "base/scriptglobal.hpp"
 #include "base/context.hpp"
 #include "base/console.hpp"
 #include "config.h"
@@ -96,7 +96,15 @@ int Main(void)
 
 	if (argc >= 4 && strcmp(argv[1], "--autocomplete") == 0) {
 		autocomplete = true;
-		autoindex = Convert::ToLong(argv[2]);
+
+		try {
+			autoindex = Convert::ToLong(argv[2]);
+		} catch (const std::invalid_argument& ex) {
+			Log(LogCritical, "icinga-app")
+			    << "Invalid index for --autocomplete: " << argv[2];
+			return EXIT_FAILURE;
+		}
+
 		argc -= 3;
 		argv += 3;
 	}
@@ -205,8 +213,20 @@ int Main(void)
 	String initconfig = Application::GetSysconfDir() + "/icinga2/init.conf";
 
 	if (Utility::PathExists(initconfig)) {
-		ConfigCompilerContext::GetInstance()->Reset();
-		ConfigCompiler::CompileFile(initconfig);
+		Expression *expression;
+		try {
+			expression = ConfigCompiler::CompileFile(initconfig);
+
+			ScriptFrame frame;
+			expression->Evaluate(frame);
+		} catch (const std::exception& ex) {
+			delete expression;
+
+			Log(LogCritical, "config", DiagnosticInformation(ex));
+			return EXIT_FAILURE;
+		}
+
+		delete expression;
 	}
 
 #ifndef _WIN32
@@ -227,7 +247,7 @@ int Main(void)
 				key = define;
 				value = "1";
 			}
-			ScriptVariable::Set(key, value);
+			ScriptGlobal::Set(key, value);
 		}
 	}
 
@@ -263,29 +283,26 @@ int Main(void)
 		}
 
 		if (vm.count("library")) {
-			BOOST_FOREACH(const String& libraryName, vm["library"].as<std::vector<std::string> >())
-			{
+			BOOST_FOREACH(const String& libraryName, vm["library"].as<std::vector<std::string> >()) {
 				try {
-					(void)Utility::LoadExtensionLibrary(libraryName);
-				}
-#ifdef _WIN32	
-				catch (win32_error &ex) {
-					if (int const * err = boost::get_error_info<errinfo_win32_error>(ex)) {
-						Log(LogCritical, "icinga-app", "Could not load library \"" + libraryName + "\"");
-						return EXIT_FAILURE;
-					}
-				}
-#else /*_WIN32*/
-				catch (std::runtime_error &ex) {
-					Log(LogCritical, "icinga-app", "Could not load library \"" + libraryName + "\"");
+					(void) Utility::LoadExtensionLibrary(libraryName);
+				} catch (const std::exception& ex) {
+					Log(LogCritical, "icinga-app")
+					    <<  "Could not load library \"" << libraryName << "\": " << DiagnosticInformation(ex);
 					return EXIT_FAILURE;
 				}
-#endif /*_WIN32*/
 			}
-		}
+		} 
 
 		if (!command || vm.count("help") || vm.count("version")) {
-			String appName = Utility::BaseName(Application::GetArgV()[0]);
+			String appName;
+
+			try {
+				Utility::BaseName(Application::GetArgV()[0]);
+			} catch (const std::bad_alloc&) {
+				Log(LogCritical, "icinga-app", "Allocation failed.");
+				return EXIT_FAILURE;
+			}
 
 			if (appName.GetLength() > 3 && appName.SubStr(0, 3) == "lt-")
 				appName = appName.SubStr(3, appName.GetLength() - 3);
@@ -293,9 +310,9 @@ int Main(void)
 			std::cout << appName << " " << "- The Icinga 2 network monitoring daemon (version: "
 			    << ConsoleColorTag(vm.count("version") ? Console_ForegroundRed : Console_Normal)
 			    << Application::GetVersion()
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 			    << "; debug"
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 			    << ConsoleColorTag(Console_Normal)
 			    << ")" << std::endl << std::endl;
 
@@ -328,7 +345,7 @@ int Main(void)
 			if (vm.count("version")) {
 				std::cout << std::endl;
 
-				Application::DisplayInfoMessage(true);
+				Application::DisplayInfoMessage(std::cout, true);
 
 				return EXIT_SUCCESS;
 			}
@@ -361,6 +378,7 @@ int Main(void)
 			}
 		} else if (command && command->GetImpersonationLevel() == ImpersonateIcinga) {
 			String group = Application::GetRunAsGroup();
+			String user = Application::GetRunAsUser();
 	
 			errno = 0;
 			struct group *gr = getgrnam(group.CStr());
@@ -381,6 +399,8 @@ int Main(void)
 				if (!vm.count("reload-internal") && setgroups(0, NULL) < 0) {
 					Log(LogCritical, "cli")
 					    << "setgroups() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+					Log(LogCritical, "cli")
+					    << "Please re-run this command as a privileged user or using the \"" << user << "\" account.";
 					return EXIT_FAILURE;
 				}
 	
@@ -390,8 +410,6 @@ int Main(void)
 					return EXIT_FAILURE;
 				}
 			}
-	
-			String user = Application::GetRunAsUser();
 	
 			errno = 0;
 			struct passwd *pw = getpwnam(user.CStr());
@@ -413,12 +431,16 @@ int Main(void)
 				if (!vm.count("reload-internal") && initgroups(user.CStr(), pw->pw_gid) < 0) {
 					Log(LogCritical, "cli")
 					    << "initgroups() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+					Log(LogCritical, "cli")
+					    << "Please re-run this command as a privileged user or using the \"" << user << "\" account.";
 					return EXIT_FAILURE;
 				}
 	
 				if (setuid(pw->pw_uid) < 0) {
 					Log(LogCritical, "cli")
 					    << "setuid() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
+					Log(LogCritical, "cli")
+					    << "Please re-run this command as a privileged user or using the \"" << user << "\" account.";
 					return EXIT_FAILURE;
 				}
 			}
@@ -615,6 +637,25 @@ VOID WINAPI ServiceMain(DWORD argc, LPSTR *argv)
 */
 int main(int argc, char **argv)
 {
+#ifndef _WIN32
+	rlimit rl;
+	if (getrlimit(RLIMIT_NOFILE, &rl) >= 0) {
+		rlim_t maxfds = rl.rlim_max;
+
+		if (maxfds == RLIM_INFINITY)
+			maxfds = 65536;
+
+		for (rlim_t i = 3; i < maxfds; i++) {
+			int rc = close(i);
+
+#ifdef I2_DEBUG
+			if (rc >= 0)
+				std::cerr << "Closed FD " << i << " which we inherited from our parent process." << std::endl;
+#endif /* I2_DEBUG */
+		}
+	}
+#endif /* _WIN32 */
+
 	/* must be called before using any other libbase functions */
 	Application::InitializeBase();
 
@@ -638,7 +679,7 @@ int main(int argc, char **argv)
 		};
 
 		StartServiceCtrlDispatcher(dispatchTable);
-		Application::Exit(1);
+		Application::Exit(EXIT_FAILURE);
 	}
 #endif /* _WIN32 */
 

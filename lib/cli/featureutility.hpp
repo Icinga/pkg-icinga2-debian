@@ -21,8 +21,10 @@
 #define FEATUREUTILITY_H
 
 #include "base/i2-base.hpp"
+#include "cli/i2-cli.hpp"
 #include "base/string.hpp"
 #include <vector>
+#include <iostream>
 
 namespace icinga
 {
@@ -30,7 +32,7 @@ namespace icinga
 /**
  * @ingroup cli
  */
-class FeatureUtility
+class I2_CLI_API FeatureUtility
 {
 public:
 	static String GetFeaturesAvailablePath(void);
@@ -40,7 +42,7 @@ public:
 
 	static int EnableFeatures(const std::vector<std::string>& features);
 	static int DisableFeatures(const std::vector<std::string>& features);
-	static int ListFeatures(void);
+	static int ListFeatures(std::ostream& os = std::cout);
 
 	static bool GetFeatures(std::vector<String>& features, bool enable);
 

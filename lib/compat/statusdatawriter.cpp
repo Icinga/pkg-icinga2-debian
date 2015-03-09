@@ -49,7 +49,7 @@ REGISTER_TYPE(StatusDataWriter);
 
 REGISTER_STATSFUNCTION(StatusDataWriterStats, &StatusDataWriter::StatsFunc);
 
-Value StatusDataWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
+void StatusDataWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
@@ -58,8 +58,6 @@ Value StatusDataWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Pt
 	}
 
 	status->Set("statusdatawriter", nodes);
-
-	return 0;
 }
 
 /**
@@ -353,10 +351,13 @@ void StatusDataWriter::DumpCheckableStatusAttrs(std::ostream& fp, const Checkabl
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	if (service)
-		fp << "\t" << "current_state=" << service->GetState() << "\n";
-	else
-		fp << "\t" << "current_state=" << (host->IsReachable() ? host->GetState() : 2) << "\n";
+	if (service) {
+		fp << "\t" << "current_state=" << service->GetState() << "\n"
+		   << "\t" << "last_hard_state=" << service->GetLastHardState() << "\n";
+	} else {
+		fp << "\t" << "current_state=" << (host->IsReachable() ? host->GetState() : 2) << "\n"
+		   << "\t" << "last_hard_state=" << host->GetLastHardState() << "\n";
+	}
 
 	fp << "\t" "state_type=" << checkable->GetStateType() << "\n"
 	      "\t" "plugin_output=" << CompatUtility::GetCheckResultOutput(cr) << "\n"
@@ -523,7 +524,7 @@ void StatusDataWriter::DumpCustomAttributes(std::ostream& fp, const CustomVarObj
 		if (kv.first.IsEmpty())
 			continue;
 
-		String value;
+		Value value;
 
 		if (kv.second.IsObjectType<Array>() || kv.second.IsObjectType<Dictionary>()) {
 			value = JsonEncode(kv.second);
@@ -684,7 +685,7 @@ void StatusDataWriter::UpdateObjectsCache(void)
 		tempobjectfp << "\t" "members" "\t";
 		DumpNameList(tempobjectfp, ug->GetMembers());
 		tempobjectfp << "\n"
-			        "\t" "}" "\n";
+				"\t" "}" "\n";
 
 		objectfp << tempobjectfp.str();
 	}

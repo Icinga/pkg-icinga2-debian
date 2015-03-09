@@ -77,7 +77,7 @@ Update the [.mailmap](.mailmap) and [AUTHORS](AUTHORS) files
 
 Bump the version in icinga2.spec.
 Update the [ChangeLog](ChangeLog), [doc/1-about.md](doc/1-about.md) and [INSTALL.md](INSTALL.md)
-files.
+files using the changelog.py script.
 Commit these changes to the "master" branch.
 
     $ git commit -v -a -m "Release version <VERSION>"
@@ -112,12 +112,12 @@ disable the usage of `git describe`.
 
 Use `git archive` to build the release tarball:
 
-    $ VERSION=2.2.4
+    $ VERSION=2.3.0
     $ git archive --format=tar --prefix=icinga2-$VERSION/ tags/v$VERSION | gzip >icinga2-$VERSION.tar.gz
 
 Finally you should verify that the tarball only contains the files it should contain:
 
-    $ VERSION=2.2.4
+    $ VERSION=2.3.0
     $ tar ztf icinga2-$VERSION.tar.gz | less
 
 
@@ -142,7 +142,8 @@ variables are supported:
 - `ICINGA2_GROUP`: The group Icinga 2 should run as; defaults to `icinga`
 - `ICINGA2_GIT_VERSION_INFO`: Whether to use Git to determine the version number; defaults to `ON`
 - `ICINGA2_COMMAND_GROUP`: The command group Icinga 2 should use; defaults to `icingacmd`
-- `ICINGA2_UNITY_BUILD`: Whether to perform a unity build; defaults to `OFF`
+- `ICINGA2_UNITY_BUILD`: Whether to perform a unity build; defaults to `ON`
+- `ICINGA2_LTO_BUILD`: Whether to use link time optimization (LTO); defaults to `OFF`
 - `ICINGA2_PLUGINDIR`: The path for the Monitoring Plugins project binaries; defaults to `/usr/lib/nagios/plugins`
 - `ICINGA2_RUNDIR`: The location of the "run" directory; defaults to `CMAKE_INSTALL_LOCALSTATEDIR/run`
 - `CMAKE_INSTALL_SYSCONFDIR`: The configuration directory; defaults to `CMAKE_INSTALL_PREFIX/etc`
@@ -156,6 +157,13 @@ Only use this for special packaging purposes and if you know what you are doing.
 Defaults to `OFF`.
 - `ICINGA2_WITH_MYSQL`: Determines whether the MySQL IDO module is built; defaults to `ON`
 - `ICINGA2_WITH_PGSQL`: Determines whether the PostgreSQL IDO module is built; defaults to `ON`
+- `ICINGA2_WITH_CHECKER`: Determines whether the checker module is built; defaults to `ON`
+- `ICINGA2_WITH_COMPAT`: Determines whether the compat module is built; defaults to `ON`
+- `ICINGA2_WITH_DEMO`: Determines whether the demo module is built; defaults to `OFF`
+- `ICINGA2_WITH_HELLO`: Determines whether the hello module is built; defaults to `OFF`
+- `ICINGA2_WITH_LIVESTATUS`: Determines whether the Livestatus module is built; defaults to `ON`
+- `ICINGA2_WITH_NOTIFICATION`: Determines whether the notification module is built; defaults to `ON`
+- `ICINGA2_WITH_PERFDATA`: Determines whether the perfdata module is built; defaults to `ON`
 
 ### Building Icinga 2 RPMs
 
