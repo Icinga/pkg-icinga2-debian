@@ -18,8 +18,10 @@
  ******************************************************************************/
 
 #include "icinga/timeperiod.hpp"
+#include "icinga/legacytimeperiod.hpp"
 #include "base/dynamictype.hpp"
 #include "base/objectlock.hpp"
+#include "base/exception.hpp"
 #include "base/logger.hpp"
 #include "base/timer.hpp"
 #include "base/utility.hpp"
@@ -28,6 +30,7 @@
 using namespace icinga;
 
 REGISTER_TYPE(TimePeriod);
+REGISTER_SCRIPTFUNCTION(ValidateTimePeriodRanges, &TimePeriod::ValidateRanges);
 
 static Timer::Ptr l_UpdateTimer;
 
@@ -199,7 +202,7 @@ void TimePeriod::UpdateRegion(double begin, double end, bool clearExisting)
 	arguments.push_back(begin);
 	arguments.push_back(end);
 
-	Array::Ptr segments = InvokeMethod("update", arguments);
+	Array::Ptr segments = GetUpdate()->Invoke(arguments);
 
 	{
 		ObjectLock olock(this);
@@ -212,6 +215,11 @@ void TimePeriod::UpdateRegion(double begin, double end, bool clearExisting)
 			}
 		}
 	}
+}
+
+bool TimePeriod::GetIsInside(void) const
+{
+	return IsInside(Utility::GetTime());
 }
 
 bool TimePeriod::IsInside(double ts) const
@@ -296,4 +304,36 @@ void TimePeriod::Dump(void)
 	}
 
 	Log(LogDebug, "TimePeriod", "---");
+}
+
+void TimePeriod::ValidateRanges(const String& location, const TimePeriod::Ptr& object)
+{
+	Dictionary::Ptr ranges = object->GetRanges();
+
+	if (!ranges)
+		return;
+
+	/* create a fake time environment to validate the definitions */
+	time_t refts = Utility::GetTime();
+	tm reference = Utility::LocalTime(refts);
+	Array::Ptr segments = new Array();
+
+	ObjectLock olock(ranges);
+	BOOST_FOREACH(const Dictionary::Pair& kv, ranges) {
+		try {
+			tm begin_tm, end_tm;
+			int stride;
+			LegacyTimePeriod::ParseTimeRange(kv.first, &begin_tm, &end_tm, &stride, &reference);
+		} catch (std::exception&) {
+			BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+			    location + ": Invalid time specification.", object->GetDebugInfo()));
+		}
+
+		try {
+			LegacyTimePeriod::ProcessTimeRanges(kv.second, &reference, segments);
+		} catch (std::exception&) {
+			BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+			    location + ": Invalid time range definition.", object->GetDebugInfo()));
+		}
+	}
 }

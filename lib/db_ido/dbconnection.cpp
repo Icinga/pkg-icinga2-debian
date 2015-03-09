@@ -22,13 +22,13 @@
 #include "icinga/icingaapplication.hpp"
 #include "icinga/host.hpp"
 #include "icinga/service.hpp"
-#include "config/configcompilercontext.hpp"
 #include "base/dynamictype.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
 #include "base/logger.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/function.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -81,6 +81,21 @@ void DbConnection::Pause(void)
 	     << "Pausing IDO connection: " << GetName();
 
 	m_CleanUpTimer.reset();
+
+	DbQuery query1;
+	query1.Table = "programstatus";
+	query1.IdColumn = "programstatus_id";
+	query1.Type = DbQueryUpdate;
+	query1.Category = DbCatProgramStatus;
+	query1.WhereCriteria = new Dictionary();
+	query1.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
+
+	query1.Fields = new Dictionary();
+	query1.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+	query1.Fields->Set("program_end_time", DbValue::FromTimestamp(Utility::GetTime()));
+	ExecuteQuery(query1);
+
+	NewTransaction();
 }
 
 void DbConnection::InitializeDbTimer(void)
@@ -421,13 +436,10 @@ void DbConnection::PrepareDatabase(void)
 	}
 }
 
-void DbConnection::ValidateFailoverTimeout(const String& location, const Dictionary::Ptr& attrs)
+void DbConnection::ValidateFailoverTimeout(const String& location, const DbConnection::Ptr& object)
 {
-	if (!attrs->Contains("failover_timeout"))
-		return;
-
-	if (attrs->Get("failover_timeout") < 60) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": Failover timeout minimum is 60s.");
+	if (object->GetFailoverTimeout() < 60) {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": Failover timeout minimum is 60s.", object->GetDebugInfo()));
 	}
 }

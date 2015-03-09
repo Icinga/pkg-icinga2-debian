@@ -34,7 +34,7 @@
 
 using namespace icinga;
 
-#define SCHEMA_VERSION "1.12.0"
+#define SCHEMA_VERSION "1.13.0"
 
 REGISTER_TYPE(IdoMysqlConnection);
 REGISTER_STATSFUNCTION(IdoMysqlConnectionStats, &IdoMysqlConnection::StatsFunc);
@@ -43,7 +43,7 @@ IdoMysqlConnection::IdoMysqlConnection(void)
 	: m_QueryQueue(500000), m_Connected(false)
 { }
 
-Value IdoMysqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
+void IdoMysqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
@@ -61,8 +61,6 @@ Value IdoMysqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::
 	}
 
 	status->Set("idomysqlconnection", nodes);
-
-	return 0;
 }
 
 void IdoMysqlConnection::Resume(void)
@@ -115,7 +113,7 @@ void IdoMysqlConnection::ExceptionHandler(boost::exception_ptr exp)
 
 void IdoMysqlConnection::AssertOnWorkQueue(void)
 {
-	ASSERT(boost::this_thread::get_id() == m_QueryQueue.GetThreadId());
+	ASSERT(m_QueryQueue.IsWorkerThread());
 }
 
 void IdoMysqlConnection::Disconnect(void)
@@ -135,10 +133,15 @@ void IdoMysqlConnection::Disconnect(void)
 
 void IdoMysqlConnection::TxTimerHandler(void)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::NewTransaction, this), true);
+	NewTransaction();
 }
 
 void IdoMysqlConnection::NewTransaction(void)
+{
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalNewTransaction, this));
+}
+
+void IdoMysqlConnection::InternalNewTransaction(void)
 {
 	boost::mutex::scoped_lock lock(m_ConnectionMutex);
 
@@ -179,17 +182,19 @@ void IdoMysqlConnection::Reconnect(void)
 
 		ClearIDCache();
 
-		String ihost, iuser, ipasswd, idb;
-		const char *host, *user , *passwd, *db;
+		String ihost, isocket_path, iuser, ipasswd, idb;
+		const char *host, *socket_path, *user , *passwd, *db;
 		long port;
 
 		ihost = GetHost();
+		isocket_path = GetSocketPath();
 		iuser = GetUser();
 		ipasswd = GetPassword();
 		idb = GetDatabase();
 
 		host = (!ihost.IsEmpty()) ? ihost.CStr() : NULL;
 		port = GetPort();
+		socket_path = (!isocket_path.IsEmpty()) ? isocket_path.CStr() : NULL;
 		user = (!iuser.IsEmpty()) ? iuser.CStr() : NULL;
 		passwd = (!ipasswd.IsEmpty()) ? ipasswd.CStr() : NULL;
 		db = (!idb.IsEmpty()) ? idb.CStr() : NULL;
@@ -202,7 +207,7 @@ void IdoMysqlConnection::Reconnect(void)
 			BOOST_THROW_EXCEPTION(std::bad_alloc());
 		}
 
-		if (!mysql_real_connect(&m_Connection, host, user, passwd, db, port, NULL, CLIENT_FOUND_ROWS)) {
+		if (!mysql_real_connect(&m_Connection, host, user, passwd, db, port, socket_path, CLIENT_FOUND_ROWS)) {
 			Log(LogCritical, "IdoMysqlConnection")
 			    << "Connection to database '" << db << "' with user '" << user << "' on '" << host << ":" << port
 			    << "' failed: \"" << mysql_error(&m_Connection) << "\"";
@@ -220,7 +225,8 @@ void IdoMysqlConnection::Reconnect(void)
 		if (!row) {
 			Log(LogCritical, "IdoMysqlConnection", "Schema does not provide any valid version! Verify your schema installation.");
 
-			Application::Exit(EXIT_FAILURE);
+			Application::RequestShutdown(EXIT_FAILURE);
+			return;
 		}
 
 		DiscardRows(result);
@@ -232,7 +238,8 @@ void IdoMysqlConnection::Reconnect(void)
 			    << "Schema version '" << version << "' does not match the required version '"
 			    << SCHEMA_VERSION << "'! Please check the upgrade documentation.";
 
-			Application::Exit(EXIT_FAILURE);
+			Application::RequestShutdown(EXIT_FAILURE);
+			return;
 		}
 
 		String instanceName = GetInstanceName();
@@ -371,7 +378,7 @@ IdoMysqlResult IdoMysqlConnection::Query(const String& query)
 
 		BOOST_THROW_EXCEPTION(
 		    database_error()
-		        << errinfo_message(mysql_error(&m_Connection))
+			<< errinfo_message(mysql_error(&m_Connection))
 			<< errinfo_database_query(query)
 		);
 	}
@@ -568,7 +575,14 @@ bool IdoMysqlConnection::FieldToEscapedString(const String& key, const Value& va
 	} else if (DbValue::IsTimestampNow(value)) {
 		*result = "NOW()";
 	} else {
-		*result = "'" + Escape(rawvalue) + "'";
+		Value fvalue;
+
+		if (rawvalue.IsBoolean())
+			fvalue = Convert::ToLong(rawvalue);
+		else
+			fvalue = rawvalue;
+
+		*result = "'" + Escape(fvalue) + "'";
 	}
 
 	return true;
@@ -589,6 +603,9 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 		return;
 
 	if (!m_Connected)
+		return;
+
+	if (query.Object && query.Object->GetObject()->GetExtension("agent_check").ToBool())
 		return;
 
 	std::ostringstream qbuf, where;
@@ -646,7 +663,7 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 			qbuf << "DELETE FROM " << GetTablePrefix() << query.Table;
 			break;
 		default:
-			ASSERT(!"Invalid query type.");
+			VERIFY(!"Invalid query type.");
 	}
 
 	if (type == DbQueryInsert || type == DbQueryUpdate) {
@@ -658,7 +675,7 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 		BOOST_FOREACH(const Dictionary::Pair& kv, query.Fields) {
 			Value value;
 
-			if (kv.second.IsEmpty())
+			if (kv.second.IsEmpty() && !kv.second.IsString())
 				continue;
 
 			if (!FieldToEscapedString(kv.first, kv.second, &value))

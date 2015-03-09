@@ -25,6 +25,7 @@
 #include "base/threadpool.hpp"
 #include "base/utility.hpp"
 #include "base/logger.hpp"
+#include <ostream>
 
 namespace icinga
 {
@@ -68,7 +69,7 @@ public:
 
 	static void InstallExceptionHandlers(void);
 
-	static void RequestShutdown(void);
+	static void RequestShutdown(int rc = 0);
 	static void RequestRestart(void);
 	static void RequestReopenLogs(void);
 
@@ -126,8 +127,6 @@ public:
 	static int GetConcurrency(void);
 	static void DeclareConcurrency(int ncpus);
 
-	static void MakeVariablesConstant(void);
-
 	static ThreadPool& GetTP(void);
 
 	static String GetVersion(void);
@@ -135,7 +134,7 @@ public:
 	static double GetStartTime(void);
 	static void SetStartTime(double ts);
 
-	static void DisplayInfoMessage(bool skipVersion = false);
+	static void DisplayInfoMessage(std::ostream& os, bool skipVersion = false);
 
 protected:
 	virtual void OnConfigLoaded(void);
@@ -163,6 +162,7 @@ private:
 	static bool m_Debugging; /**< Whether debugging is enabled. */
 	static LogSeverity m_DebuggingSeverity; /**< Whether debugging severity is set. */
 	static double m_StartTime;
+	static int m_ExitStatus;
 
 #ifndef _WIN32
 	static void SigIntTermHandler(int signum);
@@ -171,11 +171,17 @@ private:
 	static LONG WINAPI SEHUnhandledExceptionFilter(PEXCEPTION_POINTERS exi);
 #endif /* _WIN32 */
 
-	static void DisplayBugMessage(void);
+	static void DisplayBugMessage(std::ostream& os);
 
 	static void SigAbrtHandler(int signum);
 	static void SigUsr1Handler(int signum);
 	static void ExceptionHandler(void);
+
+	static String GetCrashReportFilename(void);
+
+#ifndef _WIN32
+	static void GetDebuggerBacktrace(const String& filename);
+#endif /* _WIN32 */
 };
 
 }

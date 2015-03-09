@@ -62,8 +62,12 @@ public:
 	void Resize(size_t new_size);
 	void Clear(void);
 
+	void Reserve(size_t new_size);
+
 	void CopyTo(const Array::Ptr& dest) const;
 	Array::Ptr ShallowClone(void) const;
+
+	static Object::Ptr GetPrototype(void);
 
 private:
 	std::vector<Value> m_Data; /**< The data for the array. */
@@ -78,11 +82,6 @@ inline Array::Iterator range_end(Array::Ptr x)
 {
 	return x->End();
 }
-
-I2_BASE_API Array::Ptr MakeArray(const Value& val1);
-I2_BASE_API Array::Ptr MakeArray(const Value& val1, const Value& val2);
-I2_BASE_API Array::Ptr MakeArray(const Value& val1, const Value& val2, const Value& val3);
-I2_BASE_API Array::Ptr MakeArray(const Value& val1, const Value& val2, const Value& val3, const Value& val4);
 
 }
 

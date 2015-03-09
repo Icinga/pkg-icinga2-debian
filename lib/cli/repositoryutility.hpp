@@ -21,6 +21,7 @@
 #define REPOSITORYUTILITY_H
 
 #include "base/i2-base.hpp"
+#include "cli/i2-cli.hpp"
 #include "base/dictionary.hpp"
 #include "base/array.hpp"
 #include "base/value.hpp"
@@ -33,7 +34,7 @@ namespace icinga
 /**
  * @ingroup cli
  */
-class RepositoryUtility
+class I2_CLI_API RepositoryUtility
 {
 public:
 	static Dictionary::Ptr GetArgumentAttributes(const std::vector<std::string>& arguments);
@@ -52,18 +53,24 @@ public:
 
 	static void PrintChangeLog(std::ostream& fp);
 
-	static bool AddObject(const String& name, const String& type, const Dictionary::Ptr& attrs);
-	static bool RemoveObject(const String& name, const String& type, const Dictionary::Ptr& attrs);
+	static bool AddObject(const std::vector<String>& object_paths, const String& name, const String& type, const Dictionary::Ptr& attrs,
+	    const Array::Ptr& changes, bool check_config = true);
+	static bool RemoveObject(const String& name, const String& type, const Dictionary::Ptr& attrs, const Array::Ptr& changes);
 
-	static bool CheckChangeExists(const Dictionary::Ptr& change);
+	static bool CheckChangeExists(const Dictionary::Ptr& change, const Array::Ptr& changes);
 
 	static bool SetObjectAttribute(const String& name, const String& type, const String& attr, const Value& val);
 
 	static bool CommitChangeLog(void);
 	static bool ClearChangeLog(void);
 	static bool ChangeLogHasPendingChanges(void);
+	static bool GetChangeLog(const boost::function<void (const Dictionary::Ptr&, const String&)>& callback);
+	static void CollectChangeLog(const String& change_file, std::vector<String>& changelog);
+	static void CollectChange(const Dictionary::Ptr& change, Array::Ptr& changes);
 
 	static std::vector<String> GetObjects(void);
+	static void CollectObjects(const String& object_file, std::vector<String>& objects);
+
 private:
 	RepositoryUtility(void);
 
@@ -75,17 +82,13 @@ private:
 	    const Value& val, const Dictionary::Ptr& attrs);
 
 	/* repository.d */
-	static void CollectObjects(const String& object_file, std::vector<String>& objects);
 	static bool WriteObjectToRepository(const String& path, const String& name, const String& type, const Dictionary::Ptr& item);
 	static Dictionary::Ptr GetObjectFromRepository(const String& filename);
 
 	/* changelog */
-	static void CollectChangeLog(const String& change_file, std::vector<String>& changelog);
 	static bool WriteObjectToRepositoryChangeLog(const String& path, const Dictionary::Ptr& item);
 	static Dictionary::Ptr GetObjectFromRepositoryChangeLog(const String& filename);
 
-	static bool GetChangeLog(const boost::function<void (const Dictionary::Ptr&, const String&)>& callback);
-	static void CollectChange(const Dictionary::Ptr& change, Array::Ptr& changes);
 	static void CommitChange(const Dictionary::Ptr& change, const String& path);
 	static void ClearChange(const Dictionary::Ptr& change, const String& path);
 

@@ -19,9 +19,9 @@
 
 #include "icinga/dependency.hpp"
 #include "icinga/service.hpp"
-#include "config/configcompilercontext.hpp"
 #include "base/logger.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/function.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -58,11 +58,9 @@ void Dependency::OnConfigLoaded(void)
 	SetStateFilter(FilterArrayToInt(GetStates(), defaultFilter));
 }
 
-void Dependency::OnStateLoaded(void)
+void Dependency::OnAllConfigLoaded(void)
 {
-	DynamicObject::Start();
-
-	ASSERT(!OwnsLock());
+	DynamicObject::OnAllConfigLoaded();
 
 	Host::Ptr childHost = Host::GetByName(GetChildHostName());
 
@@ -79,10 +77,9 @@ void Dependency::OnStateLoaded(void)
 	}
 	
 	if (!m_Child)
-		Log(LogWarning, "Dependency")
-		    << "Dependency '" << GetName() << "' references an invalid child object and will be ignored.";
-	else
-		m_Child->AddDependency(this);
+		BOOST_THROW_EXCEPTION(ScriptError("Dependency '" + GetName() + "' references a child host/service which doesn't exist.", GetDebugInfo()));
+
+	m_Child->AddDependency(this);
 
 	Host::Ptr parentHost = Host::GetByName(GetParentHostName());
 
@@ -99,29 +96,22 @@ void Dependency::OnStateLoaded(void)
 	}
 	
 	if (!m_Parent)
-		Log(LogWarning, "Dependency")
-		    << "Dependency '" << GetName() << "' references an invalid parent object and will always fail.";
-	else
-		m_Parent->AddReverseDependency(this);
+		BOOST_THROW_EXCEPTION(ScriptError("Dependency '" + GetName() + "' references a parent host/service which doesn't exist.", GetDebugInfo()));
+
+	m_Parent->AddReverseDependency(this);
 }
 
 void Dependency::Stop(void)
 {
 	DynamicObject::Stop();
 
-	if (GetChild())
-		GetChild()->RemoveDependency(this);
-
-	if (GetParent())
-		GetParent()->RemoveReverseDependency(this);
+	GetChild()->RemoveDependency(this);
+	GetParent()->RemoveReverseDependency(this);
 }
 
 bool Dependency::IsAvailable(DependencyType dt) const
 {
 	Checkable::Ptr parent = GetParent();
-
-	if (!parent)
-		return false;
 
 	Host::Ptr host;
 	Service::Ptr service;
@@ -141,11 +131,16 @@ bool Dependency::IsAvailable(DependencyType dt) const
 		return true;
 	}
 
-	/* ignore soft states */
-	if (parent->GetStateType() == StateTypeSoft) {
+	if (GetIgnoreSoftStates()) {
+		/* ignore soft states */
+		if (parent->GetStateType() == StateTypeSoft) {
+			Log(LogNotice, "Dependency")
+			    << "Dependency '" << GetName() << "' passed: " << (service ? "Service" : "Host") << " '" << parent->GetName() << "' is in a soft state.";
+			return true;
+		}
+	} else {
 		Log(LogNotice, "Dependency")
-		    << "Dependency '" << GetName() << "' passed: " << (service ? "Service" : "Host") << " '" << parent->GetName() << "' is in a soft state.";
-		return true;
+		    << "Dependency '" << GetName() << "' failed: " << (service ? "Service" : "Host") << " '" << parent->GetName() << "' is in a soft state.";
 	}
 
 	int state;
@@ -203,17 +198,17 @@ TimePeriod::Ptr Dependency::GetPeriod(void) const
 	return TimePeriod::GetByName(GetPeriodRaw());
 }
 
-void Dependency::ValidateFilters(const String& location, const Dictionary::Ptr& attrs)
+void Dependency::ValidateFilters(const String& location, const Dependency::Ptr& object)
 {
-	int sfilter = FilterArrayToInt(attrs->Get("states"), 0);
+	int sfilter = FilterArrayToInt(object->GetStates(), 0);
 
-	if (attrs->Get("parent_service_name") == Empty && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": State filter is invalid for host dependency.");
+	if (object->GetParentServiceName().IsEmpty() && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0) {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": State filter is invalid for host dependency.", object->GetDebugInfo()));
 	}
 
-	if (attrs->Get("parent_service_name") != Empty && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": State filter is invalid for service dependency.");
+	if (!object->GetParentServiceName().IsEmpty() && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": State filter is invalid for service dependency.", object->GetDebugInfo()));
 	}
 }

@@ -18,7 +18,7 @@
  ******************************************************************************/
 
 #include "base/scriptutils.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/function.hpp"
 #include "base/utility.hpp"
 #include "base/convert.hpp"
 #include "base/json.hpp"
@@ -26,6 +26,7 @@
 #include "base/objectlock.hpp"
 #include "base/dynamictype.hpp"
 #include "base/application.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 #include <boost/regex.hpp>
 #include <algorithm>
@@ -44,8 +45,28 @@ REGISTER_SCRIPTFUNCTION(exit, &Application::Exit);
 REGISTER_SCRIPTFUNCTION(typeof, &ScriptUtils::TypeOf);
 REGISTER_SCRIPTFUNCTION(keys, &ScriptUtils::Keys);
 REGISTER_SCRIPTFUNCTION(random, &Utility::Random);
-REGISTER_SCRIPTFUNCTION(__get_object, &ScriptUtils::GetObject);
+REGISTER_SCRIPTFUNCTION(get_object, &ScriptUtils::GetObject);
+REGISTER_SCRIPTFUNCTION(get_objects, &ScriptUtils::GetObjects);
+REGISTER_SCRIPTFUNCTION(assert, &ScriptUtils::Assert);
+REGISTER_SCRIPTFUNCTION(string, &ScriptUtils::CastString);
+REGISTER_SCRIPTFUNCTION(number, &ScriptUtils::CastNumber);
+REGISTER_SCRIPTFUNCTION(bool, &ScriptUtils::CastBool);
+REGISTER_SCRIPTFUNCTION(get_time, &Utility::GetTime);
 
+String ScriptUtils::CastString(const Value& value)
+{
+	return value;
+}
+
+double ScriptUtils::CastNumber(const Value& value)
+{
+	return value;
+}
+
+bool ScriptUtils::CastBool(const Value& value)
+{
+	return value.ToBool();
+}
 bool ScriptUtils::Regex(const String& pattern, const String& text)
 {
 	bool res = false;
@@ -60,7 +81,7 @@ bool ScriptUtils::Regex(const String& pattern, const String& text)
 	return res;
 }
 
-int ScriptUtils::Len(const Value& value)
+double ScriptUtils::Len(const Value& value)
 {
 	if (value.IsObjectType<Dictionary>()) {
 		Dictionary::Ptr dict = value;
@@ -68,8 +89,10 @@ int ScriptUtils::Len(const Value& value)
 	} else if (value.IsObjectType<Array>()) {
 		Array::Ptr array = value;
 		return array->GetLength();
-	} else {
+	} else if (value.IsString()) {
 		return Convert::ToString(value).GetLength();
+	} else {
+		return 0;
 	}
 }
 
@@ -149,7 +172,7 @@ void ScriptUtils::Log(const std::vector<Value>& arguments)
 		message = arguments[2];
 	}
 
-	if (message.IsString())
+	if (message.IsString() || (!message.IsObjectType<Array>() && !message.IsObjectType<Dictionary>()))
 		::Log(severity, facility, message);
 	else
 		::Log(severity, facility, JsonEncode(message));
@@ -199,6 +222,8 @@ Type::Ptr ScriptUtils::TypeOf(const Value& value)
 			return Type::GetByName("Object");
 		case ValueNumber:
 			return Type::GetByName("Number");
+		case ValueBoolean:
+			return Type::GetByName("Boolean");
 		case ValueString:
 			return Type::GetByName("String");
 		case ValueObject:
@@ -222,13 +247,34 @@ Array::Ptr ScriptUtils::Keys(const Dictionary::Ptr& dict)
 	return result;
 }
 
-DynamicObject::Ptr ScriptUtils::GetObject(const String& type, const String& name)
+DynamicObject::Ptr ScriptUtils::GetObject(const Type::Ptr& type, const String& name)
 {
-	DynamicType::Ptr dtype = DynamicType::GetByName(type);
+	DynamicType::Ptr dtype = DynamicType::GetByName(type->GetName());
 
 	if (!dtype)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid type name"));
 
 	return dtype->GetObject(name);
+}
+
+Array::Ptr ScriptUtils::GetObjects(const Type::Ptr& type)
+{
+	DynamicType::Ptr dtype = DynamicType::GetByName(type->GetName());
+
+	if (!dtype)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid type name"));
+
+	Array::Ptr result = new Array();
+
+	BOOST_FOREACH(const DynamicObject::Ptr& object, dtype->GetObjects())
+		result->Add(object);
+
+	return result;
+}
+
+void ScriptUtils::Assert(const Value& arg)
+{
+	if (!arg.ToBool())
+		BOOST_THROW_EXCEPTION(std::runtime_error("Assertion failed"));
 }
 

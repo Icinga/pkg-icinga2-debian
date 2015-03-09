@@ -41,19 +41,21 @@ public:
 	DECLARE_OBJECT(GraphiteWriter);
 	DECLARE_OBJECTNAME(GraphiteWriter);
 
-	static Value StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
+	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
+
+	static void ValidateNameTemplates(const String& location, const GraphiteWriter::Ptr& object);
 
 protected:
 	virtual void Start(void);
 
 private:
 	Stream::Ptr m_Stream;
-	
+
 	Timer::Ptr m_ReconnectTimer;
 
 	void CheckResultHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr);
-	void SendMetric(const String& prefix, const String& name, double value);
-	void SendPerfdata(const String& prefix, const CheckResult::Ptr& cr);
+	void SendMetric(const String& prefix, const String& name, double value, double ts);
+	void SendPerfdata(const String& prefix, const CheckResult::Ptr& cr, double ts);
 	static String EscapeMetric(const String& str);
 	static Value EscapeMacroMetric(const Value& value);
 

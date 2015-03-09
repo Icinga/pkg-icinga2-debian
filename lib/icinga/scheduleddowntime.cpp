@@ -34,6 +34,7 @@
 using namespace icinga;
 
 REGISTER_TYPE(ScheduledDowntime);
+REGISTER_SCRIPTFUNCTION(ValidateScheduledDowntimeRanges, &ScheduledDowntime::ValidateRanges);
 
 INITIALIZE_ONCE(&ScheduledDowntime::StaticInitialize);
 
@@ -62,6 +63,14 @@ void ScheduledDowntime::StaticInitialize(void)
 	l_Timer->SetInterval(60);
 	l_Timer->OnTimerExpired.connect(boost::bind(&ScheduledDowntime::TimerProc));
 	l_Timer->Start();
+}
+
+void ScheduledDowntime::OnAllConfigLoaded(void)
+{
+	CustomVarObject::OnAllConfigLoaded();
+
+	if (!GetCheckable())
+		BOOST_THROW_EXCEPTION(ScriptError("ScheduledDowntime '" + GetName() + "' references a host/service which doesn't exist.", GetDebugInfo()));
 }
 
 void ScheduledDowntime::Start(void)
@@ -170,4 +179,36 @@ void ScheduledDowntime::CreateNextDowntime(void)
 
 	Downtime::Ptr downtime = Checkable::GetDowntimeByID(uid);
 	downtime->SetConfigOwner(GetName());
+}
+
+void ScheduledDowntime::ValidateRanges(const String& location, const ScheduledDowntime::Ptr& object)
+{
+	Dictionary::Ptr ranges = object->GetRanges();
+
+	if (!ranges)
+		return;
+
+	/* create a fake time environment to validate the definitions */
+	time_t refts = Utility::GetTime();
+	tm reference = Utility::LocalTime(refts);
+	Array::Ptr segments = new Array();
+
+	ObjectLock olock(ranges);
+	BOOST_FOREACH(const Dictionary::Pair& kv, ranges) {
+		try {
+			tm begin_tm, end_tm;
+			int stride;
+			LegacyTimePeriod::ParseTimeRange(kv.first, &begin_tm, &end_tm, &stride, &reference);
+		} catch (std::exception&) {
+			BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+			    location + ": Invalid time specification.", object->GetDebugInfo()));
+		}
+
+		try {
+			LegacyTimePeriod::ProcessTimeRanges(kv.second, &reference, segments);
+		} catch (std::exception&) {
+			BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+			    location + ": Invalid time range definition.", object->GetDebugInfo()));
+		}
+	}
 }

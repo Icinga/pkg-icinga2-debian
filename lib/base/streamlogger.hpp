@@ -40,7 +40,6 @@ public:
 
 	StreamLogger(void);
 
-	virtual void Start(void);
 	virtual void Stop(void);
 	~StreamLogger(void);
 
@@ -56,7 +55,6 @@ private:
 	static boost::mutex m_Mutex;
 	std::ostream *m_Stream;
 	bool m_OwnsStream;
-	bool m_Tty;
 
 	Timer::Ptr m_FlushLogTimer;
 

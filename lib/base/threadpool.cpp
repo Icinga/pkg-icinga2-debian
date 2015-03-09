@@ -117,13 +117,13 @@ void ThreadPool::WorkerThread::ThreadProc(Queue& queue)
 
 		double st = Utility::GetTime();;
 
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 #	ifdef RUSAGE_THREAD
 		struct rusage usage_start, usage_end;
 
 		(void) getrusage(RUSAGE_THREAD, &usage_start);
 #	endif /* RUSAGE_THREAD */
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 
 		try {
 			if (wi.Callback)
@@ -147,7 +147,7 @@ void ThreadPool::WorkerThread::ThreadProc(Queue& queue)
 			queue.TaskCount++;
 		}
 
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 #	ifdef RUSAGE_THREAD
 		(void) getrusage(RUSAGE_THREAD, &usage_end);
 
@@ -173,7 +173,7 @@ void ThreadPool::WorkerThread::ThreadProc(Queue& queue)
 			    << "Event call took " << (et - st) << "s";
 #	endif /* RUSAGE_THREAD */
 		}
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 	}
 
 	boost::mutex::scoped_lock lock(queue.Mutex);
@@ -268,18 +268,17 @@ void ThreadPool::ManagerThreadProc(void)
 
 				int tthreads = wthreads - alive;
 
-				/* Make sure there is at least one thread per CPU */
-				int ncput = std::max(static_cast<unsigned int>(Application::GetConcurrency()) / QUEUECOUNT, 4U);
-				if (alive + tthreads < ncput)
-					tthreads = ncput - alive;
+				/* Make sure there is at least one thread per queue */
+				if (alive + tthreads < 1)
+					tthreads = 1 - alive;
 
-				/* Don't kill more than 8 threads at once. */
-				if (tthreads < -8)
-					tthreads = -8;
+				/* Don't kill more than 2 threads at once. */
+				if (tthreads < -2)
+					tthreads = -2;
 
 				/* Spawn more workers if there are outstanding work items. */
 				if (tthreads > 0 && pending > 0)
-					tthreads = 8;
+					tthreads = 2;
 
 				if (m_MaxThreads != UINT_MAX && (alive + tthreads) * (sizeof(m_Queues) / sizeof(m_Queues[0])) > m_MaxThreads)
 					tthreads = m_MaxThreads / (sizeof(m_Queues) / sizeof(m_Queues[0])) - alive;

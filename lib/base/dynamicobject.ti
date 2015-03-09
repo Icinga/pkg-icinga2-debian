@@ -35,8 +35,6 @@ public:
 
 abstract class DynamicObject
 {
-	[protected] Object::Ptr __parent (ParentScope);
-
 	[config, internal] String __name (Name);
 	[config] String name (ShortName) {
 		get {{{
@@ -46,10 +44,9 @@ abstract class DynamicObject
 				return m_ShortName;
 		}}}
 	};
-	[config, internal, get_protected] String type (TypeName);
-	[config] String zone;
+	[config, internal, get_protected] String type (TypeNameV);
+	[config] String zone (ZoneName);
 	[config, internal, get_protected] Array::Ptr templates;
-	[config] Dictionary::Ptr methods;
 	[get_protected] bool active;
 	[get_protected] bool paused {
 		default {{{ return true; }}}

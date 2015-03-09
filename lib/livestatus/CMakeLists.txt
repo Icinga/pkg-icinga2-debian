@@ -44,7 +44,17 @@ target_link_libraries(livestatus ${Boost_LIBRARIES} base config icinga remote)
 set_target_properties (
   livestatus PROPERTIES
   INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
+  DEFINE_SYMBOL I2_LIVESTATUS_BUILD
   FOLDER Components
 )
 
+install_if_not_exists(
+  ${PROJECT_SOURCE_DIR}/etc/icinga2/features-available/livestatus.conf
+  ${CMAKE_INSTALL_SYSCONFDIR}/icinga2/features-available
+)
+
+install(CODE "file(MAKE_DIRECTORY \"\$ENV{DESTDIR}${ICINGA2_RUNDIR}/icinga2/cmd\")")
+
 install(TARGETS livestatus RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/icinga2)
+
+set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "${CPACK_NSIS_EXTRA_INSTALL_COMMANDS}" PARENT_SCOPE)

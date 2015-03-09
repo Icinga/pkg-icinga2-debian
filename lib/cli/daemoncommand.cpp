@@ -18,17 +18,17 @@
  ******************************************************************************/
 
 #include "cli/daemoncommand.hpp"
-#include "config/configcompilercontext.hpp"
+#include "cli/daemonutility.hpp"
 #include "config/configcompiler.hpp"
+#include "config/configcompilercontext.hpp"
 #include "config/configitembuilder.hpp"
 #include "base/logger.hpp"
 #include "base/application.hpp"
-#include "base/logger.hpp"
 #include "base/timer.hpp"
 #include "base/utility.hpp"
 #include "base/exception.hpp"
 #include "base/convert.hpp"
-#include "base/scriptvariable.hpp"
+#include "base/scriptglobal.hpp"
 #include "base/context.hpp"
 #include "config.h"
 #include <boost/program_options.hpp>
@@ -55,108 +55,9 @@ static String LoadAppType(const String& typeSpec)
 
 	String library = typeSpec.SubStr(0, index);
 
-	(void) Utility::LoadExtensionLibrary(library);
+	Utility::LoadExtensionLibrary(library);
 
 	return typeSpec.SubStr(index + 1);
-}
-
-static void IncludeZoneDirRecursive(const String& path)
-{
-	String zoneName = Utility::BaseName(path);
-	Utility::GlobRecursive(path, "*.conf", boost::bind(&ConfigCompiler::CompileFile, _1, zoneName), GlobFile);
-}
-
-static void IncludeNonLocalZone(const String& zonePath)
-{
-	String etcPath = Application::GetZonesDir() + "/" + Utility::BaseName(zonePath);
-
-	if (Utility::PathExists(etcPath) || Utility::PathExists(zonePath + "/.authoritative"))
-		return;
-
-	IncludeZoneDirRecursive(zonePath);
-}
-
-static bool LoadConfigFiles(const boost::program_options::variables_map& vm, const String& appType,
-    const String& objectsFile = String(), const String& varsfile = String())
-{
-	ConfigCompilerContext::GetInstance()->Reset();
-
-	if (!objectsFile.IsEmpty())
-		ConfigCompilerContext::GetInstance()->OpenObjectsFile(objectsFile);
-
-	if (vm.count("config") > 0) {
-		BOOST_FOREACH(const String& configPath, vm["config"].as<std::vector<std::string> >()) {
-			ConfigCompiler::CompileFile(configPath);
-		}
-	} else if (!vm.count("no-config"))
-		ConfigCompiler::CompileFile(Application::GetSysconfDir() + "/icinga2/icinga2.conf");
-
-	/* Load cluster config files - this should probably be in libremote but
-	* unfortunately moving it there is somewhat non-trivial. */
-	String zonesEtcDir = Application::GetZonesDir();
-	if (!zonesEtcDir.IsEmpty() && Utility::PathExists(zonesEtcDir))
-		Utility::Glob(zonesEtcDir + "/*", &IncludeZoneDirRecursive, GlobDirectory);
-
-	String zonesVarDir = Application::GetLocalStateDir() + "/lib/icinga2/api/zones";
-	if (Utility::PathExists(zonesVarDir))
-		Utility::Glob(zonesVarDir + "/*", &IncludeNonLocalZone, GlobDirectory);
-
-	String name, fragment;
-	BOOST_FOREACH(boost::tie(name, fragment), ConfigFragmentRegistry::GetInstance()->GetItems()) {
-		ConfigCompiler::CompileText(name, fragment);
-	}
-
-	ConfigItemBuilder::Ptr builder = new ConfigItemBuilder();
-	builder->SetType(appType);
-	builder->SetName("application");
-	ConfigItem::Ptr item = builder->Compile();
-	item->Register();
-
-	bool result = ConfigItem::ValidateItems();
-
-	int warnings = 0, errors = 0;
-
-	BOOST_FOREACH(const ConfigCompilerMessage& message, ConfigCompilerContext::GetInstance()->GetMessages()) {
-		std::ostringstream locbuf;
-		ShowCodeFragment(locbuf, message.Location, true);
-		String location = locbuf.str();
-
-		String logmsg;
-
-		if (!location.IsEmpty())
-			logmsg = "Location:\n" + location;
-
-		logmsg += String("\nConfig ") + (message.Error ? "error" : "warning") + ": " + message.Text;
-
-		if (message.Error) {
-			Log(LogCritical, "config", logmsg);
-			errors++;
-		} else {
-			Log(LogWarning, "config", logmsg);
-			warnings++;
-		}
-	}
-
-	if (warnings > 0 || errors > 0) {
-		LogSeverity severity;
-
-		if (errors == 0)
-			severity = LogWarning;
-		else
-			severity = LogCritical;
-
-		Log(severity, "config")
-		    << errors << " errors, " << warnings << " warnings.";
-	}
-
-	if (!result)
-		return false;
-
-	ConfigCompilerContext::GetInstance()->FinishObjectsFile();
-
-	ScriptVariable::WriteVariablesFile(varsfile);
-
-	return true;
 }
 
 #ifndef _WIN32
@@ -192,14 +93,14 @@ static bool Daemonize(void)
 
 		if (ret == pid) {
 			Log(LogCritical, "cli", "The daemon could not be started. See log output for details.");
-			Application::Exit(EXIT_FAILURE);
+			_exit(EXIT_FAILURE);
 		} else if (ret == -1) {
 			Log(LogCritical, "cli")
 			    << "waitpid() failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-			Application::Exit(EXIT_FAILURE);
+			_exit(EXIT_FAILURE);
 		}
 
-		Application::Exit(0);
+		_exit(EXIT_SUCCESS);
 	}
 
 	Application::GetTP().Start();
@@ -233,7 +134,7 @@ static bool SetDaemonIO(const String& stderrFile)
 	if (fderr < 0 && errno == ENOENT)
 		fderr = open(errPath, O_CREAT | O_WRONLY | O_APPEND, 0600);
 
-	if (fderr > 0) {
+	if (fderr >= 0) {
 		if (fderr != 2)
 			dup2(fderr, 2);
 
@@ -324,19 +225,18 @@ int DaemonCommand::Run(const po::variables_map& vm, const std::vector<std::strin
 	if (!vm.count("validate"))
 		Logger::DisableTimestamp(false);
 
+	if (!ScriptGlobal::Exists("UseVfork"))
 #ifdef __APPLE__
-	ScriptVariable::Set("UseVfork", false, false, true);
+		ScriptGlobal::Set("UseVfork", false);
 #else /* __APPLE__ */
-	ScriptVariable::Set("UseVfork", true, false, true);
+		ScriptGlobal::Set("UseVfork", true);
 #endif /* __APPLE__ */
-
-	Application::MakeVariablesConstant();
 
 	Log(LogInformation, "cli")
 	    << "Icinga application loader (version: " << Application::GetVersion()
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 	    << "; debug"
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 	    << ")";
 
 	String appType = LoadAppType(Application::GetApplicationType());
@@ -350,7 +250,13 @@ int DaemonCommand::Run(const po::variables_map& vm, const std::vector<std::strin
 		}
 	}
 
-	if (!LoadConfigFiles(vm, appType, Application::GetObjectsPath(), Application::GetVarsPath()))
+	std::vector<std::string> configs;
+	if (vm.count("config") > 0)
+		configs = vm["config"].as < std::vector<std::string> >() ;
+	else if (!vm.count("no-config"))
+		configs.push_back(Application::GetSysconfDir() + "/icinga2/icinga2.conf");
+
+	if (!DaemonUtility::LoadConfigFiles(configs, appType, Application::GetObjectsPath(), Application::GetVarsPath()))
 		return EXIT_FAILURE;
 
 	if (vm.count("validate")) {
@@ -358,7 +264,7 @@ int DaemonCommand::Run(const po::variables_map& vm, const std::vector<std::strin
 		return EXIT_SUCCESS;
 	}
 
-	if(vm.count("reload-internal")) {
+	if (vm.count("reload-internal")) {
 		int parentpid = vm["reload-internal"].as<int>();
 		Log(LogInformation, "cli")
 		    << "Terminating previous instance of Icinga (PID " << parentpid << ")";

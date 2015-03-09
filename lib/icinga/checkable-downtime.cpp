@@ -73,7 +73,7 @@ String Checkable::AddDowntime(const String& author, const String& comment,
 
 	if (!triggeredBy.IsEmpty()) {
 		Downtime::Ptr triggerDowntime = GetDowntimeByID(triggeredBy);
-		
+
 		if (triggerDowntime)
 			downtime->SetTriggeredByLegacyId(triggerDowntime->GetLegacyId());
 	}
@@ -102,6 +102,14 @@ String Checkable::AddDowntime(const String& author, const String& comment,
 		boost::mutex::scoped_lock lock(l_DowntimeMutex);
 		l_LegacyDowntimesCache[legacy_id] = uid;
 		l_DowntimesCache[uid] = this;
+	}
+
+	/* if this object is already in a NOT-OK state trigger this downtime now */
+	if (GetStateRaw() != ServiceOK) {
+		Log(LogNotice, "Checkable")
+		    << "Checkable '" << GetName() << "' already in a NOT-OK state."
+		    << " Triggering downtime now.";
+		TriggerDowntime(uid);
 	}
 
 	Log(LogNotice, "Checkable")
@@ -193,6 +201,14 @@ void Checkable::TriggerDowntime(const String& id)
 		return;
 	}
 
+	double now = Utility::GetTime();
+
+        if (now < downtime->GetStartTime() || now > downtime->GetEndTime()) {
+		Log(LogDebug, "Checkable")
+		    << "Not triggering downtime with ID '" << downtime->GetLegacyId() << "': current time is outside downtime window.";
+		return;
+	}
+
 	Log(LogNotice, "Checkable")
 		<< "Triggering downtime with ID '" << downtime->GetLegacyId() << "'.";
 
@@ -251,9 +267,9 @@ void Checkable::StartDowntimesExpiredTimer(void)
 
 void Checkable::AddDowntimesToCache(void)
 {
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 	Log(LogDebug, "Checkable", "Updating Checkable downtimes cache.");
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 
 	Dictionary::Ptr downtimes = GetDowntimes();
 

@@ -18,10 +18,10 @@
  ******************************************************************************/
 
 #include "icinga/checkable.hpp"
-#include "config/configcompilercontext.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/function.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 #include <boost/bind/apply.hpp>
 
@@ -31,12 +31,14 @@ REGISTER_TYPE(Checkable);
 REGISTER_SCRIPTFUNCTION(ValidateCheckableCheckInterval, &Checkable::ValidateCheckInterval);
 
 boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> Checkable::OnEnablePerfdataChanged;
-boost::signals2::signal<void (const Checkable::Ptr&, const String&, const String&, AcknowledgementType, double, const MessageOrigin&)> Checkable::OnAcknowledgementSet;
+boost::signals2::signal<void (const Checkable::Ptr&, const String&, const String&, AcknowledgementType, bool, double, const MessageOrigin&)> Checkable::OnAcknowledgementSet;
 boost::signals2::signal<void (const Checkable::Ptr&, const MessageOrigin&)> Checkable::OnAcknowledgementCleared;
 
 Checkable::Checkable(void)
 	: m_CheckRunning(false)
-{ }
+{
+	SetSchedulingOffset(Utility::Random());
+}
 
 void Checkable::Start(void)
 {
@@ -46,13 +48,6 @@ void Checkable::Start(void)
 		UpdateNextCheck();
 
 	DynamicObject::Start();
-}
-
-void Checkable::OnConfigLoaded(void)
-{
-	DynamicObject::OnConfigLoaded();
-
-	SetSchedulingOffset(Utility::Random());
 }
 
 void Checkable::OnStateLoaded(void)
@@ -121,7 +116,7 @@ bool Checkable::IsAcknowledged(void)
 	return GetAcknowledgement() != AcknowledgementNone;
 }
 
-void Checkable::AcknowledgeProblem(const String& author, const String& comment, AcknowledgementType type, double expiry, const MessageOrigin& origin)
+void Checkable::AcknowledgeProblem(const String& author, const String& comment, AcknowledgementType type, bool notify, double expiry, const MessageOrigin& origin)
 {
 	{
 		ObjectLock olock(this);
@@ -130,9 +125,10 @@ void Checkable::AcknowledgeProblem(const String& author, const String& comment, 
 		SetAcknowledgementExpiry(expiry);
 	}
 
-	OnNotificationsRequested(this, NotificationAcknowledgement, GetLastCheckResult(), author, comment);
+	if (notify)
+		OnNotificationsRequested(this, NotificationAcknowledgement, GetLastCheckResult(), author, comment);
 
-	OnAcknowledgementSet(this, author, comment, type, expiry, origin);
+	OnAcknowledgementSet(this, author, comment, type, notify, expiry, origin);
 }
 
 void Checkable::ClearAcknowledgement(const MessageOrigin& origin)
@@ -267,10 +263,10 @@ Endpoint::Ptr Checkable::GetCommandEndpoint(void) const
 	return Endpoint::GetByName(GetCommandEndpointRaw());
 }
 
-void Checkable::ValidateCheckInterval(const String& location, const Dictionary::Ptr& attrs)
+void Checkable::ValidateCheckInterval(const String& location, const Checkable::Ptr& object)
 {
-	if (attrs->Contains("check_interval") && attrs->Get("check_interval") <= 0) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": check_interval must be greater than 0.");
+	if (object->GetCheckInterval() <= 0) {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": check_interval must be greater than 0.", object->GetDebugInfo()));
 	}
 }

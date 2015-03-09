@@ -43,8 +43,12 @@ public:
 
 	void UpdateRegion(double begin, double end, bool clearExisting);
 
+	virtual bool GetIsInside(void) const;
+
 	bool IsInside(double ts) const;
 	double FindNextTransition(double begin);
+
+	static void ValidateRanges(const String& location, const TimePeriod::Ptr& object);
 
 private:
 	void AddSegment(double s, double end);
