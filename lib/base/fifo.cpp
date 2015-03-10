@@ -78,11 +78,24 @@ void FIFO::Optimize(void)
 	}
 }
 
+size_t FIFO::Peek(void *buffer, size_t count)
+{
+	if (count > m_DataSize)
+		count = m_DataSize;
+
+	if (buffer != NULL)
+		std::memcpy(buffer, m_Buffer + m_Offset, count);
+
+	return count;
+}
+
 /**
  * Implements IOQueue::Read.
  */
-size_t FIFO::Read(void *buffer, size_t count)
+size_t FIFO::Read(void *buffer, size_t count, bool allow_partial)
 {
+	ASSERT(allow_partial);
+
 	if (count > m_DataSize)
 		count = m_DataSize;
 
@@ -105,6 +118,8 @@ void FIFO::Write(const void *buffer, size_t count)
 	ResizeBuffer(m_Offset + m_DataSize + count, false);
 	std::memcpy(m_Buffer + m_Offset + m_DataSize, buffer, count);
 	m_DataSize += count;
+
+	SignalDataAvailable();
 }
 
 void FIFO::Close(void)
@@ -118,4 +133,14 @@ bool FIFO::IsEof(void) const
 size_t FIFO::GetAvailableBytes(void) const
 {
 	return m_DataSize;
+}
+
+bool FIFO::SupportsWaiting(void) const
+{
+	return true;
+}
+
+bool FIFO::IsDataAvailable(void) const
+{
+	return m_DataSize > 0;
 }

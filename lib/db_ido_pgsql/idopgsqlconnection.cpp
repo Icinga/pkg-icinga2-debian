@@ -35,7 +35,7 @@
 
 using namespace icinga;
 
-#define SCHEMA_VERSION "1.12.0"
+#define SCHEMA_VERSION "1.13.0"
 
 REGISTER_TYPE(IdoPgsqlConnection);
 
@@ -45,7 +45,7 @@ IdoPgsqlConnection::IdoPgsqlConnection(void)
 	: m_QueryQueue(500000), m_Connection(NULL)
 { }
 
-Value IdoPgsqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
+void IdoPgsqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
@@ -63,8 +63,6 @@ Value IdoPgsqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::
 	}
 
 	status->Set("idopgsqlconnection", nodes);
-
-	return 0;
 }
 
 void IdoPgsqlConnection::Resume(void)
@@ -116,7 +114,7 @@ void IdoPgsqlConnection::ExceptionHandler(boost::exception_ptr exp)
 
 void IdoPgsqlConnection::AssertOnWorkQueue(void)
 {
-	ASSERT(boost::this_thread::get_id() == m_QueryQueue.GetThreadId());
+	ASSERT(m_QueryQueue.IsWorkerThread());
 }
 
 void IdoPgsqlConnection::Disconnect(void)
@@ -136,10 +134,15 @@ void IdoPgsqlConnection::Disconnect(void)
 
 void IdoPgsqlConnection::TxTimerHandler(void)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::NewTransaction, this), true);
+	NewTransaction();
 }
 
 void IdoPgsqlConnection::NewTransaction(void)
+{
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalNewTransaction, this), true);
+}
+
+void IdoPgsqlConnection::InternalNewTransaction(void)
 {
 	boost::mutex::scoped_lock lock(m_ConnectionMutex);
 
@@ -220,19 +223,27 @@ void IdoPgsqlConnection::Reconnect(void)
 		Dictionary::Ptr row = FetchRow(result, 0);
 
 		if (!row) {
+			PQfinish(m_Connection);
+			m_Connection = NULL;
+
 			Log(LogCritical, "IdoPgsqlConnection", "Schema does not provide any valid version! Verify your schema installation.");
 
-			Application::Exit(EXIT_FAILURE);
+			Application::RequestShutdown(EXIT_FAILURE);
+			return;
 		}
 
 		String version = row->Get("version");
 
 		if (Utility::CompareVersion(SCHEMA_VERSION, version) < 0) {
+			PQfinish(m_Connection);
+			m_Connection = NULL;
+
 			Log(LogCritical, "IdoPgsqlConnection")
 			    << "Schema version '" << version << "' does not match the required version '"
 			    << SCHEMA_VERSION << "'! Please check the upgrade documentation.";
 
-			Application::Exit(EXIT_FAILURE);
+			Application::RequestShutdown(EXIT_FAILURE);
+			return;
 		}
 
 		String instanceName = GetInstanceName();
@@ -564,7 +575,14 @@ bool IdoPgsqlConnection::FieldToEscapedString(const String& key, const Value& va
 	} else if (DbValue::IsTimestampNow(value)) {
 		*result = "NOW()";
 	} else {
-		*result = "E'" + Escape(rawvalue) + "'";
+		Value fvalue;
+
+		if (rawvalue.IsBoolean())
+			fvalue = Convert::ToLong(rawvalue);
+		else
+			fvalue = rawvalue;
+
+		*result = "E'" + Escape(fvalue) + "'";
 	}
 
 	return true;
@@ -585,6 +603,9 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 		return;
 
 	if (!m_Connection)
+		return;
+
+	if (query.Object && query.Object->GetObject()->GetExtension("agent_check").ToBool())
 		return;
 
 	std::ostringstream qbuf, where;
@@ -624,8 +645,6 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 			hasid = GetConfigUpdate(query.Object);
 		else if (query.StatusUpdate)
 			hasid = GetStatusUpdate(query.Object);
-		else
-			ASSERT(!"Invalid query flags.");
 
 		if (!hasid)
 			upsert = true;
@@ -644,7 +663,7 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 			qbuf << "DELETE FROM " << GetTablePrefix() << query.Table;
 			break;
 		default:
-			ASSERT(!"Invalid query type.");
+			VERIFY(!"Invalid query type.");
 	}
 
 	if (type == DbQueryInsert || type == DbQueryUpdate) {
@@ -655,7 +674,7 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 		Value value;
 		bool first = true;
 		BOOST_FOREACH(const Dictionary::Pair& kv, query.Fields) {
-			if (kv.second.IsEmpty())
+			if (kv.second.IsEmpty() && !kv.second.IsString())
 				continue;
 
 			if (!FieldToEscapedString(kv.first, kv.second, &value))

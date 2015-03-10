@@ -37,7 +37,7 @@ REGISTER_TYPE(CheckerComponent);
 
 REGISTER_STATSFUNCTION(CheckerComponentStats, &CheckerComponent::StatsFunc);
 
-Value CheckerComponent::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
+void CheckerComponent::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
@@ -57,9 +57,11 @@ Value CheckerComponent::StatsFunc(const Dictionary::Ptr& status, const Array::Pt
 	}
 
 	status->Set("checkercomponent", nodes);
-
-	return 0;
 }
+
+CheckerComponent::CheckerComponent(void)
+    : m_Stopped(false)
+{ }
 
 void CheckerComponent::OnConfigLoaded(void)
 {
@@ -74,8 +76,6 @@ void CheckerComponent::OnConfigLoaded(void)
 void CheckerComponent::Start(void)
 {
 	DynamicObject::Start();
-
-	m_Stopped = false;
 
 	m_Thread = boost::thread(boost::bind(&CheckerComponent::CheckThreadProc, this));
 
@@ -260,7 +260,7 @@ void CheckerComponent::ObjectHandler(const DynamicObject::Ptr& object)
 
 	Checkable::Ptr checkable = static_pointer_cast<Checkable>(object);
 
-	Zone::Ptr zone = Zone::GetByName(checkable->GetZone());
+	Zone::Ptr zone = Zone::GetByName(checkable->GetZoneName());
 	bool same_zone = (!zone || Zone::GetLocalZone() == zone);
 
 	{

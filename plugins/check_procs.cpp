@@ -32,6 +32,8 @@ namespace po = boost::program_options;
 using std::endl; using std::wstring; using std::wcout;
 using std::cout;
 
+static BOOL debug = FALSE;
+
 struct printInfoStruct 
 {
 	threshold warn, crit;
@@ -49,7 +51,7 @@ int wmain(int argc, wchar_t **argv)
 	printInfoStruct printInfo = { };
 
 	int r = parseArguments(argc, argv, vm, printInfo);
-    
+
 	if (r != -1)
 		return r;
 
@@ -57,34 +59,6 @@ int wmain(int argc, wchar_t **argv)
 		return printOutput(countProcs(printInfo.user), printInfo);
 
 	return printOutput(countProcs(), printInfo);
-}
-
-int printOutput(const int numProcs, printInfoStruct& printInfo) 
-{
-	state state = OK;
-
-	if (printInfo.warn.rend(numProcs))
-		state = WARNING;
-
-	if (printInfo.crit.rend(numProcs))
-		state = CRITICAL;
-	
-	switch (state) {
-	case OK:
-		wcout << L"PROCS OK " << numProcs << L"|procs=" << numProcs << L";" 
-			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0" << endl;
-		break;
-	case WARNING:
-		wcout << L"PROCS WARNING " << numProcs << L"|procs=" << numProcs << L";"
-			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0" << endl;
-		break;
-	case CRITICAL:
-		wcout << L"PROCS CRITICAL " << numProcs << L"|procs=" << numProcs << L";"
-			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0" << endl;
-		break;
-	}
-
-	return state;
 }
 
 int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct& printInfo) 
@@ -96,12 +70,12 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 	po::options_description desc;
 
 	desc.add_options()
-		("h", "print help message and exit")
-		("help", "print verbose help and exit")
-		("version,v", "print version and exit")
+		("help,h", "print help message and exit")
+		("version,V", "print version and exit")
+		("debug,d", "Verbose/Debug output")
+		("user,u", po::wvalue<wstring>(), "count only processes by user [arg]")
 		("warning,w", po::wvalue<wstring>(), "warning threshold")
 		("critical,c", po::wvalue<wstring>(), "critical threshold")
-		("user,u", po::wvalue<wstring>(), "count only processes by user [arg]")
 		;
 
 	po::basic_command_line_parser<wchar_t> parser(ac, av);
@@ -121,11 +95,6 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		return 3;
 	}
 
-	if (vm.count("h")) {
-		std::cout << desc << endl;
-		return 0;
-	}
-    
 	if (vm.count("help")) {
 		wcout << progName << " Help\n\tVersion: " << VERSION << endl;
 		wprintf(
@@ -134,7 +103,7 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		cout << desc;
 		wprintf(
 			L"\nIt will then output a string looking something like this:\n\n"
-			L"\tPROCS WARNING 67|load=67;50;90;0\n\n"
+			L"\tPROCS WARNING 67 | load=67;50;90;0\n\n"
 			L"\"PROCS\" being the type of the check, \"WARNING\" the returned status\n"
 			L"and \"67\" is the returned value.\n"
 			L"The performance data is found behind the \"|\", in order:\n"
@@ -167,7 +136,7 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		cout << endl;
 		return 0;
 	}
-    
+
 	if (vm.count("version")) {
 		std::cout << "Version: " << VERSION << endl;
 		return 0;
@@ -193,19 +162,66 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 	if (vm.count("user")) 
 		printInfo.user = vm["user"].as<wstring>();
 
+	if (vm.count("debug"))
+		debug = TRUE;
+
 	return -1;
+}
+
+int printOutput(const int numProcs, printInfoStruct& printInfo)
+{
+	if (debug)
+		wcout << L"Constructing output string" << endl;
+
+	state state = OK;
+
+	if (printInfo.warn.rend(numProcs))
+		state = WARNING;
+
+	if (printInfo.crit.rend(numProcs))
+		state = CRITICAL;
+
+	wstring user = L"";
+	if (!printInfo.user.empty())
+		user.append(L" processes of user ").append(printInfo.user);
+
+	switch (state) {
+	case OK:
+		wcout << L"PROCS OK " << numProcs << user << L" | procs=" << numProcs << L";"
+			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0;" << endl;
+		break;
+	case WARNING:
+		wcout << L"PROCS WARNING " << numProcs << user << L" | procs=" << numProcs << L";"
+			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0;" << endl;
+		break;
+	case CRITICAL:
+		wcout << L"PROCS CRITICAL " << numProcs << user << L" | procs=" << numProcs << L";"
+			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0;" << endl;
+		break;
+	}
+
+	return state;
 }
 
 int countProcs() 
 {
-	HANDLE hProcessSnap;
+	if (debug)
+		wcout << L"Counting all processes" << endl;
+
+	HANDLE hProcessSnap = NULL;
 	PROCESSENTRY32 pe32;
+
+	if (debug)
+		wcout << L"Creating snapshot" << endl;
 
 	hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (hProcessSnap == INVALID_HANDLE_VALUE)
 		return -1;
 
 	pe32.dwSize = sizeof(PROCESSENTRY32);
+
+	if (debug)
+		wcout << L"Grabbing first proccess" << endl;
 
 	if (!Process32First(hProcessSnap, &pe32)) {
 		CloseHandle(hProcessSnap);
@@ -214,16 +230,26 @@ int countProcs()
 
 	int numProcs = 0;
 
+	if (debug)
+		wcout << L"Counting processes..." << endl;
+
 	do {
 		++numProcs;
 	} while (Process32Next(hProcessSnap, &pe32));
 
-	CloseHandle(hProcessSnap);
+	if (debug)
+		wcout << L"Found " << numProcs << L" processes. Cleaning up udn returning" << endl;
+
+	if (hProcessSnap)
+		CloseHandle(hProcessSnap);
 	return numProcs;
 }
 
 int countProcs(const wstring user) 
 {
+	if (debug)
+		wcout << L"Counting all processes of user" << user << endl;
+
 	const wchar_t *wuser = user.c_str();
 	int numProcs = 0;
 
@@ -234,16 +260,28 @@ int countProcs(const wstring user)
 	SID_NAME_USE sidNameUse;
 	LPWSTR AcctName, DomainName;
 
+	if (debug)
+		wcout << L"Creating snapshot" << endl;
+
 	hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 	if (hProcessSnap == INVALID_HANDLE_VALUE)
 		goto die;
 
 	pe32.dwSize = sizeof(PROCESSENTRY32);
 
+	if (debug)
+		wcout << L"Grabbing first proccess" << endl;
+
 	if (!Process32First(hProcessSnap, &pe32))
 		goto die;
 
+	if (debug)
+		wcout << L"Counting processes..." << endl;
+
 	do {
+		if (debug)
+			wcout << L"Getting process token" << endl;
+
 		//get ProcessToken
 		hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pe32.th32ProcessID);
 		if (!OpenProcessToken(hProcess, TOKEN_QUERY, &hToken)) 
@@ -259,8 +297,8 @@ int countProcs(const wstring user)
 		pSIDTokenUser = reinterpret_cast<PTOKEN_USER>(new BYTE[dwReturnLength]);
 		memset(pSIDTokenUser, 0, dwReturnLength);
 
-		if (!pSIDTokenUser)
-			continue;
+		if (debug)
+			wcout << L"Received token, saving information" << endl;
 
 		//write Info in pSIDTokenUser
 		if (!GetTokenInformation(hToken, TokenUser, pSIDTokenUser, dwReturnLength, NULL))
@@ -270,6 +308,10 @@ int countProcs(const wstring user)
 		DomainName = NULL;
 		dwAcctName = 1;
 		dwDomainName = 1;
+		
+		if (debug)
+			wcout << L"Looking up SID" << endl;
+
 		//get dwAcctName and dwDomainName size
 		if (!LookupAccountSid(NULL, pSIDTokenUser->User.Sid, AcctName,
 			(LPDWORD)&dwAcctName, DomainName, (LPDWORD)&dwDomainName, &sidNameUse)
@@ -279,21 +321,22 @@ int countProcs(const wstring user)
 		AcctName = reinterpret_cast<LPWSTR>(new WCHAR[dwAcctName]);
 		DomainName = reinterpret_cast<LPWSTR>(new WCHAR[dwDomainName]);
 
-		if (!AcctName || !DomainName)
-			continue;
-		
 		if (!LookupAccountSid(NULL, pSIDTokenUser->User.Sid, AcctName,
 			(LPDWORD)&dwAcctName, DomainName, (LPDWORD)&dwDomainName, &sidNameUse))
 			continue;
 
-		if (!wcscmp(AcctName, wuser)) 
+		if (debug)
+			wcout << L"Comparing " << AcctName << L" to " << wuser << endl;
+		if (!wcscmp(AcctName, wuser)) {
 			++numProcs;
+			if (debug)
+				wcout << L"Is process of " << wuser << L" (" << numProcs << L")" << endl;
+		}
 		
 		delete[] reinterpret_cast<LPWSTR>(AcctName);
 		delete[] reinterpret_cast<LPWSTR>(DomainName);
 
 	} while (Process32Next(hProcessSnap, &pe32));
-	
 
 die:
 	if (hProcessSnap)

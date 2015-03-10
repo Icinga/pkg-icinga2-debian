@@ -37,8 +37,9 @@ enum ValueType
 {
 	ValueEmpty = 0,
 	ValueNumber = 1,
-	ValueString = 2,
-	ValueObject = 3
+	ValueBoolean = 2,
+	ValueString = 3,
+	ValueObject = 4
 };
 
 /**
@@ -50,7 +51,6 @@ class I2_BASE_API Value
 {
 public:
 	inline Value(void)
-		: m_Value()
 	{ }
 
 	inline Value(int value)
@@ -73,6 +73,10 @@ public:
 		: m_Value(value)
 	{ }
 
+	inline Value(bool value)
+		: m_Value(value)
+	{ }
+
 	inline Value(const String& value)
 		: m_Value(value)
 	{ }
@@ -86,7 +90,6 @@ public:
 	{ }
 
 	inline Value(Object *value)
-		: m_Value()
 	{
 		if (!value)
 			return;
@@ -96,7 +99,6 @@ public:
 
 	template<typename T>
 	inline Value(const intrusive_ptr<T>& value)
-		: m_Value()
 	{
 		if (!value)
 			return;
@@ -108,6 +110,8 @@ public:
 
 	operator double(void) const;
 	operator String(void) const;
+
+	Value& operator=(const Value& other);
 
 	bool operator==(bool rhs) const;
 	bool operator!=(bool rhs) const;
@@ -134,7 +138,7 @@ public:
 			return intrusive_ptr<T>();
 
 		if (!IsObject())
-			BOOST_THROW_EXCEPTION(std::runtime_error("Cannot convert value to object."));
+			BOOST_THROW_EXCEPTION(std::runtime_error("Cannot convert value of type '" + GetTypeName() + "' to an object."));
 
 		Object::Ptr object = boost::get<Object::Ptr>(m_Value);
 
@@ -155,7 +159,7 @@ public:
 	*/
 	inline bool IsEmpty(void) const
 	{
-		return (GetType() == ValueEmpty);
+		return (GetType() == ValueEmpty || (IsString() && boost::get<String>(m_Value).IsEmpty()));
 	}
 
 	/**
@@ -176,6 +180,16 @@ public:
 	inline bool IsNumber(void) const
 	{
 		return (GetType() == ValueNumber);
+	}
+
+	/**
+	 * Checks whether the variant is a boolean.
+	 *
+	 * @returns true if the variant is a boolean.
+	 */
+	inline bool IsBoolean(void) const
+	{
+		return (GetType() == ValueBoolean);
 	}
 
 	/**
@@ -219,8 +233,10 @@ public:
 
 	String GetTypeName(void) const;
 
+	Type::Ptr GetReflectionType(void) const;
+
 private:
-	boost::variant<boost::blank, double, String, Object::Ptr> m_Value;
+	boost::variant<boost::blank, double, bool, String, Object::Ptr> m_Value;
 
 	template<typename T>
 	const T& Get(void) const
@@ -260,6 +276,18 @@ I2_BASE_API Value operator/(const Value& lhs, double rhs);
 I2_BASE_API Value operator/(double lhs, const Value& rhs);
 I2_BASE_API Value operator/(const Value& lhs, int rhs);
 I2_BASE_API Value operator/(int lhs, const Value& rhs);
+
+I2_BASE_API Value operator%(const Value& lhs, const Value& rhs);
+I2_BASE_API Value operator%(const Value& lhs, double rhs);
+I2_BASE_API Value operator%(double lhs, const Value& rhs);
+I2_BASE_API Value operator%(const Value& lhs, int rhs);
+I2_BASE_API Value operator%(int lhs, const Value& rhs);
+
+I2_BASE_API Value operator^(const Value& lhs, const Value& rhs);
+I2_BASE_API Value operator^(const Value& lhs, double rhs);
+I2_BASE_API Value operator^(double lhs, const Value& rhs);
+I2_BASE_API Value operator^(const Value& lhs, int rhs);
+I2_BASE_API Value operator^(int lhs, const Value& rhs);
 
 I2_BASE_API Value operator&(const Value& lhs, const Value& rhs);
 I2_BASE_API Value operator&(const Value& lhs, double rhs);

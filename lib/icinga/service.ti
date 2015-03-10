@@ -35,6 +35,8 @@ public:
 
 class Service : Checkable < ServiceNameComposer
 {
+	load_after Host;
+
 	[config] String display_name {
 		get {{{
 			if (m_DisplayName.IsEmpty())
@@ -44,17 +46,17 @@ class Service : Checkable < ServiceNameComposer
 		}}}
 	};
 	[config] String host_name;
-	[enum] ServiceState "state" {
+	[enum, no_storage] ServiceState "state" {
 		get {{{
 			return GetStateRaw();
 		}}}
 	};
-	[enum] ServiceState last_state {
+	[enum, no_storage] ServiceState last_state {
 		get {{{
 			return GetLastStateRaw();
 		}}}
 	};
-	[enum] ServiceState last_hard_state {
+	[enum, no_storage] ServiceState last_hard_state {
 		get {{{
 			return GetLastHardStateRaw();
 		}}}

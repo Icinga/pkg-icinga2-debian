@@ -26,6 +26,7 @@
 #include "base/tcpsocket.hpp"
 #include "base/json.hpp"
 #include "base/utility.hpp"
+#include "base/exception.hpp"
 #include "remote/jsonrpc.hpp"
 #include <fstream>
 #include <iostream>
@@ -92,7 +93,6 @@ int PkiUtility::NewCert(const String& cn, const String& keyfile, const String& c
 
 int PkiUtility::SignCsr(const String& csrfile, const String& certfile)
 {
-	std::stringstream msgbuf;
 	char errbuf[120];
 
 	InitializeOpenSSL();
@@ -147,13 +147,13 @@ int PkiUtility::SaveCert(const String& host, const String& port, const String& k
 		sslContext = MakeSSLContext(certfile, keyfile);
 	} catch (const std::exception& ex) {
 		Log(LogCritical, "cli")
-                    << "Cannot make SSL context for cert path: '" << certfile << "' key path: '" << keyfile << "'.";
+		    << "Cannot make SSL context for cert path: '" << certfile << "' key path: '" << keyfile << "'.";
 		Log(LogDebug, "cli")
-                    << "Cannot make SSL context for cert path: '" << certfile << "' key path: '" << keyfile << "':\n"  << DiagnosticInformation(ex);
+		    << "Cannot make SSL context for cert path: '" << certfile << "' key path: '" << keyfile << "':\n"  << DiagnosticInformation(ex);
 		return 1;
 	}
 
-	TlsStream::Ptr stream = new TlsStream(client, RoleClient, sslContext);
+	TlsStream::Ptr stream = new TlsStream(client, String(), RoleClient, sslContext);
 
 	try {
 		stream->Handshake();
@@ -162,6 +162,11 @@ int PkiUtility::SaveCert(const String& host, const String& port, const String& k
 	}
 
 	boost::shared_ptr<X509> cert = stream->GetPeerCertificate();
+
+	if (!cert) {
+		Log(LogCritical, "cli", "Peer did not present a valid certificate.");
+		return 1;
+	}
 
 	std::ofstream fpcert;
 	fpcert.open(trustedfile.CStr());
@@ -208,13 +213,13 @@ int PkiUtility::RequestCertificate(const String& host, const String& port, const
 		sslContext = MakeSSLContext(certfile, keyfile);
 	} catch (const std::exception& ex) {
 		Log(LogCritical, "cli")
-                    << "Cannot make SSL context for cert path: '" << certfile << "' key path: '" << keyfile << "' ca path: '" << cafile << "'.";
+		    << "Cannot make SSL context for cert path: '" << certfile << "' key path: '" << keyfile << "' ca path: '" << cafile << "'.";
 		Log(LogDebug, "cli")
-                    << "Cannot make SSL context for cert path: '" << certfile << "' key path: '" << keyfile << "' ca path: '" << cafile << "':\n"  << DiagnosticInformation(ex);
+		    << "Cannot make SSL context for cert path: '" << certfile << "' key path: '" << keyfile << "' ca path: '" << cafile << "':\n"  << DiagnosticInformation(ex);
 		return 1;
 	}
 
-	TlsStream::Ptr stream = new TlsStream(client, RoleClient, sslContext);
+	TlsStream::Ptr stream = new TlsStream(client, String(), RoleClient, sslContext);
 
 	try {
 		stream->Handshake();
@@ -231,7 +236,7 @@ int PkiUtility::RequestCertificate(const String& host, const String& port, const
 		trustedCert = GetX509Certificate(trustedfile);
 	} catch (const std::exception&) {
 		Log(LogCritical, "cli")
-                    << "Cannot get trusted from cert path: '" << trustedfile << "'.";
+		    << "Cannot get trusted from cert path: '" << trustedfile << "'.";
 		return 1;
 	}
 
@@ -256,16 +261,23 @@ int PkiUtility::RequestCertificate(const String& host, const String& port, const
 	JsonRpc::SendMessage(stream, request);
 
 	Dictionary::Ptr response;
+	StreamReadContext src;
 
 	for (;;) {
-		response = JsonRpc::ReadMessage(stream);
+		StreamReadStatus srs = JsonRpc::ReadMessage(stream, &response, src);
+
+		if (srs == StatusEof)
+			break;
+
+		if (srs != StatusNewItem)
+			continue;
 
 		if (response && response->Contains("error")) {
 			Log(LogCritical, "cli", "Could not fetch valid response. Please check the master log (notice or debug).");
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 			/* we shouldn't expose master errors to the user in production environments */
 			Log(LogCritical, "cli", response->Get("error"));
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 			return 1;
 		}
 

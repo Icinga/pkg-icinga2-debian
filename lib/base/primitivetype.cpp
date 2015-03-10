@@ -18,10 +18,9 @@
  ******************************************************************************/
 
 #include "base/primitivetype.hpp"
+#include "base/dictionary.hpp"
 
 using namespace icinga;
-
-REGISTER_BUILTIN_TYPE(Number);
 
 PrimitiveType::PrimitiveType(const String& name)
 	: m_Name(name)

@@ -26,6 +26,7 @@
 #include "base/utility.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
+#include <boost/thread/once.hpp>
 
 using namespace icinga;
 
@@ -34,18 +35,30 @@ REGISTER_APIFUNCTION(SetLogPosition, log, &SetLogPositionHandler);
 static Value RequestCertificateHandler(const MessageOrigin& origin, const Dictionary::Ptr& params);
 REGISTER_APIFUNCTION(RequestCertificate, pki, &RequestCertificateHandler);
 
+static boost::once_flag l_ApiClientOnceFlag = BOOST_ONCE_INIT;
+static Timer::Ptr l_ApiClientTimeoutTimer;
+
 ApiClient::ApiClient(const String& identity, bool authenticated, const TlsStream::Ptr& stream, ConnectionRole role)
 	: m_Identity(identity), m_Authenticated(authenticated), m_Stream(stream), m_Role(role), m_Seen(Utility::GetTime()),
-	  m_NextHeartbeat(0)
+	  m_NextHeartbeat(0), m_Context(false)
 {
+	boost::call_once(l_ApiClientOnceFlag, &ApiClient::StaticInitialize);
+
 	if (authenticated)
 		m_Endpoint = Endpoint::GetByName(identity);
 }
 
+void ApiClient::StaticInitialize(void)
+{
+	l_ApiClientTimeoutTimer = new Timer();
+	l_ApiClientTimeoutTimer->OnTimerExpired.connect(boost::bind(&ApiClient::TimeoutTimerHandler));
+	l_ApiClientTimeoutTimer->SetInterval(15);
+	l_ApiClientTimeoutTimer->Start();
+}
+
 void ApiClient::Start(void)
 {
-	boost::thread thread(boost::bind(&ApiClient::MessageThreadProc, ApiClient::Ptr(this)));
-	thread.detach();
+	m_Stream->RegisterDataHandler(boost::bind(&ApiClient::DataAvailableHandler, this));
 }
 
 String ApiClient::GetIdentity(void) const
@@ -75,13 +88,6 @@ ConnectionRole ApiClient::GetRole(void) const
 
 void ApiClient::SendMessage(const Dictionary::Ptr& message)
 {
-	if (m_WriteQueue.GetLength() > 20000) {
-		Log(LogWarning, "remote")
-		    << "Closing connection for API identity '" << m_Identity << "': Too many queued messages.";
-		Disconnect();
-		return;
-	}
-
 	m_WriteQueue.Enqueue(boost::bind(&ApiClient::SendMessageSync, ApiClient::Ptr(this), message));
 }
 
@@ -92,8 +98,6 @@ void ApiClient::SendMessageSync(const Dictionary::Ptr& message)
 		if (m_Stream->IsEof())
 			return;
 		JsonRpc::SendMessage(m_Stream, message);
-		if (message->Get("method") != "log::SetLogPosition")
-			m_Seen = Utility::GetTime();
 	} catch (const std::exception& ex) {
 		std::ostringstream info;
 		info << "Error while sending JSON-RPC message for identity '" << m_Identity << "'";
@@ -107,11 +111,6 @@ void ApiClient::SendMessageSync(const Dictionary::Ptr& message)
 }
 
 void ApiClient::Disconnect(void)
-{
-	Utility::QueueAsyncCallback(boost::bind(&ApiClient::DisconnectSync, ApiClient::Ptr(this)));
-}
-
-void ApiClient::DisconnectSync(void)
 {
 	Log(LogWarning, "ApiClient")
 	    << "API client disconnected for identity '" << m_Identity << "'";
@@ -130,25 +129,12 @@ bool ApiClient::ProcessMessage(void)
 {
 	Dictionary::Ptr message;
 
-	if (m_Stream->IsEof())
+	StreamReadStatus srs = JsonRpc::ReadMessage(m_Stream, &message, m_Context);
+
+	if (srs != StatusNewItem)
 		return false;
 
-	try {
-		message = JsonRpc::ReadMessage(m_Stream);
-	} catch (const openssl_error& ex) {
-		const unsigned long *pe = boost::get_error_info<errinfo_openssl_error>(ex);
-
-		if (pe && *pe == 0)
-			return false; /* Connection was closed cleanly */
-
-		throw;
-	}
-
-	if (!message)
-		return false;
-
-	if (message->Get("method") != "log::SetLogPosition")
-		m_Seen = Utility::GetTime();
+	m_Seen = Utility::GetTime();
 
 	if (m_Endpoint && message->Contains("ts")) {
 		double ts = message->Get("ts");
@@ -204,19 +190,17 @@ bool ApiClient::ProcessMessage(void)
 	return true;
 }
 
-void ApiClient::MessageThreadProc(void)
+void ApiClient::DataAvailableHandler(void)
 {
-	Utility::SetThreadName("API Client");
-
 	try {
 		while (ProcessMessage())
 			; /* empty loop body */
 	} catch (const std::exception& ex) {
 		Log(LogWarning, "ApiClient")
 		    << "Error while reading JSON-RPC message for identity '" << m_Identity << "': " << DiagnosticInformation(ex);
-	}
 
-	Disconnect();
+		Disconnect();
+	}
 }
 
 Value SetLogPositionHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
@@ -241,22 +225,24 @@ Value RequestCertificateHandler(const MessageOrigin& origin, const Dictionary::P
 	if (!params)
 		return Empty;
 
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-	String salt = listener->GetTicketSalt();
-
 	Dictionary::Ptr result = new Dictionary();
 
-	if (salt.IsEmpty()) {
-		result->Set("error", "Ticket salt is not configured.");
-		return result;
-	}
+	if (!origin.FromClient->IsAuthenticated()) {
+		ApiListener::Ptr listener = ApiListener::GetInstance();
+		String salt = listener->GetTicketSalt();
 
-	String ticket = params->Get("ticket");
-	String realTicket = PBKDF2_SHA1(origin.FromClient->GetIdentity(), salt, 50000);
+		if (salt.IsEmpty()) {
+			result->Set("error", "Ticket salt is not configured.");
+			return result;
+		}
 
-	if (ticket != realTicket) {
-		result->Set("error", "Invalid ticket.");
-		return result;
+		String ticket = params->Get("ticket");
+		String realTicket = PBKDF2_SHA1(origin.FromClient->GetIdentity(), salt, 50000);
+
+		if (ticket != realTicket) {
+			result->Set("error", "Invalid ticket.");
+			return result;
+		}
 	}
 
 	boost::shared_ptr<X509> cert = origin.FromClient->GetStream()->GetPeerCertificate();
@@ -272,4 +258,28 @@ Value RequestCertificateHandler(const MessageOrigin& origin, const Dictionary::P
 	result->Set("ca", CertificateToString(cacert));
 
 	return result;
+}
+
+void ApiClient::CheckLiveness(void)
+{
+	if (m_Seen < Utility::GetTime() - 60 && (!m_Endpoint || !m_Endpoint->GetSyncing())) {
+		Log(LogInformation, "ApiClient")
+		    <<  "No messages for identity '" << m_Identity << "' have been received in the last 60 seconds.";
+		Disconnect();
+	}
+}
+
+void ApiClient::TimeoutTimerHandler(void)
+{
+	ApiListener::Ptr listener = ApiListener::GetInstance();
+
+	BOOST_FOREACH(const ApiClient::Ptr& client, listener->GetAnonymousClients()) {
+		client->CheckLiveness();
+	}
+
+	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
+		BOOST_FOREACH(const ApiClient::Ptr& client, endpoint->GetClients()) {
+			client->CheckLiveness();
+		}
+	}
 }

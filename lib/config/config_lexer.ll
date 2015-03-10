@@ -20,7 +20,6 @@
 
 #include "config/configcompiler.hpp"
 #include "config/typerule.hpp"
-#include "config/configcompilercontext.hpp"
 #include "config/expression.hpp"
 
 using namespace icinga;
@@ -28,7 +27,7 @@ using namespace icinga;
 #include "config/config_parser.hh"
 #include <sstream>
 
-#define YYLTYPE icinga::DebugInfo
+#define YYLTYPE icinga::CompilerDebugInfo
 
 #define YY_EXTRA_TYPE ConfigCompiler *
 #define YY_USER_ACTION 					\
@@ -41,73 +40,10 @@ do {							\
 	yycolumn += yyleng;				\
 } while (0);
 
-#define YYLLOC_DEFAULT(Current, Rhs, N)							\
-	do										\
-		if (YYID (N)) {								\
-			(Current).first_line   = YYRHSLOC (Rhs, 1).first_line;		\
-			(Current).first_column = YYRHSLOC (Rhs, 1).first_column;	\
-			(Current).last_line    = YYRHSLOC (Rhs, N).last_line;		\
-			(Current).last_column  = YYRHSLOC (Rhs, N).last_column;		\
-		} else {								\
-			(Current).first_line   = (Current).last_line =			\
-			    YYRHSLOC(Rhs, 0).last_line;					\
-			(Current).first_column = (Current).last_column =		\
-			    YYRHSLOC(Rhs, 0).last_column;				\
-		}									\
-	while (YYID(0))
-
 #define YY_INPUT(buf, result, max_size)			\
 do {							\
 	result = yyextra->ReadInput(buf, max_size);	\
 } while (0)
-
-extern int ignore_newlines;
-
-struct lex_buf {
-	char *buf;
-	size_t size;
-};
-
-static void lb_init(lex_buf *lb)
-{
-	lb->buf = NULL;
-	lb->size = 0;
-}
-
-/*static void lb_cleanup(lex_buf *lb)
-{
-	free(lb->buf);
-}*/
-
-static void lb_append_char(lex_buf *lb, char new_char)
-{
-	const size_t block_size = 64;
-
-	size_t old_blocks = (lb->size + (block_size - 1)) / block_size;
-	size_t new_blocks = ((lb->size + 1) + (block_size - 1)) / block_size;
-
-	if (old_blocks != new_blocks) {
-		char *new_buf = (char *)realloc(lb->buf, new_blocks * block_size);
-
-		if (new_buf == NULL && new_blocks > 0)
-			throw std::bad_alloc();
-
-		lb->buf = new_buf;
-	}
-
-	lb->size++;
-	lb->buf[lb->size - 1] = new_char;
-}
-
-static char *lb_steal(lex_buf *lb)
-{
-	lb_append_char(lb, '\0');
-
-	char *buf = lb->buf;
-	lb->buf = NULL;
-	lb->size = 0;
-	return buf;
-}
 %}
 
 %option reentrant noyywrap yylineno
@@ -120,25 +56,29 @@ static char *lb_steal(lex_buf *lb)
 %x HEREDOC
 
 %%
-	lex_buf string_buf;
+\"				{
+	yyextra->m_LexBuffer.str("");
+	yyextra->m_LexBuffer.clear();
 
-\"				{ lb_init(&string_buf); BEGIN(STRING); }
+	yyextra->m_LocationBegin = *yylloc;
+
+	BEGIN(STRING);
+				}
 
 <STRING>\"			{
 	BEGIN(INITIAL);
 
-	lb_append_char(&string_buf, '\0');
+	yylloc->FirstLine = yyextra->m_LocationBegin.FirstLine;
+	yylloc->FirstColumn = yyextra->m_LocationBegin.FirstColumn;
 
-	yylval->text = lb_steal(&string_buf);
+	std::string str = yyextra->m_LexBuffer.str();
+	yylval->text = strdup(str.c_str());
 
 	return T_STRING;
 				}
 
 <STRING>\n			{
-	std::ostringstream msgbuf;
-	msgbuf << "Unterminated string found: " << *yylloc;
-	ConfigCompilerContext::GetInstance()->AddMessage(true, msgbuf.str());
-	BEGIN(INITIAL);
+	BOOST_THROW_EXCEPTION(ScriptError("Unterminated string literal", DebugInfoRange(yyextra->m_LocationBegin, *yylloc)));
 				}
 
 <STRING>\\[0-7]{1,3}		{
@@ -149,50 +89,63 @@ static char *lb_steal(lex_buf *lb)
 
 	if (result > 0xff) {
 		/* error, constant is out-of-bounds */
-		std::ostringstream msgbuf;
-		msgbuf << "Constant is out-of-bounds: " << yytext << " " << *yylloc;
-		ConfigCompilerContext::GetInstance()->AddMessage(true, msgbuf.str());
+		BOOST_THROW_EXCEPTION(ScriptError("Constant is out of bounds: " + String(yytext), *yylloc));
 	}
 
-	lb_append_char(&string_buf, result);
+	yyextra->m_LexBuffer << static_cast<char>(result);
 				}
 
 <STRING>\\[0-9]+		{
 	/* generate error - bad escape sequence; something
 	 * like '\48' or '\0777777'
 	 */
-	std::ostringstream msgbuf;
-	msgbuf << "Bad escape sequence found: " << yytext << " " << *yylloc;
-	ConfigCompilerContext::GetInstance()->AddMessage(true, msgbuf.str());
+	BOOST_THROW_EXCEPTION(ScriptError("Bad escape sequence found: " + String(yytext), *yylloc));
 				}
-
-<STRING>\\n			{ lb_append_char(&string_buf, '\n'); }
-<STRING>\\t			{ lb_append_char(&string_buf, '\t'); }
-<STRING>\\r			{ lb_append_char(&string_buf, '\r'); }
-<STRING>\\b			{ lb_append_char(&string_buf, '\b'); }
-<STRING>\\f			{ lb_append_char(&string_buf, '\f'); }
-<STRING>\\(.|\n)		{ lb_append_char(&string_buf, yytext[1]); }
+<STRING>\\n			{ yyextra->m_LexBuffer << "\n"; }
+<STRING>\\\\			{ yyextra->m_LexBuffer << "\\"; }
+<STRING>\\\"			{ yyextra->m_LexBuffer << "\""; }
+<STRING>\\t			{ yyextra->m_LexBuffer << "\t"; }
+<STRING>\\r			{ yyextra->m_LexBuffer << "\r"; }
+<STRING>\\b			{ yyextra->m_LexBuffer << "\b"; }
+<STRING>\\f			{ yyextra->m_LexBuffer << "\f"; }
+<STRING>\\\n			{ yyextra->m_LexBuffer << yytext[1]; }
+<STRING>\\.			{
+	BOOST_THROW_EXCEPTION(ScriptError("Bad escape sequence found: " + String(yytext), *yylloc));
+				}
 
 <STRING>[^\\\n\"]+		{
 	char *yptr = yytext;
 
 	while (*yptr)
-		lb_append_char(&string_buf, *yptr++);
+		yyextra->m_LexBuffer << *yptr++;
 		       	       }
 
-\{\{\{				{ lb_init(&string_buf); BEGIN(HEREDOC); }
+<STRING><<EOF>>			{
+	BOOST_THROW_EXCEPTION(ScriptError("End-of-file while in string literal", DebugInfoRange(yyextra->m_LocationBegin, *yylloc)));
+				}
+
+\{\{\{				{
+	yyextra->m_LexBuffer.str("");
+	yyextra->m_LexBuffer.clear();
+
+	yyextra->m_LocationBegin = *yylloc;
+
+	BEGIN(HEREDOC);
+				}
 
 <HEREDOC>\}\}\}			{
 	BEGIN(INITIAL);
 
-	lb_append_char(&string_buf, '\0');
+	yylloc->FirstLine = yyextra->m_LocationBegin.FirstLine;
+	yylloc->FirstColumn = yyextra->m_LocationBegin.FirstColumn;
 
-	yylval->text = lb_steal(&string_buf);
+	std::string str = yyextra->m_LexBuffer.str();
+	yylval->text = strdup(str.c_str());
 
 	return T_STRING;
 				}
 
-<HEREDOC>(.|\n)			{ lb_append_char(&string_buf, yytext[0]); }
+<HEREDOC>(.|\n)			{ yyextra->m_LexBuffer << yytext[0]; }
 
 <INITIAL>{
 "/*"				BEGIN(C_COMMENT);
@@ -205,11 +158,8 @@ static char *lb_steal(lex_buf *lb)
 }
 
 <C_COMMENT><<EOF>>              {
-		std::ostringstream msgbuf;
-		msgbuf << "End-of-file while in comment: " << yytext << " " << *yylloc;
-		ConfigCompilerContext::GetInstance()->AddMessage(true, msgbuf.str());
-		yyterminate();
-		       	        }
+	BOOST_THROW_EXCEPTION(ScriptError("End-of-file while in comment", *yylloc));
+				}
 
 
 \/\/[^\n]*			/* ignore C++-style comments */
@@ -224,6 +174,7 @@ static char *lb_steal(lex_buf *lb)
 %string				{ yylval->type = TypeString; return T_TYPE_STRING; }
 %scalar				{ yylval->type = TypeScalar; return T_TYPE_SCALAR; }
 %any				{ yylval->type = TypeAny; return T_TYPE_ANY; }
+%function			{ yylval->type = TypeFunction; return T_TYPE_FUNCTION; }
 %name				{ yylval->type = TypeName; return T_TYPE_NAME; }
 %validator			{ return T_VALIDATOR; }
 %require			{ return T_REQUIRE; }
@@ -235,19 +186,28 @@ include				return T_INCLUDE;
 include_recursive		return T_INCLUDE_RECURSIVE;
 library				return T_LIBRARY;
 null				return T_NULL;
-true				{ yylval->num = 1; return T_NUMBER; }
-false				{ yylval->num = 0; return T_NUMBER; }
+true				{ yylval->boolean = 1; return T_BOOLEAN; }
+false				{ yylval->boolean = 0; return T_BOOLEAN; }
 const				return T_CONST;
+var				return T_VAR;
+this				return T_THIS;
+globals				return T_GLOBALS;
+locals				return T_LOCALS;
+use				return T_USE;
 apply				return T_APPLY;
 to				return T_TO;
 where				return T_WHERE;
 import				return T_IMPORT;
 assign				return T_ASSIGN;
 ignore				return T_IGNORE;
-for				return T_APPLY_FOR;
-__function			return T_FUNCTION;
-__return			return T_RETURN;
-__for				return T_FOR;
+function			return T_FUNCTION;
+return				return T_RETURN;
+break				return T_BREAK;
+continue			return T_CONTINUE;
+for				return T_FOR;
+if				return T_IF;
+else				return T_ELSE;
+while				return T_WHILE;
 =\>				return T_FOLLOWS;
 \<\<				return T_SHIFT_LEFT;
 \>\>				return T_SHIFT_RIGHT;
@@ -259,31 +219,40 @@ __for				return T_FOR;
 in				return T_IN;
 &&				return T_LOGICAL_AND;
 \|\|				return T_LOGICAL_OR;
-[a-zA-Z_][a-zA-Z0-9\-_]*	{ yylval->text = strdup(yytext); return T_IDENTIFIER; }
-@[a-zA-Z_][a-zA-Z0-9\-_]*	{ yylval->text = strdup(yytext + 1); return T_IDENTIFIER; }
-\<[^\>]*\>			{ yytext[yyleng-1] = '\0'; yylval->text = strdup(yytext + 1); return T_STRING_ANGLE; }
--?[0-9]+(\.[0-9]+)?ms		{ yylval->num = strtod(yytext, NULL) / 1000; return T_NUMBER; }
--?[0-9]+(\.[0-9]+)?d		{ yylval->num = strtod(yytext, NULL) * 60 * 60 * 24; return T_NUMBER; }
--?[0-9]+(\.[0-9]+)?h		{ yylval->num = strtod(yytext, NULL) * 60 * 60; return T_NUMBER; }
--?[0-9]+(\.[0-9]+)?m		{ yylval->num = strtod(yytext, NULL) * 60; return T_NUMBER; }
--?[0-9]+(\.[0-9]+)?s		{ yylval->num = strtod(yytext, NULL); return T_NUMBER; }
--?[0-9]+(\.[0-9]+)?		{ yylval->num = strtod(yytext, NULL); return T_NUMBER; }
+\{\{				return T_NULLARY_LAMBDA_BEGIN;
+\}\}				return T_NULLARY_LAMBDA_END;
+[a-zA-Z_][a-zA-Z0-9\_]*		{ yylval->text = strdup(yytext); return T_IDENTIFIER; }
+@[a-zA-Z_][a-zA-Z0-9\_]*	{ yylval->text = strdup(yytext + 1); return T_IDENTIFIER; }
+\<[^ \>]*\>			{ yytext[yyleng-1] = '\0'; yylval->text = strdup(yytext + 1); return T_STRING_ANGLE; }
+[0-9]+(\.[0-9]+)?ms		{ yylval->num = strtod(yytext, NULL) / 1000; return T_NUMBER; }
+[0-9]+(\.[0-9]+)?d		{ yylval->num = strtod(yytext, NULL) * 60 * 60 * 24; return T_NUMBER; }
+[0-9]+(\.[0-9]+)?h		{ yylval->num = strtod(yytext, NULL) * 60 * 60; return T_NUMBER; }
+[0-9]+(\.[0-9]+)?m		{ yylval->num = strtod(yytext, NULL) * 60; return T_NUMBER; }
+[0-9]+(\.[0-9]+)?s		{ yylval->num = strtod(yytext, NULL); return T_NUMBER; }
+[0-9]+(\.[0-9]+)?		{ yylval->num = strtod(yytext, NULL); return T_NUMBER; }
 =				{ yylval->csop = OpSetLiteral; return T_SET; }
 \+=				{ yylval->csop = OpSetAdd; return T_SET_ADD; }
 -=				{ yylval->csop = OpSetSubtract; return T_SET_SUBTRACT; }
 \*=				{ yylval->csop = OpSetMultiply; return T_SET_MULTIPLY; }
 \/=				{ yylval->csop = OpSetDivide; return T_SET_DIVIDE; }
+\%=				{ yylval->csop = OpSetModulo; return T_SET_MODULO; }
+\^=				{ yylval->csop = OpSetXor; return T_SET_XOR; }
+\&=				{ yylval->csop = OpSetBinaryAnd; return T_SET_BINARY_AND; }
+\|=				{ yylval->csop = OpSetBinaryOr; return T_SET_BINARY_OR; }
 \+				return T_PLUS;
 \-				return T_MINUS;
 \*				return T_MULTIPLY;
 \/				return T_DIVIDE_OP;
+\%				return T_MODULO;
+\^				return T_XOR;
 \&				return T_BINARY_AND;
 \|				return T_BINARY_OR;
 \<				return T_LESS_THAN;
 \>				return T_GREATER_THAN;
 }
 
-[\r\n]+				{ yycolumn -= strlen(yytext) - 1; if (!ignore_newlines) return T_NEWLINE; }
+[\r\n]+				{ yycolumn -= strlen(yytext) - 1; if (!yyextra->m_IgnoreNewlines) return T_NEWLINE; }
+<<EOF>>				{ if (!yyextra->m_Eof) { yyextra->m_Eof = true; return T_NEWLINE; } else { yyterminate(); } }
 .				return yytext[0];
 
 %%

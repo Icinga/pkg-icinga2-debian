@@ -33,6 +33,8 @@ namespace po = boost::program_options;
 using std::endl; using std::cout; using std::wstring;
 using std::wcout;
 
+static BOOL debug = FALSE;
+
 struct printInfoStruct 
 {
 	threshold warn, crit;
@@ -67,9 +69,9 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 	po::options_description desc;
 
 	desc.add_options()
-		(",h", "print usage message and exit")
-		("help", "print help message and exit")
-		("version,v", "print version and exit")
+		("help,h", "print usage message and exit")
+		("version,V", "print version and exit")
+		("debug,d", "Verbose/Debug output")
 		("warning,w", po::wvalue<wstring>(), "warning value (in percent)")
 		("critical,c", po::wvalue<wstring>(), "critical value (in percent)")
 		;
@@ -91,11 +93,6 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		return 3;
 	}
 
-	if (vm.count("h")) {
-		cout << desc << endl;
-		return 0;
-	}
-
 	if (vm.count("help")) {
 		wcout << progName << " Help\n\tVersion: " << VERSION << endl;
 		wprintf(
@@ -104,7 +101,7 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		cout << desc;
 		wprintf(
 			L"\nIt will then output a string looking something like this:\n\n"
-			L"\tLOAD WARNING 67%%|load=67%%;50%%;90%%;0;100\n\n"
+			L"\tLOAD WARNING 67%% | load=67%%;50%%;90%%;0;100\n\n"
 			L"\"LOAD\" being the type of the check, \"WARNING\" the returned status\n"
 			L"and \"67%%\" is the returned value.\n"
 			L"The performance data is found behind the \"|\", in order:\n"
@@ -162,11 +159,17 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		}
 	}
 
+	if (vm.count("debug"))
+		debug = TRUE;
+
 	return -1;
 }
 
 int printOutput(printInfoStruct& printInfo) 
 {
+	if (debug)
+		wcout << L"Constructing output string" << endl;
+
 	state state = OK;
 
 	if (printInfo.warn.rend(printInfo.load))
@@ -176,7 +179,7 @@ int printOutput(printInfoStruct& printInfo)
 		state = CRITICAL;
 
 	std::wstringstream perf;
-	perf << L"%|load=" << printInfo.load << L"%;" << printInfo.warn.pString() << L";" 
+	perf << L"% | load=" << printInfo.load << L"%;" << printInfo.warn.pString() << L";" 
 		<< printInfo.crit.pString() << L";0;100" << endl;
 
 	switch (state) {
@@ -196,7 +199,7 @@ int printOutput(printInfoStruct& printInfo)
 
 int check_load(printInfoStruct& printInfo) 
 {
-	PDH_HQUERY phQuery;
+	PDH_HQUERY phQuery = NULL;
 	PDH_HCOUNTER phCounter;
 	DWORD dwBufferSize = 0;
 	DWORD CounterType;
@@ -204,6 +207,9 @@ int check_load(printInfoStruct& printInfo)
 	PDH_STATUS err;
 
 	LPCWSTR path = L"\\Processor(_Total)\\% Idle Time";
+
+	if (debug)
+		wcout << L"Creating query and adding counter" << endl;
 
 	err = PdhOpenQuery(NULL, NULL, &phQuery);
 	if (!SUCCEEDED(err))
@@ -213,20 +219,39 @@ int check_load(printInfoStruct& printInfo)
 	if (!SUCCEEDED(err))
 		goto die;
 
+	if (debug)
+		wcout << L"Collecting first batch of query data" << endl;
+
 	err = PdhCollectQueryData(phQuery);
 	if (!SUCCEEDED(err))
 		goto die;
+
+	if (debug)
+		wcout << L"Sleep for one second" << endl;
 
 	Sleep(1000);
 
+	if (debug)
+		wcout << L"Collecting second batch of query data" << endl;
+
 	err = PdhCollectQueryData(phQuery);
 	if (!SUCCEEDED(err))
 		goto die;
 
+	if (debug)
+		wcout << L"Creating formatted counter array" << endl;
+
 	err = PdhGetFormattedCounterValue(phCounter, PDH_FMT_DOUBLE, &CounterType, &DisplayValue);
 	if (SUCCEEDED(err)) {
-		if (DisplayValue.CStatus == PDH_CSTATUS_VALID_DATA)
+		if (DisplayValue.CStatus == PDH_CSTATUS_VALID_DATA) {
+			if (debug)
+				wcout << L"Recieved Value of " << DisplayValue.doubleValue << L" (idle)" << endl;
 			printInfo.load = 100.0 - DisplayValue.doubleValue;
+		}
+
+		if (debug)
+			wcout << L"Finished collection. Cleaning up and returning" << endl;
+
 		PdhCloseQuery(phQuery);
 		return -1;
 	}

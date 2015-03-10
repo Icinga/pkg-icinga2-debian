@@ -41,10 +41,13 @@ public:
 	FIFO(void);
 	~FIFO(void);
 
-	virtual size_t Read(void *buffer, size_t count);
+	size_t Peek(void *buffer, size_t count);
+	virtual size_t Read(void *buffer, size_t count, bool allow_partial = false);
 	virtual void Write(const void *buffer, size_t count);
 	virtual void Close(void);
 	virtual bool IsEof(void) const;
+	virtual bool SupportsWaiting(void) const;
+	virtual bool IsDataAvailable(void) const;
 
 	size_t GetAvailableBytes(void) const;
 

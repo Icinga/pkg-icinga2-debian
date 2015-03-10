@@ -299,8 +299,10 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 		for (it = klass.Fields.begin(); it != klass.Fields.end(); it++) {
 			std::string ftype = it->Type;
 
-			if (ftype == "bool" || ftype == "int" || ftype == "double")
+			if (ftype == "int" || ftype == "double")
 				ftype = "Number";
+			else if (ftype == "bool")
+				ftype = "Boolean";
 
 			if (ftype.find("::Ptr") != std::string::npos)
 				ftype = ftype.substr(0, ftype.size() - strlen("::Ptr"));
@@ -346,6 +348,17 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 		  << "\t" << "{" << std::endl
 		  << "\t\t" << "return TypeHelper<" << klass.Name << ">::GetFactory();" << std::endl
 		  << "\t" << "}" << std::endl << std::endl;
+
+	/* GetLoadDependencies */
+	std::cout << "\t" << "virtual std::vector<String> GetLoadDependencies(void) const" << std::endl
+		  << "\t" << "{" << std::endl
+		  << "\t\t" << "std::vector<String> deps;" << std::endl;
+
+	for (std::vector<std::string>::const_iterator itd = klass.LoadDependencies.begin(); itd != klass.LoadDependencies.end(); itd++)
+		std::cout << "\t\t" << "deps.push_back(\"" << *itd << "\");" << std::endl;
+
+	std::cout << "\t\t" << "return deps;" << std::endl
+		  << "\t" << "}" << std::endl;
 
 	std::cout << "};" << std::endl << std::endl;
 
@@ -452,15 +465,21 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 				prot = "public";
 
 			std::cout << prot << ":" << std::endl
-					  << "\t" << it->Type << " Get" << it->GetFriendlyName() << "(void) const" << std::endl
+			    << "\t" << "virtual " << it->Type << " Get" << it->GetFriendlyName() << "(void) const";
+
+			if (it->PureGetAccessor) {
+				std::cout << " = 0;" << std::endl;
+			} else {
+				std::cout << std::endl
 					  << "\t" << "{" << std::endl;
 
-			if (it->GetAccessor.empty())
-				std::cout << "\t\t" << "return m_" << it->GetFriendlyName() << ";" << std::endl;
-			else
-				std::cout << it->GetAccessor << std::endl;
+				if (it->GetAccessor.empty() && !(it->Attributes & FANoStorage))
+					std::cout << "\t\t" << "return m_" << it->GetFriendlyName() << ";" << std::endl;
+				else
+					std::cout << it->GetAccessor << std::endl;
 
-			std::cout << "\t" << "}" << std::endl << std::endl;
+				std::cout << "\t" << "}" << std::endl << std::endl;
+			}
 		}
 
 		/* setters */
@@ -475,22 +494,27 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 				prot = "public";
 
 			std::cout << prot << ":" << std::endl
-					  << "\t" << "void Set" << it->GetFriendlyName() << "(";
+					  << "\t" << "virtual void Set" << it->GetFriendlyName() << "(";
 
 			if (it->Type == "bool" || it->Type == "double" || it->Type == "int")
 				std::cout << it->Type;
 			else
 				std::cout << "const " << it->Type << "&";
 
-			std::cout << " value)" << std::endl
-					  << "\t" << "{" << std::endl;
+			std::cout << " value)" << std::endl;
 
-			if (it->SetAccessor.empty())
-				std::cout << "\t\t" << "m_" << it->GetFriendlyName() << " = value;" << std::endl;
-			else
-				std::cout << it->SetAccessor << std::endl;
+			if (it->PureSetAccessor) {
+				std::cout << " = 0;" << std::endl;
+			} else {
+				std::cout << "\t" << "{" << std::endl;
 
-			std::cout << "\t" << "}" << std::endl << std::endl;
+				if (it->SetAccessor.empty() && !(it->Attributes & FANoStorage))
+					std::cout << "\t\t" << "m_" << it->GetFriendlyName() << " = value;" << std::endl;
+				else
+					std::cout << it->SetAccessor << std::endl;
+
+				std::cout << "\t" << "}" << std::endl << std::endl;
+			}
 		}
 
 		/* default */
@@ -513,7 +537,8 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 		std::cout << "private:" << std::endl;
 
 		for (it = klass.Fields.begin(); it != klass.Fields.end(); it++) {
-			std::cout << "\t" << it->Type << " m_" << it->GetFriendlyName() << ";" << std::endl;
+			if (!(it->Attributes & FANoStorage))
+				std::cout << "\t" << it->Type << " m_" << it->GetFriendlyName() << ";" << std::endl;
 		}
 	}
 

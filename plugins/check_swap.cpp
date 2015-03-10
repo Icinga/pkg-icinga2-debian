@@ -17,8 +17,8 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 #include <Shlwapi.h>
-#include <Pdh.h>
 #include <iostream>
+#include <WinBase.h>
 
 #include "thresholds.h"
 
@@ -31,10 +31,13 @@ namespace po = boost::program_options;
 using std::endl; using std::wcout; using std::wstring;
 using std::cout;
 
+static BOOL debug = FALSE;
+
 struct printInfoStruct 
 {
 	threshold warn, crit;
-	double swap;
+	double tSwap, aSwap;
+	Bunit unit = BunitMB;
 };
 
 static int parseArguments(int, wchar_t **, po::variables_map&, printInfoStruct&);
@@ -66,11 +69,12 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 	po::options_description desc;
 
 	desc.add_options()
-		(",h", "print help message and exit")
-		("help", "print verbose help and exit")
-		("version,v", "print version and exit")
+		("help,h", "print help message and exit")
+		("version,V", "print version and exit")
+		("debug,d", "Verbose/Debug output")
 		("warning,w", po::wvalue<wstring>(), "warning threshold")
 		("critical,c", po::wvalue<wstring>(), "critical threshold")
+		("unit,u", po::wvalue<wstring>(), "the unit to use for display (default MB)")
 		;
 
 	po::basic_command_line_parser<wchar_t> parser(ac, av);
@@ -90,11 +94,6 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		return 3;
 	}
 
-	if (vm.count("h")) {
-		cout << desc << endl;
-		return 0;
-	}
-    
 	if (vm.count("help")) {
 		wcout << progName << " Help\n\tVersion: " << VERSION << endl;
 		wprintf(
@@ -103,9 +102,9 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		cout << desc;
 		wprintf(
 			L"\nIt will then output a string looking something like this:\n\n"
-			L"\tSWAP WARNING 23.8304%%|swap=23.8304%%;19.5;30;0;100\n\n"
+			L"\tSWAP WARNING - 20%% free | swap=2000B;3000;500;0;10000\n\n"
 			L"\"SWAP\" being the type of the check, \"WARNING\" the returned status\n"
-			L"and \"23.8304%%\" is the returned value.\n"
+			L"and \"20%%\" is the returned value.\n"
 			L"The performance data is found behind the \"|\", in order:\n"
 			L"returned value, warning threshold, critical threshold, minimal value and,\n"
 			L"if applicable, the maximal value. Performance data will only be displayed when\n"
@@ -146,10 +145,25 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 			cout << e.what() << endl;
 			return 3;
 		}
+		printInfo.warn.legal = !printInfo.warn.legal;
 	}
+
 	if (vm.count("critical")) {
 		try {
 			printInfo.crit = threshold(vm["critical"].as<wstring>());
+		} catch (std::invalid_argument& e) {
+			cout << e.what() << endl;
+			return 3;
+		}
+		printInfo.crit.legal = !printInfo.crit.legal;
+	}
+
+	if (vm.count("debug"))
+		debug = TRUE;
+
+	if (vm.count("unit")) {
+		try {
+			printInfo.unit = parseBUnit(vm["unit"].as<wstring>());
 		} catch (std::invalid_argument& e) {
 			cout << e.what() << endl;
 			return 3;
@@ -161,26 +175,33 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 
 int printOutput(printInfoStruct& printInfo) 
 {
-	state state = OK;
+	if (debug)
+		wcout << L"Constructing output string" << endl;
 
-	if (printInfo.warn.rend(printInfo.swap))
+	state state = OK;
+	double fswap = ((double)printInfo.aSwap / (double)printInfo.tSwap) * 100.0;
+
+	if (printInfo.warn.rend(printInfo.aSwap, printInfo.tSwap))
 		state = WARNING;
 
-	if (printInfo.crit.rend(printInfo.swap))
+	if (printInfo.crit.rend(printInfo.aSwap, printInfo.tSwap))
 		state = CRITICAL;
 
 	switch (state) {
 	case OK:
-		wcout << L"SWAP OK " << printInfo.swap << L"%|swap=" << printInfo.swap << L"%;" 
-			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0;100" << endl;
+		wcout << L"SWAP OK - " << fswap << L"% free | swap=" << printInfo.aSwap << BunitStr(printInfo.unit) << L";"
+			<< printInfo.warn.pString(printInfo.tSwap) << L";" << printInfo.crit.pString(printInfo.tSwap) 
+			<< L";0;" << printInfo.tSwap << endl;
 		break;
 	case WARNING:
-		wcout << L"SWAP WARNING " << printInfo.swap << L"%|swap=" << printInfo.swap << L"%;"
-			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0;100" << endl;
+		wcout << L"SWAP WARNING - " << fswap << L"% free | swap=" << printInfo.aSwap << BunitStr(printInfo.unit) << L";"
+			<< printInfo.warn.pString(printInfo.tSwap) << L";" << printInfo.crit.pString(printInfo.tSwap) 
+			<< L";0;" << printInfo.tSwap << endl;
 		break;
 	case CRITICAL:
-		wcout << L"SWAP CRITICAL " << printInfo.swap << L"%|swap=" << printInfo.swap << L"%;"
-			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0;100" << endl;
+		wcout << L"SWAP CRITICAL - " << fswap << L"% free | swap=" << printInfo.aSwap << BunitStr(printInfo.unit) << L";"
+			<< printInfo.warn.pString(printInfo.tSwap) << L";" << printInfo.crit.pString(printInfo.tSwap) 
+			<< L";0;" << printInfo.tSwap << endl;
 		break;
 	}
 
@@ -189,37 +210,16 @@ int printOutput(printInfoStruct& printInfo)
 
 int check_swap(printInfoStruct& printInfo) 
 {
-	PDH_HQUERY phQuery;
-	PDH_HCOUNTER phCounter;
-	DWORD dwBufferSize = 0;
-	DWORD CounterType;
-	PDH_FMT_COUNTERVALUE DisplayValue;
-	PDH_STATUS err;
+	MEMORYSTATUSEX MemBuf;
+	MemBuf.dwLength = sizeof(MemBuf);
 
-	LPCWSTR path = L"\\Paging File(*)\\% Usage";
-
-	err = PdhOpenQuery(NULL, NULL, &phQuery);
-	if (!SUCCEEDED(err))
-		goto die;
-
-	err = PdhAddEnglishCounter(phQuery, path, NULL, &phCounter);
-	if (!SUCCEEDED(err))
-		goto die;
-
-	err = PdhCollectQueryData(phQuery);
-	if (!SUCCEEDED(err))
-		goto die;
-
-	err = PdhGetFormattedCounterValue(phCounter, PDH_FMT_DOUBLE, &CounterType, &DisplayValue);
-	if (SUCCEEDED(err)) {
-		printInfo.swap = DisplayValue.doubleValue;
-		PdhCloseQuery(phQuery);
-		return -1;
+	if (!GlobalMemoryStatusEx(&MemBuf)) {
+		die();
+		return 3;
 	}
 
-die:
-	if (phQuery)
-		PdhCloseQuery(phQuery);
-	die(err);
-	return 3;
+	printInfo.tSwap = round(MemBuf.ullTotalPageFile / pow(1024.0, printInfo.unit));
+	printInfo.aSwap = round(MemBuf.ullAvailPageFile / pow(1024.0, printInfo.unit));
+
+	return -1;
 }

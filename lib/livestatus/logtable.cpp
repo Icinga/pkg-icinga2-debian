@@ -57,8 +57,6 @@ LogTable::LogTable(const String& compat_log_path, time_t from, time_t until)
 	AddColumns(this);
 }
 
-
-
 void LogTable::AddColumns(Table *table, const String& prefix,
     const Column::ObjectAccessor& objectAccessor)
 {
@@ -112,7 +110,7 @@ void LogTable::UpdateLogEntries(const Dictionary::Ptr& log_entry_attrs, int line
 	/* additional attributes only for log table */
 	log_entry_attrs->Set("lineno", lineno);
 
-	addRowFn(log_entry_attrs);
+	addRowFn(log_entry_attrs, LivestatusGroupByNone, Empty);
 }
 
 Object::Ptr LogTable::HostAccessor(const Value& row, const Column::ObjectAccessor&)
@@ -166,8 +164,6 @@ Object::Ptr LogTable::CommandAccessor(const Value& row, const Column::ObjectAcce
 			return event_command;
 	} else
 		return check_command;
-
-	return Object::Ptr();
 }
 
 Value LogTable::TimeAccessor(const Value& row)
@@ -244,6 +240,3 @@ Value LogTable::CommandNameAccessor(const Value& row)
 {
 	return static_cast<Dictionary::Ptr>(row)->Get("command_name");
 }
-
-
-

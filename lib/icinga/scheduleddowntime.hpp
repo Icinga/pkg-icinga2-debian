@@ -29,6 +29,9 @@ namespace icinga
 {
 
 class ApplyRule;
+struct ScriptFrame;
+class Host;
+class Service;
 
 /**
  * An Icinga scheduled downtime specification.
@@ -47,7 +50,13 @@ public:
 
 	static void RegisterApplyRuleHandler(void);
 
+	static void EvaluateApplyRules(const intrusive_ptr<Host>& host);
+	static void EvaluateApplyRules(const intrusive_ptr<Service>& service);
+
+	static void ValidateRanges(const String& location, const ScheduledDowntime::Ptr& object);
+
 protected:
+	virtual void OnAllConfigLoaded(void);
 	virtual void Start(void);
 
 private:
@@ -56,10 +65,8 @@ private:
 	std::pair<double, double> FindNextSegment(void);
 	void CreateNextDowntime(void);
 
-	static void EvaluateApplyRuleOneInstance(const Checkable::Ptr& checkable, const String& name, const Dictionary::Ptr& locals, const ApplyRule& rule);
-	static bool EvaluateApplyRuleOne(const Checkable::Ptr& checkable, const ApplyRule& rule);
-	static void EvaluateApplyRule(const ApplyRule& rule);
-	static void EvaluateApplyRules(const std::vector<ApplyRule>& rules);
+	static bool EvaluateApplyRuleInstance(const Checkable::Ptr& checkable, const String& name, ScriptFrame& frame, const ApplyRule& rule);
+	static bool EvaluateApplyRule(const Checkable::Ptr& checkable, const ApplyRule& rule);
 };
 
 }

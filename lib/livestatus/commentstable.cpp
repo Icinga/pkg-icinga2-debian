@@ -73,8 +73,10 @@ void CommentsTable::FetchRows(const AddRowFunction& addRowFn)
 		String id;
 		Comment::Ptr comment;
 		BOOST_FOREACH(tie(id, comment), comments) {
-			if (Host::GetOwnerByCommentID(id) == host)
-				addRowFn(comment);
+			if (Host::GetOwnerByCommentID(id) == host) {
+				if (!addRowFn(comment, LivestatusGroupByNone, Empty))
+					return;
+			}
 		}
 	}
 
@@ -86,8 +88,10 @@ void CommentsTable::FetchRows(const AddRowFunction& addRowFn)
 		String id;
 		Comment::Ptr comment;
 		BOOST_FOREACH(tie(id, comment), comments) {
-			if (Service::GetOwnerByCommentID(id) == service)
-				addRowFn(comment);
+			if (Service::GetOwnerByCommentID(id) == service) {
+				if (!addRowFn(comment, LivestatusGroupByNone, Empty))
+					return;
+			}
 		}
 	}
 }
@@ -98,9 +102,9 @@ Object::Ptr CommentsTable::HostAccessor(const Value& row, const Column::ObjectAc
 
 	Checkable::Ptr checkable = Checkable::GetOwnerByCommentID(comment->GetId());
 
-        Host::Ptr host;
-        Service::Ptr service;
-        tie(host, service) = GetHostService(checkable);
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
 
 	return host;
 }
@@ -111,9 +115,9 @@ Object::Ptr CommentsTable::ServiceAccessor(const Value& row, const Column::Objec
 
 	Checkable::Ptr checkable = Checkable::GetOwnerByCommentID(comment->GetId());
 
-        Host::Ptr host;
-        Service::Ptr service;
-        tie(host, service) = GetHostService(checkable);
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
 
 	return service;
 }

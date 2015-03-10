@@ -32,6 +32,8 @@ namespace po = boost::program_options;
 using std::endl; using std::wcout;
 using std::cout; using std::wstring;
 
+static BOOL debug = FALSE;
+
 struct printInfoStruct 
 {
 	threshold warn, crit;
@@ -67,9 +69,9 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 	po::options_description desc;
 
 	desc.add_options()
-		(",h", "print help message and exit")
-		("help", "print verbose help and exit")
-		("version,v", "print version and exit")
+		("help,h", "print help message and exit")
+		("version,V", "print version and exit")
+		("debug,d", "Verbose/Debug output")
 		("warning,w", po::wvalue<wstring>(), "warning threshold")
 		("critical,c", po::wvalue<wstring>(), "critical threshold")
 		;
@@ -91,11 +93,6 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		return 3;
 	}
 
-	if (vm.count("h")) {
-		cout << desc << endl;
-		return 0;
-	}
-    
 	if (vm.count("help")) {
 		wcout << progName << " Help\n\tVersion: " << VERSION << endl;
 		wprintf(
@@ -104,7 +101,7 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		cout << desc;
 		wprintf(
 			L"\nIt will then output a string looking something like this:\n\n"
-			L"\tUSERS WARNING 48|users=48;10;50;0\n\n"
+			L"\tUSERS WARNING 48 | users=48;10;50;0\n\n"
 			L"\"USERS\" being the type of the check, \"WARNING\" the returned status\n"
 			L"and \"48\" is the returned value.\n"
 			L"The performance data is found behind the \"|\", in order:\n"
@@ -157,11 +154,17 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		}
 	}
 
+	if (vm.count("debug"))
+		debug = TRUE;
+
 	return -1;
 }
 
 int printOutput(printInfoStruct& printInfo) 
 {
+	if (debug)
+		wcout << L"Constructing output string" << endl;
+
 	state state = OK;
 
 	if (printInfo.warn.rend(printInfo.users))
@@ -172,16 +175,16 @@ int printOutput(printInfoStruct& printInfo)
 
 	switch (state) {
 	case OK:
-		wcout << L"USERS OK " << printInfo.users << L" User(s)|users=" << printInfo.users << L";" 
-			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0" << endl;
+		wcout << L"USERS OK " << printInfo.users << L" User(s) logged in | users=" << printInfo.users << L";"
+			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0;" << endl;
 		break;
 	case WARNING:
-		wcout << L"USERS WARNING " << printInfo.users << L" User(s)|users=" << printInfo.users << L";"
-			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0" << endl;
+		wcout << L"USERS WARNING " << printInfo.users << L" User(s) logged in | users=" << printInfo.users << L";"
+			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0;" << endl;
 		break;
 	case CRITICAL:
-		wcout << L"USERS CRITICAL " << printInfo.users << L" User(s)|users=" << printInfo.users << L";"
-			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0" << endl;
+		wcout << L"USERS CRITICAL " << printInfo.users << L" User(s) logged in | users=" << printInfo.users << L";"
+			<< printInfo.warn.pString() << L";" << printInfo.crit.pString() << L";0;" << endl;
 		break;
 	}
 
@@ -195,21 +198,34 @@ int check_users(printInfoStruct& printInfo)
 	DWORD count;
 	DWORD index;
 
+	if (debug) 
+		wcout << L"Trying to enumerate terminal sessions" << endl;
+	
 	if (!WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1, &pSessionInfo, &count)) {
 		wcout << L"Failed to enumerate terminal sessions" << endl;
+		die();
 		if (pSessionInfo)
 			WTSFreeMemory(pSessionInfo);
 		return 3;
 	}
+
+	if (debug)
+		wcout << L"Got all sessions (" << count << L"), traversing and counting active ones" << endl;
 
 	for (index = 0; index < count; index++) {
 		LPWSTR name;
 		DWORD size;
 		int len;
 
+		if (debug)
+			wcout << L"Querrying session number " << index << endl;
+
 		if (!WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, pSessionInfo[index].SessionId,
 										WTSUserName, &name, &size))
 			continue;
+
+		if (debug)
+			wcout << L"Found \"" << name << L"\". Checking whether it's a real session" << endl;
 
 		len = lstrlenW(name);
 
@@ -217,10 +233,16 @@ int check_users(printInfoStruct& printInfo)
 
 		if (!len)
 			continue;
-
-		if (pSessionInfo[index].State == WTSActive || pSessionInfo[index].State == WTSDisconnected)
+		
+		if (pSessionInfo[index].State == WTSActive || pSessionInfo[index].State == WTSDisconnected) {
 			users++;
+			if (debug)
+				wcout << L"\"" << name << L"\" is a real session, counting it. Now " << users << endl;
+		}
 	}
+
+	if (debug)
+		wcout << "Finished coutning user sessions (" << users << "). Freeing memory and returning" << endl;
 
 	WTSFreeMemory(pSessionInfo);
 	printInfo.users = users;

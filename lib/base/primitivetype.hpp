@@ -46,21 +46,23 @@ private:
 	String m_Name;
 };
 
-#define REGISTER_BUILTIN_TYPE(type)						\
+#define REGISTER_BUILTIN_TYPE(type, prototype)					\
 	namespace { namespace UNIQUE_NAME(prt) { namespace prt ## type {	\
 		void RegisterBuiltinType(void)					\
 		{								\
 			icinga::Type::Ptr t = new PrimitiveType(#type);		\
+			t->SetPrototype(prototype);				\
 			icinga::Type::Register(t);				\
 		}								\
 		INITIALIZE_ONCE(RegisterBuiltinType);				\
 	} } }
 
-#define REGISTER_PRIMITIVE_TYPE(type)						\
+#define REGISTER_PRIMITIVE_TYPE(type, prototype)				\
 	namespace { namespace UNIQUE_NAME(prt) { namespace prt ## type {	\
 		void RegisterPrimitiveType(void)				\
 		{								\
 			icinga::Type::Ptr t = new PrimitiveType(#type);		\
+			t->SetPrototype(prototype);				\
 			icinga::Type::Register(t);				\
 			type::TypeInstance = t;					\
 		}								\

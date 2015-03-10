@@ -89,7 +89,7 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 	Dictionary::Ptr raw_arguments = commandObj->GetArguments();
 
 	Value command;
-	if (!raw_arguments || raw_command.IsObjectType<Array>())
+	if (!raw_arguments || raw_command.IsObjectType<Array>() || raw_command.IsObjectType<Function>())
 		command = MacroProcessor::ResolveMacros(raw_command, macroResolvers, cr, NULL,
 		    PluginUtility::EscapeMacroShellArg, resolvedMacros, useResolvedMacros);
 	else {
@@ -109,7 +109,7 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 			arg.Key = kv.first;
 
 			bool required = false;
-			String argval;
+			Value argval;
 
 			if (arginfo.IsObjectType<Dictionary>()) {
 				Dictionary::Ptr argdict = arginfo;
@@ -123,26 +123,36 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 					arg.RepeatKey = argdict->Get("repeat_key");
 				arg.Order = argdict->Get("order");
 
-				String set_if = argdict->Get("set_if");
+				Value set_if = argdict->Get("set_if");
 
 				if (!set_if.IsEmpty()) {
 					String missingMacro;
-					String set_if_resolved = MacroProcessor::ResolveMacros(set_if, macroResolvers,
+					Value set_if_resolved = MacroProcessor::ResolveMacros(set_if, macroResolvers,
 					    cr, &missingMacro, MacroProcessor::EscapeCallback(), resolvedMacros,
 					    useResolvedMacros);
 
 					if (!missingMacro.IsEmpty())
 						continue;
 
-					try {
-						if (!Convert::ToLong(set_if_resolved))
+					int value;
+
+					if (set_if_resolved == "true")
+						value = 1;
+					else if (set_if_resolved == "false")
+						value = 0;
+					else {
+						try {
+							value = Convert::ToLong(set_if_resolved);
+						} catch (const std::exception& ex) {
+							/* tried to convert a string */
+							Log(LogWarning, "PluginUtility")
+							    << "Error evaluating set_if value '" << set_if_resolved << "': " << ex.what();
 							continue;
-					} catch (const std::exception& ex) {
-						/* tried to convert a string */
-						Log(LogWarning, "PluginUtility")
-						    << "Error evaluating set_if value '" << set_if_resolved << "': " << ex.what();
-						continue;
+						}
 					}
+
+					if (!value)
+						continue;
 				}
 			}
 			else
@@ -167,7 +177,7 @@ void PluginUtility::ExecuteCommand(const Command::Ptr& commandObj, const Checkab
 						ProcessResult pr;
 						pr.PID = -1;
 						pr.ExecutionStart = Utility::GetTime();
-						pr.ExecutionStart = pr.ExecutionStart;
+						pr.ExecutionEnd = pr.ExecutionStart;
 						pr.ExitStatus = 3; /* Unknown */
 						pr.Output = message;
 						callback(Empty, pr);

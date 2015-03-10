@@ -21,6 +21,8 @@
 #include "icinga/service.hpp"
 #include "icinga/hostgroup.hpp"
 #include "icinga/pluginutility.hpp"
+#include "icinga/scheduleddowntime.hpp"
+#include "base/exception.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
 #include "base/utility.hpp"
@@ -32,11 +34,11 @@ using namespace icinga;
 
 REGISTER_TYPE(Host);
 
-void Host::OnConfigLoaded(void)
+void Host::OnAllConfigLoaded(void)
 {
-	Checkable::OnConfigLoaded();
+	Checkable::OnAllConfigLoaded();
 
-	ASSERT(!OwnsLock());
+	HostGroup::EvaluateObjectRules(this);
 
 	Array::Ptr groups = GetGroups();
 
@@ -52,6 +54,11 @@ void Host::OnConfigLoaded(void)
 				hg->ResolveGroupMembership(this, true);
 		}
 	}
+
+	ScheduledDowntime::EvaluateApplyRules(this);
+	Notification::EvaluateApplyRules(this);
+	Dependency::EvaluateApplyRules(this);
+	Service::EvaluateApplyRules(this);
 }
 
 void Host::Stop(void)
@@ -227,6 +234,9 @@ bool Host::ResolveMacro(const String& macro, const CheckResult::Ptr&, Value *res
 	} else if (macro == "last_state_change") {
 		*result = Convert::ToString((long)GetLastStateChange());
 		return true;
+	} else if (macro == "downtime_depth") {
+		*result = Convert::ToString((long)GetDowntimeDepth());
+		return true;
 	} else if (macro == "duration_sec") {
 		*result = Convert::ToString((long)(Utility::GetTime() - GetLastStateChange()));
 		return true;
@@ -272,6 +282,9 @@ bool Host::ResolveMacro(const String& macro, const CheckResult::Ptr&, Value *res
 			return true;
 		} else if (macro == "last_check") {
 			*result = Convert::ToString((long)cr->GetScheduleStart());
+			return true;
+		} else if (macro == "check_source") {
+			*result = cr->GetCheckSource();
 			return true;
 		}
 	}

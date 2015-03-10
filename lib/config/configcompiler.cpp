@@ -26,8 +26,6 @@
 #include <fstream>
 #include <boost/foreach.hpp>
 
-using std::ifstream;
-
 using namespace icinga;
 
 std::vector<String> ConfigCompiler::m_IncludeSearchDirs;
@@ -41,7 +39,7 @@ std::vector<String> ConfigCompiler::m_IncludeSearchDirs;
  * @param zone The zone.
  */
 ConfigCompiler::ConfigCompiler(const String& path, std::istream *input, const String& zone)
-	: m_Path(path), m_Input(input), m_Zone(zone)
+	: m_Path(path), m_Input(input), m_Zone(zone), m_Eof(false), m_OpenBraces(0), m_IgnoreNewlines(0)
 {
 	InitializeScanner();
 }
@@ -52,6 +50,7 @@ ConfigCompiler::ConfigCompiler(const String& path, std::istream *input, const St
 ConfigCompiler::~ConfigCompiler(void)
 {
 	DestroyScanner();
+	delete m_Input;
 }
 
 /**
@@ -82,9 +81,9 @@ void *ConfigCompiler::GetScanner(void) const
  *
  * @returns The path.
  */
-String ConfigCompiler::GetPath(void) const
+const char *ConfigCompiler::GetPath(void) const
 {
-	return m_Path;
+	return m_Path.CStr();
 }
 
 void ConfigCompiler::SetZone(const String& zone)
@@ -97,6 +96,11 @@ String ConfigCompiler::GetZone(void) const
 	return m_Zone;
 }
 
+void ConfigCompiler::CollectIncludes(std::vector<Expression *>& expressions, const String& file, const String& zone)
+{
+	expressions.push_back(CompileFile(file, zone));
+}
+
 /**
  * Handles an include directive.
  *
@@ -104,7 +108,7 @@ String ConfigCompiler::GetZone(void) const
  * @param search Whether to search global include dirs.
  * @param debuginfo Debug information.
  */
-void ConfigCompiler::HandleInclude(const String& include, bool search, const DebugInfo& debuginfo)
+Expression *ConfigCompiler::HandleInclude(const String& include, bool search, const DebugInfo& debuginfo)
 {
 	String path;
 
@@ -126,32 +130,38 @@ void ConfigCompiler::HandleInclude(const String& include, bool search, const Deb
 		}
 	}
 
-	std::vector<ConfigItem::Ptr> items;
+	std::vector<Expression *> expressions;
 
-	if (!Utility::Glob(includePath, boost::bind(&ConfigCompiler::CompileFile, _1, m_Zone), GlobFile) && includePath.FindFirstOf("*?") == String::NPos) {
+	if (!Utility::Glob(includePath, boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, m_Zone), GlobFile) && includePath.FindFirstOf("*?") == String::NPos) {
 		std::ostringstream msgbuf;
-		msgbuf << "Include file '" + include + "' does not exist: " << debuginfo;
-		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
+		msgbuf << "Include file '" + include + "' does not exist";
+		BOOST_THROW_EXCEPTION(ScriptError(msgbuf.str(), debuginfo));
 	}
+
+	DictExpression *expr = new DictExpression(expressions);
+	expr->MakeInline();
+	return expr;
 }
 
 /**
  * Handles recursive includes.
  *
- * @param include The directory path.
+ * @param path The directory path.
  * @param pattern The file pattern.
  * @param debuginfo Debug information.
  */
-void ConfigCompiler::HandleIncludeRecursive(const String& include, const String& pattern, const DebugInfo&)
+Expression *ConfigCompiler::HandleIncludeRecursive(const String& path, const String& pattern, const DebugInfo&)
 {
-	String path;
+	String ppath;
 
-	if (include.GetLength() > 0 && include[0] == '/')
-		path = include;
+	if (path.GetLength() > 0 && path[0] == '/')
+		ppath = path;
 	else
-		path = Utility::DirName(GetPath()) + "/" + include;
+		ppath = Utility::DirName(GetPath()) + "/" + path;
 
-	Utility::GlobRecursive(path, pattern, boost::bind(&ConfigCompiler::CompileFile, _1, m_Zone), GlobFile);
+	std::vector<Expression *> expressions;
+	Utility::GlobRecursive(ppath, pattern, boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, m_Zone), GlobFile);
+	return new DictExpression(expressions);
 }
 
 /**
@@ -161,7 +171,18 @@ void ConfigCompiler::HandleIncludeRecursive(const String& include, const String&
  */
 void ConfigCompiler::HandleLibrary(const String& library)
 {
-	(void) Utility::LoadExtensionLibrary(library);
+	Utility::LoadExtensionLibrary(library);
+}
+
+void ConfigCompiler::CompileHelper(void)
+{
+	try {
+		m_Promise.set_value(boost::shared_ptr<Expression>(Compile()));
+	} catch (...) {
+		m_Promise.set_exception(boost::current_exception());
+	}
+
+	delete this;
 }
 
 /**
@@ -171,14 +192,18 @@ void ConfigCompiler::HandleLibrary(const String& library)
  * @param stream The input stream.
  * @returns Configuration items.
  */
-void ConfigCompiler::CompileStream(const String& path, std::istream *stream, const String& zone)
+Expression *ConfigCompiler::CompileStream(const String& path, std::istream *stream, const String& zone)
 {
 	CONTEXT("Compiling configuration stream with name '" + path + "'");
 
 	stream->exceptions(std::istream::badbit);
 
-	ConfigCompiler ctx(path, stream, zone);
-	ctx.Compile();
+	ConfigCompiler* ctx = new ConfigCompiler(path, stream, zone);
+
+	boost::shared_future<boost::shared_ptr<Expression> > ftr = boost::shared_future<boost::shared_ptr<Expression> >(ctx->m_Promise.get_future());
+
+	Utility::QueueAsyncCallback(boost::bind(&ConfigCompiler::CompileHelper, ctx));
+	return new FutureExpression(ftr);
 }
 
 /**
@@ -187,14 +212,14 @@ void ConfigCompiler::CompileStream(const String& path, std::istream *stream, con
  * @param path The path.
  * @returns Configuration items.
  */
-void ConfigCompiler::CompileFile(const String& path, const String& zone)
+Expression *ConfigCompiler::CompileFile(const String& path, const String& zone)
 {
 	CONTEXT("Compiling configuration file '" + path + "'");
 
-	std::ifstream stream;
-	stream.open(path.CStr(), std::ifstream::in);
+	std::ifstream *stream = new std::ifstream();
+	stream->open(path.CStr(), std::ifstream::in);
 
-	if (!stream)
+	if (!*stream)
 		BOOST_THROW_EXCEPTION(posix_error()
 			<< boost::errinfo_api_function("std::ifstream::open")
 			<< boost::errinfo_errno(errno)
@@ -203,7 +228,7 @@ void ConfigCompiler::CompileFile(const String& path, const String& zone)
 	Log(LogInformation, "ConfigCompiler")
 	    << "Compiling config file: " << path;
 
-	return CompileStream(path, &stream, zone);
+	return CompileStream(path, stream, zone);
 }
 
 /**
@@ -213,10 +238,10 @@ void ConfigCompiler::CompileFile(const String& path, const String& zone)
  * @param text The text.
  * @returns Configuration items.
  */
-void ConfigCompiler::CompileText(const String& path, const String& text, const String& zone)
+Expression *ConfigCompiler::CompileText(const String& path, const String& text, const String& zone)
 {
-	std::stringstream stream(text);
-	return CompileStream(path, &stream, zone);
+	std::stringstream *stream = new std::stringstream(text);
+	return CompileStream(path, stream, zone);
 }
 
 /**
