@@ -32,6 +32,8 @@ namespace po = boost::program_options;
 using std::cout; using std::endl;
 using std::wcout; using std::wstring;
 
+static BOOL debug;
+
 struct printInfoStruct 
 {
 	threshold warn, crit;
@@ -44,7 +46,7 @@ static int parseArguments(int, wchar_t **, po::variables_map&, printInfoStruct&)
 static int printOutput(printInfoStruct&);
 static void getUptime(printInfoStruct&);
 
-int main(int argc, wchar_t **argv)
+int wmain(int argc, wchar_t **argv)
 {
 	po::variables_map vm;
 	printInfoStruct printInfo = { };
@@ -67,10 +69,10 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 	po::options_description desc;
 	
 	desc.add_options()
-		(",h", "print help message and exit")
-		("help", "print verbose help and exit")
-		("version,v", "print version and exit")
+		("help,h", "print help message and exit")
+		("version,V", "print version and exit")
 		("warning,w", po::wvalue<wstring>(), "warning threshold (Uses -unit)")
+		("debug,d", "Verbose/Debug output")
 		("critical,c", po::wvalue<wstring>(), "critical threshold (Uses -unit)")
 		("unit,u", po::wvalue<wstring>(), "desired unit of output\nh\t- hours\nm\t- minutes\ns\t- seconds (default)\nms\t- milliseconds")
 		;
@@ -92,11 +94,6 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		return 3;
 	}
 
-	if (vm.count("h")) {
-		cout << desc << endl;
-		return 0;
-	}
-
 	if (vm.count("help")) {
 		wcout << progName << " Help\n\tVersion: " << VERSION << endl;
 		wprintf(
@@ -105,7 +102,7 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		cout << desc;
 		wprintf(
 			L"\nIt will then output a string looking something like this:\n\n"
-			L"\tUPTIME WARNING 712h|uptime=712h;700;1800;0\n\n"
+			L"\tUPTIME WARNING 712h | uptime=712h;700;1800;0\n\n"
 			L"\"UPTIME\" being the type of the check, \"WARNING\" the returned status\n"
 			L"and \"712h\" is the returned value.\n"
 			L"The performance data is found behind the \"|\", in order:\n"
@@ -166,16 +163,23 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		try{
 			printInfo.unit = parseTUnit(vm["unit"].as<wstring>());
 		} catch (std::invalid_argument) {
-
-		} wcout << L"Unknown unit type " << vm["unit"].as<wstring>() << endl;
+			wcout << L"Unknown unit type " << vm["unit"].as<wstring>() << endl;
+			return 3;
+		} 
 	} else
 		printInfo.unit = TunitS;
-    
+
+	if (vm.count("debug"))
+		debug = TRUE;
+
 	return -1;
 }
 
 static int printOutput(printInfoStruct& printInfo) 
 {
+	if (debug)
+		wcout << L"Constructing output string" << endl;
+
 	state state = OK;
 
 	if (printInfo.warn.rend(printInfo.time))
@@ -185,19 +189,19 @@ static int printOutput(printInfoStruct& printInfo)
 
 	switch (state) {
 	case OK:
-		wcout << L"UPTIME OK " << printInfo.time << TunitStr(printInfo.unit) << L"|uptime=" << printInfo.time 
-			<< TunitStr(printInfo.unit) << L";" << printInfo.warn.pString() << L";" 
-			<< printInfo.crit.pString() << L";0" << endl;
+		wcout << L"UPTIME OK " << printInfo.time << TunitStr(printInfo.unit) << L" | uptime=" << printInfo.time
+			<< TunitStr(printInfo.unit) << L";" << printInfo.warn.pString() << L";"
+			<< printInfo.crit.pString() << L";0;" << endl;
 		break;
 	case WARNING:
-		wcout << L"UPTIME WARNING " << printInfo.time << TunitStr(printInfo.unit) << L"|uptime=" << printInfo.time
+		wcout << L"UPTIME WARNING " << printInfo.time << TunitStr(printInfo.unit) << L" | uptime=" << printInfo.time
 			<< TunitStr(printInfo.unit) << L";" << printInfo.warn.pString() << L";"
-			<< printInfo.crit.pString() << L";0" << endl;
+			<< printInfo.crit.pString() << L";0;" << endl;
 		break;
 	case CRITICAL:
-		wcout << L"UPTIME CRITICAL " << printInfo.time << TunitStr(printInfo.unit) << L"|uptime=" << printInfo.time
+		wcout << L"UPTIME CRITICAL " << printInfo.time << TunitStr(printInfo.unit) << L" | uptime=" << printInfo.time
 			<< TunitStr(printInfo.unit) << L";" << printInfo.warn.pString() << L";"
-			<< printInfo.crit.pString() << L";0" << endl;
+			<< printInfo.crit.pString() << L";0;" << endl;
 		break;
 	}
 
@@ -206,8 +210,14 @@ static int printOutput(printInfoStruct& printInfo)
 
 void getUptime(printInfoStruct& printInfo) 
 {
+	if (debug)
+		wcout << L"Getting uptime in milliseconds" << endl;
+
 	boost::chrono::milliseconds uptime = boost::chrono::milliseconds(GetTickCount64());
 	
+	if (debug)
+		wcout << L"Converting requested unit (default: seconds)" << endl;
+
 	switch (printInfo.unit) {
 	case TunitH: 
 		printInfo.time = boost::chrono::duration_cast<boost::chrono::hours>(uptime).count();
@@ -222,5 +232,4 @@ void getUptime(printInfoStruct& printInfo)
 		printInfo.time = uptime.count();
 		break;
 	}
-	
 }

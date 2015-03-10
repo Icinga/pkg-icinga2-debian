@@ -35,6 +35,8 @@ namespace po = boost::program_options;
 using std::wcout; using std::endl;
 using std::wstring; using std::cout;
 
+static BOOL debug = FALSE;
+
 struct printInfoStruct 
 {
 	BOOL warn, crit;
@@ -46,10 +48,10 @@ static int parseArguments(int, wchar_t **, po::variables_map&, printInfoStruct&)
 static int printOutput(const printInfoStruct&);
 static int check_update(printInfoStruct&);
 
-int main(int argc, wchar_t **argv) 
+int wmain(int argc, wchar_t **argv) 
 {
-	po::variables_map vm;
 	printInfoStruct printInfo = { FALSE, FALSE, 0, FALSE, FALSE, FALSE };
+	po::variables_map vm;
 
 	int ret = parseArguments(argc, argv, vm, printInfo);
 	if (ret != -1)
@@ -62,35 +64,6 @@ int main(int argc, wchar_t **argv)
 	return printOutput(printInfo);
 }
 
-int printOutput(const printInfoStruct& printInfo) 
-{
-	state state = OK;
-	wstring output = L"UPDATE ";
-
-	if (printInfo.important)
-		state = WARNING;
-
-	if (printInfo.reboot)
-		state = CRITICAL;
-
-	switch (state) {
-	case OK:
-		output.append(L"OK ");
-		break;
-	case WARNING:
-		output.append(L"WARNING ");
-		break;
-	case CRITICAL:
-		output.append(L"CRITICAL ");
-		break;
-	}
-
-	wcout << output << printInfo.numUpdates << L"|update=" << printInfo.numUpdates << L";"
-		<< printInfo.warn << L";" << printInfo.crit << L";0" << endl;
-        
-	return state;
-}
-
 int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct& printInfo) 
 {
 	wchar_t namePath[MAX_PATH];
@@ -100,12 +73,12 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 	po::options_description desc;
 
 	desc.add_options()
-		(",h", "print help message and exit")
-		("help", "print verbose help and exit")
-		("version,v", "print version and exit")
+		("help,h", "print help message and exit")
+		("version,V", "print version and exit")
+		("debug,d", "Verbose/Debug output")
 		("warning,w", "warn if there are important updates available")
 		("critical,c", "critical if there are important updates that require a reboot")
-		("possible-reboot", "treat \"update may need to reboot\" as \"update needs to reboot\"")
+		("possible-reboot", "treat \"update may need reboot\" as \"update needs reboot\"")
 		;
 
 	po::basic_command_line_parser<wchar_t> parser(ac, av);
@@ -125,11 +98,6 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		return 3;
 	}
 
-	if (vm.count("h")) {
-		cout << desc << endl;
-		return 0;
-	} 
-    
 	if (vm.count("help")) {
 		wcout << progName << " Help\n\tVersion: " << VERSION << endl;
 		wprintf(
@@ -138,7 +106,7 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 		cout << desc;
 		wprintf(
 			L"\nAfter some time, it will then output a string like this one:\n\n"
-			L"\tUPDATE WARNING 8|updates=8;1;1;0\n\n"
+			L"\tUPDATE WARNING 8 | updates=8;1;1;0\n\n"
 			L"\"UPDATE\" being the type of the check, \"WARNING\" the returned status\n"
 			L"and \"8\" is the number of important updates updates.\n"
 			L"The performance data is found behind the \"|\", in order:\n"
@@ -162,7 +130,7 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 			, progName, progName);
 		cout << endl;
 		return 0;
-	}  if (vm.count("version")) {
+	} if (vm.count("version")) {
 		cout << "Version: " << VERSION << endl;
 		return 0;
 	}
@@ -176,18 +144,57 @@ int parseArguments(int ac, wchar_t **av, po::variables_map& vm, printInfoStruct&
 	if (vm.count("possible-reboot"))
 		printInfo.careForCanRequest = TRUE;
 
+	if (vm.count("debug"))
+		debug = TRUE;
+
 	return -1;
+}
+
+int printOutput(const printInfoStruct& printInfo)
+{
+	if (debug)
+		wcout << L"Constructing output string" << endl;
+
+	state state = OK;
+	wstring output = L"UPDATE ";
+
+	if (printInfo.important)
+		state = WARNING;
+
+	if (printInfo.reboot)
+		state = CRITICAL;
+
+	switch (state) {
+	case OK:
+		output.append(L"OK ");
+		break;
+	case WARNING:
+		output.append(L"WARNING ");
+		break;
+	case CRITICAL:
+		output.append(L"CRITICAL ");
+		break;
+	}
+
+	wcout << output << printInfo.numUpdates << L" | update=" << printInfo.numUpdates << L";"
+		<< printInfo.warn << L";" << printInfo.crit << L";0;" << endl;
+
+	return state;
 }
 
 int check_update(printInfoStruct& printInfo) 
 {
+	if (debug)
+		wcout << "Initializing COM library" << endl;
 	CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	ISearchResult *pResult;
 	IUpdateSession *pSession;
 	IUpdateSearcher *pSearcher;
+	BSTR criteria = NULL;
 
 	HRESULT err;
-
+	if (debug)
+		wcout << "Creating UpdateSession and UpdateSearcher" << endl;
 	CoCreateInstance(CLSID_UpdateSession, NULL, CLSCTX_INPROC_SERVER, IID_IUpdateSession, (LPVOID*)&pSession);
 	pSession->CreateUpdateSearcher(&pSearcher);
 
@@ -198,9 +205,12 @@ int check_update(printInfoStruct& printInfo)
 	 RebootRequired = 1: Reboot required
 	*/
 
-	BSTR criteria = SysAllocString(CRITERIA);
+	criteria = SysAllocString(CRITERIA);
 	// http://msdn.microsoft.com/en-us/library/windows/desktop/aa386526%28v=vs.85%29.aspx
 	// http://msdn.microsoft.com/en-us/library/ff357803%28v=vs.85%29.aspx
+
+	if (debug)
+		wcout << L"Querrying updates from server" << endl;
 
 	err = pSearcher->Search(criteria, &pResult);
 	if (!SUCCEEDED(err))
@@ -218,30 +228,40 @@ int check_update(printInfoStruct& printInfo)
 		return -1;
 
 	printInfo.numUpdates = updateSize;
-	printInfo.important = printInfo.warn;
-
-	if (!printInfo.crit)
-		return -1;
+//	printInfo.important = printInfo.warn;
 
 	IInstallationBehavior *pIbehav;
 	InstallationRebootBehavior updateReboot;
 
 	for (LONG i = 0; i < updateSize; i++) {
 		pCollection->get_Item(i, &pUpdate);
+		if (debug) {
+			wcout << L"Checking reboot behaviour of update number " << i << endl;
+		}
 		pUpdate->get_InstallationBehavior(&pIbehav);
 		pIbehav->get_RebootBehavior(&updateReboot);
 		if (updateReboot == irbAlwaysRequiresReboot) {
 			printInfo.reboot = TRUE;
+			if (debug)
+				wcout << L"It requires reboot" << endl;
 			continue;
 		}
 		if (printInfo.careForCanRequest && updateReboot == irbCanRequestReboot)
+			if (debug)
+				wcout << L"It requires reboot" << endl;
 			printInfo.reboot = TRUE;
 	}
 
-	return 0;
+	if (debug)
+		wcout << L"Cleaning up and returning" << endl;
+
+	SysFreeString(criteria);
+	CoUninitialize();
+	return -1;
 
 die:
 	die(err);
+	CoUninitialize();
 	if (criteria)
 		SysFreeString(criteria);
 	return 3;

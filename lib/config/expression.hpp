@@ -24,27 +24,87 @@
 #include "base/debuginfo.hpp"
 #include "base/array.hpp"
 #include "base/dictionary.hpp"
+#include "base/function.hpp"
+#include "base/exception.hpp"
+#include "base/scriptframe.hpp"
+#include "base/convert.hpp"
 #include <boost/foreach.hpp>
+#include <boost/thread/future.hpp>
+#include <map>
 
 namespace icinga
 {
 
 struct DebugHint
 {
-	std::vector<std::pair<String, DebugInfo> > Messages;
-	std::map<String, DebugHint> Children;
+public:
+	DebugHint(const Dictionary::Ptr& hints = Dictionary::Ptr())
+		: m_Hints(hints)
+	{ }
 
 	inline void AddMessage(const String& message, const DebugInfo& di)
 	{
-		Messages.push_back(std::make_pair(message, di));
+		Array::Ptr amsg = new Array();
+		amsg->Add(message);
+		amsg->Add(di.Path);
+		amsg->Add(di.FirstLine);
+		amsg->Add(di.FirstColumn);
+		amsg->Add(di.LastLine);
+		amsg->Add(di.LastColumn);
+		GetMessages()->Add(amsg);
 	}
 
-	inline DebugHint *GetChild(const String& name)
+	inline DebugHint GetChild(const String& name)
 	{
-		return &Children[name];
+		Dictionary::Ptr children = GetChildren();
+
+		Dictionary::Ptr child = children->Get(name);
+
+		if (!child) {
+			child = new Dictionary();
+			children->Set(name, child);
+		}
+
+		return DebugHint(child);
 	}
 
-	Dictionary::Ptr ToDictionary(void) const;
+	Dictionary::Ptr ToDictionary(void) const
+	{
+		return m_Hints;
+	}
+
+private:
+	Dictionary::Ptr m_Hints;
+
+	Array::Ptr GetMessages(void)
+	{
+		if (!m_Hints)
+			m_Hints = new Dictionary();
+
+		Array::Ptr messages = m_Hints->Get("messages");
+
+		if (!messages) {
+			messages = new Array();
+			m_Hints->Set("messages", messages);
+		}
+
+		return messages;
+	}
+
+	Dictionary::Ptr GetChildren(void)
+	{
+		if (!m_Hints)
+			m_Hints = new Dictionary();
+
+		Dictionary::Ptr children = m_Hints->Get("properties");
+
+		if (!children) {
+			children = new Dictionary;
+			m_Hints->Set("properties", children);
+		}
+
+		return children;
+	}
 };
 
 enum CombinedSetOp
@@ -53,8 +113,78 @@ enum CombinedSetOp
 	OpSetAdd,
 	OpSetSubtract,
 	OpSetMultiply,
-	OpSetDivide
+	OpSetDivide,
+	OpSetModulo,
+	OpSetXor,
+	OpSetBinaryAnd,
+	OpSetBinaryOr
 };
+
+enum ScopeSpecifier
+{
+	ScopeLocal,
+	ScopeCurrent,
+	ScopeThis,
+	ScopeGlobal
+};
+
+typedef std::map<String, String> DefinitionMap;
+
+/**
+ * @ingroup config
+ */
+enum ExpressionResultCode
+{
+	ResultOK,
+	ResultReturn,
+	ResultContinue,
+	ResultBreak
+};
+
+/**
+ * @ingroup config
+ */
+struct ExpressionResult
+{
+public:
+	template<typename T>
+	ExpressionResult(const T& value, ExpressionResultCode code = ResultOK)
+	    : m_Value(value), m_Code(code)
+	{ }
+
+	operator Value(void) const
+	{
+		return m_Value;
+	}
+
+	Value GetValue(void) const
+	{
+		return m_Value;
+	}
+
+	ExpressionResultCode GetCode(void) const
+	{
+		return m_Code;
+	}
+
+private:
+	Value m_Value;
+	ExpressionResultCode m_Code;
+};
+
+#define CHECK_RESULT(res)			\
+	do {					\
+		if (res.GetCode() != ResultOK)	\
+			return res;		\
+	} while (0);
+
+#define CHECK_RESULT_LOOP(res)			\
+	if (res.GetCode() == ResultReturn)	\
+		return res;			\
+	if (res.GetCode() == ResultContinue)	\
+		continue;			\
+	if (res.GetCode() == ResultBreak)	\
+		break;				\
 
 /**
  * @ingroup config
@@ -64,22 +194,14 @@ class I2_CONFIG_API Expression
 public:
 	virtual ~Expression(void);
 
-	Value Evaluate(const Object::Ptr& context, DebugHint *dhint = NULL) const;
-
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const = 0;
+	ExpressionResult Evaluate(ScriptFrame& frame, DebugHint *dhint = NULL) const;
+	virtual bool GetReference(ScriptFrame& frame, bool init_dict, Value *parent, String *index, DebugHint **dhint = NULL) const;
 	virtual const DebugInfo& GetDebugInfo(void) const;
 
-public:
-	static Value FunctionWrapper(const std::vector<Value>& arguments,
-	    const std::vector<String>& funcargs,
-	    const boost::shared_ptr<Expression>& expr, const Object::Ptr& scope);
-
-	static bool HasField(const Object::Ptr& context, const String& field);
-	static Value GetField(const Object::Ptr& context, const String& field);
-	static void SetField(const Object::Ptr& context, const String& field, const Value& value);
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const = 0;
 };
 
-I2_CONFIG_API std::vector<Expression *> MakeIndexer(const String& index1);
+I2_CONFIG_API Expression *MakeIndexer(ScopeSpecifier scopeSpec, const String& index);
 
 class I2_CONFIG_API OwnedExpression : public Expression
 {
@@ -89,9 +211,9 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
 	{
-		return m_Expression->DoEvaluate(context, dhint);
+		return m_Expression->DoEvaluate(frame, dhint);
 	}
 
 	virtual const DebugInfo& GetDebugInfo(void) const
@@ -103,13 +225,35 @@ private:
 	boost::shared_ptr<Expression> m_Expression;
 };
 
+class I2_CONFIG_API FutureExpression : public Expression
+{
+public:
+	FutureExpression(const boost::shared_future<boost::shared_ptr<Expression> >& future)
+		: m_Future(future)
+	{ }
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
+	{
+		return m_Future.get()->DoEvaluate(frame, dhint);
+	}
+
+	virtual const DebugInfo& GetDebugInfo(void) const
+	{
+		return m_Future.get()->GetDebugInfo();
+	}
+
+private:
+	mutable boost::shared_future<boost::shared_ptr<Expression> > m_Future;
+};
+
 class I2_CONFIG_API LiteralExpression : public Expression
 {
 public:
 	LiteralExpression(const Value& value = Value());
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 private:
 	Value m_Value;
@@ -175,11 +319,19 @@ public:
 		: DebuggableExpression(debugInfo), m_Variable(variable)
 	{ }
 
+	String GetVariable(void) const
+	{
+		return m_Variable;
+	}
+
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+	virtual bool GetReference(ScriptFrame& frame, bool init_dict, Value *parent, String *index, DebugHint **dhint) const;
 
 private:
 	String m_Variable;
+
+	friend I2_CONFIG_API void BindToScope(Expression *& expr, ScopeSpecifier scopeSpec);
 };
 	
 class I2_CONFIG_API NegateExpression : public UnaryExpression
@@ -190,7 +342,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API LogicalNegateExpression : public UnaryExpression
@@ -201,7 +353,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 
 class I2_CONFIG_API AddExpression : public BinaryExpression
@@ -212,7 +364,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API SubtractExpression : public BinaryExpression
@@ -223,7 +375,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API MultiplyExpression : public BinaryExpression
@@ -234,7 +386,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API DivideExpression : public BinaryExpression
@@ -245,9 +397,31 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
-	
+
+class I2_CONFIG_API ModuloExpression : public BinaryExpression
+{
+public:
+	ModuloExpression(Expression *operand1, Expression *operand2, const DebugInfo& debugInfo = DebugInfo())
+		: BinaryExpression(operand1, operand2, debugInfo)
+	{ }
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+};
+
+class I2_CONFIG_API XorExpression : public BinaryExpression
+{
+public:
+	XorExpression(Expression *operand1, Expression *operand2, const DebugInfo& debugInfo = DebugInfo())
+		: BinaryExpression(operand1, operand2, debugInfo)
+	{ }
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+};
+
 class I2_CONFIG_API BinaryAndExpression : public BinaryExpression
 {
 public:
@@ -256,7 +430,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API BinaryOrExpression : public BinaryExpression
@@ -267,7 +441,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API ShiftLeftExpression : public BinaryExpression
@@ -278,7 +452,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API ShiftRightExpression : public BinaryExpression
@@ -289,7 +463,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API EqualExpression : public BinaryExpression
@@ -300,7 +474,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API NotEqualExpression : public BinaryExpression
@@ -311,7 +485,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API LessThanExpression : public BinaryExpression
@@ -322,7 +496,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API GreaterThanExpression : public BinaryExpression
@@ -333,7 +507,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API LessThanOrEqualExpression : public BinaryExpression
@@ -344,7 +518,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API GreaterThanOrEqualExpression : public BinaryExpression
@@ -355,7 +529,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API InExpression : public BinaryExpression
@@ -366,7 +540,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API NotInExpression : public BinaryExpression
@@ -377,7 +551,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API LogicalAndExpression : public BinaryExpression
@@ -388,7 +562,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API LogicalOrExpression : public BinaryExpression
@@ -399,7 +573,7 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 };
 	
 class I2_CONFIG_API FunctionCallExpression : public DebuggableExpression
@@ -418,7 +592,7 @@ public:
 	}
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 public:
 	Expression *m_FName;
@@ -439,7 +613,7 @@ public:
 	}
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 private:
 	std::vector<Expression *> m_Expressions;
@@ -448,7 +622,7 @@ private:
 class I2_CONFIG_API DictExpression : public DebuggableExpression
 {
 public:
-	DictExpression(const std::vector<Expression *>& expressions, const DebugInfo& debugInfo = DebugInfo())
+	DictExpression(const std::vector<Expression *>& expressions = std::vector<Expression *>(), const DebugInfo& debugInfo = DebugInfo())
 		: DebuggableExpression(debugInfo), m_Expressions(expressions), m_Inline(false)
 	{ }
 
@@ -461,38 +635,123 @@ public:
 	void MakeInline(void);
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 private:
 	std::vector<Expression *> m_Expressions;
 	bool m_Inline;
+
+	friend I2_CONFIG_API void BindToScope(Expression *& expr, ScopeSpecifier scopeSpec);
 };
 	
-class I2_CONFIG_API SetExpression : public DebuggableExpression
+class I2_CONFIG_API SetExpression : public BinaryExpression
 {
 public:
-	SetExpression(const std::vector<Expression *>& indexer, CombinedSetOp op, Expression *operand2, const DebugInfo& debugInfo = DebugInfo())
-		: DebuggableExpression(debugInfo), m_Op(op), m_Indexer(indexer), m_Operand2(operand2)
+	SetExpression(Expression *operand1, CombinedSetOp op, Expression *operand2, const DebugInfo& debugInfo = DebugInfo())
+		: BinaryExpression(operand1, operand2, debugInfo), m_Op(op)
 	{ }
 
-	~SetExpression(void)
-	{
-		BOOST_FOREACH(Expression *expr, m_Indexer)
-			delete expr;
-
-		delete m_Operand2;
-	}
-
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 private:
 	CombinedSetOp m_Op;
-	std::vector<Expression *> m_Indexer;
-	Expression *m_Operand2;
 
+	friend I2_CONFIG_API void BindToScope(Expression *& expr, ScopeSpecifier scopeSpec);
 };
-	
+
+class I2_CONFIG_API ConditionalExpression : public DebuggableExpression
+{
+public:
+	ConditionalExpression(Expression *condition, Expression *true_branch, Expression *false_branch, const DebugInfo& debugInfo = DebugInfo())
+		: DebuggableExpression(debugInfo), m_Condition(condition), m_TrueBranch(true_branch), m_FalseBranch(false_branch)
+	{ }
+
+	~ConditionalExpression(void)
+	{
+		delete m_Condition;
+		delete m_TrueBranch;
+		delete m_FalseBranch; 
+	}
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+
+private:
+	Expression *m_Condition;
+	Expression *m_TrueBranch;
+	Expression *m_FalseBranch;
+};
+
+class I2_CONFIG_API WhileExpression : public DebuggableExpression
+{
+public:
+	WhileExpression(Expression *condition, Expression *loop_body, const DebugInfo& debugInfo = DebugInfo())
+		: DebuggableExpression(debugInfo), m_Condition(condition), m_LoopBody(loop_body)
+	{ }
+
+	~WhileExpression(void)
+	{
+		delete m_Condition;
+		delete m_LoopBody;
+	}
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+
+private:
+	Expression *m_Condition;
+	Expression *m_LoopBody;
+};
+
+
+class I2_CONFIG_API ReturnExpression : public UnaryExpression
+{
+public:
+	ReturnExpression(Expression *expression, const DebugInfo& debugInfo = DebugInfo())
+		: UnaryExpression(expression, debugInfo)
+	{ }
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+};
+
+class I2_CONFIG_API BreakExpression : public DebuggableExpression
+{
+public:
+	BreakExpression(const DebugInfo& debugInfo = DebugInfo())
+		: DebuggableExpression(debugInfo)
+	{ }
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+};
+
+class I2_CONFIG_API ContinueExpression : public DebuggableExpression
+{
+public:
+	ContinueExpression(const DebugInfo& debugInfo = DebugInfo())
+		: DebuggableExpression(debugInfo)
+	{ }
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+};
+
+class I2_CONFIG_API GetScopeExpression : public Expression
+{
+public:
+	GetScopeExpression(ScopeSpecifier scopeSpec)
+		: m_ScopeSpec(scopeSpec)
+	{ }
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+
+private:
+	ScopeSpecifier m_ScopeSpec;
+};
+
 class I2_CONFIG_API IndexerExpression : public BinaryExpression
 {
 public:
@@ -501,43 +760,47 @@ public:
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
+	virtual bool GetReference(ScriptFrame& frame, bool init_dict, Value *parent, String *index, DebugHint **dhint) const;
+
+	friend I2_CONFIG_API void BindToScope(Expression *& expr, ScopeSpecifier scopeSpec);
 };
-	
+
+I2_CONFIG_API void BindToScope(Expression *& expr, ScopeSpecifier scopeSpec);
+
 class I2_CONFIG_API ImportExpression : public DebuggableExpression
 {
 public:
-	ImportExpression(Expression *type, Expression *name, const DebugInfo& debugInfo = DebugInfo())
-		: DebuggableExpression(debugInfo), m_Type(type), m_Name(name)
+	ImportExpression(Expression *name, const DebugInfo& debugInfo = DebugInfo())
+		: DebuggableExpression(debugInfo), m_Name(name)
 	{ }
 
 	~ImportExpression(void)
 	{
-		delete m_Type;
 		delete m_Name;
 	}
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 private:
-	Expression *m_Type;
 	Expression *m_Name;
 };
 
 class I2_CONFIG_API FunctionExpression : public DebuggableExpression
 {
 public:
-	FunctionExpression(const String& name, const std::vector<String>& args, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
-		: DebuggableExpression(debugInfo), m_Name(name), m_Args(args), m_Expression(expression)
+	FunctionExpression(const std::vector<String>& args,
+	    std::map<String, Expression *> *closedVars, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
+		: DebuggableExpression(debugInfo), m_Args(args), m_ClosedVars(closedVars), m_Expression(expression)
 	{ }
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 private:
-	String m_Name;
 	std::vector<String> m_Args;
+	std::map<String, Expression *> *m_ClosedVars;
 	boost::shared_ptr<Expression> m_Expression;
 };
 
@@ -546,10 +809,11 @@ class I2_CONFIG_API ApplyExpression : public DebuggableExpression
 public:
 	ApplyExpression(const String& type, const String& target, Expression *name,
 	    Expression *filter, const String& fkvar, const String& fvvar,
-	    Expression *fterm, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
+	    Expression *fterm, std::map<String, Expression *> *closedVars,
+	    Expression *expression, const DebugInfo& debugInfo = DebugInfo())
 		: DebuggableExpression(debugInfo), m_Type(type), m_Target(target),
 		    m_Name(name), m_Filter(filter), m_FKVar(fkvar), m_FVVar(fvvar),
-		    m_FTerm(fterm), m_Expression(expression)
+		    m_FTerm(fterm), m_ClosedVars(closedVars), m_Expression(expression)
 	{ }
 
 	~ApplyExpression(void)
@@ -558,7 +822,7 @@ public:
 	}
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 private:
 	String m_Type;
@@ -568,14 +832,18 @@ private:
 	String m_FKVar;
 	String m_FVVar;
 	boost::shared_ptr<Expression> m_FTerm;
+	std::map<String, Expression *> *m_ClosedVars;
 	boost::shared_ptr<Expression> m_Expression;
 };
-	
+
 class I2_CONFIG_API ObjectExpression : public DebuggableExpression
 {
 public:
-	ObjectExpression(bool abstract, const String& type, Expression *name, Expression *filter, const String& zone, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
-		: DebuggableExpression(debugInfo), m_Abstract(abstract), m_Type(type), m_Name(name), m_Filter(filter), m_Zone(zone), m_Expression(expression)
+	ObjectExpression(bool abstract, const String& type, Expression *name, Expression *filter,
+	    const String& zone, std::map<String, Expression *> *closedVars,
+	    Expression *expression, const DebugInfo& debugInfo = DebugInfo())
+		: DebuggableExpression(debugInfo), m_Abstract(abstract), m_Type(type),
+		  m_Name(name), m_Filter(filter), m_Zone(zone), m_ClosedVars(closedVars), m_Expression(expression)
 	{ }
 
 	~ObjectExpression(void)
@@ -584,7 +852,7 @@ public:
 	}
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 private:
 	bool m_Abstract;
@@ -592,6 +860,7 @@ private:
 	Expression *m_Name;
 	boost::shared_ptr<Expression> m_Filter;
 	String m_Zone;
+	std::map<String, Expression *> *m_ClosedVars;
 	boost::shared_ptr<Expression> m_Expression;
 };
 	
@@ -609,7 +878,7 @@ public:
 	}
 
 protected:
-	virtual Value DoEvaluate(const Object::Ptr& context, DebugHint *dhint) const;
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const;
 
 private:
 	String m_FKVar;

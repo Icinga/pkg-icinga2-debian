@@ -64,7 +64,7 @@ public:
 	void SetStatusUpdate(const DbObject::Ptr& dbobj, bool hasupdate);
 	bool GetStatusUpdate(const DbObject::Ptr& dbobj) const;
 
-	static void ValidateFailoverTimeout(const String& location, const Dictionary::Ptr& attrs);
+	static void ValidateFailoverTimeout(const String& location, const DbConnection::Ptr& object);
 
 protected:
 	virtual void OnConfigLoaded(void);
@@ -78,6 +78,7 @@ protected:
 
 	virtual void CleanUpExecuteQuery(const String& table, const String& time_column, double max_age);
 	virtual void FillIDCache(const DbType::Ptr& type) = 0;
+	virtual void NewTransaction(void) = 0;
 
 	void UpdateAllObjects(void);
 

@@ -20,21 +20,21 @@
 #include "icinga/notification.hpp"
 #include "icinga/notificationcommand.hpp"
 #include "icinga/service.hpp"
-#include "config/configcompilercontext.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/utility.hpp"
 #include "base/convert.hpp"
 #include "base/exception.hpp"
 #include "base/initialize.hpp"
-#include "base/scriptvariable.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/scriptglobal.hpp"
+#include "base/function.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(Notification);
 REGISTER_SCRIPTFUNCTION(ValidateNotificationFilters, &Notification::ValidateFilters);
+REGISTER_SCRIPTFUNCTION(ValidateNotificationUsers, &Notification::ValidateUsers);
 INITIALIZE_ONCE(&Notification::StaticInitialize);
 
 boost::signals2::signal<void (const Notification::Ptr&, double, const MessageOrigin&)> Notification::OnNextNotificationChanged;
@@ -58,33 +58,38 @@ String NotificationNameComposer::MakeName(const String& shortName, const Object:
 
 void Notification::StaticInitialize(void)
 {
-	ScriptVariable::Set("OK", StateFilterOK, true, true);
-	ScriptVariable::Set("Warning", StateFilterWarning, true, true);
-	ScriptVariable::Set("Critical", StateFilterCritical, true, true);
-	ScriptVariable::Set("Unknown", StateFilterUnknown, true, true);
-	ScriptVariable::Set("Up", StateFilterUp, true, true);
-	ScriptVariable::Set("Down", StateFilterDown, true, true);
+	ScriptGlobal::Set("OK", StateFilterOK);
+	ScriptGlobal::Set("Warning", StateFilterWarning);
+	ScriptGlobal::Set("Critical", StateFilterCritical);
+	ScriptGlobal::Set("Unknown", StateFilterUnknown);
+	ScriptGlobal::Set("Up", StateFilterUp);
+	ScriptGlobal::Set("Down", StateFilterDown);
 
-	ScriptVariable::Set("DowntimeStart", 1 << NotificationDowntimeStart, true, true);
-	ScriptVariable::Set("DowntimeEnd", 1 << NotificationDowntimeEnd, true, true);
-	ScriptVariable::Set("DowntimeRemoved", 1 << NotificationDowntimeRemoved, true, true);
-	ScriptVariable::Set("Custom", 1 << NotificationCustom, true, true);
-	ScriptVariable::Set("Acknowledgement", 1 << NotificationAcknowledgement, true, true);
-	ScriptVariable::Set("Problem", 1 << NotificationProblem, true, true);
-	ScriptVariable::Set("Recovery", 1 << NotificationRecovery, true, true);
-	ScriptVariable::Set("FlappingStart", 1 << NotificationFlappingStart, true, true);
-	ScriptVariable::Set("FlappingEnd", 1 << NotificationFlappingEnd, true, true);
+	ScriptGlobal::Set("DowntimeStart", 1 << NotificationDowntimeStart);
+	ScriptGlobal::Set("DowntimeEnd", 1 << NotificationDowntimeEnd);
+	ScriptGlobal::Set("DowntimeRemoved", 1 << NotificationDowntimeRemoved);
+	ScriptGlobal::Set("Custom", 1 << NotificationCustom);
+	ScriptGlobal::Set("Acknowledgement", 1 << NotificationAcknowledgement);
+	ScriptGlobal::Set("Problem", 1 << NotificationProblem);
+	ScriptGlobal::Set("Recovery", 1 << NotificationRecovery);
+	ScriptGlobal::Set("FlappingStart", 1 << NotificationFlappingStart);
+	ScriptGlobal::Set("FlappingEnd", 1 << NotificationFlappingEnd);
 }
 
 void Notification::OnConfigLoaded(void)
 {
 	SetTypeFilter(FilterArrayToInt(GetTypes(), ~0));
 	SetStateFilter(FilterArrayToInt(GetStates(), ~0));
+}
 
+void Notification::OnAllConfigLoaded(void)
+{
 	Checkable::Ptr obj = GetCheckable();
 
-	if (obj)
-		obj->AddNotification(this);
+	if (!obj)
+		BOOST_THROW_EXCEPTION(ScriptError("Notification object refers to a host/service which doesn't exist.", GetDebugInfo()));
+
+	obj->AddNotification(this);
 }
 
 void Notification::Start(void)
@@ -496,27 +501,38 @@ int icinga::FilterArrayToInt(const Array::Ptr& typeFilters, int defaultValue)
 	return resultTypeFilter;
 }
 
-void Notification::ValidateFilters(const String& location, const Dictionary::Ptr& attrs)
+void Notification::ValidateUsers(const String& location, const Notification::Ptr& object)
 {
-	int sfilter = FilterArrayToInt(attrs->Get("states"), 0);
+	Array::Ptr users = object->GetUsersRaw();
+	Array::Ptr groups = object->GetUserGroupsRaw();
 
-	if (attrs->Get("service_name") == Empty && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": State filter is invalid.");
+	if ((!users || users->GetLength() == 0) && (!groups || groups->GetLength() == 0)) {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": No users/user_groups specified.", object->GetDebugInfo()));
+	}
+}
+
+void Notification::ValidateFilters(const String& location, const Notification::Ptr& object)
+{
+	int sfilter = FilterArrayToInt(object->GetStates(), 0);
+
+	if (object->GetServiceName().IsEmpty() && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0) {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": State filter is invalid.", object->GetDebugInfo()));
 	}
 
-	if (attrs->Get("service_name") != Empty && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": State filter is invalid.");
+	if (!object->GetServiceName().IsEmpty() && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": State filter is invalid.", object->GetDebugInfo()));
 	}
 
-	int tfilter = FilterArrayToInt(attrs->Get("types"), 0);
+	int tfilter = FilterArrayToInt(object->GetTypes(), 0);
 
 	if ((tfilter & ~(1 << NotificationDowntimeStart | 1 << NotificationDowntimeEnd | 1 << NotificationDowntimeRemoved |
 	    1 << NotificationCustom | 1 << NotificationAcknowledgement | 1 << NotificationProblem | 1 << NotificationRecovery |
 	    1 << NotificationFlappingStart | 1 << NotificationFlappingEnd)) != 0) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": Type filter is invalid.");
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": Type filter is invalid.", object->GetDebugInfo()));
 	}
 }
 

@@ -20,12 +20,11 @@
 #include "cli/repositoryutility.hpp"
 #include "cli/clicommand.hpp"
 #include "config/configtype.hpp"
-#include "config/configcompilercontext.hpp"
 #include "config/configcompiler.hpp"
 #include "base/logger.hpp"
 #include "base/application.hpp"
 #include "base/convert.hpp"
-#include "base/scriptvariable.hpp"
+#include "base/scriptglobal.hpp"
 #include "base/json.hpp"
 #include "base/netstring.hpp"
 #include "base/tlsutility.hpp"
@@ -33,6 +32,7 @@
 #include "base/debug.hpp"
 #include "base/objectlock.hpp"
 #include "base/console.hpp"
+#include "base/serializer.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -130,12 +130,12 @@ void RepositoryUtility::CreateRepositoryPath(const String& path)
 	if (!Utility::PathExists(path))
 		Utility::MkDirP(path, 0750);
 
-	String user = ScriptVariable::Get("RunAsUser");
-        String group = ScriptVariable::Get("RunAsGroup");
+	String user = ScriptGlobal::Get("RunAsUser");
+	String group = ScriptGlobal::Get("RunAsGroup");
 
-        if (!Utility::SetFileOwnership(path, user, group)) {
-                Log(LogWarning, "cli")
-                    << "Cannot set ownership for user '" << user << "' group '" << group << "' on path '" << path << "'. Verify it yourself!";
+	if (!Utility::SetFileOwnership(path, user, group)) {
+		Log(LogWarning, "cli")
+		    << "Cannot set ownership for user '" << user << "' group '" << group << "' on path '" << path << "'. Verify it yourself!";
 	}
 }
 
@@ -199,9 +199,9 @@ public:
 };
 
 /* modify objects and write changelog */
-bool RepositoryUtility::AddObject(const String& name, const String& type, const Dictionary::Ptr& attrs)
+bool RepositoryUtility::AddObject(const std::vector<String>& object_paths, const String& name, const String& type,
+    const Dictionary::Ptr& attrs, const Array::Ptr& changes, bool check_config)
 {
-	std::vector<String> object_paths = GetObjects();
 	String pattern;
 
 	if (type == "Service")
@@ -228,47 +228,45 @@ bool RepositoryUtility::AddObject(const String& name, const String& type, const 
 	change->Set("command", "add");
 	change->Set("attrs", attrs);
 
-	ConfigCompilerContext::GetInstance()->Reset();
-
-	String fname, fragment;
-	BOOST_FOREACH(boost::tie(fname, fragment), ConfigFragmentRegistry::GetInstance()->GetItems()) {
-		ConfigCompiler::CompileText(fname, fragment);
-	}
-
-	ConfigType::Ptr ctype = ConfigType::GetByName(type);
-
-	if (!ctype)
-		Log(LogCritical, "cli")
-		    << "No validation type available for '" << type << "'.";
-	else {
-		Dictionary::Ptr vattrs = attrs->ShallowClone();
-		vattrs->Set("__name", vattrs->Get("name"));
-		vattrs->Remove("name");
-		vattrs->Remove("import");
-		vattrs->Set("type", type);
-
-		RepositoryTypeRuleUtilities utils;
-		ctype->ValidateItem(name, vattrs, DebugInfo(), &utils);
-
-		int warnings = 0, errors = 0;
-
-		BOOST_FOREACH(const ConfigCompilerMessage& message, ConfigCompilerContext::GetInstance()->GetMessages()) {
-			String logmsg = String("Config ") + (message.Error ? "error" : "warning") + ": " + message.Text;
-
-			if (message.Error) {
-				Log(LogCritical, "config", logmsg);
-				errors++;
-			} else {
-				Log(LogWarning, "config", logmsg);
-				warnings++;
+	if (check_config) {
+		String fname, fragment;
+		BOOST_FOREACH(boost::tie(fname, fragment), ConfigFragmentRegistry::GetInstance()->GetItems()) {
+			Expression *expression = ConfigCompiler::CompileText(fname, fragment);
+			if (expression) {
+				ScriptFrame frame;
+				expression->Evaluate(frame);
+				delete expression;
 			}
 		}
 
-		if (errors > 0)
-			return false;
+		ConfigType::Ptr ctype = ConfigType::GetByName(type);
+
+		if (!ctype)
+			Log(LogCritical, "cli")
+			    << "No validation type available for '" << type << "'.";
+		else {
+			Dictionary::Ptr vattrs = attrs->ShallowClone();
+			vattrs->Set("__name", vattrs->Get("name"));
+			vattrs->Remove("name");
+			vattrs->Remove("import");
+			vattrs->Set("type", type);
+
+			Type::Ptr dtype = Type::GetByName(type);
+
+			Object::Ptr object = dtype->Instantiate();
+			Deserialize(object, vattrs, false, FAConfig);
+
+			try {
+				RepositoryTypeRuleUtilities utils;
+				ctype->ValidateItem(name, object, DebugInfo(), &utils);
+			} catch (const ScriptError& ex) {
+				Log(LogCritical, "config", DiagnosticInformation(ex));
+				return false;
+			}
+		}
 	}
 
-	if (CheckChangeExists(change)) {
+	if (CheckChangeExists(change, changes)) {
 		Log(LogWarning, "cli")
 		    << "Change '" << change->Get("command") << "' for type '"
 		    << change->Get("type") << "' and name '" << change->Get("name")
@@ -277,10 +275,13 @@ bool RepositoryUtility::AddObject(const String& name, const String& type, const 
 		return false;
 	}
 
+	/* store the cached change */
+	changes->Add(change);
+
 	return WriteObjectToRepositoryChangeLog(path, change);
 }
 
-bool RepositoryUtility::RemoveObject(const String& name, const String& type, const Dictionary::Ptr& attrs)
+bool RepositoryUtility::RemoveObject(const String& name, const String& type, const Dictionary::Ptr& attrs, const Array::Ptr& changes)
 {
 	/* add a new changelog entry by timestamp */
 	String path = GetRepositoryChangeLogPath() + "/" + Convert::ToString(Utility::GetTime()) + "-" + type + "-" + SHA256(name) + ".change";
@@ -293,7 +294,7 @@ bool RepositoryUtility::RemoveObject(const String& name, const String& type, con
 	change->Set("command", "remove");
 	change->Set("attrs", attrs); //required for service->host_name
 
-	if (CheckChangeExists(change)) {
+	if (CheckChangeExists(change, changes)) {
 		Log(LogWarning, "cli")
 		    << "Change '" << change->Get("command") << "' for type '"
 		    << change->Get("type") << "' and name '" << change->Get("name")
@@ -301,6 +302,9 @@ bool RepositoryUtility::RemoveObject(const String& name, const String& type, con
 
 		return false;
 	}
+
+	/* store the cached change */
+	changes->Add(change);
 
 	return WriteObjectToRepositoryChangeLog(path, change);
 }
@@ -311,16 +315,12 @@ bool RepositoryUtility::SetObjectAttribute(const String& name, const String& typ
 	return true;
 }
 
-bool RepositoryUtility::CheckChangeExists(const Dictionary::Ptr& change)
+bool RepositoryUtility::CheckChangeExists(const Dictionary::Ptr& change, const Array::Ptr& changes)
 {
 	Dictionary::Ptr attrs = change->Get("attrs");
 
-	Array::Ptr changelog = new Array();
-
-	GetChangeLog(boost::bind(RepositoryUtility::CollectChange, _1, changelog));
-
-	ObjectLock olock(changelog);
-	BOOST_FOREACH(const Dictionary::Ptr& entry, changelog) {
+	ObjectLock olock(changes);
+	BOOST_FOREACH(const Dictionary::Ptr& entry, changes) {
 		if (entry->Get("type") != change->Get("type"))
 			continue;
 
@@ -375,9 +375,9 @@ bool RepositoryUtility::WriteObjectToRepositoryChangeLog(const String& path, con
 
 	String tempPath = path + ".tmp";
 
-        std::ofstream fp(tempPath.CStr(), std::ofstream::out | std::ostream::trunc);
-        fp << JsonEncode(item);
-        fp.close();
+	std::ofstream fp(tempPath.CStr(), std::ofstream::out | std::ostream::trunc);
+	fp << JsonEncode(item);
+	fp.close();
 
 #ifdef _WIN32
 	_unlink(path.CStr());
@@ -497,7 +497,7 @@ bool RepositoryUtility::SetObjectAttributeInternal(const String& name, const Str
 	std::cout << "Writing object '" << name << "' to path '" << path << "'.\n";
 
 	//TODO: Create a patch file
-	if(!WriteObjectToRepository(path, name, type, obj)) {
+	if (!WriteObjectToRepository(path, name, type, obj)) {
 		Log(LogCritical, "cli")
 		    << "Can't write object " << name << " to repository.\n";
 		return false;
@@ -515,10 +515,10 @@ bool RepositoryUtility::WriteObjectToRepository(const String& path, const String
 
 	String tempPath = path + ".tmp";
 
-        std::ofstream fp(tempPath.CStr(), std::ofstream::out | std::ostream::trunc);
-        SerializeObject(fp, name, type, item);
+	std::ofstream fp(tempPath.CStr(), std::ofstream::out | std::ostream::trunc);
+	SerializeObject(fp, name, type, item);
 	fp << std::endl;
-        fp.close();
+	fp.close();
 
 #ifdef _WIN32
 	_unlink(path.CStr());
@@ -730,39 +730,39 @@ void RepositoryUtility::SerializeObject(std::ostream& fp, const String& name, co
 
 void RepositoryUtility::FormatValue(std::ostream& fp, const Value& val)
 {
-        if (val.IsObjectType<Array>()) {
-                FormatArray(fp, val);
-                return;
-        }
+	if (val.IsObjectType<Array>()) {
+		FormatArray(fp, val);
+		return;
+	}
 
-        if (val.IsString()) {
-                fp << "\"" << Convert::ToString(val) << "\"";
-                return;
-        }
+	if (val.IsString()) {
+		fp << "\"" << Convert::ToString(val) << "\"";
+		return;
+	}
 
-        fp << Convert::ToString(val);
+	fp << Convert::ToString(val);
 }
 
 void RepositoryUtility::FormatArray(std::ostream& fp, const Array::Ptr& arr)
 {
-        bool first = true;
+	bool first = true;
 
-        fp << "[ ";
+	fp << "[ ";
 
-        if (arr) {
-                ObjectLock olock(arr);
-                BOOST_FOREACH(const Value& value, arr) {
-                        if (first)
-                                first = false;
-                        else
-                                fp << ", ";
+	if (arr) {
+		ObjectLock olock(arr);
+		BOOST_FOREACH(const Value& value, arr) {
+			if (first)
+				first = false;
+			else
+				fp << ", ";
 
-                        FormatValue(fp, value);
-                }
-        }
+			FormatValue(fp, value);
+		}
+	}
 
-        if (!first)
-                fp << " ";
+	if (!first)
+		fp << " ";
 
-        fp << "]";
+	fp << "]";
 }

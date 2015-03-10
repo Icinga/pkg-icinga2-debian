@@ -47,6 +47,8 @@ public:
 
 	static boost::signals2::signal<void(bool)> OnMasterChanged;
 
+	ApiListener(void);
+
 	static ApiListener::Ptr GetInstance(void);
 
 	boost::shared_ptr<SSL_CTX> GetSSLContext(void) const;
@@ -59,7 +61,7 @@ public:
 	void SyncSendMessage(const Endpoint::Ptr& endpoint, const Dictionary::Ptr& message);
 	void RelayMessage(const MessageOrigin& origin, const DynamicObject::Ptr& secobj, const Dictionary::Ptr& message, bool log);
 
-	static Value StatsFunc(Dictionary::Ptr& status, Array::Ptr& perfdata);
+	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 	std::pair<Dictionary::Ptr, Dictionary::Ptr> GetStatus(void);
 
 	void AddAnonymousClient(const ApiClient::Ptr& aclient);
@@ -70,6 +72,7 @@ public:
 
 protected:
 	virtual void OnConfigLoaded(void);
+	virtual void OnAllConfigLoaded(void);
 	virtual void Start(void);
 
 private:
@@ -83,7 +86,7 @@ private:
 	bool AddListener(const String& node, const String& service);
 	void AddConnection(const Endpoint::Ptr& endpoint);
 
-	void NewClientHandler(const Socket::Ptr& client, ConnectionRole role);
+	void NewClientHandler(const Socket::Ptr& client, const String& hostname, ConnectionRole role);
 	void ListenerThreadProc(const Socket::Ptr& server);
 
 	WorkQueue m_RelayQueue;
@@ -107,7 +110,7 @@ private:
 	void SyncZoneDirs(void) const;
 	void SyncZoneDir(const Zone::Ptr& zone) const;
 
-	bool IsConfigMaster(const Zone::Ptr& zone) const;
+	static bool IsConfigMaster(const Zone::Ptr& zone);
 	static void ConfigGlobHandler(Dictionary::Ptr& config, const String& path, const String& file);
 	void SendConfigUpdate(const ApiClient::Ptr& aclient);
 };

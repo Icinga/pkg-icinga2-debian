@@ -22,7 +22,6 @@
 
 #include "base/i2-base.hpp"
 #include "base/string.hpp"
-#include "base/exception.hpp"
 
 namespace icinga
 {
@@ -32,7 +31,7 @@ namespace icinga
  *
  * @ingroup config
  */
-struct DebugInfo
+struct I2_BASE_API DebugInfo
 {
 	String Path;
 
@@ -41,18 +40,15 @@ struct DebugInfo
 
 	int LastLine;
 	int LastColumn;
+
+	DebugInfo(void);
 };
 
 I2_BASE_API std::ostream& operator<<(std::ostream& out, const DebugInfo& val);
 
 I2_BASE_API DebugInfo DebugInfoRange(const DebugInfo& start, const DebugInfo& end);
 
-I2_BASE_API void ShowCodeFragment(std::ostream& out, const DebugInfo& di, bool verbose);
-
-struct errinfo_debuginfo_;
-typedef boost::error_info<struct errinfo_debuginfo_, DebugInfo> errinfo_debuginfo;
-
-I2_BASE_API std::string to_string(const errinfo_debuginfo& e);
+I2_BASE_API void ShowCodeFragment(std::ostream& out, const DebugInfo& di, bool verbose = true);
 
 }
 

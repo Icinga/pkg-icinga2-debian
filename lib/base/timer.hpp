@@ -45,7 +45,7 @@ public:
 	static void AdjustTimers(double adjustment);
 
 	void Start(void);
-	void Stop(void);
+	void Stop(bool wait = false);
 
 	void Reschedule(double next = -1);
 	double GetNext(void) const;
@@ -81,8 +81,10 @@ private:
 	double m_Interval; /**< The interval of the timer. */
 	double m_Next; /**< When the next event should happen. */
 	bool m_Started; /**< Whether the timer is enabled. */
+	bool m_Running; /**< Whether the timer proc is currently running. */
 
 	void Call();
+	void InternalReschedule(bool completed, double next = -1);
 
 	static void TimerThreadProc(void);
 

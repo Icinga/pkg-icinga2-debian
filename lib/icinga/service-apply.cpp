@@ -20,13 +20,12 @@
 #include "icinga/service.hpp"
 #include "config/configitembuilder.hpp"
 #include "config/applyrule.hpp"
-#include "config/configcompilercontext.hpp"
 #include "base/initialize.hpp"
 #include "base/dynamictype.hpp"
 #include "base/logger.hpp"
 #include "base/context.hpp"
 #include "base/workqueue.hpp"
-#include "base/configerror.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -37,11 +36,14 @@ void Service::RegisterApplyRuleHandler(void)
 {
 	std::vector<String> targets;
 	targets.push_back("Host");
-	ApplyRule::RegisterType("Service", targets, &Service::EvaluateApplyRules);
+	ApplyRule::RegisterType("Service", targets);
 }
 
-void Service::EvaluateApplyRuleOneInstance(const Host::Ptr& host, const String& name, const Dictionary::Ptr& locals, const ApplyRule& rule)
+bool Service::EvaluateApplyRuleInstance(const Host::Ptr& host, const String& name, ScriptFrame& frame, const ApplyRule& rule)
 {
+	if (!rule.EvaluateFilter(frame))
+		return false;
+
 	DebugInfo di = rule.GetDebugInfo();
 
 	Log(LogDebug, "Service")
@@ -50,25 +52,26 @@ void Service::EvaluateApplyRuleOneInstance(const Host::Ptr& host, const String& 
 	ConfigItemBuilder::Ptr builder = new ConfigItemBuilder(di);
 	builder->SetType("Service");
 	builder->SetName(name);
-	builder->SetScope(locals);
+	builder->SetScope(frame.Locals);
 
-	builder->AddExpression(new SetExpression(MakeIndexer("host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
 
-	builder->AddExpression(new SetExpression(MakeIndexer("name"), OpSetLiteral, MakeLiteral(name), di));
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "name"), OpSetLiteral, MakeLiteral(name), di));
 
-	String zone = host->GetZone();
+	String zone = host->GetZoneName();
 
 	if (!zone.IsEmpty())
-		builder->AddExpression(new SetExpression(MakeIndexer("zone"), OpSetLiteral, MakeLiteral(zone), di));
+		builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "zone"), OpSetLiteral, MakeLiteral(zone), di));
 
 	builder->AddExpression(new OwnedExpression(rule.GetExpression()));
 
 	ConfigItem::Ptr serviceItem = builder->Compile();
-	DynamicObject::Ptr dobj = serviceItem->Commit();
-	dobj->OnConfigLoaded();
+	serviceItem->Commit();
+
+	return true;
 }
 
-bool Service::EvaluateApplyRuleOne(const Host::Ptr& host, const ApplyRule& rule)
+bool Service::EvaluateApplyRule(const Host::Ptr& host, const ApplyRule& rule)
 {
 	DebugInfo di = rule.GetDebugInfo();
 
@@ -76,86 +79,71 @@ bool Service::EvaluateApplyRuleOne(const Host::Ptr& host, const ApplyRule& rule)
 	msgbuf << "Evaluating 'apply' rule (" << di << ")";
 	CONTEXT(msgbuf.str());
 
-	Dictionary::Ptr locals = new Dictionary();
-	locals->Set("__parent", rule.GetScope());
-	locals->Set("host", host);
-
-	if (!rule.EvaluateFilter(locals))
-		return false;
+	ScriptFrame frame;
+	if (rule.GetScope())
+		rule.GetScope()->CopyTo(frame.Locals);
+	frame.Locals->Set("host", host);
 
 	Value vinstances;
 
 	if (rule.GetFTerm()) {
-		vinstances = rule.GetFTerm()->Evaluate(locals);
+		try {
+			vinstances = rule.GetFTerm()->Evaluate(frame);
+		} catch (const std::exception&) {
+			/* Silently ignore errors here and assume there are no instances. */
+			return false;
+		}
 	} else {
 		Array::Ptr instances = new Array();
 		instances->Add("");
 		vinstances = instances;
 	}
 
+	bool match = false;
+
 	if (vinstances.IsObjectType<Array>()) {
 		if (!rule.GetFVVar().IsEmpty())
-			BOOST_THROW_EXCEPTION(ConfigError("Array iterator requires value to be an array.") << errinfo_debuginfo(di));
+			BOOST_THROW_EXCEPTION(ScriptError("Array iterator requires value to be an array.", di));
 
 		Array::Ptr arr = vinstances;
+		Array::Ptr arrclone = arr->ShallowClone();
 
-		ObjectLock olock(arr);
-		BOOST_FOREACH(const String& instance, arr) {
+		ObjectLock olock(arrclone);
+		BOOST_FOREACH(const Value& instance, arrclone) {
 			String name = rule.GetName();
 
 			if (!rule.GetFKVar().IsEmpty()) {
-				locals->Set(rule.GetFKVar(), instance);
+				frame.Locals->Set(rule.GetFKVar(), instance);
 				name += instance;
 			}
 
-			EvaluateApplyRuleOneInstance(host, name, locals, rule);
+			if (EvaluateApplyRuleInstance(host, name, frame, rule))
+				match = true;
 		}
 	} else if (vinstances.IsObjectType<Dictionary>()) {
 		if (rule.GetFVVar().IsEmpty())
-			BOOST_THROW_EXCEPTION(ConfigError("Dictionary iterator requires value to be a dictionary.") << errinfo_debuginfo(di));
+			BOOST_THROW_EXCEPTION(ScriptError("Dictionary iterator requires value to be a dictionary.", di));
 	
 		Dictionary::Ptr dict = vinstances;
 
-		ObjectLock olock(dict);
-		BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
-			locals->Set(rule.GetFKVar(), kv.first);
-			locals->Set(rule.GetFVVar(), kv.second);
+		BOOST_FOREACH(const String& key, dict->GetKeys()) {
+			frame.Locals->Set(rule.GetFKVar(), key);
+			frame.Locals->Set(rule.GetFVVar(), dict->Get(key));
 
-			EvaluateApplyRuleOneInstance(host, rule.GetName() + kv.first, locals, rule);
+			if (EvaluateApplyRuleInstance(host, rule.GetName() + key, frame, rule))
+				match = true;
 		}
 	}
 
-	return true;
+	return match;
 }
 
-void Service::EvaluateApplyRule(const ApplyRule& rule)
+void Service::EvaluateApplyRules(const Host::Ptr& host)
 {
-	int apply_count = 0;
-
-	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
+	BOOST_FOREACH(ApplyRule& rule, ApplyRule::GetRules("Service")) {
 		CONTEXT("Evaluating 'apply' rules for host '" + host->GetName() + "'");
 
-		try {
-			if (EvaluateApplyRuleOne(host, rule))
-				apply_count++;
-		} catch (const ConfigError& ex) {
-			const DebugInfo *di = boost::get_error_info<errinfo_debuginfo>(ex);
-			ConfigCompilerContext::GetInstance()->AddMessage(true, ex.what(), di ? *di : DebugInfo());
-		}
+		if (EvaluateApplyRule(host, rule))
+			rule.AddMatch();
 	}
-
-	if (apply_count == 0)
-		Log(LogWarning, "Service")
-		    << "Apply rule '" << rule.GetName() << "' for host does not match anywhere!";
-}
-
-void Service::EvaluateApplyRules(const std::vector<ApplyRule>& rules)
-{
-	ParallelWorkQueue upq;
-
-	BOOST_FOREACH(const ApplyRule& rule, rules) {
-		upq.Enqueue(boost::bind(&Service::EvaluateApplyRule, boost::cref(rule)));
-	}
-
-	upq.Join();
 }

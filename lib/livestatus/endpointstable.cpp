@@ -61,7 +61,8 @@ String EndpointsTable::GetPrefix(void) const
 void EndpointsTable::FetchRows(const AddRowFunction& addRowFn)
 {
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
-		addRowFn(endpoint);
+		if (!addRowFn(endpoint, LivestatusGroupByNone, Empty))
+			return;
 	}
 }
 
@@ -110,6 +111,3 @@ Value EndpointsTable::IsConnectedAccessor(const Value& row)
 
 	return is_connected;
 }
-
-
-

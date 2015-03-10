@@ -25,6 +25,7 @@
 #include "base/object.hpp"
 #include "base/array.hpp"
 #include "base/stream.hpp"
+#include "base/scriptframe.hpp"
 #include <deque>
 
 using namespace icinga;
@@ -39,10 +40,22 @@ enum LivestatusError
 	LivestatusErrorQuery = 452
 };
 
+struct LivestatusScriptFrame
+{
+	double Seen;
+	int NextLine;
+	std::map<String, String> Lines;
+	Dictionary::Ptr Locals;
+
+	LivestatusScriptFrame(void)
+		: Seen(0), NextLine(1)
+	{ }
+};
+
 /**
  * @ingroup livestatus
  */
-class LivestatusQuery : public Object
+class I2_LIVESTATUS_API LivestatusQuery : public Object
 {
 public:
 	DECLARE_PTR_TYPEDEFS(LivestatusQuery);
@@ -68,11 +81,13 @@ private:
 
 	String m_OutputFormat;
 	bool m_ColumnHeaders;
+	int m_Limit;
 
 	String m_ResponseHeader;
 
-	/* Parameters for COMMAND queries. */
+	/* Parameters for COMMAND/SCRIPT queries. */
 	String m_Command;
+	String m_Session;
 
 	/* Parameters for invalid queries. */
 	int m_ErrorCode;
@@ -89,6 +104,7 @@ private:
 
 	void ExecuteGetHelper(const Stream::Ptr& stream);
 	void ExecuteCommandHelper(const Stream::Ptr& stream);
+	void ExecuteScriptHelper(const Stream::Ptr& stream);
 	void ExecuteErrorHelper(const Stream::Ptr& stream);
 
 	void SendResponse(const Stream::Ptr& stream, int code, const String& data);

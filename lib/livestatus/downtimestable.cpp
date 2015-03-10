@@ -73,8 +73,10 @@ void DowntimesTable::FetchRows(const AddRowFunction& addRowFn)
 		String id;
 		Downtime::Ptr downtime;
 		BOOST_FOREACH(boost::tie(id, downtime), downtimes) {
-			if (Host::GetOwnerByDowntimeID(id) == host)
-				addRowFn(downtime);
+			if (Host::GetOwnerByDowntimeID(id) == host) {
+				if (!addRowFn(downtime, LivestatusGroupByNone, Empty))
+					return;
+			}
 		}
 	}
 
@@ -86,8 +88,10 @@ void DowntimesTable::FetchRows(const AddRowFunction& addRowFn)
 		String id;
 		Downtime::Ptr downtime;
 		BOOST_FOREACH(boost::tie(id, downtime), downtimes) {
-			if (Service::GetOwnerByDowntimeID(id) == service)
-				addRowFn(downtime);
+			if (Service::GetOwnerByDowntimeID(id) == service) {
+				if (!addRowFn(downtime, LivestatusGroupByNone, Empty))
+					return;
+			}
 		}
 	}
 }
@@ -98,9 +102,9 @@ Object::Ptr DowntimesTable::HostAccessor(const Value& row, const Column::ObjectA
 
 	Checkable::Ptr checkable = Checkable::GetOwnerByDowntimeID(downtime->GetId());
 
-        Host::Ptr host;
-        Service::Ptr service;
-        tie(host, service) = GetHostService(checkable);
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
 
 	return host;
 }
@@ -111,9 +115,9 @@ Object::Ptr DowntimesTable::ServiceAccessor(const Value& row, const Column::Obje
 
 	Checkable::Ptr checkable = Checkable::GetOwnerByDowntimeID(downtime->GetId());
 
-        Host::Ptr host;
-        Service::Ptr service;
-        tie(host, service) = GetHostService(checkable);
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
 
 	return service;
 }

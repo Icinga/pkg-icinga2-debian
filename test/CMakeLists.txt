@@ -22,7 +22,13 @@ set(base_test_SOURCES
   base-json.cpp base-match.cpp base-netstring.cpp base-object.cpp
   base-serialize.cpp base-shellescape.cpp base-stacktrace.cpp
   base-stream.cpp base-string.cpp base-timer.cpp base-type.cpp
-  base-value.cpp icinga-macros.cpp icinga-perfdata.cpp test.cpp
+  base-value.cpp config-ops.cpp icinga-macros.cpp icinga-perfdata.cpp
+  test.cpp
+)
+
+set(livestatus_test_SOURCES
+  livestatus.cpp
+  test.cpp
 )
 
 set_property(SOURCE test.cpp PROPERTY EXCLUDE_UNITY_BUILD TRUE)
@@ -36,6 +42,7 @@ add_boost_test(base
   LIBRARIES base config icinga
   TESTS base_array/construct
         base_array/getset
+        base_array/resize
         base_array/insert
         base_array/remove
         base_array/foreach
@@ -80,15 +87,31 @@ add_boost_test(base
         base_timer/interval
         base_timer/invoke
         base_timer/scope
+	base_type/gettype
+	base_type/assign
+	base_type/byname
+	base_type/instantiate
         base_value/scalar
         base_value/convert
         base_value/format
+	config_ops/simple
+	config_ops/advanced
 	icinga_macros/simple
 	icinga_perfdata/empty
 	icinga_perfdata/simple
+	icinga_perfdata/quotes
 	icinga_perfdata/multiple
 	icinga_perfdata/uom
 	icinga_perfdata/warncritminmax
+	icinga_perfdata/ignore_invalid_warn_crit_min_max
 	icinga_perfdata/invalid
+	icinga_perfdata/multi
 )
 
+if(ICINGA2_WITH_LIVESTATUS)
+  add_boost_test(livestatus
+    SOURCES test.cpp ${livestatus_test_SOURCES}
+    LIBRARIES base config icinga cli livestatus
+    TESTS livestatus/hosts livestatus/services
+  )
+endif()

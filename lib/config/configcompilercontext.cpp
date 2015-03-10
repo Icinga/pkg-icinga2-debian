@@ -21,43 +21,11 @@
 #include "base/singleton.hpp"
 #include "base/json.hpp"
 #include "base/netstring.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 #include <fstream>
 
 using namespace icinga;
-
-void ConfigCompilerContext::AddMessage(bool error, const String& message, const DebugInfo& di)
-{
-	boost::mutex::scoped_lock lock(m_Mutex);
-
-	m_Messages.push_back(ConfigCompilerMessage(error, message, di));
-}
-
-std::vector<ConfigCompilerMessage> ConfigCompilerContext::GetMessages(void) const
-{
-	boost::mutex::scoped_lock lock(m_Mutex);
-
-	return m_Messages;
-}
-
-bool ConfigCompilerContext::HasErrors(void) const
-{
-	boost::mutex::scoped_lock lock(m_Mutex);
-
-	BOOST_FOREACH(const ConfigCompilerMessage& message, m_Messages) {
-		if (message.Error)
-			return true;
-	}
-
-	return false;
-}
-
-void ConfigCompilerContext::Reset(void)
-{
-	boost::mutex::scoped_lock lock(m_Mutex);
-
-	m_Messages.clear();
-}
 
 ConfigCompilerContext *ConfigCompilerContext::GetInstance(void)
 {
@@ -95,6 +63,7 @@ void ConfigCompilerContext::WriteObject(const Dictionary::Ptr& object)
 void ConfigCompilerContext::FinishObjectsFile(void)
 {
 	m_ObjectsFP->Close();
+	m_ObjectsFP.reset();
 
 	String tempFilename = m_ObjectsPath + ".tmp";
 
@@ -107,7 +76,6 @@ void ConfigCompilerContext::FinishObjectsFile(void)
 		    << boost::errinfo_api_function("rename")
 		    << boost::errinfo_errno(errno)
 		    << boost::errinfo_file_name(tempFilename));
-        }
-
+	}
 }
 

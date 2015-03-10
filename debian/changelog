@@ -1,8 +1,21 @@
-icinga2 (2.2.4-1~ppa1~vivid1) vivid; urgency=medium
+icinga2 (2.3.0-1~ppa1~vivid1) vivid; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
+
+icinga2 (2.3.0-1) unstable; urgency=medium
+
+  [ Gunnar Beutner ]
+  * [bbd4107] Add the PIDFile setting to the systemd unit file
+
+  [ Alexander Wirt ]
+  * [739d013] Use service instead of killall in logrotate snippet
+    (Closes: #778892)
+  * [92c6b16] Imported Upstream version 2.3.0
+  * [57d4676] Use kill -USR1 instead of service.
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 10 Mar 2015 10:38:18 +0100
 
 icinga2 (2.2.4-1) unstable; urgency=medium
 

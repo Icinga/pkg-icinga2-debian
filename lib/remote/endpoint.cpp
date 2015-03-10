@@ -34,7 +34,7 @@ REGISTER_TYPE(Endpoint);
 boost::signals2::signal<void(const Endpoint::Ptr&, const ApiClient::Ptr&)> Endpoint::OnConnected;
 boost::signals2::signal<void(const Endpoint::Ptr&, const ApiClient::Ptr&)> Endpoint::OnDisconnected;
 
-void Endpoint::OnConfigLoaded(void)
+void Endpoint::OnAllConfigLoaded(void)
 {
 	DynamicObject::OnConfigLoaded();
 
@@ -46,14 +46,14 @@ void Endpoint::OnConfigLoaded(void)
 
 		if (members.find(this) != members.end()) {
 			if (m_Zone)
-				BOOST_THROW_EXCEPTION(std::runtime_error("Endpoint '" + GetName() + "' is in more than one zone."));
+				BOOST_THROW_EXCEPTION(ScriptError("Endpoint '" + GetName() + "' is in more than one zone.", GetDebugInfo()));
 
 			m_Zone = zone;
 		}
 	}
 
 	if (!m_Zone)
-		BOOST_THROW_EXCEPTION(std::runtime_error("Endpoint '" + GetName() + "' does not belong to a zone."));
+		BOOST_THROW_EXCEPTION(ScriptError("Endpoint '" + GetName() + "' does not belong to a zone.", GetDebugInfo()));
 }
 
 void Endpoint::AddClient(const ApiClient::Ptr& client)
@@ -83,6 +83,8 @@ void Endpoint::RemoveClient(const ApiClient::Ptr& client)
 
 		Log(LogWarning, "ApiListener")
 		    << "Removing API client for endpoint '" << GetName() << "'. " << m_Clients.size() << " API clients left.";
+
+		SetConnecting(false);
 	}
 
 	bool is_master = ApiListener::GetInstance()->IsMaster();

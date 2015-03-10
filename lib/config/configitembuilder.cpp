@@ -21,6 +21,7 @@
 #include "base/dynamictype.hpp"
 #include <sstream>
 #include <boost/foreach.hpp>
+#include <boost/smart_ptr/make_shared.hpp>
 
 using namespace icinga;
 
@@ -54,7 +55,7 @@ void ConfigItemBuilder::SetAbstract(bool abstract)
 	m_Abstract = abstract;
 }
 
-void ConfigItemBuilder::SetScope(const Object::Ptr& scope)
+void ConfigItemBuilder::SetScope(const Dictionary::Ptr& scope)
 {
 	m_Scope = scope;
 }
@@ -67,6 +68,11 @@ void ConfigItemBuilder::SetZone(const String& zone)
 void ConfigItemBuilder::AddExpression(Expression *expr)
 {
 	m_Expressions.push_back(expr);
+}
+
+void ConfigItemBuilder::SetFilter(const boost::shared_ptr<Expression>& filter)
+{
+	m_Filter = filter;
 }
 
 ConfigItem::Ptr ConfigItemBuilder::Compile(void)
@@ -83,31 +89,22 @@ ConfigItem::Ptr ConfigItemBuilder::Compile(void)
 		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
 	}
 
-	if (m_Name.IsEmpty()) {
-		std::ostringstream msgbuf;
-		msgbuf << "The name of an object may not be empty: " << m_DebugInfo;
-		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
-	}
-
 	std::vector<Expression *> exprs;
 
 	Array::Ptr templateArray = new Array();
 	templateArray->Add(m_Name);
 
-	std::vector<Expression *> indexer;
-	indexer.push_back(new LiteralExpression("templates"));
-
-	exprs.push_back(new SetExpression(indexer, OpSetAdd,
+	exprs.push_back(new SetExpression(MakeIndexer(ScopeCurrent, "templates"), OpSetAdd,
 	    new LiteralExpression(templateArray), m_DebugInfo));
 
 	DictExpression *dexpr = new DictExpression(m_Expressions, m_DebugInfo);
 	dexpr->MakeInline();
 	exprs.push_back(dexpr);
 
-	DictExpression *exprl = new DictExpression(exprs, m_DebugInfo);
+	boost::shared_ptr<DictExpression> exprl = boost::make_shared<DictExpression>(exprs, m_DebugInfo);
 	exprl->MakeInline();
 
-	return new ConfigItem(m_Type, m_Name, m_Abstract, boost::shared_ptr<Expression>(exprl),
+	return new ConfigItem(m_Type, m_Name, m_Abstract, exprl, m_Filter,
 	    m_DebugInfo, m_Scope, m_Zone);
 }
 

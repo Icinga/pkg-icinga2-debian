@@ -21,11 +21,12 @@
 #define NETSTRING_H
 
 #include "base/i2-base.hpp"
-#include "base/string.hpp"
 #include "base/stream.hpp"
 
 namespace icinga
 {
+
+class String;
 
 /**
  * Helper functions for reading/writing messages in the netstring format.
@@ -37,7 +38,7 @@ namespace icinga
 class I2_BASE_API NetString
 {
 public:
-	static bool ReadStringFromStream(const Stream::Ptr& stream, String *message);
+	static StreamReadStatus ReadStringFromStream(const Stream::Ptr& stream, String *message, StreamReadContext& context);
 	static void WriteStringToStream(const Stream::Ptr& stream, const String& message);
 
 private:

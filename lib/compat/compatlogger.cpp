@@ -25,7 +25,6 @@
 #include "icinga/macroprocessor.hpp"
 #include "icinga/externalcommandprocessor.hpp"
 #include "icinga/compatutility.hpp"
-#include "config/configcompilercontext.hpp"
 #include "base/dynamictype.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
@@ -33,7 +32,7 @@
 #include "base/convert.hpp"
 #include "base/application.hpp"
 #include "base/utility.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/function.hpp"
 #include "base/statsfunction.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
@@ -45,7 +44,7 @@ REGISTER_SCRIPTFUNCTION(ValidateRotationMethod, &CompatLogger::ValidateRotationM
 
 REGISTER_STATSFUNCTION(CompatLoggerStats, &CompatLogger::StatsFunc);
 
-Value CompatLogger::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
+void CompatLogger::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
@@ -54,8 +53,6 @@ Value CompatLogger::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 	}
 
 	status->Set("compatlogger", nodes);
-
-	return 0;
 }
 
 /**
@@ -564,14 +561,14 @@ void CompatLogger::RotationTimerHandler(void)
 	ScheduleNextRotation();
 }
 
-void CompatLogger::ValidateRotationMethod(const String& location, const Dictionary::Ptr& attrs)
+void CompatLogger::ValidateRotationMethod(const String& location, const CompatLogger::Ptr& object)
 {
-	Value rotation_method = attrs->Get("rotation_method");
+	String rotation_method = object->GetRotationMethod();
 
-	if (!rotation_method.IsEmpty() && rotation_method != "HOURLY" && rotation_method != "DAILY" &&
+	if (rotation_method != "HOURLY" && rotation_method != "DAILY" &&
 	    rotation_method != "WEEKLY" && rotation_method != "MONTHLY" && rotation_method != "NONE") {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": Rotation method '" + rotation_method + "' is invalid.");
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": Rotation method '" + rotation_method + "' is invalid.", object->GetDebugInfo()));
 	}
 }
 

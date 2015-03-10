@@ -18,11 +18,11 @@
  ******************************************************************************/
 
 #include "config/configtype.hpp"
-#include "config/configcompilercontext.hpp"
+#include "config/vmops.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
 #include "base/singleton.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/function.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -72,7 +72,7 @@ void ConfigType::AddParentRules(std::vector<TypeRuleList::Ptr>& ruleLists, const
 	}
 }
 
-void ConfigType::ValidateItem(const String& name, const Dictionary::Ptr& attrs, const DebugInfo& debugInfo, const TypeRuleUtilities *utils)
+void ConfigType::ValidateItem(const String& name, const Object::Ptr& object, const DebugInfo& debugInfo, const TypeRuleUtilities *utils)
 {
 	String location = "Object '" + name + "' (Type: '" + GetName() + "')";
 
@@ -86,7 +86,7 @@ void ConfigType::ValidateItem(const String& name, const Dictionary::Ptr& attrs, 
 	AddParentRules(ruleLists, this);
 	ruleLists.push_back(m_RuleList);
 
-	ValidateDictionary(attrs, ruleLists, locations, utils);
+	ValidateObject(object, ruleLists, locations, utils);
 }
 
 String ConfigType::LocationToString(const std::vector<String>& locations)
@@ -105,7 +105,55 @@ String ConfigType::LocationToString(const std::vector<String>& locations)
 	return stack;
 }
 
-void ConfigType::ValidateDictionary(const Dictionary::Ptr& dictionary,
+void ConfigType::ValidateAttribute(const String& key, const Value& value,
+    const std::vector<TypeRuleList::Ptr>& ruleLists, std::vector<String>& locations,
+    const TypeRuleUtilities *utils)
+{
+	TypeValidationResult overallResult = ValidationUnknownField;
+	std::vector<TypeRuleList::Ptr> subRuleLists;
+	String hint;
+
+	locations.push_back("Key " + key);
+
+	BOOST_FOREACH(const TypeRuleList::Ptr& ruleList, ruleLists) {
+		TypeRuleList::Ptr subRuleList;
+		TypeValidationResult result = ruleList->ValidateAttribute(key, value, &subRuleList, &hint, utils);
+
+		if (subRuleList)
+			subRuleLists.push_back(subRuleList);
+
+		if (overallResult == ValidationOK)
+			continue;
+
+		if (result == ValidationOK) {
+			overallResult = result;
+			continue;
+		}
+
+		if (result == ValidationInvalidType)
+			overallResult = result;
+	}
+
+	if (overallResult == ValidationUnknownField)
+		BOOST_THROW_EXCEPTION(ScriptError("Unknown attribute: " + LocationToString(locations)));
+	else if (overallResult == ValidationInvalidType) {
+		String message = "Invalid value: " + LocationToString(locations);
+
+		if (!hint.IsEmpty())
+			message += ": " + hint;
+
+		BOOST_THROW_EXCEPTION(ScriptError(message));
+	}
+
+	if (!subRuleLists.empty() && value.IsObject() && !value.IsObjectType<Array>())
+		ValidateObject(value, subRuleLists, locations, utils);
+	else if (!subRuleLists.empty() && value.IsObjectType<Array>())
+		ValidateArray(value, subRuleLists, locations, utils);
+
+	locations.pop_back();
+}
+
+void ConfigType::ValidateObject(const Object::Ptr& object,
     const std::vector<TypeRuleList::Ptr>& ruleLists, std::vector<String>& locations,
     const TypeRuleUtilities *utils)
 {
@@ -113,12 +161,10 @@ void ConfigType::ValidateDictionary(const Dictionary::Ptr& dictionary,
 		BOOST_FOREACH(const String& require, ruleList->GetRequires()) {
 			locations.push_back("Attribute '" + require + "'");
 
-			Value value = dictionary->Get(require);
+			Value value = VMOps::GetField(object, require);
 
-			if (value.IsEmpty() || (value.IsString() && static_cast<String>(value).IsEmpty())) {
-				ConfigCompilerContext::GetInstance()->AddMessage(true,
-				    "Required attribute is missing: " + LocationToString(locations));
-			}
+			if (value.IsEmpty())
+				BOOST_THROW_EXCEPTION(ScriptError("Required attribute is missing: " + LocationToString(locations)));
 
 			locations.pop_back();
 		}
@@ -126,64 +172,41 @@ void ConfigType::ValidateDictionary(const Dictionary::Ptr& dictionary,
 		String validator = ruleList->GetValidator();
 
 		if (!validator.IsEmpty()) {
-			ScriptFunction::Ptr func = ScriptFunction::GetByName(validator);
+			Function::Ptr func = ScriptGlobal::Get(validator, &Empty);
 
 			if (!func)
 				BOOST_THROW_EXCEPTION(std::invalid_argument("Validator function '" + validator + "' does not exist."));
 
 			std::vector<Value> arguments;
 			arguments.push_back(LocationToString(locations));
-			arguments.push_back(dictionary);
+			arguments.push_back(object);
 
 			func->Invoke(arguments);
 		}
 	}
 
-	ObjectLock olock(dictionary);
+	Dictionary::Ptr dictionary = dynamic_pointer_cast<Dictionary>(object);
 
-	BOOST_FOREACH(const Dictionary::Pair& kv, dictionary) {
-		TypeValidationResult overallResult = ValidationUnknownField;
-		std::vector<TypeRuleList::Ptr> subRuleLists;
-		String hint;
+	if (dictionary) {
+		ObjectLock olock(dictionary);
 
-		locations.push_back("Attribute '" + kv.first + "'");
+		BOOST_FOREACH(const Dictionary::Pair& kv, dictionary) {
+			ValidateAttribute(kv.first, kv.second, ruleLists, locations, utils);
+		}
+	} else {
+		Type::Ptr type = object->GetReflectionType();
 
-		BOOST_FOREACH(const TypeRuleList::Ptr& ruleList, ruleLists) {
-			TypeRuleList::Ptr subRuleList;
-			TypeValidationResult result = ruleList->ValidateAttribute(kv.first, kv.second, &subRuleList, &hint, utils);
+		if (!type)
+			return;
 
-			if (subRuleList)
-				subRuleLists.push_back(subRuleList);
+		for (int i = 0; i < type->GetFieldCount(); i++) {
+			Field field = type->GetFieldInfo(i);
 
-			if (overallResult == ValidationOK)
+			if (!(field.Attributes & FAConfig))
 				continue;
 
-			if (result == ValidationOK) {
-				overallResult = result;
-				continue;
-			}
-
-			if (result == ValidationInvalidType)
-				overallResult = result;
+			ValidateAttribute(field.Name, object->GetField(i), ruleLists, locations, utils);
 		}
-
-		if (overallResult == ValidationUnknownField)
-			ConfigCompilerContext::GetInstance()->AddMessage(true, "Unknown attribute: " + LocationToString(locations));
-		else if (overallResult == ValidationInvalidType) {
-			String message = "Invalid value for attribute: " + LocationToString(locations);
-
-			if (!hint.IsEmpty())
-				message += ": " + hint;
-
-			ConfigCompilerContext::GetInstance()->AddMessage(true, message);
-		}
-
-		if (!subRuleLists.empty() && kv.second.IsObjectType<Dictionary>())
-			ValidateDictionary(kv.second, subRuleLists, locations, utils);
-		else if (!subRuleLists.empty() && kv.second.IsObjectType<Array>())
-			ValidateArray(kv.second, subRuleLists, locations, utils);
-
-		locations.pop_back();
 	}
 }
 
@@ -197,10 +220,8 @@ void ConfigType::ValidateArray(const Array::Ptr& array,
 
 			locations.push_back("Attribute '" + require + "'");
 
-			if (array->GetLength() < index) {
-				ConfigCompilerContext::GetInstance()->AddMessage(true,
-				    "Required array index is missing: " + LocationToString(locations));
-			}
+			if (array->GetLength() < index)
+				BOOST_THROW_EXCEPTION(ScriptError("Required array index is missing: " + LocationToString(locations)));
 
 			locations.pop_back();
 		}
@@ -208,7 +229,7 @@ void ConfigType::ValidateArray(const Array::Ptr& array,
 		String validator = ruleList->GetValidator();
 
 		if (!validator.IsEmpty()) {
-			ScriptFunction::Ptr func = ScriptFunction::GetByName(validator);
+			Function::Ptr func = ScriptGlobal::Get(validator, &Empty);
 
 			if (!func)
 				BOOST_THROW_EXCEPTION(std::invalid_argument("Validator function '" + validator + "' does not exist."));
@@ -229,48 +250,7 @@ void ConfigType::ValidateArray(const Array::Ptr& array,
 		key = Convert::ToString(index);
 		index++;
 
-		TypeValidationResult overallResult = ValidationUnknownField;
-		std::vector<TypeRuleList::Ptr> subRuleLists;
-		String hint;
-
-		locations.push_back("Index " + key);
-
-		BOOST_FOREACH(const TypeRuleList::Ptr& ruleList, ruleLists) {
-			TypeRuleList::Ptr subRuleList;
-			TypeValidationResult result = ruleList->ValidateAttribute(key, value, &subRuleList, &hint, utils);
-
-			if (subRuleList)
-				subRuleLists.push_back(subRuleList);
-
-			if (overallResult == ValidationOK)
-				continue;
-
-			if (result == ValidationOK) {
-				overallResult = result;
-				continue;
-			}
-
-			if (result == ValidationInvalidType)
-				overallResult = result;
-		}
-
-		if (overallResult == ValidationUnknownField)
-			ConfigCompilerContext::GetInstance()->AddMessage(true, "Unknown attribute: " + LocationToString(locations));
-		else if (overallResult == ValidationInvalidType) {
-			String message = "Invalid value for array index: " + LocationToString(locations);
-
-			if (!hint.IsEmpty())
-				message += ": " + hint;
-
-			ConfigCompilerContext::GetInstance()->AddMessage(true, message);
-		}
-
-		if (!subRuleLists.empty() && value.IsObjectType<Dictionary>())
-			ValidateDictionary(value, subRuleLists, locations, utils);
-		else if (!subRuleLists.empty() && value.IsObjectType<Array>())
-			ValidateArray(value, subRuleLists, locations, utils);
-
-		locations.pop_back();
+		ValidateAttribute(key, value, ruleLists, locations, utils);
 	}
 }
 
@@ -287,11 +267,6 @@ ConfigType::Ptr ConfigType::GetByName(const String& name)
 ConfigTypeRegistry::ItemMap ConfigType::GetTypes(void)
 {
 	return ConfigTypeRegistry::GetInstance()->GetItems();
-}
-
-void ConfigType::DiscardTypes(void)
-{
-	ConfigTypeRegistry::GetInstance()->Clear();
 }
 
 ConfigTypeRegistry *ConfigTypeRegistry::GetInstance(void)

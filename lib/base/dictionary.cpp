@@ -25,7 +25,7 @@
 
 using namespace icinga;
 
-REGISTER_PRIMITIVE_TYPE(Dictionary);
+REGISTER_PRIMITIVE_TYPE(Dictionary, Dictionary::GetPrototype());
 
 /**
  * Compares dictionary keys using the less operator.
@@ -194,6 +194,17 @@ void Dictionary::Remove(Dictionary::Iterator it)
 	m_Data.erase(it);
 }
 
+/**
+ * Removes all dictionary items.
+ */
+void Dictionary::Clear(void)
+{
+	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
+
+	m_Data.clear();
+}
+
 void Dictionary::CopyTo(const Dictionary::Ptr& dest) const
 {
 	ASSERT(!OwnsLock());
@@ -214,4 +225,24 @@ Dictionary::Ptr Dictionary::ShallowClone(void) const
 	Dictionary::Ptr clone = new Dictionary();
 	CopyTo(clone);
 	return clone;
+}
+
+/**
+ * Returns an array containing all keys
+ * which are currently set in this directory.
+ *
+ * @returns an array of key names
+ */
+std::vector<String> Dictionary::GetKeys(void) const
+{
+	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
+
+	std::vector<String> keys;
+
+	BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
+		keys.push_back(kv.first);
+	}
+
+	return keys;
 }

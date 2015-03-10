@@ -1392,7 +1392,7 @@ Value ApiEvents::DowntimeRemovedAPIHandler(const MessageOrigin& origin, const Di
 
 void ApiEvents::AcknowledgementSetHandler(const Checkable::Ptr& checkable,
     const String& author, const String& comment, AcknowledgementType type,
-    double expiry, const MessageOrigin& origin)
+    bool notify, double expiry, const MessageOrigin& origin)
 {
 	ApiListener::Ptr listener = ApiListener::GetInstance();
 
@@ -1410,6 +1410,7 @@ void ApiEvents::AcknowledgementSetHandler(const Checkable::Ptr& checkable,
 	params->Set("author", author);
 	params->Set("comment", comment);
 	params->Set("acktype", type);
+	params->Set("notify", notify);
 	params->Set("expiry", expiry);
 
 	Dictionary::Ptr message = new Dictionary();
@@ -1448,7 +1449,7 @@ Value ApiEvents::AcknowledgementSetAPIHandler(const MessageOrigin& origin, const
 
 	checkable->AcknowledgeProblem(params->Get("author"), params->Get("comment"),
 	    static_cast<AcknowledgementType>(static_cast<int>(params->Get("acktype"))),
-	    params->Get("expiry"), origin);
+	    params->Get("notify"), params->Get("expiry"), origin);
 
 	return Empty;
 }
@@ -1510,9 +1511,9 @@ Value ApiEvents::AcknowledgementClearedAPIHandler(const MessageOrigin& origin, c
 
 Value ApiEvents::ExecuteCommandAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
 {
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
+	Endpoint::Ptr sourceEndpoint = origin.FromClient->GetEndpoint();
 
-	if (!endpoint || (origin.FromZone && !Zone::GetLocalZone()->IsChildOf(origin.FromZone)))
+	if (!sourceEndpoint || (origin.FromZone && !Zone::GetLocalZone()->IsChildOf(origin.FromZone)))
 		return Empty;
 
 	ApiListener::Ptr listener = ApiListener::GetInstance();
@@ -1525,14 +1526,38 @@ Value ApiEvents::ExecuteCommandAPIHandler(const MessageOrigin& origin, const Dic
 	if (!listener->GetAcceptCommands()) {
 		Log(LogWarning, "ApiListener")
 		    << "Ignoring command. '" << listener->GetName() << "' does not accept commands.";
+
+		Host::Ptr host = new Host();
+		Dictionary::Ptr attrs = new Dictionary();
+
+		attrs->Set("__name", params->Get("host"));
+		attrs->Set("type", "Host");
+
+		Deserialize(host, attrs, false, FAConfig);
+
+		if (params->Contains("service"))
+			host->SetExtension("agent_service_name", params->Get("service"));
+
+		CheckResult::Ptr cr = new CheckResult();
+		cr->SetState(ServiceUnknown);
+		cr->SetOutput("Endpoint '" + Endpoint::GetLocalEndpoint()->GetName() + "' does not accept commands.");
+		Dictionary::Ptr message = MakeCheckResultMessage(host, cr);
+		listener->SyncSendMessage(sourceEndpoint, message);
+
 		return Empty;
 	}
 
+	/* use a virtual host object for executing the command */
 	Host::Ptr host = new Host();
 	Dictionary::Ptr attrs = new Dictionary();
 
 	attrs->Set("__name", params->Get("host"));
 	attrs->Set("type", "Host");
+
+	Deserialize(host, attrs, false, FAConfig);
+
+	if (params->Contains("service"))
+		host->SetExtension("agent_service_name", params->Get("service"));
 
 	String command = params->Get("command");
 	String command_type = params->Get("command_type");
@@ -1543,7 +1568,7 @@ Value ApiEvents::ExecuteCommandAPIHandler(const MessageOrigin& origin, const Dic
 			cr->SetState(ServiceUnknown);
 			cr->SetOutput("Check command '" + command + "' does not exist.");
 			Dictionary::Ptr message = MakeCheckResultMessage(host, cr);
-			listener->SyncSendMessage(endpoint, message);
+			listener->SyncSendMessage(sourceEndpoint, message);
 			return Empty;
 		}
 	} else if (command_type == "event_command") {
@@ -1553,24 +1578,38 @@ Value ApiEvents::ExecuteCommandAPIHandler(const MessageOrigin& origin, const Dic
 		return Empty;
 
 	attrs->Set(command_type, params->Get("command"));
-	attrs->Set("command_endpoint", endpoint->GetName());
+	attrs->Set("command_endpoint", sourceEndpoint->GetName());
 
 	Deserialize(host, attrs, false, FAConfig);
 
-	if (params->Contains("service"))
-		host->SetExtension("agent_service_name", params->Get("service"));
-
 	host->SetExtension("agent_check", true);
-
-	static_pointer_cast<DynamicObject>(host)->OnStateLoaded();
-	static_pointer_cast<DynamicObject>(host)->OnConfigLoaded();
 
 	Dictionary::Ptr macros = params->Get("macros");
 
-	if (command_type == "check_command")
-		host->ExecuteCheck(macros, true);
-	else if (command_type == "event_command")
+	if (command_type == "check_command") {
+		try {
+			host->ExecuteRemoteCheck(macros);
+		} catch (const std::exception& ex) {
+			CheckResult::Ptr cr = new CheckResult();
+			cr->SetState(ServiceUnknown);
+
+			String output = "Exception occured while checking '" + host->GetName() + "': " + DiagnosticInformation(ex);
+			cr->SetOutput(output);
+
+			double now = Utility::GetTime();
+			cr->SetScheduleStart(now);
+			cr->SetScheduleEnd(now);
+			cr->SetExecutionStart(now);
+			cr->SetExecutionEnd(now);
+
+			Dictionary::Ptr message = MakeCheckResultMessage(host, cr);
+			listener->SyncSendMessage(sourceEndpoint, message);
+
+			Log(LogCritical, "checker", output);
+		}
+	} else if (command_type == "event_command") {
 		host->ExecuteEventHandler(macros, true);
+	}
 
 	return Empty;
 }
@@ -1602,6 +1641,9 @@ void ApiEvents::RepositoryTimerHandler(void)
 	}
 
 	Zone::Ptr my_zone = my_endpoint->GetZone();
+
+	if (!my_zone)
+		return;
 
 	Dictionary::Ptr params = new Dictionary();
 	params->Set("seen", Utility::GetTime());

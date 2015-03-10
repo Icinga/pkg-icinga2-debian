@@ -15,7 +15,9 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
+add_subdirectory(plugins-contrib.d)
+
 install(
-  FILES itl command.conf command-icinga.conf timeperiod.conf plugins command-plugins.conf manubulon command-plugins-manubulon.conf 
+  FILES itl command.conf command-icinga.conf hangman timeperiod.conf plugins command-plugins.conf manubulon command-plugins-manubulon.conf command-nscp-local.conf nscp plugins-contrib
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icinga2/include
 )
