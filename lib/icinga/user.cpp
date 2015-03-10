@@ -18,11 +18,12 @@
  ******************************************************************************/
 
 #include "icinga/user.hpp"
+#include "icinga/usergroup.hpp"
 #include "icinga/notification.hpp"
 #include "icinga/usergroup.hpp"
-#include "config/configcompilercontext.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/function.hpp"
 #include "base/objectlock.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -34,8 +35,17 @@ boost::signals2::signal<void (const User::Ptr&, bool, const MessageOrigin&)> Use
 
 void User::OnConfigLoaded(void)
 {
+	DynamicObject::OnConfigLoaded();
+
 	SetTypeFilter(FilterArrayToInt(GetTypes(), ~0));
 	SetStateFilter(FilterArrayToInt(GetStates(), ~0));
+}
+
+void User::OnAllConfigLoaded(void)
+{
+	DynamicObject::OnAllConfigLoaded();
+
+	UserGroup::EvaluateObjectRules(this);
 
 	Array::Ptr groups = GetGroups();
 
@@ -91,22 +101,22 @@ TimePeriod::Ptr User::GetPeriod(void) const
 	return TimePeriod::GetByName(GetPeriodRaw());
 }
 
-void User::ValidateFilters(const String& location, const Dictionary::Ptr& attrs)
+void User::ValidateFilters(const String& location, const User::Ptr& object)
 {
-	int sfilter = FilterArrayToInt(attrs->Get("states"), 0);
+	int sfilter = FilterArrayToInt(object->GetStates(), 0);
 
 	if ((sfilter & ~(StateFilterUp | StateFilterDown | StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": State filter is invalid.");
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": State filter is invalid.", object->GetDebugInfo()));
 	}
 
-	int tfilter = FilterArrayToInt(attrs->Get("types"), 0);
+	int tfilter = FilterArrayToInt(object->GetTypes(), 0);
 
 	if ((tfilter & ~(1 << NotificationDowntimeStart | 1 << NotificationDowntimeEnd | 1 << NotificationDowntimeRemoved |
 	    1 << NotificationCustom | 1 << NotificationAcknowledgement | 1 << NotificationProblem | 1 << NotificationRecovery |
 	    1 << NotificationFlappingStart | 1 << NotificationFlappingEnd)) != 0) {
-		ConfigCompilerContext::GetInstance()->AddMessage(true, "Validation failed for " +
-		    location + ": Type filter is invalid.");
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": Type filter is invalid.", object->GetDebugInfo()));
 	}
 }
 

@@ -27,11 +27,11 @@
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
-#include "base/scriptfunction.hpp"
+#include "base/function.hpp"
 #include "base/initialize.hpp"
-#include "base/scriptvariable.hpp"
 #include "base/workqueue.hpp"
 #include "base/context.hpp"
+#include "base/application.hpp"
 #include <fstream>
 #include <boost/foreach.hpp>
 #include <boost/exception/errinfo_api_function.hpp>
@@ -53,7 +53,7 @@ DynamicObject::DynamicObject(void)
 
 DynamicType::Ptr DynamicObject::GetType(void) const
 {
-	return DynamicType::GetByName(GetTypeName());
+	return DynamicType::GetByName(GetTypeNameV());
 }
 
 DebugInfo DynamicObject::GetDebugInfo(void) const
@@ -182,6 +182,11 @@ void DynamicObject::OnConfigLoaded(void)
 	/* Nothing to do here. */
 }
 
+void DynamicObject::OnAllConfigLoaded(void)
+{
+	/* Nothing to do here. */
+}
+
 void DynamicObject::OnStateLoaded(void)
 {
 	/* Nothing to do here. */
@@ -212,35 +217,6 @@ void DynamicObject::SetAuthority(bool authority)
 		SetPaused(true);
 		OnPaused(this);
 	}
-}
-
-Value DynamicObject::InvokeMethod(const String& method,
-    const std::vector<Value>& arguments)
-{
-	Dictionary::Ptr methods;
-
-	methods = GetMethods();
-
-	if (!methods)
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Method '" + method + "' does not exist."));
-
-	Value funcName = methods->Get(method);
-
-	if (funcName.IsEmpty())
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Method '" + method + "' does not exist."));
-
-	ScriptFunction::Ptr func;
-
-	if (funcName.IsObjectType<ScriptFunction>()) {
-		func = funcName;
-	} else {
-		func = ScriptFunction::GetByName(funcName);
-
-		if (!func)
-			BOOST_THROW_EXCEPTION(std::invalid_argument("Function '" + String(funcName) + "' does not exist."));
-	}
-
-	return func->Invoke(arguments);
 }
 
 void DynamicObject::DumpObjects(const String& filename, int attributeTypes)
@@ -313,10 +289,10 @@ void DynamicObject::RestoreObject(const String& message, int attributeTypes)
 		return;
 
 	ASSERT(!object->IsActive());
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 	Log(LogDebug, "DynamicObject")
 	    << "Restoring object '" << name << "' of type '" << type << "'.";
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 	Dictionary::Ptr update = persistentObject->Get("update");
 	Deserialize(object, update, false, attributeTypes);
 	object->OnStateLoaded();
@@ -325,6 +301,9 @@ void DynamicObject::RestoreObject(const String& message, int attributeTypes)
 
 void DynamicObject::RestoreObjects(const String& filename, int attributeTypes)
 {
+	if (!Utility::PathExists(filename))
+		return;
+
 	Log(LogInformation, "DynamicObject")
 	    << "Restoring program state from file '" << filename << "'";
 
@@ -335,10 +314,19 @@ void DynamicObject::RestoreObjects(const String& filename, int attributeTypes)
 
 	unsigned long restored = 0;
 
-	ParallelWorkQueue upq;
+	WorkQueue upq(25000, Application::GetConcurrency());
 
 	String message;
-	while (NetString::ReadStringFromStream(sfp, &message)) {
+	StreamReadContext src;
+	for (;;) {
+		StreamReadStatus srs = NetString::ReadStringFromStream(sfp, &message, src);
+
+		if (srs == StatusEof)
+			break;
+
+		if (srs != StatusNewItem)
+			continue;
+
 		upq.Enqueue(boost::bind(&DynamicObject::RestoreObject, message, attributeTypes));
 		restored++;
 	}

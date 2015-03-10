@@ -20,6 +20,7 @@
 #ifndef LIVESTATUSLISTENER_H
 #define LIVESTATUSLISTENER_H
 
+#include "livestatus/i2-livestatus.hpp"
 #include "livestatus/livestatuslistener.thpp"
 #include "livestatus/livestatusquery.hpp"
 #include "base/socket.hpp"
@@ -33,28 +34,29 @@ namespace icinga
 /**
  * @ingroup livestatus
  */
-class LivestatusListener : public ObjectImpl<LivestatusListener>
+class I2_LIVESTATUS_API LivestatusListener : public ObjectImpl<LivestatusListener>
 {
 public:
 	DECLARE_OBJECT(LivestatusListener);
 	DECLARE_OBJECTNAME(LivestatusListener);
 
-	static Value StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
+	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
 	static int GetClientsConnected(void);
 	static int GetConnections(void);
 
-	static void ValidateSocketType(const String& location, const Dictionary::Ptr& attrs);
+	static void ValidateSocketType(const String& location, const LivestatusListener::Ptr& object);
 
 protected:
 	virtual void Start(void);
 	virtual void Stop(void);
 
 private:
-	void ServerThreadProc(const Socket::Ptr& server);
+	void ServerThreadProc(void);
 	void ClientHandler(const Socket::Ptr& client);
 
 	Socket::Ptr m_Listener;
+	boost::thread m_Thread;
 };
 
 }

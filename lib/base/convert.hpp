@@ -59,7 +59,20 @@ public:
 		}
 	}
 
-	static bool ToBool(const String& val);
+	static inline long ToLong(const Value& val)
+	{
+		return val;
+	}
+
+	static inline double ToDouble(const Value& val)
+	{
+		return val;
+	}
+
+	static inline bool ToBool(const Value& val)
+	{
+		return val.ToBool();
+	}
 
 	template<typename T>
 	static String ToString(const T& val)

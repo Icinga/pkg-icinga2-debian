@@ -25,6 +25,7 @@
 #include "base/object.hpp"
 #include "base/initialize.hpp"
 #include <boost/function.hpp>
+#include <vector>
 
 namespace icinga
 {
@@ -60,6 +61,8 @@ class I2_BASE_API Type : public Object
 public:
 	DECLARE_PTR_TYPEDEFS(Type);
 
+	virtual String ToString(void) const;
+
 	virtual String GetName(void) const = 0;
 	virtual Type::Ptr GetBaseType(void) const = 0;
 	virtual int GetAttributes(void) const = 0;
@@ -73,16 +76,38 @@ public:
 
 	bool IsAbstract(void) const;
 
+	Object::Ptr GetPrototype(void) const;
+	void SetPrototype(const Object::Ptr& object);
+
 	static void Register(const Type::Ptr& type);
 	static Type::Ptr GetByName(const String& name);
+
+	virtual void SetField(int id, const Value& value);
+	virtual Value GetField(int id) const;
+
+	virtual std::vector<String> GetLoadDependencies(void) const;
 
 protected:
 	virtual ObjectFactory GetFactory(void) const = 0;
 
 private:
-	typedef std::map<String, Type::Ptr> TypeMap;
+	Object::Ptr m_Prototype;
+};
 
-	static TypeMap& GetTypes(void);
+class I2_BASE_API TypeType : public Type
+{
+public:
+	DECLARE_PTR_TYPEDEFS(Type);
+
+	virtual String GetName(void) const;
+	virtual Type::Ptr GetBaseType(void) const;
+	virtual int GetAttributes(void) const;
+	virtual int GetFieldId(const String& name) const;
+	virtual Field GetFieldInfo(int id) const;
+	virtual int GetFieldCount(void) const;
+
+protected:
+	virtual ObjectFactory GetFactory(void) const;
 };
 
 template<typename T>

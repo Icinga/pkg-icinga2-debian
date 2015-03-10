@@ -26,7 +26,6 @@
 #include "base/utility.hpp"
 #include "base/json.hpp"
 #include "base/objectlock.hpp"
-#include "base/scriptfunction.hpp"
 #include <mmatch.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/foreach.hpp>
@@ -57,9 +56,6 @@ using namespace icinga;
 
 boost::thread_specific_ptr<String> Utility::m_ThreadName;
 boost::thread_specific_ptr<unsigned int> Utility::m_RandSeed;
-
-REGISTER_SCRIPTFUNCTION(escape, &Utility::EscapeString);
-REGISTER_SCRIPTFUNCTION(unescape, &Utility::UnescapeString);
 
 /**
  * Demangles a symbol name.
@@ -260,11 +256,8 @@ double Utility::GetTime(void)
 #else /* _WIN32 */
 	struct timeval tv;
 
-	if (gettimeofday(&tv, NULL) < 0) {
-		BOOST_THROW_EXCEPTION(posix_error()
-		    << boost::errinfo_api_function("gettimeofday")
-		    << boost::errinfo_errno(errno));
-	}
+	int rc = gettimeofday(&tv, NULL);
+	VERIFY(rc >= 0);
 
 	return tv.tv_sec + tv.tv_usec / 1000000.0;
 #endif /* _WIN32 */
@@ -303,12 +296,7 @@ void Utility::Sleep(double timeout)
  *
  * @param library The name of the library.
  */
-#ifdef _WIN32
-HMODULE
-#else /* _WIN32 */
-void *
-#endif /* _WIN32 */
-Utility::LoadExtensionLibrary(const String& library)
+void Utility::LoadExtensionLibrary(const String& library)
 {
 	String path;
 #if defined(_WIN32)
@@ -340,9 +328,6 @@ Utility::LoadExtensionLibrary(const String& library)
 #endif /* _WIN32 */
 
 	ExecuteDeferredInitializers();
-
-
-	return hModule;
 }
 
 boost::thread_specific_ptr<std::vector<boost::function<void(void)> > >& Utility::GetDeferredInitializers(void)
@@ -356,8 +341,10 @@ void Utility::ExecuteDeferredInitializers(void)
 	if (!GetDeferredInitializers().get())
 		return;
 
-	BOOST_FOREACH(const boost::function<void(void)>& callback, *GetDeferredInitializers().get())
+	BOOST_FOREACH(const boost::function<void(void)>& callback, *GetDeferredInitializers().get()) {
+		VERIFY(callback);
 		callback();
+	}
 
 	GetDeferredInitializers().reset();
 }

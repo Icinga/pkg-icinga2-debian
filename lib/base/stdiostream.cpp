@@ -38,7 +38,7 @@ StdioStream::~StdioStream(void)
 	Close();
 }
 
-size_t StdioStream::Read(void *buffer, size_t size)
+size_t StdioStream::Read(void *buffer, size_t size, bool allow_partial)
 {
 	ObjectLock olock(this);
 
@@ -63,5 +63,5 @@ void StdioStream::Close(void)
 
 bool StdioStream::IsEof(void) const
 {
-	return m_InnerStream->eof();
+	return !m_InnerStream->good();
 }

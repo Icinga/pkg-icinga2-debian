@@ -37,7 +37,7 @@ public:
 	DECLARE_OBJECT(FileLogger);
 	DECLARE_OBJECTNAME(FileLogger);
 
-	static Value StatsFunc(Dictionary::Ptr& status, Array::Ptr& perfdata);
+	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
 	virtual void Start(void);
 

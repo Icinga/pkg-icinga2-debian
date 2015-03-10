@@ -97,9 +97,11 @@ int FeatureUtility::EnableFeatures(const std::vector<std::string>& features)
 		    << ConsoleColorTag(Console_Normal) << ". Make sure to restart Icinga 2 for these changes to take effect.\n";
 
 #ifndef _WIN32
-		if (symlink(source.CStr(), target.CStr()) < 0) {
+		String relativeSource = "../features-available/" + feature + ".conf";
+
+		if (symlink(relativeSource.CStr(), target.CStr()) < 0) {
 			Log(LogCritical, "cli")
-			    << "Cannot enable feature '" << feature << "'. Linking source '" << source << "' to target file '" << target
+			    << "Cannot enable feature '" << feature << "'. Linking source '" << relativeSource << "' to target file '" << target
 			    << "' failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\".";
 			errors.push_back(feature);
 			continue;
@@ -173,7 +175,7 @@ int FeatureUtility::DisableFeatures(const std::vector<std::string>& features)
 	return 0;
 }
 
-int FeatureUtility::ListFeatures(void)
+int FeatureUtility::ListFeatures(std::ostream& os)
 {
 	std::vector<String> disabled_features;
 	std::vector<String> enabled_features;
@@ -181,13 +183,13 @@ int FeatureUtility::ListFeatures(void)
 	if (!FeatureUtility::GetFeatures(disabled_features, true))
 		return 1;
 
-	std::cout << ConsoleColorTag(Console_ForegroundRed | Console_Bold) << "Disabled features: " << ConsoleColorTag(Console_Normal)
+	os << ConsoleColorTag(Console_ForegroundRed | Console_Bold) << "Disabled features: " << ConsoleColorTag(Console_Normal)
 	    << boost::algorithm::join(disabled_features, " ") << "\n";
 
 	if (!FeatureUtility::GetFeatures(enabled_features, false))
 		return 1;
 
-	std::cout << ConsoleColorTag(Console_ForegroundGreen | Console_Bold) << "Enabled features: " << ConsoleColorTag(Console_Normal)
+	os << ConsoleColorTag(Console_ForegroundGreen | Console_Bold) << "Enabled features: " << ConsoleColorTag(Console_Normal)
 	    << boost::algorithm::join(enabled_features, " ") << "\n";
 
 	return 0;

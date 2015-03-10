@@ -34,7 +34,7 @@ REGISTER_TYPE(NotificationComponent);
 
 REGISTER_STATSFUNCTION(NotificationComponentStats, &NotificationComponent::StatsFunc);
 
-Value NotificationComponent::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
+void NotificationComponent::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
@@ -43,8 +43,6 @@ Value NotificationComponent::StatsFunc(const Dictionary::Ptr& status, const Arra
 	}
 
 	status->Set("notificationcomponent", nodes);
-
-	return 0;
 }
 
 /**
@@ -112,8 +110,8 @@ void NotificationComponent::NotificationTimerHandler(void)
 		}
 
 		try {
-			Log(LogInformation, "NotificationComponent")
-			    << "Sending reminder notification for object '" << checkable->GetName() << "'";
+			Log(LogNotice, "NotificationComponent")
+			    << "Attempting to send reminder notification for object '" << checkable->GetName() << "'";
 			notification->BeginExecuteNotification(NotificationProblem, checkable->GetLastCheckResult(), false);
 		} catch (const std::exception& ex) {
 			Log(LogWarning, "NotificationComponent")

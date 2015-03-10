@@ -21,6 +21,7 @@
 #define AGENTUTILITY_H
 
 #include "base/i2-base.hpp"
+#include "cli/i2-cli.hpp"
 #include "base/dictionary.hpp"
 #include "base/array.hpp"
 #include "base/value.hpp"
@@ -33,7 +34,7 @@ namespace icinga
 /**
  * @ingroup cli
  */
-class NodeUtility
+class I2_CLI_API NodeUtility
 {
 public:
 	static String GetRepositoryPath(void);
@@ -51,7 +52,7 @@ public:
 
 	static std::vector<Dictionary::Ptr> GetNodes(void);
 
-	static bool CreateBackupFile(const String& target);
+	static bool CreateBackupFile(const String& target, bool is_private = false);
 
 	static bool WriteNodeConfigObjects(const String& filename, const Array::Ptr& objects);
 

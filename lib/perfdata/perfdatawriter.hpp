@@ -40,7 +40,9 @@ public:
 	DECLARE_OBJECT(PerfdataWriter);
 	DECLARE_OBJECTNAME(PerfdataWriter);
 
-	static Value StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
+	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
+
+	static void ValidateFormatTemplates(const String& location, const PerfdataWriter::Ptr& object);
 
 protected:
 	virtual void Start(void);

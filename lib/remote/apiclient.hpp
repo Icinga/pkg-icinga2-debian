@@ -58,7 +58,6 @@ public:
 	ConnectionRole GetRole(void) const;
 
 	void Disconnect(void);
-	void DisconnectSync(void);
 
 	void SendMessage(const Dictionary::Ptr& request);
 
@@ -73,12 +72,19 @@ private:
 	ConnectionRole m_Role;
 	double m_Seen;
 	double m_NextHeartbeat;
+	Timer::Ptr m_TimeoutTimer;
+
+	StreamReadContext m_Context;
 
 	WorkQueue m_WriteQueue;
 
 	bool ProcessMessage(void);
-	void MessageThreadProc(void);
+	void DataAvailableHandler(void);
 	void SendMessageSync(const Dictionary::Ptr& request);
+
+	static void StaticInitialize(void);
+	static void TimeoutTimerHandler(void);
+	void CheckLiveness(void);
 };
 
 }

@@ -26,7 +26,7 @@
 #include "base/initialize.hpp"
 #include "base/logger.hpp"
 #include "base/utility.hpp"
-#include "base/scriptvariable.hpp"
+#include "base/scriptglobal.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/thread/once.hpp>
@@ -489,7 +489,7 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 	while (environ[envc] != NULL)
 		envc++;
 
-	char **envp = new char *[envc + (m_ExtraEnvironment ? m_ExtraEnvironment->GetLength() : 0) + 1];
+	char **envp = new char *[envc + (m_ExtraEnvironment ? m_ExtraEnvironment->GetLength() : 0) + 2];
 
 	for (int i = 0; i < envc; i++)
 		envp[i] = strdup(environ[i]);
@@ -505,12 +505,13 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 		}
 	}
 
-	envp[envc + (m_ExtraEnvironment ? m_ExtraEnvironment->GetLength() : 0)] = NULL;
+	envp[envc + (m_ExtraEnvironment ? m_ExtraEnvironment->GetLength() : 0)] = strdup("LC_NUMERIC=C");
+	envp[envc + (m_ExtraEnvironment ? m_ExtraEnvironment->GetLength() : 0) + 1] = NULL;
 
 	m_ExtraEnvironment.reset();
 
 #ifdef HAVE_VFORK
-	Value use_vfork = ScriptVariable::Get("UseVfork");
+	Value use_vfork = ScriptGlobal::Get("UseVfork");
 
 	if (use_vfork.IsEmpty() || static_cast<bool>(use_vfork))
 		m_Process = vfork();
@@ -545,8 +546,8 @@ void Process::Run(const boost::function<void(const ProcessResult&)>& callback)
 		if (icinga2_execvpe(argv[0], argv, envp) < 0) {
 			char errmsg[512];
 			strcpy(errmsg, "execvpe(");
-			strncat(errmsg, argv[0], sizeof(errmsg) - 1);
-			strncat(errmsg, ") failed", sizeof(errmsg) - 1);
+			strncat(errmsg, argv[0], sizeof(errmsg) - strlen(errmsg) - 1);
+			strncat(errmsg, ") failed", sizeof(errmsg) - strlen(errmsg) - 1);
 			errmsg[sizeof(errmsg) - 1] = '\0';
 			perror(errmsg);
 			_exit(128);

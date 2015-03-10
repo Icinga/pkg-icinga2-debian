@@ -27,46 +27,9 @@ using namespace boost::algorithm;
 
 using std::wstring;
 
-threshold::threshold(bool l)
-	: set(false), legal(l)
+threshold::threshold()
+	: set(false)
 {}
-
-//return TRUE if the threshold is broken
-bool threshold::rend(const double b)
-{
-	if (!set)
-		return set;
-	if (lower == upper)
-		return b > upper == legal;
-	else
-		return (b < lower || upper < b) != legal;
-}
-
-//returns a printable string of the threshold
-std::wstring threshold::pString()
-{
-	if (!set)
-		return L"0";
-
-	std::wstring s;
-	if (!legal)
-		s.append(L"!");
-
-	if (lower != upper) {
-		if (perc)
-			s.append(L"[").append(std::to_wstring(lower)).append(L"%").append(L"-")
-			.append(std::to_wstring(upper)).append(L"%").append(L"]");
-		else
-			s.append(L"[").append(std::to_wstring(lower)).append(L"-")
-			.append(std::to_wstring(upper)).append(L"]");
-	} else {
-		if (perc)
-			s = std::to_wstring(lower).append(L"%");
-		else
-			s = std::to_wstring(lower);
-	}
-	return s;
-}
 
 threshold::threshold(const wstring& stri)
 {
@@ -93,11 +56,11 @@ threshold::threshold(const wstring& stri)
 		wstring str1 = svec.at(0), str2 = svec.at(1);
 
 		if (str1.at(str1.length() - 1) == L'%' && str2.at(str2.length() - 1) == L'%') {
-			perc = true;
+			pc = true;
 			str1 = wstring(str1.begin(), str1.end() - 1);
 			str2 = wstring(str2.begin(), str2.end() - 1);
 		}
-			
+
 		try {
 			boost::algorithm::trim(str1);
 			lower = boost::lexical_cast<double>(str1);
@@ -109,7 +72,7 @@ threshold::threshold(const wstring& stri)
 		}
 	} else { //not range
 		if (str.at(str.length() - 1) == L'%') {
-			perc = true;
+			pc = true;
 			str = wstring(str.begin(), str.end() - 1);
 		}
 		try {
@@ -122,13 +85,82 @@ threshold::threshold(const wstring& stri)
 	}
 }
 
+//return TRUE if the threshold is broken
+bool threshold::rend(const double val, const double max)
+{
+	double upperAbs = upper;
+	double lowerAbs = lower;
+
+	if (perc) {
+		upperAbs = upper / 100 * max;
+		lowerAbs = lower / 100 * max;
+	}
+
+	if (!set)
+		return set;
+	if (lowerAbs == upperAbs)
+		return val > upperAbs == legal;
+	else
+		return (val < lowerAbs || upperAbs < val) != legal;
+}
+
+//returns a printable string of the threshold
+std::wstring threshold::pString(const double max)
+{
+	if (!set)
+		return L"";
+	//transform percentages to abolute values
+	double lowerAbs = lower;
+	double upperAbs = upper;
+	if (perc) {
+		lowerAbs = lower / 100 * max;
+		upperAbs = upper / 100 * max;
+	}
+
+	std::wstring s, lowerStr = removeZero(lowerAbs), 
+					upperStr = removeZero(upperAbs);
+
+	if (lower != upper) {
+		s.append(L"[").append(lowerStr).append(L"-")
+		.append(upperStr).append(L"]");
+	} else 
+		s.append(lowerStr);
+	
+	return s;
+}
+
+std::wstring removeZero(double val)
+{
+	std::wstring ret = boost::lexical_cast<std::wstring>(val);
+	int pos = ret.length();
+	if (ret.find_first_of(L".") == std::string::npos)
+		return ret;
+	for (std::wstring::reverse_iterator rit = ret.rbegin(); rit != ret.rend(); ++rit) {
+		if (*rit == L'.') {
+			return ret.substr(0, pos - 1);
+		}
+		if (*rit != L'0') {
+			return ret.substr(0, pos);
+		}
+		pos--;
+	}
+	return L"0";
+}
+
+std::vector<std::wstring> splitMultiOptions(std::wstring str)
+{
+	std::vector<wstring> sVec;
+	boost::split(sVec, str, boost::is_any_of(L","));
+	return sVec;
+}
+
 Bunit parseBUnit(const wstring& str)
 {
 	wstring wstr = to_upper_copy(str);
 
 	if (wstr == L"B")
 		return BunitB;
-	if (wstr == L"kB")
+	if (wstr == L"KB")
 		return BunitkB;
 	if (wstr == L"MB")
 		return BunitMB;

@@ -61,27 +61,32 @@ String CommandsTable::GetPrefix(void) const
 void CommandsTable::FetchRows(const AddRowFunction& addRowFn)
 {
 	BOOST_FOREACH(const DynamicObject::Ptr& object, DynamicType::GetObjectsByType<CheckCommand>()) {
-		addRowFn(object);
+		if (!addRowFn(object, LivestatusGroupByNone, Empty))
+			return;
 	}
+
 	BOOST_FOREACH(const DynamicObject::Ptr& object, DynamicType::GetObjectsByType<EventCommand>()) {
-		addRowFn(object);
+		if (!addRowFn(object, LivestatusGroupByNone, Empty))
+			return;
 	}
+
 	BOOST_FOREACH(const DynamicObject::Ptr& object, DynamicType::GetObjectsByType<NotificationCommand>()) {
-		addRowFn(object);
+		if (!addRowFn(object, LivestatusGroupByNone, Empty))
+			return;
 	}
 }
 
 Value CommandsTable::NameAccessor(const Value& row)
 {
 	Command::Ptr command = static_cast<Command::Ptr>(row);
-	
+
 	return CompatUtility::GetCommandName(command);
 }
 
 Value CommandsTable::LineAccessor(const Value& row)
 {
 	Command::Ptr command = static_cast<Command::Ptr>(row);
-	
+
 	if (!command)
 		return Empty;
 
@@ -109,6 +114,8 @@ Value CommandsTable::CustomVariableNamesAccessor(const Value& row)
 
 	String key;
 	Value value;
+
+	ObjectLock xlock(vars);
 	BOOST_FOREACH(tie(key, value), vars) {
 		cv->Add(key);
 	}
@@ -137,6 +144,8 @@ Value CommandsTable::CustomVariableValuesAccessor(const Value& row)
 
 	String key;
 	Value value;
+
+	ObjectLock xlock(vars);
 	BOOST_FOREACH(tie(key, value), vars) {
 		cv->Add(value);
 	}
@@ -165,6 +174,8 @@ Value CommandsTable::CustomVariablesAccessor(const Value& row)
 
 	String key;
 	Value value;
+
+	ObjectLock xlock(vars);
 	BOOST_FOREACH(tie(key, value), vars) {
 		Array::Ptr key_val = new Array();
 		key_val->Add(key);

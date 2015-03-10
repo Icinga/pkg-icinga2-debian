@@ -21,13 +21,12 @@
 #include "icinga/service.hpp"
 #include "config/configitembuilder.hpp"
 #include "config/applyrule.hpp"
-#include "config/configcompilercontext.hpp"
 #include "base/initialize.hpp"
 #include "base/dynamictype.hpp"
 #include "base/logger.hpp"
 #include "base/context.hpp"
 #include "base/workqueue.hpp"
-#include "base/configerror.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -39,11 +38,14 @@ void Dependency::RegisterApplyRuleHandler(void)
 	std::vector<String> targets;
 	targets.push_back("Host");
 	targets.push_back("Service");
-	ApplyRule::RegisterType("Dependency", targets, &Dependency::EvaluateApplyRules);
+	ApplyRule::RegisterType("Dependency", targets);
 }
 
-void Dependency::EvaluateApplyRuleOneInstance(const Checkable::Ptr& checkable, const String& name, const Dictionary::Ptr& locals, const ApplyRule& rule)
+bool Dependency::EvaluateApplyRuleInstance(const Checkable::Ptr& checkable, const String& name, ScriptFrame& frame, const ApplyRule& rule)
 {
+	if (!rule.EvaluateFilter(frame))
+		return false;
+
 	DebugInfo di = rule.GetDebugInfo();
 
 	Log(LogDebug, "Dependency")
@@ -52,32 +54,32 @@ void Dependency::EvaluateApplyRuleOneInstance(const Checkable::Ptr& checkable, c
 	ConfigItemBuilder::Ptr builder = new ConfigItemBuilder(di);
 	builder->SetType("Dependency");
 	builder->SetName(name);
-	builder->SetScope(locals);
+	builder->SetScope(frame.Locals);
 
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	builder->AddExpression(new SetExpression(MakeIndexer("parent_host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
-	builder->AddExpression(new SetExpression(MakeIndexer("child_host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "parent_host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "child_host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
 
 	if (service)
-		builder->AddExpression(new SetExpression(MakeIndexer("child_service_name"), OpSetLiteral, MakeLiteral(service->GetShortName()), di));
+		builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "child_service_name"), OpSetLiteral, MakeLiteral(service->GetShortName()), di));
 
-	String zone = checkable->GetZone();
+	String zone = checkable->GetZoneName();
 
 	if (!zone.IsEmpty())
-		builder->AddExpression(new SetExpression(MakeIndexer("zone"), OpSetLiteral, MakeLiteral(zone), di));
+		builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "zone"), OpSetLiteral, MakeLiteral(zone), di));
 
 	builder->AddExpression(new OwnedExpression(rule.GetExpression()));
 
 	ConfigItem::Ptr dependencyItem = builder->Compile();
-	DynamicObject::Ptr dobj = dependencyItem->Commit();
-	dobj->OnConfigLoaded();
+	dependencyItem->Commit();
 
+	return true;
 }
 
-bool Dependency::EvaluateApplyRuleOne(const Checkable::Ptr& checkable, const ApplyRule& rule)
+bool Dependency::EvaluateApplyRule(const Checkable::Ptr& checkable, const ApplyRule& rule)
 {
 	DebugInfo di = rule.GetDebugInfo();
 
@@ -89,115 +91,89 @@ bool Dependency::EvaluateApplyRuleOne(const Checkable::Ptr& checkable, const App
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr locals = new Dictionary();
-	locals->Set("__parent", rule.GetScope());
-	locals->Set("host", host);
+	ScriptFrame frame;
+	if (rule.GetScope())
+		rule.GetScope()->CopyTo(frame.Locals);
+	frame.Locals->Set("host", host);
 	if (service)
-		locals->Set("service", service);
-
-	if (!rule.EvaluateFilter(locals))
-		return false;
+		frame.Locals->Set("service", service);
 
 	Value vinstances;
 
 	if (rule.GetFTerm()) {
-		vinstances = rule.GetFTerm()->Evaluate(locals);
+		try {
+			vinstances = rule.GetFTerm()->Evaluate(frame);
+		} catch (const std::exception&) {
+			/* Silently ignore errors here and assume there are no instances. */
+			return false;
+		}
 	} else {
 		Array::Ptr instances = new Array();
 		instances->Add("");
 		vinstances = instances;
 	}
 
+	bool match = false;
+
 	if (vinstances.IsObjectType<Array>()) {
 		if (!rule.GetFVVar().IsEmpty())
-			BOOST_THROW_EXCEPTION(ConfigError("Array iterator requires value to be an array.") << errinfo_debuginfo(di));
+			BOOST_THROW_EXCEPTION(ScriptError("Array iterator requires value to be an array.", di));
 
 		Array::Ptr arr = vinstances;
+		Array::Ptr arrclone = arr->ShallowClone();
 
-		ObjectLock olock(arr);
-		BOOST_FOREACH(const String& instance, arr) {
+		ObjectLock olock(arrclone);
+		BOOST_FOREACH(const Value& instance, arrclone) {
 			String name = rule.GetName();
 
 			if (!rule.GetFKVar().IsEmpty()) {
-				locals->Set(rule.GetFKVar(), instance);
+				frame.Locals->Set(rule.GetFKVar(), instance);
 				name += instance;
 			}
 
-			EvaluateApplyRuleOneInstance(checkable, name, locals, rule);
+			if (EvaluateApplyRuleInstance(checkable, name, frame, rule))
+				match = true;
 		}
 	} else if (vinstances.IsObjectType<Dictionary>()) {
 		if (rule.GetFVVar().IsEmpty())
-			BOOST_THROW_EXCEPTION(ConfigError("Dictionary iterator requires value to be a dictionary.") << errinfo_debuginfo(di));
+			BOOST_THROW_EXCEPTION(ScriptError("Dictionary iterator requires value to be a dictionary.", di));
 	
 		Dictionary::Ptr dict = vinstances;
 
-		ObjectLock olock(dict);
-		BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
-			locals->Set(rule.GetFKVar(), kv.first);
-			locals->Set(rule.GetFVVar(), kv.second);
+		BOOST_FOREACH(const String& key, dict->GetKeys()) {
+			frame.Locals->Set(rule.GetFKVar(), key);
+			frame.Locals->Set(rule.GetFVVar(), dict->Get(key));
 
-			EvaluateApplyRuleOneInstance(checkable, rule.GetName() + kv.first, locals, rule);
+			if (EvaluateApplyRuleInstance(checkable, rule.GetName() + key, frame, rule))
+				match = true;
 		}
 	}
 
-	return true;
+	return match;
 }
 
-void Dependency::EvaluateApplyRule(const ApplyRule& rule)
+void Dependency::EvaluateApplyRules(const Host::Ptr& host)
 {
-	int apply_count = 0;
+	CONTEXT("Evaluating 'apply' rules for host '" + host->GetName() + "'");
 
-	if (rule.GetTargetType() == "Host") {
-		apply_count = 0;
+	BOOST_FOREACH(ApplyRule& rule, ApplyRule::GetRules("Dependency")) {
+		if (rule.GetTargetType() != "Host")
+			continue;
 
-		BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
-			CONTEXT("Evaluating 'apply' rules for host '" + host->GetName() + "'");
-
-			try {
-				if (EvaluateApplyRuleOne(host, rule))
-					apply_count++;
-			} catch (const ConfigError& ex) {
-				const DebugInfo *di = boost::get_error_info<errinfo_debuginfo>(ex);
-				ConfigCompilerContext::GetInstance()->AddMessage(true, ex.what(), di ? *di : DebugInfo());
-			}
-		}
-
-		if (apply_count == 0)
-			Log(LogWarning, "Dependency")
-			    << "Apply rule '" << rule.GetName() << "' for host does not match anywhere!";
-
-	} else if (rule.GetTargetType() == "Service") {
-		apply_count = 0;
-
-		BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjectsByType<Service>()) {
-			CONTEXT("Evaluating 'apply' rules for Service '" + service->GetName() + "'");
-
-			try {
-				if (EvaluateApplyRuleOne(service, rule))
-					apply_count++;
-			} catch (const ConfigError& ex) {
-				const DebugInfo *di = boost::get_error_info<errinfo_debuginfo>(ex);
-				ConfigCompilerContext::GetInstance()->AddMessage(true, ex.what(), di ? *di : DebugInfo());
-			}
-		}
-
-		if (apply_count == 0)
-			Log(LogWarning, "Dependency")
-			    << "Apply rule '" << rule.GetName() << "' for service does not match anywhere!";
-
-	} else {
-		Log(LogWarning, "Dependency")
-		    << "Wrong target type for apply rule '" << rule.GetName() << "'!";
+		if (EvaluateApplyRule(host, rule))
+			rule.AddMatch();
 	}
 }
 
-void Dependency::EvaluateApplyRules(const std::vector<ApplyRule>& rules)
+void Dependency::EvaluateApplyRules(const Service::Ptr& service)
 {
-	ParallelWorkQueue upq;
+	CONTEXT("Evaluating 'apply' rules for service '" + service->GetName() + "'");
 
-	BOOST_FOREACH(const ApplyRule& rule, rules) {
-		upq.Enqueue(boost::bind(&Dependency::EvaluateApplyRule, boost::cref(rule)));
+	BOOST_FOREACH(ApplyRule& rule, ApplyRule::GetRules("Dependency")) {
+		if (rule.GetTargetType() != "Service")
+			continue;
+
+		if (EvaluateApplyRule(service, rule))
+			rule.AddMatch();
 	}
-
-	upq.Join();
 }

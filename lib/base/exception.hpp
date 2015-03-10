@@ -25,6 +25,7 @@
 #include "base/stacktrace.hpp"
 #include "base/context.hpp"
 #include "base/utility.hpp"
+#include "base/debuginfo.hpp"
 #include <sstream>
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/errinfo_errno.hpp>
@@ -42,6 +43,27 @@ namespace icinga
 class I2_BASE_API user_error : virtual public std::exception, virtual public boost::exception
 { };
 
+/*
+ * @ingroup base
+ */
+class I2_BASE_API ScriptError : virtual public user_error
+{
+public:
+	ScriptError(const String& message);
+	ScriptError(const String& message, const DebugInfo& di, bool incompleteExpr = false);
+	~ScriptError(void) throw();
+
+	virtual const char *what(void) const throw();
+
+	DebugInfo GetDebugInfo(void) const;
+	bool IsIncompleteExpression(void) const;
+
+private:
+	String m_Message;
+	DebugInfo m_DebugInfo;
+	bool m_IncompleteExpr;
+};
+
 I2_BASE_API StackTrace *GetLastExceptionStack(void);
 I2_BASE_API void SetLastExceptionStack(const StackTrace& trace);
 
@@ -51,44 +73,34 @@ I2_BASE_API void SetLastExceptionContext(const ContextTrace& context);
 I2_BASE_API void RethrowUncaughtException(void);
 
 typedef boost::error_info<StackTrace, StackTrace> StackTraceErrorInfo;
-typedef boost::error_info<ContextTrace, ContextTrace> ContextTraceErrorInfo;
 
-template<typename T>
-String DiagnosticInformation(const T& ex, StackTrace *stack = NULL, ContextTrace *context = NULL)
+inline std::string to_string(const StackTraceErrorInfo& e)
 {
-	std::ostringstream result;
-
-	result << boost::diagnostic_information(ex);
-
-	if (dynamic_cast<const user_error *>(&ex) == NULL) {
-		if (boost::get_error_info<StackTraceErrorInfo>(ex) == NULL) {
-			result << std::endl;
-
-			if (!stack)
-				stack = GetLastExceptionStack();
-			
-			if (stack)
-				result << *stack;
-				
-		}
-
-		if (boost::get_error_info<ContextTraceErrorInfo>(ex) == NULL) {
-			result << std::endl;
-
-			if (!context)
-				context = GetLastExceptionContext();
-
-			if (context)
-				result << *context;
-		}
-	}
-
-	return result.str();
+	return "";
 }
 
-I2_BASE_API String DiagnosticInformation(boost::exception_ptr eptr);
+typedef boost::error_info<ContextTrace, ContextTrace> ContextTraceErrorInfo;
 
-class I2_BASE_API posix_error : virtual public std::exception, virtual public boost::exception { };
+inline std::string to_string(const ContextTraceErrorInfo& e)
+{
+	std::ostringstream msgbuf;
+	msgbuf << "[Context] = " << e.value();
+	return msgbuf.str();
+}
+
+I2_BASE_API String DiagnosticInformation(const std::exception& ex, bool verbose = true, StackTrace *stack = NULL, ContextTrace *context = NULL);
+I2_BASE_API String DiagnosticInformation(boost::exception_ptr eptr, bool verbose = true);
+
+class I2_BASE_API posix_error : virtual public std::exception, virtual public boost::exception {
+public:
+	posix_error(void);
+	virtual ~posix_error(void) throw();
+
+	virtual const char *what(void) const throw();
+
+private:
+	mutable char *m_Message;
+};
 
 #ifdef _WIN32
 class I2_BASE_API win32_error : virtual public std::exception, virtual public boost::exception { };
@@ -98,7 +110,7 @@ typedef boost::error_info<struct errinfo_win32_error_, int> errinfo_win32_error;
 
 inline std::string to_string(const errinfo_win32_error& e)
 {
-	return Utility::FormatErrorNumber(e.value());
+	return "[errinfo_win32_error] = " + Utility::FormatErrorNumber(e.value()) + "\n";
 }
 #endif /* _WIN32 */
 
@@ -107,7 +119,7 @@ typedef boost::error_info<struct errinfo_getaddrinfo_error_, int> errinfo_getadd
 
 inline std::string to_string(const errinfo_getaddrinfo_error& e)
 {
-	return gai_strerror(e.value());
+	return "[errinfo_getaddrinfo_error] = " + String(gai_strerror(e.value())) + "\n";
 }
 
 struct errinfo_message_;

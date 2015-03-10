@@ -48,9 +48,10 @@ struct FieldAccessor
 {
 	FieldAccessorType Type;
 	std::string Accessor;
+	bool Pure;
 
-	FieldAccessor(FieldAccessorType type, const std::string& accessor)
-		: Type(type), Accessor(accessor)
+	FieldAccessor(FieldAccessorType type, const std::string& accessor, bool pure)
+		: Type(type), Accessor(accessor), Pure(pure)
 	{ }
 };
 
@@ -61,7 +62,9 @@ enum FieldAttribute
 	FAEnum = 4,
 	FAGetProtected = 8,
 	FASetProtected = 16,
-	FAInternal = 32
+	FAInternal = 32,
+	FANoStorage = 64,
+	FALoadDependency = 128
 };
 
 struct Field
@@ -71,8 +74,14 @@ struct Field
 	std::string Name;
 	std::string AlternativeName;
 	std::string GetAccessor;
+	bool PureGetAccessor;
 	std::string SetAccessor;
+	bool PureSetAccessor;
 	std::string DefaultAccessor;
+
+	Field(void)
+		: Attributes(0), PureGetAccessor(false), PureSetAccessor(false)
+	{ }
 
 	std::string GetFriendlyName(void) const
 	{
@@ -116,6 +125,7 @@ struct Klass
 	std::string TypeBase;
 	int Attributes;
 	std::vector<Field> Fields;
+	std::vector<std::string> LoadDependencies;
 };
 
 class ClassCompiler

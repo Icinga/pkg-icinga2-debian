@@ -19,13 +19,15 @@ set(cli_SOURCES
   nodeaddcommand.cpp nodeblackandwhitelistcommand.cpp nodelistcommand.cpp noderemovecommand.cpp
   nodesetcommand.cpp nodesetupcommand.cpp nodeupdateconfigcommand.cpp nodewizardcommand.cpp nodeutility.cpp
   clicommand.cpp
-  daemoncommand.cpp
+  consolecommand.cpp
+  daemoncommand.cpp daemonutility.cpp
   featureenablecommand.cpp featuredisablecommand.cpp featurelistcommand.cpp featureutility.cpp
-  objectlistcommand.cpp
+  objectlistcommand.cpp objectlistutility.cpp
   pkinewcacommand.cpp pkinewcertcommand.cpp pkisigncsrcommand.cpp pkirequestcommand.cpp pkisavecertcommand.cpp pkiticketcommand.cpp
   pkiutility.cpp
   repositoryclearchangescommand.cpp repositorycommitcommand.cpp repositoryobjectcommand.cpp repositoryutility.cpp
   variablegetcommand.cpp variablelistcommand.cpp variableutility.cpp
+  troubleshootcommand.cpp
 )
 
 if(ICINGA2_UNITY_BUILD)

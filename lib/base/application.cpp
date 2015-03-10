@@ -27,17 +27,20 @@
 #include "base/debug.hpp"
 #include "base/type.hpp"
 #include "base/convert.hpp"
-#include "base/scriptvariable.hpp"
+#include "base/scriptglobal.hpp"
 #include "base/process.hpp"
-#include "icinga-version.h"
-#include <sstream>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/errinfo_errno.hpp>
 #include <boost/exception/errinfo_file_name.hpp>
+#include <sstream>
 #include <iostream>
+#include <fstream>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif /* __linux__ */
 
 using namespace icinga;
 
@@ -54,6 +57,7 @@ static bool l_InExceptionHandler = false;
 int Application::m_ArgC;
 char **Application::m_ArgV;
 double Application::m_StartTime;
+int Application::m_ExitStatus = 0;
 
 /**
  * Constructor for the Application class.
@@ -110,33 +114,15 @@ void Application::Exit(int rc)
 	}
 
 	UninitializeBase();
-
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 	exit(rc);
-#else /* _DEBUG */
+#else /* I2_DEBUG */
 	_exit(rc); // Yay, our static destructors are pretty much beyond repair at this point.
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 }
 
 void Application::InitializeBase(void)
 {
-#ifndef _WIN32
-	rlimit rl;
-	if (getrlimit(RLIMIT_NOFILE, &rl) >= 0) {
-		rlim_t maxfds = rl.rlim_max;
-
-		if (maxfds == RLIM_INFINITY)
-			maxfds = 65536;
-
-		for (rlim_t i = 3; i < maxfds; i++) {
-#ifdef _DEBUG
-			if (close(i) >= 0)
-				std::cerr << "Closed FD " << i << " which we inherited from our parent process." << std::endl;
-#endif /* _DEBUG */
-		}
-	}
-#endif /* _WIN32 */
-
 #ifdef _WIN32
 	/* disable GUI-based error messages for LoadLibrary() */
 	SetErrorMode(SEM_FAILCRITICALERRORS);
@@ -244,10 +230,9 @@ void Application::SetResourceLimits(void)
 
 		new_argv[argc + 1] = NULL;
 
-		if (execvp(new_argv[0], new_argv) < 0)
-			perror("execvp");
-
-		Exit(EXIT_FAILURE);
+		(void) execvp(new_argv[0], new_argv);
+		perror("execvp");
+		_exit(EXIT_FAILURE);
 	}
 #	else /* RLIMIT_STACK */
 	Log(LogNotice, "Application", "System does not support adjusting the resource limit for stack size (RLIMIT_STACK)");
@@ -299,12 +284,12 @@ mainloop:
 		double now = Utility::GetTime();
 		double timeDiff = lastLoop - now;
 
-		if (abs(timeDiff) > 15) {
+		if (std::fabs(timeDiff) > 15) {
 			/* We made a significant jump in time. */
 			Log(LogInformation, "Application")
 			    << "We jumped "
 			    << (timeDiff < 0 ? "forward" : "backward")
-			    << " in time: " << abs(timeDiff) << " seconds";
+			    << " in time: " << std::fabs(timeDiff) << " seconds";
 
 			Timer::AdjustTimers(-timeDiff);
 		}
@@ -325,7 +310,11 @@ mainloop:
 		goto mainloop;
 	}
 
-	Log(LogInformation, "Application", "Shutting down Icinga...");
+	if (m_ExitStatus)
+		Log(LogInformation, "Application", "Shutting down Icinga after a fatal error.");
+	else
+		Log(LogInformation, "Application", "Shutting down Icinga...");
+
 	DynamicObject::StopObjects();
 	Application::GetInstance()->OnShutdown();
 
@@ -372,8 +361,9 @@ pid_t Application::StartReloadProcess(void)
  * Signals the application to shut down during the next
  * execution of the event loop.
  */
-void Application::RequestShutdown(void)
+void Application::RequestShutdown(int rc)
 {
+	m_ExitStatus = rc > m_ExitStatus ? rc : m_ExitStatus;
 	m_ShuttingDown = true;
 }
 
@@ -475,38 +465,114 @@ String Application::GetExePath(const String& argv0)
 /**
  * Display version and path information.
  */
-void Application::DisplayInfoMessage(bool skipVersion)
+void Application::DisplayInfoMessage(std::ostream& os, bool skipVersion)
 {
-	std::cerr << "Application information:" << std::endl;
+	os << "Application information:" << "\n";
 
 	if (!skipVersion)
-		std::cerr << "  Application version: " << GetVersion() << std::endl;
+		os << "  Application version: " << GetVersion() << "\n";
 
-	std::cerr << "  Installation root: " << GetPrefixDir() << std::endl
-		  << "  Sysconf directory: " << GetSysconfDir() << std::endl
-		  << "  Run directory: " << GetRunDir() << std::endl
-		  << "  Local state directory: " << GetLocalStateDir() << std::endl
-		  << "  Package data directory: " << GetPkgDataDir() << std::endl
-		  << "  State path: " << GetStatePath() << std::endl
-		  << "  Objects path: " << GetObjectsPath() << std::endl
-		  << "  Vars path: " << GetVarsPath() << std::endl
-		  << "  PID path: " << GetPidPath() << std::endl
-		  << "  Application type: " << GetApplicationType() << std::endl;
+	os << "  Installation root: " << GetPrefixDir() << "\n"
+	   << "  Sysconf directory: " << GetSysconfDir() << "\n"
+	   << "  Run directory: " << GetRunDir() << "\n"
+	   << "  Local state directory: " << GetLocalStateDir() << "\n"
+	   << "  Package data directory: " << GetPkgDataDir() << "\n"
+	   << "  State path: " << GetStatePath() << "\n"
+	   << "  Objects path: " << GetObjectsPath() << "\n"
+	   << "  Vars path: " << GetVarsPath() << "\n"
+	   << "  PID path: " << GetPidPath() << "\n"
+	   << "  Application type: " << GetApplicationType() << "\n";
 }
 
 /**
  * Displays a message that tells users what to do when they encounter a bug.
  */
-void Application::DisplayBugMessage(void)
+void Application::DisplayBugMessage(std::ostream& os)
 {
-	std::cerr << "***" << std::endl
-		  << "* This would indicate a runtime problem or configuration error. If you believe this is a bug in Icinga 2" << std::endl
-		  << "* please submit a bug report at https://dev.icinga.org/ and include this stack trace as well as any other" << std::endl
-		  << "* information that might be useful in order to reproduce this problem." << std::endl
-		  << "***" << std::endl;
+	os << "***" << "\n"
+	   << "* This would indicate a runtime problem or configuration error. If you believe this is a bug in Icinga 2" << "\n"
+	   << "* please submit a bug report at https://dev.icinga.org/ and include this stack trace as well as any other" << "\n"
+	   << "* information that might be useful in order to reproduce this problem." << "\n"
+	   << "***" << "\n";
 }
 
+String Application::GetCrashReportFilename(void)
+{
+	return GetLocalStateDir() + "/log/icinga2/crash/report." + Convert::ToString(Utility::GetTime());
+}
+
+
 #ifndef _WIN32
+void Application::GetDebuggerBacktrace(const String& filename)
+{
+#ifdef __linux__
+	prctl(PR_SET_DUMPABLE, 1);
+#endif /* __linux __ */
+
+	String my_pid = Convert::ToString(Utility::GetPid());
+
+	pid_t pid = fork();
+
+	if (pid < 0) {
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("fork")
+		    << boost::errinfo_errno(errno));
+	}
+
+	if (pid == 0) {
+		int fd = open(filename.CStr(), O_CREAT | O_RDWR | O_APPEND, 0600);
+
+		if (fd < 0) {
+			BOOST_THROW_EXCEPTION(posix_error()
+			    << boost::errinfo_api_function("open")
+			    << boost::errinfo_errno(errno)
+			    << boost::errinfo_file_name(filename));
+		}
+
+		if (fd != 1) {
+			/* redirect stdout to the file */
+			dup2(fd, 1);
+			close(fd);
+		}
+
+		/* redirect stderr to stdout */
+		if (fd != 2)
+			close(2);
+
+		dup2(1, 2);
+
+		char *my_pid_str = strdup(my_pid.CStr());
+		const char *argv[] = {
+			"gdb",
+			"--batch",
+			"-p",
+			my_pid_str,
+			"-ex",
+			"thread apply all bt full",
+			"-ex",
+			"detach",
+			"-ex",
+			"quit",
+			NULL
+		};
+		(void)execvp(argv[0], const_cast<char **>(argv));
+		perror("Failed to launch GDB");
+		free(my_pid_str);
+		_exit(0);
+	}
+
+	int status;
+	if (waitpid(pid, &status, 0) < 0) {
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("waitpid")
+		    << boost::errinfo_errno(errno));
+	}
+
+#ifdef __linux__
+	prctl(PR_SET_DUMPABLE, 0);
+#endif /* __linux __ */
+}
+
 /**
  * Signal handler for SIGINT and SIGTERM. Prepares the application for cleanly
  * shutting down during the next execution of the event loop.
@@ -557,13 +623,26 @@ void Application::SigAbrtHandler(int)
 		  << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << std::endl
 		  << std::endl;
 
-	DisplayInfoMessage();
+	String fname = GetCrashReportFilename();
+	std::ofstream ofs;
+	ofs.open(fname.CStr());
+
+	Log(LogCritical, "Application")
+	    << "Icinga 2 has terminated unexpectedly. Additional information can be found in '" << fname << "'" << "\n";
+
+	DisplayInfoMessage(ofs);
 
 	StackTrace trace;
-	std::cerr << "Stacktrace:" << std::endl;
-	trace.Print(std::cerr, 1);
+	ofs << "Stacktrace:" << "\n";
+	trace.Print(ofs, 1);
 
-	DisplayBugMessage();
+	DisplayBugMessage(ofs);
+
+	ofs.close();
+
+#ifndef _WIN32
+	GetDebuggerBacktrace(fname);
+#endif /* _WIN32 */
 }
 #else /* _WIN32 */
 /**
@@ -602,21 +681,36 @@ void Application::ExceptionHandler(void)
 	sigaction(SIGABRT, &sa, NULL);
 #endif /* _WIN32 */
 
-	std::cerr << "Caught unhandled exception." << std::endl
-		  << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << std::endl
-		  << std::endl;
+	String fname = GetCrashReportFilename();
+	std::ofstream ofs;
+	ofs.open(fname.CStr());
 
-	DisplayInfoMessage();
+	ofs << "Caught unhandled exception." << "\n"
+	    << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << "\n"
+	    << "\n";
+
+	DisplayInfoMessage(ofs);
 
 	try {
 		RethrowUncaughtException();
 	} catch (const std::exception& ex) {
-		std::cerr << std::endl
-			  << DiagnosticInformation(ex)
-			  << std::endl;
+		Log(LogCritical, "Application")
+		    << DiagnosticInformation(ex, false) << "\n"
+		    << "\n"
+		    << "Additional information is available in '" << fname << "'" << "\n";
+
+		ofs << "\n"
+		    << DiagnosticInformation(ex)
+		    << "\n";
 	}
 
-	DisplayBugMessage();
+	DisplayBugMessage(ofs);
+
+	ofs.close();
+
+#ifndef _WIN32
+	GetDebuggerBacktrace(fname);
+#endif /* _WIN32 */
 
 	abort();
 }
@@ -629,17 +723,24 @@ LONG CALLBACK Application::SEHUnhandledExceptionFilter(PEXCEPTION_POINTERS exi)
 
 	l_InExceptionHandler = true;
 
-	DisplayInfoMessage();
+	String fname = GetCrashReportFilename();
+	std::ofstream ofs;
+	ofs.open(fname.CStr());
 
-	std::cerr << "Caught unhandled SEH exception." << std::endl
-		  << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << std::endl
-		  << std::endl;
+	Log(LogCritical, "Application")
+	    << "Icinga 2 has terminated unexpectedly. Additional information can be found in '" << fname << "'";
+
+	DisplayInfoMessage(ofs);
+
+	ofs << "Caught unhandled SEH exception." << "\n"
+	    << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << "\n"
+	    << "\n";
 
 	StackTrace trace(exi);
-	std::cerr << "Stacktrace:" << std::endl;
-	trace.Print(std::cerr, 1);
+	ofs << "Stacktrace:" << "\n";
+	trace.Print(ofs, 1);
 
-	DisplayBugMessage();
+	DisplayBugMessage(ofs);
 
 	return EXCEPTION_CONTINUE_SEARCH;
 }
@@ -669,8 +770,6 @@ void Application::InstallExceptionHandlers(void)
  */
 int Application::Run(void)
 {
-	int result;
-
 #ifndef _WIN32
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
@@ -692,12 +791,10 @@ int Application::Run(void)
 	} catch (const std::exception&) {
 		Log(LogCritical, "Application")
 		    << "Cannot update PID file '" << GetPidPath() << "'. Aborting.";
-		return false;
+		return EXIT_FAILURE;
 	}
 
-	result = Main();
-
-	return result;
+	return Main();
 }
 
 /**
@@ -756,7 +853,7 @@ void Application::UpdatePidFile(const String& filename, pid_t pid)
 	}
 #endif /* _WIN32 */
 
-	fprintf(m_PidFile, "%d\n", pid);
+	fprintf(m_PidFile, "%lu\n", (unsigned long)pid);
 	fflush(m_PidFile);
 }
 
@@ -847,7 +944,7 @@ pid_t Application::ReadPidFile(const String& filename)
  */
 String Application::GetPrefixDir(void)
 {
-	return ScriptVariable::Get("PrefixDir");
+	return ScriptGlobal::Get("PrefixDir");
 }
 
 /**
@@ -857,7 +954,8 @@ String Application::GetPrefixDir(void)
  */
 void Application::DeclarePrefixDir(const String& path)
 {
-	ScriptVariable::Set("PrefixDir", path, false);
+	if (!ScriptGlobal::Exists("PrefixDir"))
+		ScriptGlobal::Set("PrefixDir", path);
 }
 
 /**
@@ -867,7 +965,7 @@ void Application::DeclarePrefixDir(const String& path)
  */
 String Application::GetSysconfDir(void)
 {
-	return ScriptVariable::Get("SysconfDir");
+	return ScriptGlobal::Get("SysconfDir");
 }
 
 /**
@@ -877,7 +975,8 @@ String Application::GetSysconfDir(void)
  */
 void Application::DeclareSysconfDir(const String& path)
 {
-	ScriptVariable::Set("SysconfDir", path, false);
+	if (!ScriptGlobal::Exists("SysconfDir"))
+		ScriptGlobal::Set("SysconfDir", path);
 }
 
 /**
@@ -887,7 +986,7 @@ void Application::DeclareSysconfDir(const String& path)
  */
 String Application::GetRunDir(void)
 {
-	return ScriptVariable::Get("RunDir");
+	return ScriptGlobal::Get("RunDir");
 }
 
 /**
@@ -897,7 +996,8 @@ String Application::GetRunDir(void)
  */
 void Application::DeclareRunDir(const String& path)
 {
-	ScriptVariable::Set("RunDir", path, false);
+	if (!ScriptGlobal::Exists("RunDir"))
+		ScriptGlobal::Set("RunDir", path);
 }
 
 /**
@@ -907,7 +1007,7 @@ void Application::DeclareRunDir(const String& path)
  */
 String Application::GetLocalStateDir(void)
 {
-	return ScriptVariable::Get("LocalStateDir");
+	return ScriptGlobal::Get("LocalStateDir");
 }
 
 /**
@@ -917,7 +1017,8 @@ String Application::GetLocalStateDir(void)
  */
 void Application::DeclareLocalStateDir(const String& path)
 {
-	ScriptVariable::Set("LocalStateDir", path, false);
+	if (!ScriptGlobal::Exists("LocalStateDir"))
+		ScriptGlobal::Set("LocalStateDir", path);
 }
 
 /**
@@ -927,7 +1028,7 @@ void Application::DeclareLocalStateDir(const String& path)
  */
 String Application::GetZonesDir(void)
 {
-	return ScriptVariable::Get("ZonesDir", &Empty);
+	return ScriptGlobal::Get("ZonesDir", &Empty);
 }
 
 /**
@@ -937,7 +1038,8 @@ String Application::GetZonesDir(void)
  */
 void Application::DeclareZonesDir(const String& path)
 {
-	ScriptVariable::Set("ZonesDir", path, false);
+	if (!ScriptGlobal::Exists("ZonesDir"))
+		ScriptGlobal::Set("ZonesDir", path);
 }
 
 /**
@@ -948,7 +1050,7 @@ void Application::DeclareZonesDir(const String& path)
 String Application::GetPkgDataDir(void)
 {
 	String defaultValue = "";
-	return ScriptVariable::Get("PkgDataDir", &Empty);
+	return ScriptGlobal::Get("PkgDataDir", &Empty);
 }
 
 /**
@@ -958,7 +1060,8 @@ String Application::GetPkgDataDir(void)
  */
 void Application::DeclarePkgDataDir(const String& path)
 {
-	ScriptVariable::Set("PkgDataDir", path, false);
+	if (!ScriptGlobal::Exists("PkgDataDir"))
+		ScriptGlobal::Set("PkgDataDir", path);
 }
 
 /**
@@ -968,7 +1071,7 @@ void Application::DeclarePkgDataDir(const String& path)
  */
 String Application::GetIncludeConfDir(void)
 {
-	return ScriptVariable::Get("IncludeConfDir", &Empty);
+	return ScriptGlobal::Get("IncludeConfDir", &Empty);
 }
 
 /**
@@ -978,7 +1081,8 @@ String Application::GetIncludeConfDir(void)
  */
 void Application::DeclareIncludeConfDir(const String& path)
 {
-	ScriptVariable::Set("IncludeConfDir", path, false);
+	if (!ScriptGlobal::Exists("IncludeConfDir"))
+		ScriptGlobal::Set("IncludeConfDir", path);
 }
 
 /**
@@ -988,7 +1092,7 @@ void Application::DeclareIncludeConfDir(const String& path)
  */
 String Application::GetStatePath(void)
 {
-	return ScriptVariable::Get("StatePath", &Empty);
+	return ScriptGlobal::Get("StatePath", &Empty);
 }
 
 /**
@@ -998,7 +1102,8 @@ String Application::GetStatePath(void)
  */
 void Application::DeclareStatePath(const String& path)
 {
-	ScriptVariable::Set("StatePath", path, false);
+	if (!ScriptGlobal::Exists("StatePath"))
+		ScriptGlobal::Set("StatePath", path);
 }
 
 /**
@@ -1008,7 +1113,7 @@ void Application::DeclareStatePath(const String& path)
  */
 String Application::GetObjectsPath(void)
 {
-	return ScriptVariable::Get("ObjectsPath", &Empty);
+	return ScriptGlobal::Get("ObjectsPath", &Empty);
 }
 
 /**
@@ -1018,7 +1123,8 @@ String Application::GetObjectsPath(void)
  */
 void Application::DeclareObjectsPath(const String& path)
 {
-	ScriptVariable::Set("ObjectsPath", path, false);
+	if (!ScriptGlobal::Exists("ObjectsPath"))
+		ScriptGlobal::Set("ObjectsPath", path);
 }
 
 /**
@@ -1028,7 +1134,7 @@ void Application::DeclareObjectsPath(const String& path)
 */
 String Application::GetVarsPath(void)
 {
-	return ScriptVariable::Get("VarsPath", &Empty);
+	return ScriptGlobal::Get("VarsPath", &Empty);
 }
 
 /**
@@ -1038,7 +1144,8 @@ String Application::GetVarsPath(void)
 */
 void Application::DeclareVarsPath(const String& path)
 {
-	ScriptVariable::Set("VarsPath", path, false);
+	if (!ScriptGlobal::Exists("VarsPath"))
+		ScriptGlobal::Set("VarsPath", path);
 }
 
 /**
@@ -1048,7 +1155,7 @@ void Application::DeclareVarsPath(const String& path)
  */
 String Application::GetPidPath(void)
 {
-	return ScriptVariable::Get("PidPath", &Empty);
+	return ScriptGlobal::Get("PidPath", &Empty);
 }
 
 /**
@@ -1058,7 +1165,8 @@ String Application::GetPidPath(void)
  */
 void Application::DeclarePidPath(const String& path)
 {
-	ScriptVariable::Set("PidPath", path, false);
+	if (!ScriptGlobal::Exists("PidPath"))
+		ScriptGlobal::Set("PidPath", path);
 }
 
 /**
@@ -1068,7 +1176,7 @@ void Application::DeclarePidPath(const String& path)
  */
 String Application::GetApplicationType(void)
 {
-	return ScriptVariable::Get("ApplicationType");
+	return ScriptGlobal::Get("ApplicationType");
 }
 
 /**
@@ -1078,7 +1186,8 @@ String Application::GetApplicationType(void)
  */
 void Application::DeclareApplicationType(const String& type)
 {
-	ScriptVariable::Set("ApplicationType", type, false);
+	if (!ScriptGlobal::Exists("ApplicationType"))
+		ScriptGlobal::Set("ApplicationType", type);
 }
 
 /**
@@ -1088,7 +1197,7 @@ void Application::DeclareApplicationType(const String& type)
  */
 String Application::GetRunAsUser(void)
 {
-	return ScriptVariable::Get("RunAsUser");
+	return ScriptGlobal::Get("RunAsUser");
 }
 
 /**
@@ -1098,7 +1207,8 @@ String Application::GetRunAsUser(void)
  */
 void Application::DeclareRunAsUser(const String& user)
 {
-	ScriptVariable::Set("RunAsUser", user, false);
+	if (!ScriptGlobal::Exists("RunAsUser"))
+		ScriptGlobal::Set("RunAsUser", user);
 }
 
 /**
@@ -1108,7 +1218,7 @@ void Application::DeclareRunAsUser(const String& user)
  */
 String Application::GetRunAsGroup(void)
 {
-	return ScriptVariable::Get("RunAsGroup");
+	return ScriptGlobal::Get("RunAsGroup");
 }
 
 /**
@@ -1118,7 +1228,8 @@ String Application::GetRunAsGroup(void)
  */
 void Application::DeclareConcurrency(int ncpus)
 {
-	ScriptVariable::Set("Concurrency", ncpus, false);
+	if (!ScriptGlobal::Exists("Concurrency"))
+		ScriptGlobal::Set("Concurrency", ncpus);
 }
 
 /**
@@ -1129,7 +1240,7 @@ void Application::DeclareConcurrency(int ncpus)
 int Application::GetConcurrency(void)
 {
 	Value defaultConcurrency = boost::thread::hardware_concurrency();
-	return ScriptVariable::Get("Concurrency", &defaultConcurrency);
+	return ScriptGlobal::Get("Concurrency", &defaultConcurrency);
 }
 
 /**
@@ -1139,22 +1250,8 @@ int Application::GetConcurrency(void)
  */
 void Application::DeclareRunAsGroup(const String& group)
 {
-	ScriptVariable::Set("RunAsGroup", group, false);
-}
-
-void Application::MakeVariablesConstant(void)
-{
-	ScriptVariable::GetByName("PrefixDir")->SetConstant(true);
-	ScriptVariable::GetByName("SysconfDir")->SetConstant(true);
-	ScriptVariable::GetByName("LocalStateDir")->SetConstant(true);
-	ScriptVariable::GetByName("RunDir")->SetConstant(true);
-	ScriptVariable::GetByName("PkgDataDir")->SetConstant(true);
-	ScriptVariable::GetByName("StatePath")->SetConstant(true);
-	ScriptVariable::GetByName("ObjectsPath")->SetConstant(true);
-	ScriptVariable::GetByName("PidPath")->SetConstant(true);
-	ScriptVariable::GetByName("ApplicationType")->SetConstant(true);
-	ScriptVariable::GetByName("RunAsUser")->SetConstant(true);
-	ScriptVariable::GetByName("RunAsGroup")->SetConstant(true);
+	if (!ScriptGlobal::Exists("RunAsGroup"))
+		ScriptGlobal::Set("RunAsGroup", group);
 }
 
 /**
@@ -1166,11 +1263,6 @@ ThreadPool& Application::GetTP(void)
 {
 	static ThreadPool tp;
 	return tp;
-}
-
-String Application::GetVersion(void)
-{
-	return VERSION;
 }
 
 double Application::GetStartTime(void)

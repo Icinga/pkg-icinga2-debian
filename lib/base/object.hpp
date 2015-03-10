@@ -25,11 +25,11 @@
 #include "base/thinmutex.hpp"
 #include <boost/thread/thread.hpp>
 
-#ifndef _DEBUG
+#ifndef I2_DEBUG
 #include <boost/thread/mutex.hpp>
-#else /* _DEBUG */
+#else /* I2_DEBUG */
 #include <boost/thread/recursive_mutex.hpp>
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 
 #include <boost/smart_ptr/intrusive_ptr.hpp>
 
@@ -46,11 +46,12 @@ namespace icinga
 class Value;
 class Object;
 class Type;
+class String;
 
 #define DECLARE_PTR_TYPEDEFS(klass) \
 	typedef intrusive_ptr<klass> Ptr
 
-#define IMPL_TYPE_LOOKUP(klass) 					\
+#define IMPL_TYPE_LOOKUP() 						\
 	static intrusive_ptr<Type> TypeInstance;			\
 	virtual intrusive_ptr<Type> GetReflectionType(void) const	\
 	{								\
@@ -59,7 +60,7 @@ class Type;
 
 #define DECLARE_OBJECT(klass) \
 	DECLARE_PTR_TYPEDEFS(klass); \
-	IMPL_TYPE_LOOKUP(klass);
+	IMPL_TYPE_LOOKUP();
 
 template<typename T>
 intrusive_ptr<Object> DefaultObjectFactory(void)
@@ -92,14 +93,18 @@ public:
 	Object(void);
 	virtual ~Object(void);
 
+	virtual String ToString(void) const;
+
 	virtual void SetField(int id, const Value& value);
 	virtual Value GetField(int id) const;
 
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 	bool OwnsLock(void) const;
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 
 	void InflateMutex(void);
+
+	static Object::Ptr GetPrototype(void);
 
 private:
 	Object(const Object& other);
@@ -108,13 +113,13 @@ private:
 	uintptr_t m_References;
 	mutable ThinMutex m_Mutex;
 
-#ifdef _DEBUG
+#ifdef I2_DEBUG
 #	ifndef _WIN32
 	mutable pthread_t m_LockOwner;
 #	else /* _WIN32 */
 	mutable DWORD m_LockOwner;
 #	endif /* _WIN32 */
-#endif /* _DEBUG */
+#endif /* I2_DEBUG */
 
 	friend struct ObjectLock;
 

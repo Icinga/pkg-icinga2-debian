@@ -43,10 +43,11 @@
 using namespace icinga;
 
 REGISTER_TYPE(GraphiteWriter);
+REGISTER_SCRIPTFUNCTION(ValidateNameTemplates, &GraphiteWriter::ValidateNameTemplates);
 
 REGISTER_STATSFUNCTION(GraphiteWriterStats, &GraphiteWriter::StatsFunc);
 
-Value GraphiteWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
+void GraphiteWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
@@ -55,8 +56,6 @@ Value GraphiteWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&
 	}
 
 	status->Set("graphitewriter", nodes);
-
-	return 0;
 }
 
 void GraphiteWriter::Start(void)
@@ -116,27 +115,29 @@ void GraphiteWriter::CheckResultHandler(const Checkable::Ptr& checkable, const C
 
 	String prefix;
 
+	double ts = cr->GetExecutionEnd();
+
 	if (service) {
 		prefix = MacroProcessor::ResolveMacros(GetServiceNameTemplate(), resolvers, cr, NULL, &GraphiteWriter::EscapeMacroMetric);
 
-		SendMetric(prefix, "state", service->GetState());
+		SendMetric(prefix, "state", service->GetState(), ts);
 	} else {
 		prefix = MacroProcessor::ResolveMacros(GetHostNameTemplate(), resolvers, cr, NULL, &GraphiteWriter::EscapeMacroMetric);
 
-		SendMetric(prefix, "state", host->GetState());
+		SendMetric(prefix, "state", host->GetState(), ts);
 	}
 
-	SendMetric(prefix, "current_attempt", checkable->GetCheckAttempt());
-	SendMetric(prefix, "max_check_attempts", checkable->GetMaxCheckAttempts());
-	SendMetric(prefix, "state_type", checkable->GetStateType());
-	SendMetric(prefix, "reachable", checkable->IsReachable());
-	SendMetric(prefix, "downtime_depth", checkable->GetDowntimeDepth());
-	SendMetric(prefix, "latency", Service::CalculateLatency(cr));
-	SendMetric(prefix, "execution_time", Service::CalculateExecutionTime(cr));
-	SendPerfdata(prefix, cr);
+	SendMetric(prefix, "current_attempt", checkable->GetCheckAttempt(), ts);
+	SendMetric(prefix, "max_check_attempts", checkable->GetMaxCheckAttempts(), ts);
+	SendMetric(prefix, "state_type", checkable->GetStateType(), ts);
+	SendMetric(prefix, "reachable", checkable->IsReachable(), ts);
+	SendMetric(prefix, "downtime_depth", checkable->GetDowntimeDepth(), ts);
+	SendMetric(prefix, "latency", Service::CalculateLatency(cr), ts);
+	SendMetric(prefix, "execution_time", Service::CalculateExecutionTime(cr), ts);
+	SendPerfdata(prefix, cr, ts);
 }
 
-void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& cr)
+void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& cr, double ts)
 {
 	Array::Ptr perfdata = cr->GetPerformanceData();
 
@@ -146,7 +147,7 @@ void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& 
 	ObjectLock olock(perfdata);
 	BOOST_FOREACH(const Value& val, perfdata) {
 		PerfdataValue::Ptr pdv;
-		
+
 		if (val.IsObjectType<PerfdataValue>())
 			pdv = val;
 		else {
@@ -158,27 +159,27 @@ void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& 
 				continue;
 			}
 		}
-		
+
 		String escaped_key = EscapeMetric(pdv->GetLabel());
 		boost::algorithm::replace_all(escaped_key, "::", ".");
 
-		SendMetric(prefix, escaped_key, pdv->GetValue());
+		SendMetric(prefix, escaped_key, pdv->GetValue(), ts);
 
 		if (pdv->GetCrit())
-			SendMetric(prefix, escaped_key + "_crit", pdv->GetCrit());
+			SendMetric(prefix, escaped_key + "_crit", pdv->GetCrit(), ts);
 		if (pdv->GetWarn())
-			SendMetric(prefix, escaped_key + "_warn", pdv->GetWarn());
+			SendMetric(prefix, escaped_key + "_warn", pdv->GetWarn(), ts);
 		if (pdv->GetMin())
-			SendMetric(prefix, escaped_key + "_min", pdv->GetMin());
+			SendMetric(prefix, escaped_key + "_min", pdv->GetMin(), ts);
 		if (pdv->GetMax())
-			SendMetric(prefix, escaped_key + "_max", pdv->GetMax());
+			SendMetric(prefix, escaped_key + "_max", pdv->GetMax(), ts);
 	}
 }
 
-void GraphiteWriter::SendMetric(const String& prefix, const String& name, double value)
+void GraphiteWriter::SendMetric(const String& prefix, const String& name, double value, double ts)
 {
 	std::ostringstream msgbuf;
-	msgbuf << prefix << "." << name << " " << Convert::ToString(value) << " " << static_cast<long>(Utility::GetTime());
+	msgbuf << prefix << "." << name << " " << Convert::ToString(value) << " " << static_cast<long>(ts);
 
 	Log(LogDebug, "GraphiteWriter")
 	    << "Add to metric list:'" << msgbuf.str() << "'.";
@@ -229,4 +230,17 @@ Value GraphiteWriter::EscapeMacroMetric(const Value& value)
 		return Utility::Join(result, '.');
 	} else
 		return EscapeMetric(value);
+}
+
+void GraphiteWriter::ValidateNameTemplates(const String& location, const GraphiteWriter::Ptr& object)
+{
+	if (!MacroProcessor::ValidateMacroString(object->GetHostNameTemplate())) {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": Closing $ not found in macro format string '" + object->GetHostNameTemplate() + "'.", object->GetDebugInfo()));
+	}
+
+	if (!MacroProcessor::ValidateMacroString(object->GetServiceNameTemplate())) {
+		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
+		    location + ": Closing $ not found in macro format string '" + object->GetServiceNameTemplate() + "'.", object->GetDebugInfo()));
+	}
 }

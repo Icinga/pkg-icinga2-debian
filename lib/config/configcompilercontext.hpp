@@ -21,25 +21,12 @@
 #define CONFIGCOMPILERCONTEXT_H
 
 #include "config/i2-config.hpp"
-#include "base/debuginfo.hpp"
 #include "base/stdiostream.hpp"
 #include "base/dictionary.hpp"
 #include <boost/thread/mutex.hpp>
-#include <vector>
 
 namespace icinga
 {
-
-struct I2_CONFIG_API ConfigCompilerMessage
-{
-	bool Error;
-	String Text;
-	DebugInfo Location;
-
-	ConfigCompilerMessage(bool error, const String& text, const DebugInfo& di)
-		: Error(error), Text(text), Location(di)
-	{ }
-};
 
 /*
  * @ingroup config
@@ -47,12 +34,6 @@ struct I2_CONFIG_API ConfigCompilerMessage
 class I2_CONFIG_API ConfigCompilerContext
 {
 public:
-	void AddMessage(bool error, const String& message, const DebugInfo& di = DebugInfo());
-	std::vector<ConfigCompilerMessage> GetMessages(void) const;
-	bool HasErrors(void) const;
-
-	void Reset(void);
-
 	void OpenObjectsFile(const String& filename);
 	void WriteObject(const Dictionary::Ptr& object);
 	void FinishObjectsFile(void);
@@ -60,7 +41,6 @@ public:
 	static ConfigCompilerContext *GetInstance(void);
 
 private:
-	std::vector<ConfigCompilerMessage> m_Messages;
 	String m_ObjectsPath;
 	StdioStream::Ptr m_ObjectsFP;
 

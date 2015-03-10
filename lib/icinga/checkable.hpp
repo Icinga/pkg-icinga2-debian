@@ -94,7 +94,7 @@ public:
 
 	AcknowledgementType GetAcknowledgement(void);
 
-	void AcknowledgeProblem(const String& author, const String& comment, AcknowledgementType type, double expiry = 0, const MessageOrigin& origin = MessageOrigin());
+	void AcknowledgeProblem(const String& author, const String& comment, AcknowledgementType type, bool notify = true, double expiry = 0, const MessageOrigin& origin = MessageOrigin());
 	void ClearAcknowledgement(const MessageOrigin& origin = MessageOrigin());
 
 	/* Checks */
@@ -135,8 +135,8 @@ public:
 
 	static void UpdateStatistics(const CheckResult::Ptr& cr, CheckableType type);
 
-	void ExecuteCheck(const Dictionary::Ptr& resolvedMacros = Dictionary::Ptr(),
-	    bool useResolvedMacros = false);
+	void ExecuteRemoteCheck(const Dictionary::Ptr& resolvedMacros = Dictionary::Ptr());
+	void ExecuteCheck();
 	void ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrigin& origin = MessageOrigin());
 
 	int GetModifiedAttributes(void) const;
@@ -187,7 +187,7 @@ public:
 	static boost::signals2::signal<void (const Checkable::Ptr&, FlappingState)> OnFlappingChanged;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const Downtime::Ptr&)> OnDowntimeTriggered;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const String&, const String&, AcknowledgementType,
-					     double, const MessageOrigin&)> OnAcknowledgementSet;
+					     bool, double, const MessageOrigin&)> OnAcknowledgementSet;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const MessageOrigin&)> OnAcknowledgementCleared;
 	static boost::signals2::signal<void (const Checkable::Ptr&)> OnEventCommandExecuted;
 
@@ -277,12 +277,11 @@ public:
 	void RemoveReverseDependency(const intrusive_ptr<Dependency>& dep);
 	std::set<intrusive_ptr<Dependency> > GetReverseDependencies(void) const;
 
-	static void ValidateCheckInterval(const String& location, const Dictionary::Ptr& attrs);
+	static void ValidateCheckInterval(const String& location, const Checkable::Ptr& object);
 
 protected:
 	virtual void Start(void);
 
-	virtual void OnConfigLoaded(void);
 	virtual void OnStateLoaded(void);
 
 private:

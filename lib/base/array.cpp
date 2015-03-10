@@ -21,11 +21,12 @@
 #include "base/objectlock.hpp"
 #include "base/debug.hpp"
 #include "base/primitivetype.hpp"
+#include "base/dictionary.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
-REGISTER_PRIMITIVE_TYPE(Array);
+REGISTER_PRIMITIVE_TYPE(Array, Array::GetPrototype());
 
 /**
  * Restrieves a value from an array.
@@ -180,6 +181,14 @@ void Array::Clear(void)
 	m_Data.clear();
 }
 
+void Array::Reserve(size_t new_size)
+{
+	ASSERT(!OwnsLock());
+	ObjectLock olock(this);
+
+	m_Data.reserve(new_size);
+}
+
 void Array::CopyTo(const Array::Ptr& dest) const
 {
 	ASSERT(!OwnsLock());
@@ -201,36 +210,3 @@ Array::Ptr Array::ShallowClone(void) const
 	return clone;
 }
 
-Array::Ptr icinga::MakeArray(const Value& val1)
-{
-	Array::Ptr result = new Array();
-	result->Add(val1);
-	return result;
-}
-
-Array::Ptr icinga::MakeArray(const Value& val1, const Value& val2)
-{
-	Array::Ptr result = new Array();
-	result->Add(val1);
-	result->Add(val2);
-	return result;
-}
-
-Array::Ptr icinga::MakeArray(const Value& val1, const Value& val2, const Value& val3)
-{
-	Array::Ptr result = new Array();
-	result->Add(val1);
-	result->Add(val2);
-	result->Add(val3);
-	return result;
-}
-
-Array::Ptr icinga::MakeArray(const Value& val1, const Value& val2, const Value& val3, const Value& val4)
-{
-	Array::Ptr result = new Array();
-	result->Add(val1);
-	result->Add(val2);
-	result->Add(val3);
-	result->Add(val4);
-	return result;
-}
