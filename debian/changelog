@@ -1,9 +1,9 @@
-icinga2 (2.3.1-1) UNRELEASED; urgency=medium
+icinga2 (2.3.1-1) unstable; urgency=medium
 
   * [2927737] Create /var/log/icinga2/crash
   * [730bfc7] Imported Upstream version 2.3.1
 
- -- Alexander Wirt <formorer@debian.org>  Thu, 12 Mar 2015 13:31:37 +0100
+ -- Alexander Wirt <formorer@debian.org>  Thu, 12 Mar 2015 15:05:34 +0100
 
 icinga2 (2.3.0-1) unstable; urgency=medium
 
