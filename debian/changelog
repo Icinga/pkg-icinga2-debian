@@ -1,8 +1,15 @@
-icinga2 (2.3.0-1~ppa1~saucy1) saucy; urgency=medium
+icinga2 (2.3.1-1~ppa1~saucy1) saucy; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+
+icinga2 (2.3.1-1) unstable; urgency=medium
+
+  * [2927737] Create /var/log/icinga2/crash
+  * [730bfc7] Imported Upstream version 2.3.1
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 12 Mar 2015 15:05:34 +0100
 
 icinga2 (2.3.0-1) unstable; urgency=medium
 
