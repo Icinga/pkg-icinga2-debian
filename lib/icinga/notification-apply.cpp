@@ -54,7 +54,7 @@ bool Notification::EvaluateApplyRuleInstance(const Checkable::Ptr& checkable, co
 	ConfigItemBuilder::Ptr builder = new ConfigItemBuilder(di);
 	builder->SetType("Notification");
 	builder->SetName(name);
-	builder->SetScope(frame.Locals);
+	builder->SetScope(frame.Locals->ShallowClone());
 
 	Host::Ptr host;
 	Service::Ptr service;
@@ -73,7 +73,7 @@ bool Notification::EvaluateApplyRuleInstance(const Checkable::Ptr& checkable, co
 	builder->AddExpression(new OwnedExpression(rule.GetExpression()));
 
 	ConfigItem::Ptr notificationItem = builder->Compile();
-	notificationItem->Commit();
+	notificationItem->Register();
 
 	return true;
 }
