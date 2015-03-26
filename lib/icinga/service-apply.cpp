@@ -52,7 +52,7 @@ bool Service::EvaluateApplyRuleInstance(const Host::Ptr& host, const String& nam
 	ConfigItemBuilder::Ptr builder = new ConfigItemBuilder(di);
 	builder->SetType("Service");
 	builder->SetName(name);
-	builder->SetScope(frame.Locals);
+	builder->SetScope(frame.Locals->ShallowClone());
 
 	builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
 
@@ -66,7 +66,7 @@ bool Service::EvaluateApplyRuleInstance(const Host::Ptr& host, const String& nam
 	builder->AddExpression(new OwnedExpression(rule.GetExpression()));
 
 	ConfigItem::Ptr serviceItem = builder->Compile();
-	serviceItem->Commit();
+	serviceItem->Register();
 
 	return true;
 }
