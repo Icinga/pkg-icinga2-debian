@@ -54,8 +54,13 @@ Value MacroProcessor::ResolveMacros(const Value& str, const ResolverList& resolv
 
 		BOOST_FOREACH(const Value& arg, arr) {
 			/* Note: don't escape macros here. */
-			resultArr->Add(InternalResolveMacros(arg, resolvers, cr, missingMacro,
-			    EscapeCallback(), resolvedMacros, useResolvedMacros));
+			Value value = InternalResolveMacros(arg, resolvers, cr, missingMacro,
+			    EscapeCallback(), resolvedMacros, useResolvedMacros);
+
+			if (value.IsObjectType<Array>())
+				resultArr->Add(Utility::Join(value, ';'));
+			else
+				resultArr->Add(value);
 		}
 
 		result = resultArr;
@@ -312,7 +317,7 @@ bool MacroProcessor::ValidateMacroString(const String& macro)
 	size_t pos_first, pos_second, offset;
 	offset = 0;
 
-	while((pos_first = macro.FindFirstOf("$", offset)) != String::NPos) {
+	while ((pos_first = macro.FindFirstOf("$", offset)) != String::NPos) {
 		pos_second = macro.FindFirstOf("$", pos_first + 1);
 
 		if (pos_second == String::NPos)
