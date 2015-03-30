@@ -62,6 +62,7 @@ Depends:
     adduser,
     lsb-release,
     ${misc:Depends}
+Recommends: logrotate
 Description: host and network monitoring system - common files
  Icinga 2 is a general-purpose monitoring application to fit the needs of
  any size of network. Icinga 1.x was a Nagios fork; this new generation
