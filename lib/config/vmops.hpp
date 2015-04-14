@@ -1,21 +1,21 @@
 /******************************************************************************
-* Icinga 2                                                                   *
-* Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
-*                                                                            *
-* This program is free software; you can redistribute it and/or              *
-* modify it under the terms of the GNU General Public License                *
-* as published by the Free Software Foundation; either version 2             *
-* of the License, or (at your option) any later version.                     *
-*                                                                            *
-* This program is distributed in the hope that it will be useful,            *
-* but WITHOUT ANY WARRANTY; without even the implied warranty of             *
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              *
-* GNU General Public License for more details.                               *
-*                                                                            *
-* You should have received a copy of the GNU General Public License          *
-* along with this program; if not, write to the Free Software Foundation     *
-* Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
-******************************************************************************/
+ * Icinga 2                                                                   *
+ * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ *                                                                            *
+ * This program is free software; you can redistribute it and/or              *
+ * modify it under the terms of the GNU General Public License                *
+ * as published by the Free Software Foundation; either version 2             *
+ * of the License, or (at your option) any later version.                     *
+ *                                                                            *
+ * This program is distributed in the hope that it will be useful,            *
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of             *
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the              *
+ * GNU General Public License for more details.                               *
+ *                                                                            *
+ * You should have received a copy of the GNU General Public License          *
+ * along with this program; if not, write to the Free Software Foundation     *
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
+ ******************************************************************************/
 
 #ifndef VMOPS_H
 #define VMOPS_H
@@ -129,7 +129,7 @@ public:
 		return Empty;
 	}
 
-	static inline Value For(ScriptFrame& frame, const String& fkvar, const String& fvvar, const Value& value, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
+	static inline ExpressionResult For(ScriptFrame& frame, const String& fkvar, const String& fvvar, const Value& value, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
 	{
 		if (value.IsObjectType<Array>()) {
 			if (!fvvar.IsEmpty())
@@ -186,7 +186,8 @@ public:
 
 	static inline Value GetPrototypeField(const Value& context, const String& field, bool not_found_error = true, const DebugInfo& debugInfo = DebugInfo())
 	{
-		Type::Ptr type = context.GetReflectionType();
+		Type::Ptr ctype = context.GetReflectionType();
+		Type::Ptr type = ctype;
 
 		do {
 			Object::Ptr object = type->GetPrototype();
@@ -198,7 +199,7 @@ public:
 		} while (type);
 
 		if (not_found_error)
-			BOOST_THROW_EXCEPTION(ScriptError("Invalid field name: '" + field + "'", debugInfo));
+			BOOST_THROW_EXCEPTION(ScriptError("Invalid field access (for value of type '" + ctype->GetName() + "'): '" + field + "'", debugInfo));
 		else
 			return Empty;
 	}
