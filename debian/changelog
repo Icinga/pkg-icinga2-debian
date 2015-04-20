@@ -1,8 +1,15 @@
-icinga2 (2.3.4-1~ppa1~saucy1) saucy; urgency=medium
+icinga2 (2.3.4-2~ppa1~saucy1) saucy; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+
+icinga2 (2.3.4-2) unstable; urgency=medium
+
+  * [54904c5] Fix upstream version in icinga2 --version
+  * [3bb3712] Add first autopkgtest (dep8) support
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 17:19:39 +0200
 
 icinga2 (2.3.4-1) unstable; urgency=medium
 
