@@ -1,3 +1,10 @@
+icinga2 (2.3.4-2) unstable; urgency=medium
+
+  * [54904c5] Fix upstream version in icinga2 --version
+  * [3bb3712] Add first autopkgtest (dep8) support
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 17:19:39 +0200
+
 icinga2 (2.3.4-1) unstable; urgency=medium
 
   [ Achim Ledermüller ]
