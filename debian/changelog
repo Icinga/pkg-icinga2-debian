@@ -1,8 +1,20 @@
-icinga2 (2.3.3-1~ppa1~vivid1) vivid; urgency=medium
+icinga2 (2.3.4-1~ppa1~vivid1) vivid; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
+
+icinga2 (2.3.4-1) unstable; urgency=medium
+
+  [ Achim Ledermüller ]
+  * [8009d66] Specify pidfile for status_of_proc in the init script
+
+  [ Alexander Wirt ]
+  * [2a5d1cb] Remove obsolete logrotate_use_service patch
+  * [43b9dd6] Imported Upstream version 2.3.4
+  * [be9777c] Recommend logrotate in icinga2-common
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 13:16:16 +0200
 
 icinga2 (2.3.3-1) unstable; urgency=medium
 
