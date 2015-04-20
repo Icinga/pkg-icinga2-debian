@@ -45,7 +45,7 @@ void DbEvents::StaticInitialize(void)
 	/* Status */
 	Checkable::OnCommentAdded.connect(boost::bind(&DbEvents::AddComment, _1, _2));
 	Checkable::OnCommentRemoved.connect(boost::bind(&DbEvents::RemoveComment, _1, _2));
-	Checkable::OnDowntimeAdded.connect(boost::bind(&DbEvents::AddDowntime, _1, _2));
+	Checkable::OnDowntimeAdded.connect(boost::bind(&DbEvents::AddDowntime, _1, _2, true));
 	Checkable::OnDowntimeRemoved.connect(boost::bind(&DbEvents::RemoveDowntime, _1, _2));
 	Checkable::OnDowntimeTriggered.connect(boost::bind(&DbEvents::TriggerDowntime, _1, _2));
 	Checkable::OnAcknowledgementSet.connect(boost::bind(&DbEvents::AddAcknowledgement, _1, _4));
@@ -469,17 +469,18 @@ void DbEvents::AddDowntimes(const Checkable::Ptr& checkable)
 	ObjectLock olock(downtimes);
 
 	BOOST_FOREACH(const Dictionary::Pair& kv, downtimes) {
-		AddDowntime(checkable, kv.second);
+		AddDowntime(checkable, kv.second, false);
 	}
 }
 
-void DbEvents::AddDowntime(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime)
+void DbEvents::AddDowntime(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime, bool remove_existing)
 {
 	/*
 	 * make sure to delete any old downtime to avoid multiple inserts from
 	 * configured ScheduledDowntime dumps and CreateNextDowntime() calls
 	 */
-	RemoveDowntime(checkable, downtime);
+	if (remove_existing)
+		RemoveDowntime(checkable, downtime);
 	AddDowntimeInternal(checkable, downtime, false);
 }
 
@@ -527,11 +528,8 @@ void DbEvents::AddDowntimeByType(const Checkable::Ptr& checkable, const Downtime
 	fields1->Set("duration", downtime->GetDuration());
 	fields1->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->GetStartTime()));
 	fields1->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->GetEndTime()));
-	fields1->Set("was_started", Empty);
-	fields1->Set("actual_start_time", Empty);
-	fields1->Set("actual_start_time_usec", Empty);
-	fields1->Set("is_in_effect", Empty);
-	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
+	fields1->Set("was_started", 0);
+	fields1->Set("is_in_effect", 0);
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	String node = IcingaApplication::GetInstance()->GetNodeName();
@@ -610,6 +608,37 @@ void DbEvents::RemoveDowntime(const Checkable::Ptr& checkable, const Downtime::P
 	query3.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	DbObject::OnQuery(query3);
+
+	/* host/service status */
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
+
+	DbQuery query4;
+	if (service)
+		query4.Table = "servicestatus";
+	else
+		query4.Table = "hoststatus";
+
+	query4.Type = DbQueryInsert | DbQueryUpdate;
+	query4.Category = DbCatState;
+	query4.StatusUpdate = true;
+	query4.Object = DbObject::GetOrCreateByObject(checkable);
+
+	Dictionary::Ptr fields4 = new Dictionary();
+	fields4->Set("scheduled_downtime_depth", checkable->GetDowntimeDepth());
+
+	query4.Fields = fields4;
+
+	query4.WhereCriteria = new Dictionary();
+	if (service)
+		query4.WhereCriteria->Set("service_object_id", service);
+	else
+		query4.WhereCriteria->Set("host_object_id", host);
+
+	query4.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
+
+	DbObject::OnQuery(query4);
 }
 
 void DbEvents::TriggerDowntime(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime)
