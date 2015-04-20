@@ -1,3 +1,9 @@
+icinga2 (2.3.4-1~bpo80+1) debmon-jessie; urgency=medium
+
+  * Rebuild for debmon-jessie
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 13:40:20 +0200
+
 icinga2 (2.3.4-1) unstable; urgency=medium
 
   [ Achim Ledermüller ]
