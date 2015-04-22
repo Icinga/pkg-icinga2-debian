@@ -1,8 +1,14 @@
-icinga2 (2.3.4-2~debmon80+1) debmon-jessie; urgency=medium
+icinga2 (2.3.4-3~debmon80+1) debmon-jessie; urgency=medium
 
   * Rebuild for debmon-jessie
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 13:40:20 +0200
+
+icinga2 (2.3.4-3) unstable; urgency=medium
+
+  * [392a0bf] Add patch to fix broken postrotate script
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 22 Apr 2015 09:42:11 +0200
 
 icinga2 (2.3.4-2) unstable; urgency=medium
 
