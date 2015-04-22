@@ -1,3 +1,9 @@
+icinga2 (2.3.4-3) unstable; urgency=medium
+
+  * [392a0bf] Add patch to fix broken postrotate script
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 22 Apr 2015 09:42:11 +0200
+
 icinga2 (2.3.4-2) unstable; urgency=medium
 
   * [54904c5] Fix upstream version in icinga2 --version
