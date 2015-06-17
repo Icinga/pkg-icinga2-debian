@@ -1,8 +1,15 @@
-icinga2 (2.3.4-3~debmon80+1) debmon-jessie; urgency=medium
+icinga2 (2.3.5-1~debmon80+1) debmon-jessie; urgency=medium
 
   * Rebuild for debmon-jessie
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 13:40:20 +0200
+
+icinga2 (2.3.5-1) unstable; urgency=medium
+
+  * [64334db] Imported Upstream version 2.3.5
+  * [afffeeb] Remove obsolete patches
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 17 Jun 2015 14:48:59 +0200
 
 icinga2 (2.3.4-3) unstable; urgency=medium
 
