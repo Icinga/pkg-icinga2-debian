@@ -66,7 +66,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.3.3
+Version: 2.3.5
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
@@ -506,7 +506,7 @@ exit 0
 %{_libexecdir}/%{name}/prepare-dirs
 %{_libexecdir}/%{name}/safe-reload
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}
-%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/perfdata
+%attr(0770,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/perfdata
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_localstatedir}/spool/%{name}/tmp
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_datadir}/%{name}/include
 %{_datadir}/%{name}/include

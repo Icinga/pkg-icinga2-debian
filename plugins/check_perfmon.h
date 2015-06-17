@@ -17,45 +17,32 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#ifndef SCRIPTUTILS_H
-#define SCRIPTUTILS_H
+#ifndef CHECK_PERFMON_H
+#define CHECK_PERFMON_H
 
-#include "base/i2-base.hpp"
-#include "base/string.hpp"
-#include "base/array.hpp"
-#include "base/dictionary.hpp"
-#include "base/type.hpp"
-#include "base/dynamicobject.hpp"
+#include <Windows.h>
+#include <Pdh.h>
+#include <pdhmsg.h>
 
-namespace icinga
+#include "thresholds.h"
+
+#include "boost/program_options.hpp"
+
+struct printInfoStruct
 {
-
-/**
- * @ingroup base
- */
-class I2_BASE_API ScriptUtils
-{
-public:
-	static String CastString(const Value& value);
-	static double CastNumber(const Value& value);
-	static bool CastBool(const Value& value);
-	static bool Regex(const String& pattern, const String& text);
-	static double Len(const Value& value);
-	static Array::Ptr Union(const std::vector<Value>& arguments);
-	static Array::Ptr Intersection(const std::vector<Value>& arguments);
-	static void Log(const std::vector<Value>& arguments);
-	static Array::Ptr Range(const std::vector<Value>& arguments);
-	static Type::Ptr TypeOf(const Value& value);
-	static Array::Ptr Keys(const Dictionary::Ptr& dict);
-	static DynamicObject::Ptr GetObject(const Type::Ptr& type, const String& name);
-	static Array::Ptr GetObjects(const Type::Ptr& type);
-	static void Assert(const Value& arg);
-	static String MsiGetComponentPathShim(const String& component);
-
-private:
-	ScriptUtils(void);
+	threshold tWarn, tCrit;
+	std::wstring wsFullPath;
+	DOUBLE dValue;
+	DWORD dwPerformanceWait = 1000,
+		dwRequestedType = PDH_FMT_DOUBLE;
 };
 
-}
+BOOL ParseArguments(CONST INT, WCHAR **, boost::program_options::variables_map&, printInfoStruct&);
+BOOL GetIntstancesAndCountersOfObject(CONST std::wstring, std::vector<std::wstring>&, std::vector<std::wstring>&);
+VOID PrintObjects();
+VOID PrintObjectInfo(CONST printInfoStruct&);
+INT QueryPerfData(printInfoStruct&);
+INT PrintOutput(CONST boost::program_options::variables_map&, printInfoStruct&);
+VOID FormatPDHError(PDH_STATUS);
 
-#endif /* SCRIPTUTILS_H */
+#endif // !CHECK_PERFMON_H

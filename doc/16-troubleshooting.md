@@ -102,7 +102,7 @@ included using
     include <itl>
     include <plugins>
 
-in the [icinga2.conf](5-configuring-icinga-2.md#icinga2-conf) configuration file. These files are not considered configuration files and will be overridden
+in the [icinga2.conf](4-configuring-icinga-2.md#icinga2-conf) configuration file. These files are not considered configuration files and will be overridden
 on upgrade, so please send modifications as proposed patches upstream. The default include path is set to
 `LocalStateDir + "/share/icinga2/includes"`.
 
@@ -151,7 +151,7 @@ Examples:
 ## <a id="feature-not-working"></a> Feature is not working
 
 * Make sure that the feature configuration is enabled by symlinking from `features-available/`
-to `features-enabled` and that the latter is included in [icinga2.conf](5-configuring-icinga-2.md#icinga2-conf).
+to `features-enabled` and that the latter is included in [icinga2.conf](4-configuring-icinga-2.md#icinga2-conf).
 * Are the feature attributes set correctly according to the documentation?
 * Any errors on the logs?
 
@@ -159,7 +159,7 @@ to `features-enabled` and that the latter is included in [icinga2.conf](5-config
 
 * Make sure that the line(s) are not [commented out](19-language-reference.md#comments) (starting with `//` or `#`, or
 encapsulated by `/* ... */`).
-* Is the configuration file included in [icinga2.conf](5-configuring-icinga-2.md#icinga2-conf)?
+* Is the configuration file included in [icinga2.conf](4-configuring-icinga-2.md#icinga2-conf)?
 
 ## <a id="configuration-attribute-inheritance"></a> Configuration attributes are inherited from
 
@@ -168,6 +168,11 @@ contain additional attributes, your objects will automatically inherit them. You
 or modify these attributes in the current object.
 
 ## <a id="troubleshooting-cluster"></a> Cluster Troubleshooting
+
+This applies to anything using the cluster protocol:
+
+* [Distributed and High-Availability](12-distributed-monitoring-ha.md#distributed-monitoring-high-availability) scenarios
+* [Remote client](10-icinga2-client.md#icinga2-client-scenarios) scenarios
 
 You should configure the [cluster health checks](12-distributed-monitoring-ha.md#cluster-health-check) if you haven't
 done so already.
@@ -196,15 +201,49 @@ happens (default port is `5665`).
 
 ### <a id="troubleshooting-cluster-ssl-errors"></a> Cluster Troubleshooting SSL Errors
 
-If the cluster communication fails with cryptic SSL error messages, make sure to check
+If the cluster communication fails with SSL error messages, make sure to check
 the following
 
 * File permissions on the SSL certificate files
 * Does the used CA match for all cluster endpoints?
+  * Verify the `Issuer` being your trusted CA
+  * Verify the `Subject` containing your endpoint's common name (CN)
+  * Check the validity of the certificate itself
 
-Examples:
+Steps:
 
     # ls -la /etc/icinga2/pki
+
+    # cd /etc/icinga2/pki/
+    # openssl x509 -in icinga2a.crt -text
+    Certificate:
+        Data:
+            Version: 1 (0x0)
+            Serial Number: 2 (0x2)
+        Signature Algorithm: sha1WithRSAEncryption
+            Issuer: C=DE, ST=Bavaria, L=Nuremberg, O=NETWAYS GmbH, OU=Monitoring, CN=Icinga CA
+            Validity
+                Not Before: Jan  7 13:17:38 2014 GMT
+                Not After : Jan  5 13:17:38 2024 GMT
+            Subject: C=DE, ST=Bavaria, L=Nuremberg, O=NETWAYS GmbH, OU=Monitoring, CN=icinga2a
+            Subject Public Key Info:
+                Public Key Algorithm: rsaEncryption
+                    Public-Key: (4096 bit)
+                    Modulus:
+                    ...
+
+Try to manually connect to the cluster node:
+
+    # openssl s_client -connect 192.168.33.10:5665
+
+
+Unauthenticated nodes are able to connect required by the
+[CSR auto-signing](10-icinga2-client.md#csr-autosigning-requirements) functionality.
+
+    [2015-06-10 03:28:11 +0200] information/ApiListener: New client connection for identity 'icinga-client' (unauthenticated)
+
+If this message does not go away, make sure to verify the client's certificate and
+its received `ca.crt` in `/etc/icinga2/pki`.
 
 
 ### <a id="troubleshooting-cluster-message-errors"></a> Cluster Troubleshooting Message Errors
@@ -215,6 +254,21 @@ they remain in a Split-Brain-mode and history may differ.
 
 Although the Icinga 2 cluster protocol stores historical events in a replay log for later synchronisation,
 you should make sure to check why the network connection failed.
+
+### <a id="troubleshooting-cluster-command-endpoint-errors"></a> Cluster Troubleshooting Command Endpoint Errors
+
+Command endpoints can be used for clients acting as [remote command execution bridge](10-icinga2-client.md#icinga2-client-configuration-command-bridge)
+as well as inside an [High-Availability cluster](12-distributed-monitoring-ha.md#distributed-monitoring-high-availability).
+
+There is no cli command for manually executing the check, but you can verify
+the following (e.g. by invoking a forced check from the web interface):
+
+* `icinga2.log` contains connection and execution errors
+ * `CheckCommand` definition not found on the remote client
+ * Referenced check plugin not found on the remote client
+ * Runtime warnings and errors, e.g. unresolved runtime macros or configuration problems
+* Specific error messages are also populated into `UNKNOWN` check results including a detailed error message in their output
+
 
 ### <a id="troubleshooting-cluster-config-sync"></a> Cluster Troubleshooting Config Sync
 
