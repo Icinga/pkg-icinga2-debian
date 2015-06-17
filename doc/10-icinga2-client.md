@@ -115,7 +115,7 @@ The setup wizard will do the following:
 * Generate a new CSR, sign it with the local CA and copying it into `/etc/icinga2/pki`
 * Generate a local zone and endpoint configuration for this master based on FQDN
 * Enabling the API feature, and setting optional `bind_host` and `bind_port`
-* Setting the `NodeName` and `TicketSalt` constants in [constants.conf](5-configuring-icinga-2.md#constants-conf)
+* Setting the `NodeName` and `TicketSalt` constants in [constants.conf](4-configuring-icinga-2.md#constants-conf)
 
 The setup wizard does not automatically restart Icinga 2.
 
@@ -155,7 +155,7 @@ graphical installer for Windows based client setup.
 Your client setup requires the following
 
 * A ready configured and installed [master node](10-icinga2-client.md#icinga2-client-installation-master-setup)
-* SSL signed certificate for communication with the master (Use [CSR auto-signing](certifiates-csr-autosigning)).
+* SSL signed certificate for communication with the master (Use [CSR auto-signing](10-icinga2-client.md#csr-autosigning-requirements)).
 * Enabled API feature, and a local Endpoint and Zone object configuration
 * Firewall ACLs for the communication port (default 5665)
 
@@ -166,7 +166,7 @@ Your client setup requires the following
 If your remote clients are capable of connecting to the central master, Icinga 2
 supports CSR auto-signing.
 
-First you'll need to define a secure ticket salt in the [constants.conf](5-configuring-icinga-2.md#constants-conf).
+First you'll need to define a secure ticket salt in the [constants.conf](4-configuring-icinga-2.md#constants-conf).
 The [setup wizard for the master setup](10-icinga2-client.md#icinga2-client-installation-master-setup) will create
 one for you already.
 
@@ -187,7 +187,7 @@ Example for a client:
 > **Note**
 >
 > You can omit the `--salt` parameter using the `TicketSalt` constant from
-> [constants.conf](5-configuring-icinga-2.md#constants-conf) if already defined and Icinga 2 was
+> [constants.conf](4-configuring-icinga-2.md#constants-conf) if already defined and Icinga 2 was
 > reloaded after the master setup.
 
 ### <a id="certificates-manual-creation"></a> Manual SSL Certificate Generation
@@ -293,7 +293,7 @@ The setup wizard will do the following:
 (based on FQDN)
 * Disabling the `notification` feature for this client
 * Enabling the `api` feature, and setting optional `bind_host` and `bind_port`
-* Setting the `NodeName` constant in [constants.conf](5-configuring-icinga-2.md#constants-conf)
+* Setting the `NodeName` constant in [constants.conf](4-configuring-icinga-2.md#constants-conf)
 
 The setup wizard does not automatically restart Icinga 2.
 
@@ -397,6 +397,7 @@ Restart Icinga 2 once complete.
 Download the MSI-Installer package from [http://packages.icinga.org/windows/](http://packages.icinga.org/windows/).
 
 Requirements:
+* Windows Vista/Server 2008 or higher
 * [Microsoft .NET Framework 2.0](http://www.microsoft.com/de-de/download/details.aspx?id=1639) if not already installed.
 
 The setup wizard will install Icinga 2 and then continue with SSL certificate generation,
@@ -599,8 +600,8 @@ defined endpoint. The check result is then received asynchronously through the c
       vars.users_wgreater = 10
       vars.users_cgreater = 20
 
-      /* assign where a remote client is set */
-      assign where host.vars.remote_client
+      /* assign where a remote client pattern is matched */
+      assign where match("*-remote", host.name)
     }
 
 
@@ -658,7 +659,8 @@ cluster configuration and its object relation (Zones, Endpoints, etc) and the wa
 will be able to sync the configuration from the master to the remote satellite or client.
 
 Please continue reading in the [distributed monitoring chapter](12-distributed-monitoring-ha.md#distributed-monitoring-high-availability),
-especially the [configuration synchronisation section](12-distributed-monitoring-ha.md#cluster-zone-config-sync).
+especially the [configuration synchronisation](12-distributed-monitoring-ha.md#cluster-zone-config-sync)
+and [best practices](12-distributed-monitoring-ha.md#zone-config-sync-best-practice).
 
 
 

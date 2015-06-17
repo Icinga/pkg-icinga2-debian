@@ -32,6 +32,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/errinfo_errno.hpp>
 #include <boost/exception/errinfo_file_name.hpp>
@@ -41,6 +42,9 @@
 #ifdef __linux__
 #include <sys/prctl.h>
 #endif /* __linux__ */
+#ifdef _WIN32
+#include <VersionHelpers.h>
+#endif /*_WIN32*/
 
 using namespace icinga;
 
@@ -485,23 +489,81 @@ static String UnameHelper(char type)
 	return result;
 }
 
-static String LsbReleaseHelper(void)
+int ReleaseHelper(std::string &result)
 {
+	/* You are useing *some* distribution */
 	FILE *fp = popen("lsb_release -s -d 2>&1", "r");
-
-	char line[1024];
 	std::ostringstream msgbuf;
 
-	while (fgets(line, sizeof(line), fp) != NULL)
-		msgbuf << line;
+	if (fp != NULL) {
+		char line[1024];
+		while (fgets(line, sizeof(line), fp) != NULL)
+			msgbuf << line;
+		int status = pclose(fp);
+		if (WEXITSTATUS(status) == 0) { 
+			result = msgbuf.str();
+			boost::trim(result);
+			return result.length();
+		}
+	}
 
-	pclose(fp);
+	/* You have systemd or Ubuntu etc. */
+	std::ifstream release("/etc/os-release");
+	std::string release_line;
+	if (release.is_open()) {
+		while (getline(release, release_line)) {
+			if (release_line.find("PRETTY_NAME") != std::string::npos) {
+				result = release_line.substr(13, release_line.length() - 14); 
+				return result.length();
+			}
+		}
+	}
 
-	String result = msgbuf.str();
-	result.Trim();
+	/* Centos < 7 */
+	release.close();
+	release.open("/etc/redhat-release");
+	if (release.is_open()) {
+		getline(release, release_line);
+		result = release_line;
+		return result.length();
+	}
 
-	return result;
+	/* sles 11 sp3, opensuse w/e */
+	release.close();
+	release.open("etc/SuSE-release");
+	if (release.is_open()) {
+		getline(release, release_line);
+		result = release_line;
+		return result.length();
+	}
+
+	/* Just give up */
+	return 0;
 }
+
+#else
+static String WindowsVersionHelper()
+{
+	//Minimum required Version, the installer/user is in the responsibility to take care of that
+	String winver = "Windows Vista";
+	if (IsWindowsVistaSP1OrGreater())
+		winver = "Windows Vista SP1";
+	if (IsWindowsVistaSP2OrGreater())
+		winver = "Windows Vista SP2";
+	if (IsWindows7OrGreater())
+		winver = "Windows 7";
+	if (IsWindows7SP1OrGreater())
+		winver = "Windows 7 SP1";
+	if (IsWindows8OrGreater())
+		winver = "Windows 8";
+	if (IsWindows8Point1OrGreater())
+		winver = "Windows 8.1 or greater";
+	if (IsWindowsServer())
+		winver += " (Server)";
+
+	return winver;
+}
+
 #endif /* _WIN32 */
 
 /**
@@ -531,10 +593,17 @@ void Application::DisplayInfoMessage(std::ostream& os, bool skipVersion)
 	   << "  Operating system: " << UnameHelper('s') << "\n"
 	   << "  Operating system version: " << UnameHelper('r') << "\n"
 	   << "  Architecture: " << UnameHelper('m') << "\n";
+#else
+	os << "\n"
+	   << "System information:\n"
+	   << "  Operating system: Windows\n"
+	   << "  Operating system version: " << WindowsVersionHelper() << "\n";
 #endif /* _WIN32 */
 
 #ifdef __linux__
-	os << "  Distribution: " << LsbReleaseHelper() << "\n";
+	std::string release;
+	if (ReleaseHelper(release))
+		os << "  Distribution: " << release << "\n";
 #endif /* __linux__ */
 }
 
