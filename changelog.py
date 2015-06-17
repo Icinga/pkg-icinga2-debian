@@ -21,10 +21,13 @@
 import urllib2, json, sys, string
 
 if len(sys.argv) < 2:
-    print "Usage:", sys.argv[0], "<VERSION>"
+    print "Usage:", sys.argv[0], "<VERSION>", "[link-issues]"
     sys.exit(0)
 
 version_name = sys.argv[1]
+
+link_issues = (len(sys.argv) >= 3 and sys.argv[2] == "link-issues")
+issue_url = "https://dev.icinga.org/issues/"
 
 rsp = urllib2.urlopen("https://dev.icinga.org/projects/i2/versions.json")
 versions_data = json.loads(rsp.read())
@@ -54,8 +57,6 @@ print ""
 print "#### Changes"
 print ""
 print changes
-print ""
-print "#### Issues"
 print ""
 
 offset = 0
@@ -89,10 +90,20 @@ while True:
 for p in range(2):
     not_empty = False
 
+    for log_entry in log_entries:
+        if (p == 0 and log_entry[0] == "Feature") or (p == 1 and log_entry[0] != "Feature"):
+            not_empty = True
+
+    if not_empty:
+        print "####", "Features" if p == 0 else "Bugfixes"
+        print ""
+
     for log_entry in sorted(log_entries):
         if (p == 0 and log_entry[0] == "Feature") or (p == 1 and log_entry[0] != "Feature"):
-            print "* %s %d: %s" % log_entry
-            not_empty = True
+            if not link_issues:  
+                print "* %s %d: %s" % log_entry
+            else:
+                print "* {0} [{1}]({3}{1} \"{0} {1}\"): {2}".format(log_entry[0], log_entry[1], log_entry[2], issue_url)
 
     if not_empty:
         print ""
