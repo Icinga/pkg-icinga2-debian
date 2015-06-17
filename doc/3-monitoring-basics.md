@@ -2,6 +2,9 @@
 
 This part of the Icinga 2 documentation provides an overview of all the basic
 monitoring concepts you need to know to run Icinga 2.
+Keep in mind these examples are made with a linux server in mind, if you are
+using Windows you will need to change the services accordingly. See the [ITL reference](7-icinga-template-library.md#windows-plugins)
+ for further information.
 
 ## <a id="hosts-services"></a> Hosts and Services
 
@@ -149,14 +152,14 @@ In addition to built-in attributes you can define your own attributes:
 
 Valid values for custom attributes include:
 
-* Strings and numbers
-* Arrays and dictionaries
-* Functions
+* [Strings](19-language-reference.md#string-literals), [numbers](19-language-reference.md#numeric-literals) and [booleans](19-language-reference.md#boolean-literals)
+* [Arrays](19-language-reference.md#array) and [dictionaries](19-language-reference.md#dictionary)
+* [Functions](3-monitoring-basics.md#custom-attributes-functions)
 
 ### <a id="custom-attributes-functions"></a> Functions as Custom Attributes
 
-Icinga 2 lets you specify functions for custom attributes. The special case here
-is that whenever Icinga 2 needs the value for such a custom attribute it runs
+Icinga 2 lets you specify [functions](19-language-reference.md#functions) for custom attributes.
+The special case here is that whenever Icinga 2 needs the value for such a custom attribute it runs
 the function and uses whatever value the function returns:
 
     object CheckCommand "random-value" {
@@ -194,7 +197,7 @@ value of arbitrary macro expressions:
     }}
 
 Acessing object attributes at runtime inside these functions is described in the
-[advanced topics](4-advanced-topics.md#access-object-attributes-at-runtime) chapter.
+[advanced topics](5-advanced-topics.md#access-object-attributes-at-runtime) chapter.
 
 ## <a id="runtime-macros"></a> Runtime Macros
 
@@ -404,7 +407,7 @@ based on attribute identifiers for example `host_name` objects can be [applied](
 Before you start using the apply rules keep the following in mind:
 
 * Define the best match.
-    * A set of unique [custom attributes](#custom-attributes-apply) for these hosts/services?
+    * A set of unique [custom attributes](3-monitoring-basics.md#custom-attributes) for these hosts/services?
     * Or [group](3-monitoring-basics.md#groups) memberships, e.g. a host being a member of a hostgroup, applying services to it?
     * A generic pattern [match](19-language-reference.md#function-calls) on the host/service name?
     * [Multiple expressions combined](3-monitoring-basics.md#using-apply-expressions) with `&&` or `||` [operators](19-language-reference.md#expression-operators)
@@ -421,12 +424,12 @@ for not only matching for their existance or values in apply expressions, but al
 
 * [Apply services to hosts](3-monitoring-basics.md#using-apply-services)
 * [Apply notifications to hosts and services](3-monitoring-basics.md#using-apply-notifications)
-* [Apply dependencies to hosts and services](3-monitoring-basics.md#using-apply-scheduledowntimes)
+* [Apply dependencies to hosts and services](3-monitoring-basics.md#using-apply-dependencies)
 * [Apply scheduled downtimes to hosts and services](3-monitoring-basics.md#using-apply-scheduledowntimes)
 
 A more advanced example is using [apply with for loops on arrays or
-dictionaries](#using-apply-for) for example provided by
-[custom atttributes](#custom-attributes-apply) or groups.
+dictionaries](3-monitoring-basics.md#using-apply-for) for example provided by
+[custom atttributes](3-monitoring-basics.md#custom-attributes) or groups.
 
 > **Tip**
 >
@@ -481,17 +484,16 @@ The notification is ignored for services whose host name ends with `*internal`
     apply Notification "notify-cust-xy-mysql" to Service {
       import "cust-xy-notification"
 
-      assign where match("*has gold support 24x7*", service.notes) && (host.vars.customer == "customer-xy" || host.vars.always_notify == true
+      assign where match("*has gold support 24x7*", service.notes) && (host.vars.customer == "customer-xy" || host.vars.always_notify == true)
       ignore where match("*internal", host.name) || (service.vars.priority < 2 && host.vars.is_clustered == true)
     }
 
 
 
-
 ### <a id="using-apply-services"></a> Apply Services to Hosts
 
-The sample configuration already includes a detailed example in [hosts.conf](5-configuring-icinga-2.md#hosts-conf)
-and [services.conf](5-configuring-icinga-2.md#services-conf) for this use case.
+The sample configuration already includes a detailed example in [hosts.conf](4-configuring-icinga-2.md#hosts-conf)
+and [services.conf](4-configuring-icinga-2.md#services-conf) for this use case.
 
 The example for `ssh` applies a service object to all hosts with the `address`
 attribute being defined and the custom attribute `os` set to the string `Linux` in `vars`.
@@ -506,7 +508,7 @@ attribute being defined and the custom attribute `os` set to the string `Linux` 
 
 
 Other detailed scenario examples are used in their respective chapters, for example
-[apply services with custom command arguments](#using-apply-services-command-arguments).
+[apply services with custom command arguments](3-monitoring-basics.md#command-passing-parameters).
 
 ### <a id="using-apply-notifications"></a> Apply Notifications to Hosts and Services
 
@@ -533,9 +535,9 @@ Detailed examples can be found in the [dependencies](3-monitoring-basics.md#depe
 
 ### <a id="using-apply-scheduledowntimes"></a> Apply Recurring Downtimes to Hosts and Services
 
-The sample confituration includes an example in [downtimes.conf](5-configuring-icinga-2.md#downtimes-conf).
+The sample configuration includes an example in [downtimes.conf](4-configuring-icinga-2.md#downtimes-conf).
 
-Detailed examples can be found in the [recurring downtimes](4-advanced-topics.md#recurring-downtimes) chapter.
+Detailed examples can be found in the [recurring downtimes](5-advanced-topics.md#recurring-downtimes) chapter.
 
 
 ### <a id="using-apply-for"></a> Using Apply For Rules
@@ -544,8 +546,8 @@ Next to the standard way of using [apply rules](3-monitoring-basics.md#using-app
 there is the requirement of generating apply rules objects based on set (array or
 dictionary).
 
-The sample configuration already includes a detailed example in [hosts.conf](5-configuring-icinga-2.md#hosts-conf)
-and [services.conf](5-configuring-icinga-2.md#services-conf) for this use case.
+The sample configuration already includes a detailed example in [hosts.conf](4-configuring-icinga-2.md#hosts-conf)
+and [services.conf](4-configuring-icinga-2.md#services-conf) for this use case.
 
 Take the following example: A host provides the snmp oids for different service check
 types. This could look like the following example:
@@ -573,7 +575,7 @@ The service's `display_name` should be set to the identifier inside the dictiona
       ignore where identifier == "bgp" //don't generate service for bgp checks
     }
 
-Icinga 2 evalatues the `apply for` rule for all objects with the custom attribute
+Icinga 2 evaluates the `apply for` rule for all objects with the custom attribute
 `oids` set. It then iterates over all list items inside the `for` loop and evaluates the
 `assign/ignore where` expressions. You can access the loop variable
 in these expressions, e.g. for ignoring certain values.
@@ -592,38 +594,54 @@ generic `apply for` rule generating the object name with or without a prefix.
 
 #### <a id="using-apply-for-custom-attribute-override"></a> Apply For and Custom Attribute Override
 
-Imagine a different more advanced example: You are monitoring your switch (hosts) with many
-interfaces (services). The following requirements/problems apply:
+Imagine a different more advanced example: You are monitoring your network device (host)
+with many interfaces (services). The following requirements/problems apply:
 
-* Each interface service check should be named with a prefix and a running number
+* Each interface service check should be named with a prefix and a name defined in your host object (which could be generated from your CMDB, etc)
 * Each interface has its own vlan tag
 * Some interfaces have QoS enabled
 * Additional attributes such as `display_name` or `notes, `notes_url` and `action_url` must be
 dynamically generated
 
-By defining the `interfaces` dictionary with three example interfaces on the `core-switch`
-host object, you'll make sure to pass the storage required by the for loop in the service apply
-rule.
 
-    object Host "core-switch" {
+Tip: Define the snmp community as global constant in your [constants.conf](4-configuring-icinga-2.md#constants-conf) file.
+
+    const IftrafficSnmpCommunity = "public"
+
+By defining the `interfaces` dictionary with three example interfaces on the `cisco-catalyst-6509-34`
+host object, you'll make sure to pass the [custom attribute](3-monitoring-basics.md#custom-attributes)
+storage required by the for loop in the service apply rule.
+
+    object Host "cisco-catalyst-6509-34" {
       import "generic-host"
-      address = "127.0.0.1"
+      display_name = "Catalyst 6509 #34 VIE21"
+      address = "127.0.1.4"
 
-      vars.interfaces["0"] = {
-        port = 1
-        vlan = "internal"
-        address = "127.0.0.2"
-        qos = "enabled"
+      /* "GigabitEthernet0/2" is the interface name,
+       * and key name in service apply for later on
+       */
+      vars.interfaces["GigabitEthernet0/2"] = {
+         /* define all custom attributes with the
+          * same name required for command parameters/arguments
+          * in service apply (look into your CheckCommand definition)
+          */
+         iftraffic_units = "g"
+         iftraffic_community = IftrafficSnmpCommunity
+	 iftraffic_bandwidth = 1
+         vlan = "internal"
+         qos = "disabled"
       }
-      vars.interfaces["1"] = {
-        port = 2
-        vlan = "mgmt"
-        address = "127.0.1.2"
+      vars.interfaces["GigabitEthernet0/4"] = {
+         iftraffic_units = "g"
+         //iftraffic_community = IftrafficSnmpCommunity
+	 iftraffic_bandwidth = 1
+         vlan = "renote"
+         qos = "enabled"
       }
-      vars.interfaces["2"] = {
-        port = 3
-        vlan = "remote"
-        address = "127.0.2.2"
+      vars.interfaces["MgmtInterface1"] = {
+         iftraffic_community = IftrafficSnmpCommunity
+         vlan = "mgmt"
+         interface_address = "127.99.0.100" #special management ip
       }
     }
 
@@ -631,38 +649,142 @@ You can also omit the `"if-"` string, then all generated service names are direc
 taken from the `if_name` variable value.
 
 The config dictionary contains all key-value pairs for the specific interface in one
-loop cycle, like `port`, `vlan`, `address` and `qos` for the `0` interface.
+loop cycle, like `iftraffic_units`, `vlan`, and `qos` for the specified interface.
 
-By defining a default value for the custom attribute `qos` in the `vars` dictionary
-before adding the `config` dictionary we'll ensure that this attribute is always defined.
+You can either map the custom attributes from the `interface_config` dictionary to
+local custom attributes stashed into `vars`. If the names match the required command
+argument parameters already (for example `iftraffic_units`), you could also add the
+`interface_config` dictionary to the `vars` dictionary using the `+=` operator.
 
-After `vars` is fully populated, all object attributes can be set. For strings, you can use
-string concatention with the `+` operator.
+After `vars` is fully populated, all object attributes can be set calculated from
+provided host attributes. For strings, you can use string concatention with the `+` operator.
 
-You can also specifiy the check command that way.
+You can also specifiy the display_name, check command, interval, notes, notes_url, action_url, etc.
+attributes that way. Attribute strings can be [concatenated](19-language-reference.md#expression-operators),
+for example for adding a more detailed service `display_name`.
 
-    apply Service "if-" for (if_name => config in host.vars.interfaces) {
+This example also uses [if conditions](19-language-reference.md#conditional-statements)
+if specific values are not set, adding a local default value.
+The other way around you can override specific custom attributes inherited from a service template,
+if set.
+
+    /* loop over the host.vars.interfaces dictionary
+     * for (key => value in dict) means `interface_name` as key
+     * and `interface_config` as value. Access config attributes
+     * with the indexer (`.`) character.
+     */
+    apply Service "if-" for (interface_name => interface_config in host.vars.interfaces) {
       import "generic-service"
-      check_command = "ping4"
+      check_command = "iftraffic"
+      display_name = "IF-" + interface_name
 
-      vars.qos = "disabled"
-      vars += config
+      /* use the key as command argument (no duplication of values in host.vars.interfaces) */
+      vars.iftraffic_interface = interface_name
 
-      display_name = "if-" + if_name + "-" + vars.vlan
+      /* map the custom attributes as command arguments */
+      vars.iftraffic_units = interface_config.iftraffic_units
+      vars.iftraffic_community = interface_config.iftraffic_community
 
-      notes = "Interface check for Port " + string(vars.port) + " in VLAN " + vars.vlan + " on Address " + vars.address + " QoS " + vars.qos
+      /* the above can be achieved in a shorter fashion if the names inside host.vars.interfaces
+       * are the _exact_ same as required as command parameter by the check command
+       * definition.
+       */
+      vars += interface_config
+
+      /* set a default value for units and bandwidth */
+      if (interface_config.iftraffic_units == "") {
+        vars.iftraffic_units = "m"
+      }
+      if (interface_config.iftraffic_bandwidth == "") {
+        vars.iftraffic_bandwidth = 1
+      }
+      if (interface_config.vlan == "") {
+        vars.vlan = "not set"
+      }
+      if (interface_config.qos == "") {
+        vars.qos = "not set"
+      }
+
+      /* set the global constant if not explicitely
+       * not provided by the `interfaces` dictionary on the host
+       */
+      if (len(interface_config.iftraffic_community) == 0 || len(vars.iftraffic_community) == 0) {
+        vars.iftraffic_community = IftrafficSnmpCommunity
+      }
+
+      /* Calculate some additional object attributes after populating the `vars` dictionary */
+      notes = "Interface check for " + interface_name + " (units: '" + interface_config.iftraffic_units + "') in VLAN '" + vars.vlan + "' with ' QoS '" + vars.qos + "'"
       notes_url = "http://foreman.company.com/hosts/" + host.name
-      action_url = "http://snmp.checker.company.com/" + host.name + "if-" + if_name
+      action_url = "http://snmp.checker.company.com/" + host.name + "/if-" + interface_name
     }
 
-Note that numbers must be explicitely casted to string when adding to strings.
-This can be achieved by wrapping them into the [string()](19-language-reference.md#function-calls) function.
+
+
+This example makes use of the [check_iftraffic](https://exchange.icinga.org/exchange/iftraffic) plugin.
+The `CheckCommand` definition can be found in the
+[contributed plugin check commands](7-icinga-template-library.md#plugins-contrib-command-iftraffic)
+- make sure to include them in your [icinga2 configuration file](4-configuring-icinga-2.md#icinga2-conf).
+
 
 > **Tip**
 >
 > Building configuration in that dynamic way requires detailed information
 > of the generated objects. Use the `object list` [CLI command](8-cli-commands.md#cli-command-object)
 > after successful [configuration validation](8-cli-commands.md#config-validation).
+
+Verify that the apply-for-rule successfully created the service objects with the
+inherited custom attributes:
+
+    # icinga2 daemon -C
+    # icinga2 object list --type Service --name *catalyst*
+
+Object 'cisco-catalyst-6509-34!if-GigabitEthernet0/2' of type 'Service':
+    ......
+      * vars
+        % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 59:3-59:26
+        * iftraffic_bandwidth = 1
+        * iftraffic_community = "public"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 53:3-53:65
+        * iftraffic_interface = "GigabitEthernet0/2"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 49:3-49:43
+        * iftraffic_units = "g"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 52:3-52:57
+        * qos = "disabled"
+        * vlan = "internal"
+
+
+    Object 'cisco-catalyst-6509-34!if-GigabitEthernet0/4' of type 'Service':
+    ...
+      * vars
+        % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 59:3-59:26
+        * iftraffic_bandwidth = 1
+        * iftraffic_community = "public"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 53:3-53:65
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 79:5-79:53
+        * iftraffic_interface = "GigabitEthernet0/4"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 49:3-49:43
+        * iftraffic_units = "g"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 52:3-52:57
+        * qos = "enabled"
+        * vlan = "renote"
+
+    Object 'cisco-catalyst-6509-34!if-MgmtInterface1' of type 'Service':
+    ...
+      * vars
+        % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 59:3-59:26
+        * iftraffic_bandwidth = 1
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 66:5-66:32
+        * iftraffic_community = "public"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 53:3-53:65
+        * iftraffic_interface = "MgmtInterface1"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 49:3-49:43
+        * iftraffic_units = "m"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 52:3-52:57
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 63:5-63:30
+        * interface_address = "127.99.0.100"
+        * qos = "not set"
+          % = modified in '/etc/icinga2/conf.d/iftraffic.conf', lines 72:5-72:24
+        * vlan = "mgmt"
 
 
 ### <a id="using-apply-object-attributes"></a> Use Object Attributes in Apply Rules
@@ -893,7 +1015,7 @@ notifications between start and end time.
       vars.mobile = "+1 555 424642"
     }
 
-Define an additional [NotificationCommand](#notification) for SMS notifications.
+Define an additional [NotificationCommand](3-monitoring-basics.md#notification-commands) for SMS notifications.
 
 > **Note**
 >
@@ -1044,8 +1166,8 @@ using the `check_command` attribute.
 `plugin-check-command` to support native plugin based check methods.
 
 Unless you have done so already, download your check plugin and put it
-into the [PluginDir](5-configuring-icinga-2.md#constants-conf) directory. The following example uses the
-`check_disk` plugin contained in the Monitoring Plugins package.
+into the [PluginDir](4-configuring-icinga-2.md#constants-conf) directory. The following example uses the
+`check_mysql` plugin contained in the Monitoring Plugins package.
 
 The plugin path and all command arguments are made a list of
 double-quoted string arguments for proper shell escaping.
@@ -1055,92 +1177,140 @@ all available options. Our example defines warning (`-w`) and
 critical (`-c`) thresholds for the disk usage. Without any
 partition defined (`-p`) it will check all local partitions.
 
-    icinga@icinga2 $ /usr/lib/nagios/plugins/check_disk --help
-    ...
-    This plugin checks the amount of used disk space on a mounted file system
-    and generates an alert if free space is less than one of the threshold values
+   icinga@icinga2 $ /usr/lib64/nagios/plugins/check_mysql --help
+   ...
 
+    This program tests connections to a MySQL server
 
-    Usage:
-     check_disk -w limit -c limit [-W limit] [-K limit] {-p path | -x device}
-    [-C] [-E] [-e] [-f] [-g group ] [-k] [-l] [-M] [-m] [-R path ] [-r path ]
-    [-t timeout] [-u unit] [-v] [-X type] [-N type]
-    ...
+   Usage:
+     check_mysql [-d database] [-H host] [-P port] [-s socket]
+           [-u user] [-p password] [-S] [-l] [-a cert] [-k key]
+           [-C ca-cert] [-D ca-dir] [-L ciphers] [-f optfile] [-g group]
 
-> **Note**
->
-> Don't execute plugins as `root` and always use the absolute path to the plugin! Trust us.
-
-Next step is to understand how command parameters are being passed from
-a host or service object, and add a [CheckCommand](6-object-types.md#objecttype-checkcommand)
+Next step is to understand how [command parameters](3-monitoring-basics.md#command-passing-parameters)
+are being passed from a host or service object, and add a [CheckCommand](6-object-types.md#objecttype-checkcommand)
 definition based on these required parameters and/or default values.
+
+Please continue reading in the [plugins section](13-addons-plugins.md#plugins) for additional integration examples.
 
 #### <a id="command-passing-parameters"></a> Passing Check Command Parameters from Host or Service
 
 Check command parameters are defined as custom attributes which can be accessed as runtime macros
 by the executed check command.
 
-Define the default check command custom attribute `disk_wfree` and `disk_cfree`
-(freely definable naming schema) and their default threshold values. You can
+The check command parameters for ITL provided plugin check command definitions are documented
+[here](7-icinga-template-library.md#plugin-check-commands), for example
+[disk](7-icinga-template-library.md#plugin-check-command-disk).
+
+In order to practice passing command parameters you should [integrate your own plugin](3-monitoring-basics.md#command-plugin-integration).
+
+The following example will use `check_mysql` provided by the [Monitoring Plugins installation](2-getting-started.md#setting-up-check-plugins).
+
+Define the default check command custom attributes, for example `mysql_user` and `mysql_password`
+(freely definable naming schema) and optional their default threshold values. You can
 then use these custom attributes as runtime macros for [command arguments](3-monitoring-basics.md#command-arguments)
 on the command line.
 
 > **Tip**
 >
 > Use a common command type as prefix for your command arguments to increase
-> readability. `disk_wfree` helps understanding the context better than just
-> `wfree` as argument.
+> readability. `mysql_user` helps understanding the context better than just
+> `user` as argument.
 
 The default custom attributes can be overridden by the custom attributes
-defined in the service using the check command `my-disk`. The custom attributes
+defined in the host or service using the check command `my-mysql`. The custom attributes
 can also be inherited from a parent template using additive inheritance (`+=`).
 
-    object CheckCommand "my-disk" {
+    # vim /etc/icinga2/conf.d/commands.conf
+
+    object CheckCommand "my-mysql" {
       import "plugin-check-command"
 
-      command = [ PluginDir + "/check_disk" ]
+      command = [ PluginDir + "/check_mysql" ] //constants.conf -> const PluginDir
 
       arguments = {
-        "-w" = {
-          value = "$disk_wfree$"
-          description = "Exit with WARNING status if less than INTEGER units of disk are free or Exit with WARNING status if less than PERCENT of disk space is free"
+        "-H" = "$mysql_host$"
+        "-u" = {
           required = true
+          value = "$mysql_user$"
         }
-        "-c" = {
-          value = "$disk_cfree$"
-          description = "Exit with CRITICAL status if less than INTEGER units of disk are free or Exit with CRITCAL status if less than PERCENT of disk space is free"
-          required = true
+        "-p" = "$mysql_password$"
+        "-P" = "$mysql_port$"
+        "-s" = "$mysql_socket$"
+        "-a" = "$mysql_cert$"
+        "-d" = "$mysql_database$"
+        "-k" = "$mysql_key$"
+        "-C" = "$mysql_ca_cert$"
+        "-D" = "$mysql_ca_dir$"
+        "-L" = "$mysql_ciphers$"
+        "-f" = "$mysql_optfile$"
+        "-g" = "$mysql_group$"
+        "-S" = {
+          set_if = "$mysql_check_slave$"
+          description = "Check if the slave thread is running properly."
         }
-        "-W" = {
-          value = "$disk_inode_wfree$"
-          description = "Exit with WARNING status if less than PERCENT of inode space is free"
-        }
-        "-K" = {
-          value = "$disk_inode_cfree$"
-          description = "Exit with CRITICAL status if less than PERCENT of inode space is free"
-        }
-        "-p" = {
-          value = "$disk_partitions$"
-          description = "Path or partition (may be repeated)"
-          repeat_key = true
-          order = 1
-        }
-        "-x" = {
-          value = "$disk_partitions_excluded$"
-          description = "Ignore device (only works if -p unspecified)"
+        "-l" = {
+          set_if = "$mysql_ssl$"
+          description = "Use ssl encryption"
         }
       }
 
-      vars.disk_wfree = "20%"
-      vars.disk_cfree = "10%"
+      vars.mysql_check_slave = false
+      vars.mysql_ssl = false
+      vars.mysql_host = "$address$"
     }
 
-> **Note**
->
-> A proper example for the `check_disk` plugin is already shipped with Icinga 2
-> ready to use with the [plugin check commands](7-icinga-template-library.md#plugin-check-command-disk).
+The check command definition also sets `mysql_host` to the `$address$` default value. You can override
+this command parameter if for example your MySQL host is not running on the same server's ip address.
 
-The host `localhost` with the applied service `basic-partitions` checks a basic set of disk partitions
+Make sure pass all required command parameters, such as `mysql_user`, `mysql_password` and `mysql_database`.
+`MysqlUsername` and `MysqlPassword` are specified as [global constants](4-configuring-icinga-2.md#constants-conf)
+in this example.
+
+    # vim /etc/icinga2/conf.d/services.conf
+
+    apply Service "mysql-icinga-db-health" {
+      import "generic-service"
+
+      check_command = "my-mysql"
+
+      vars.mysql_user = MysqlUsername
+      vars.mysql_password = MysqlPassword
+
+      vars.mysql_database = "icinga"
+      vars.mysql_host = "192.168.33.11"
+
+      assign where match("icinga2*", host.name)
+      ignore where host.vars.no_health_check == true
+    }
+
+
+Take a different example: The example host configuration in [hosts.conf](4-configuring-icinga-2.md#hosts-conf)
+also applies an `ssh` service check. Your host's ssh port is not the default `22`, but set to `2022`.
+You can pass the command parameter as custom attribute `ssh_port` directly inside the service apply rule
+inside [services.conf](4-configuring-icinga-2.md#services-conf):
+
+    apply Service "ssh" {
+      import "generic-service"
+
+      check_command = "ssh"
+      vars.ssh_port = 2022 //custom command parameter
+
+      assign where (host.address || host.address6) && host.vars.os == "Linux"
+    }
+
+If you prefer this being configured at the host instead of the service, modify the host configuration
+object instead. The runtime macro resolving order is described [here](3-monitoring-basics.md#macro-evaluation-order).
+
+   object Host NodeName {
+   ...
+     vars.ssh_port = 2022
+   }
+
+#### <a id="command-passing-parameters-apply-for"></a> Passing Check Command Parameters Using Apply For
+
+The host `localhost` with the generated services from the `basic-partitions` dictionary (see
+[apply for](3-monitoring-basics.md#using-apply-for) for details) checks a basic set of disk partitions
 with modified custom attributes (warning thresholds at `10%`, critical thresholds at `5%`
 free disk space).
 
@@ -1169,7 +1339,7 @@ string values for passing multiple partitions to the `check_disk` check plugin.
 
 
 More details on using arrays in custom attributes can be found in
-[this chapter](#runtime-custom-attributes).
+[this chapter](3-monitoring-basics.md#custom-attributes).
 
 
 #### <a id="command-arguments"></a> Command Arguments
