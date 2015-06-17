@@ -530,14 +530,9 @@ void StatusDataWriter::DumpCustomAttributes(std::ostream& fp, const CustomVarObj
 			value = JsonEncode(kv.second);
 			is_json = true;
 		} else
-			value = kv.second;
+			value = CompatUtility::EscapeString(kv.second);
 
-		fp << "\t";
-
-		if (!CompatUtility::IsLegacyAttribute(object, kv.first))
-			fp << "_";
-
-		fp << kv.first << "\t" << value << "\n";
+		fp << "\t" "_" << kv.first << "\t" << value << "\n";
 	}
 
 	if (is_json)
