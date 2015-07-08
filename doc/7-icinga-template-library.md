@@ -437,6 +437,29 @@ imap_address    | **Optional.** The host's address. Defaults to "$address$" if t
 imap_port       | **Optional.** The port that should be checked. Defaults to 143.
 
 
+## <a id="plugin-check-command-ldap"></a> ldap
+
+Check command object for the `check_ldap` plugin.
+
+Custom Attributes:
+
+Name            | Description
+----------------|--------------
+ldap_address    | **Optional.** Host name, IP Address, or unix socket (must be an absolute path). Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+ldap_port       | **Optional.** Port number. Defaults to 389.
+ldap_attr	| **Optional.** LDAP attribute to search for (default: "(objectclass=*)"
+ldap_base       | **Required.** LDAP base (eg. ou=myunit,o=myorg,c=at).
+ldap_bind       | **Optional.** LDAP bind DN (if required).
+ldap_pass       | **Optional.** LDAP password (if required).
+ldap_starttls   | **Optional.** Use STARTSSL mechanism introduced in protocol version 3.
+ldap_ssl        | **Optional.** Use LDAPS (LDAP v2 SSL method). This also sets the default port to 636.
+ldap_v2         | **Optional.** Use LDAP protocol version 2 (enabled by default).
+ldap_v3         | **Optional.** Use LDAP protocol version 3 (disabled by default)
+ldap_warning	| **Optional.** Response time to result in warning status (seconds).
+ldap_critical	| **Optional.** Response time to result in critical status (seconds).
+ldap_timeout	| **Optional.** Seconds before connection times out (default: 10).
+ldap_verbose	| **Optional.** Show details for command-line debugging (disabled by default)
+
 ## <a id="plugin-check-command-load"></a> load
 
 Check command object for the `check_load` plugin.
@@ -462,7 +485,7 @@ Custom attributes passed as [command parameters](3-monitoring-basics.md#command-
 Name            | Description
 ----------------|--------------
 nrpe_address    | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
-nrpe_port       | **Optional.** The NRPE port. Defaults to 5668.
+nrpe_port       | **Optional.** The NRPE port. Defaults to 5666.
 nrpe_command    | **Optional.** The command that should be executed.
 nrpe_no_ssl     | **Optional.** Whether to disable SSL or not. Defaults to `false`.
 nrpe_timeout_unknown | **Optional.** Whether to set timeouts to unknown instead of critical state. Defaults to `false`.
@@ -498,6 +521,33 @@ Custom attributes passed as [command parameters](3-monitoring-basics.md#command-
 Name            | Description
 ----------------|--------------
 ntp_address     | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+ntp_port        | **Optional.** Port number (default: 123).
+ntp_quit        | **Optional.** Returns UNKNOWN instead of CRITICAL if offset cannot be found.
+ntp_warning     | **Optional.** Offset to result in warning status (seconds).
+ntp_critical    | **Optional.** Offset to result in critical status (seconds).
+ntp_timeoffset  | **Optional.** Expected offset of the ntp server relative to local server (seconds).
+ntp_timeout     | **Optional.** Seconds before connection times out (default: 10).
+
+
+## <a id="plugin-check-command-ntp-peer"></a> ntp_peer
+
+Check command object for the `check_ntp_peer` plugin.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name            | Description
+----------------|--------------
+ntp_address     | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+ntp_port        | **Optional.** The port to use. Default to 123.
+ntp_warning     | **Optional.** Offset to result in warning status (seconds).
+ntp_critical    | **Optional.** Offset to result in critical status (seconds).
+ntp_wstratum    | **Optional.** Warning threshold for stratum of server's synchronization peer.
+ntp_cstratum    | **Optional.** Critical threshold for stratum of server's synchronization peer.
+ntp_wjitter     | **Optional.** Warning threshold for jitter.
+ntp_cjitter     | **Optional.** Critical threshold for jitter.
+ntp_wsource     | **Optional.** Warning threshold for number of usable time sources.
+ntp_csource     | **Optional.** Critical threshold for number of usable time sources.
+ntp_timeout     | **Optional.** Seconds before connection times out (default: 10).
 
 
 ## <a id="plugin-check-command-passive"></a> passive
@@ -627,11 +677,24 @@ Check command object for the `check_smtp` plugin.
 
 Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
 
-Name                 | Description
----------------------|--------------
-smtp_address         | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
-smtp_port            | **Optional.** The port that should be checked. Defaults to 25.
-smtp_mail_from       | **Optional.** Test a MAIL FROM command with the given email address.
+Name                  | Description
+----------------------|--------------
+smtp_address          | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+smtp_port             | **Optional.** The port that should be checked. Defaults to 25.
+smtp_mail_from        | **Optional.** Test a MAIL FROM command with the given email address.
+smtp_expect           | **Optional.** String to expect in first line of server response (default: '220').
+smtp_command          | **Optional.** SMTP command (may be used repeatedly).
+smtp_response         | **Optional.** Expected response to command (may be used repeatedly).
+smtp_helo_fqdn        | **Optional.** FQDN used for HELO
+smtp_certificate_age  | **Optional.** Minimum number of days a certificate has to be valid.
+smtp_starttls         | **Optional.** Use STARTTLS for the connection.
+smtp_authtype         | **Optional.** SMTP AUTH type to check (default none, only LOGIN supported).
+smtp_authuser         | **Optional.** SMTP AUTH username.
+smtp_authpass         | **Optional.** SMTP AUTH password.
+smtp_ignore_quit      | **Optional.** Ignore failure when sending QUIT command to server.
+smtp_warning          | **Optional.** Response time to result in warning status (seconds).
+smtp_critical         | **Optional.** Response time to result in critical status (seconds).
+smtp_timeout          | **Optional.** Seconds before connection times out (default: 10).
 
 
 ## <a id="plugin-check-command-snmp"></a> snmp
@@ -671,7 +734,8 @@ Name              | Description
 snmpv3_address    | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
 snmpv3_user       | **Required.** The username to log in with.
 snmpv3_auth_alg   | **Optional.** The authentication algorithm. Defaults to SHA.
-snmpv3_auth_key   | **Required.** The authentication key.
+snmpv3_seclevel   | **Optional.** The security level. Defaults to authPriv.
+snmpv3_auth_key   | **Required,** The authentication key. Required if `snmpv3_seclevel` is set to `authPriv` otherwise optional.
 snmpv3_priv_alg   | **Optional.** The encryption algorithm. Defaults to AES.
 snmpv3_priv_key   | **Required.** The encryption key.
 snmpv3_oid        | **Required.** The SNMP OID.
@@ -1050,7 +1114,6 @@ Custom attributes passed as [command parameters](3-monitoring-basics.md#command-
 
 Name            | Description
 ----------------|--------------
-nscp_path       | **Optional.** Can be used to override the NSClient++ on a per-command basis. Defaults to NscpPath.
 nscp_log_level  | **Optional.** The log level. Defaults to "critical".
 nscp_load_all   | **Optional.** Whether to load all modules. Defaults to true.
 nscp_boot       | **Optional.** Whether to use the --boot option. Defaults to true.
@@ -1199,6 +1262,7 @@ snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. 
 snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default.
 snmp_warn               | **Optional.** The warning threshold.
 snmp_crit               | **Optional.** The critical threshold.
+snmp_is_cisco		| **Optional.** Change OIDs for Cisco switches. Defaults to false.
 snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
@@ -1402,6 +1466,49 @@ postgres_standby     | **Optional.** Assume that the server is in continious WAL
 postgres_production  | **Optional.** Assume that the server is in production mode if set to true. Defaults to false.
 postgres_action      | **Required.** Determines the test executed.
 postgres_unixsocket  | **Optional.** If "postgres_unixsocket" is set to true the unix socket is used instead of an address. Defaults to false.
+
+### <a id="plugins-contrib-command-mongodb"></a> mongodb
+
+The plugin `mongodb` utilises Python PyMongo.
+For development check [https://github.com](https://github.com/mzupan/nagios-plugin-mongodb).
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                             | Description
+---------------------------------|------------------------------------------------------------------------------------------------------------------------------
+mongodb_host                     | **Required.** Specifies the hostname or address.
+mongodb_port                     | **Required.** The port mongodb is runnung on.
+mongodb_user                     | **Optional.** The username you want to login as
+mongodb_passwd                   | **Optional.** The password you want to use for that user
+mongodb_warning                  | **Optional.** The warning threshold we want to set
+mongodb_critical                 | **Optional.** The critical threshold we want to set
+mongodb_action                   | **Required.** The action you want to take
+mongodb_maxlag                   | **Optional.** Get max replication lag (for replication_lag action only)
+mongodb_mappedmemory             | **Optional.** Get mapped memory instead of resident (if resident memory can not be read)
+mongodb_perfdata                 | **Optional.** Enable output of Nagios performance data
+mongodb_database                 | **Optional.** Specify the database to check
+mongodb_alldatabases             | **Optional.** Check all databases (action database_size)
+mongodb_ssl                      | **Optional.** Connect using SSL
+mongodb_replicaset               | **Optional.** Connect to replicaset
+mongodb_querytype                | **Optional.** The query type to check [query|insert|update|delete|getmore|command] from queries_per_second
+mongodb_collection               | **Optional.** Specify the collection to check
+mongodb_sampletime               | **Optional.** Time used to sample number of pages faults
+
+### <a id="plugins-contrib-command-elasticsearch"></a> elasticsearch
+
+An [ElasticSearch](https://www.elastic.co/products/elasticsearch) availability
+and performance monitoring plugin available for download at [GitHub](https://github.com/anchor/nagios-plugin-elasticsearch).
+The plugin requires the HTTP API enabled on your ElasticSearch node.
+
+Name                         | Description
+-----------------------------|-------------------------------------------------------------------------------------------------------
+elasticsearch_failuredomain  | **Optional.** A comma-separated list of ElasticSearch attributes that make up your cluster's failure domain.
+elasticsearch_host           | **Optional.** Hostname or network address to probe. Defaults to 'localhost'.
+elasticsearch_masternodes    | **Optional.** Issue a warning if the number of master-eligible nodes in the cluster drops below this number. By default, do not monitor the number of nodes in the cluster.
+elasticsearch_port           | **Optional.** TCP port to probe.  The ElasticSearch API should be listening here. Defaults to 9200.
+elasticsearch_prefix         | **Optional.** Optional prefix (e.g. 'es') for the ElasticSearch API. Defaults to ''.
+elasticsearch_yellowcritical | **Optional.** Instead of issuing a 'warning' for a yellow cluster state, issue a 'critical' alert. Defaults to false.
+
 
 ## <a id="plugins-contrib-ipmi"></a> IPMI Devices
 

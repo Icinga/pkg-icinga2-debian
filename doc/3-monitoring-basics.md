@@ -917,6 +917,8 @@ refining the notifications being actually sent.
 There are many ways of sending notifications, e.g. by e-mail, XMPP,
 IRC, Twitter, etc. On its own Icinga 2 does not know how to send notifications.
 Instead it relies on external mechanisms such as shell scripts to notify users.
+More notification methods are listed in the [addons and plugins](13-addons-plugins.md#notification-scripts-interfaces)
+chapter.
 
 A notification specification requires one or more users (and/or user groups)
 who will be notified in case of problems. These users must have all custom
@@ -1518,7 +1520,7 @@ NotificationCommand object refer to that.
 
 ### <a id="event-commands"></a> Event Commands
 
-Unlike notifications event commands for hosts/services are called on every
+Unlike notifications, event commands for hosts/services are called on every
 check execution if one of these conditions match:
 
 * The host/service is in a [soft state](3-monitoring-basics.md#hard-soft-states)

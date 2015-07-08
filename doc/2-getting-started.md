@@ -12,7 +12,7 @@ and distribution you are running.
 
   Distribution            | Repository
   ------------------------|---------------------------
-  Debian                  | [debmon](http://debmon.org/packages/debmon-wheezy/icinga2), [Icinga Repository](http://packages.icinga.org/debian/)
+  Debian                  | [debmon](http://debmon.org/packages/debmon-jessie/icinga2), [Icinga Repository](http://packages.icinga.org/debian/)
   Ubuntu                  | [Icinga PPA](https://launchpad.net/~formorer/+archive/ubuntu/icinga), [Icinga Repository](http://packages.icinga.org/ubuntu/)
   RHEL/CentOS             | [Icinga Repository](http://packages.icinga.org/epel/)
   openSUSE                | [Icinga Repository](http://packages.icinga.org/openSUSE/), [Server Monitoring Repository](https://build.opensuse.org/package/show/server:monitoring/icinga2)
@@ -32,7 +32,7 @@ Below is a list with examples for the various distributions.
 Debian (debmon):
 
     # wget -O - http://debmon.org/debmon/repo.key 2>/dev/null | apt-key add -
-    # echo 'deb http://debmon.org/debmon debmon-wheezy main' >/etc/apt/sources.list.d/debmon.list
+    # echo 'deb http://debmon.org/debmon debmon-jessie main' >/etc/apt/sources.list.d/debmon.list
     # apt-get update
 
 Ubuntu (PPA):
@@ -46,6 +46,11 @@ RHEL/CentOS:
     # curl -o /etc/yum.repos.d/ICINGA-release.repo http://packages.icinga.org/epel/ICINGA-release.repo
     # yum makecache
 
+The packages for RHEL/CentOS depend on other packages which are distributed
+as part of the [EPEL repository](http://fedoraproject.org/wiki/EPEL). Please
+make sure to enable this repository by following
+[these instructions](http://fedoraproject.org/wiki/EPEL#How_can_I_use_these_extra_packages.3F).
+
 Fedora:
 
     # rpm --import http://packages.icinga.org/icinga.key
@@ -57,6 +62,9 @@ SLES 11:
     # zypper ar http://packages.icinga.org/SUSE/ICINGA-release-11.repo
     # zypper ref
 
+The packages for SLES 11 depend on the `openssl1` package which is distributed
+as part of the [SLES 11 Security Module](https://www.suse.com/communities/conversations/introducing-the-suse-linux-enterprise-11-security-module/).
+
 SLES 12:
 
     # zypper ar http://packages.icinga.org/SUSE/ICINGA-release.repo
@@ -66,11 +74,6 @@ openSUSE:
 
     # zypper ar http://packages.icinga.org/openSUSE/ICINGA-release.repo
     # zypper ref
-
-The packages for RHEL/CentOS depend on other packages which are distributed
-as part of the [EPEL repository](http://fedoraproject.org/wiki/EPEL). Please
-make sure to enable this repository by following
-[these instructions](http://fedoraproject.org/wiki/EPEL#How_can_I_use_these_extra_packages.3F).
 
 ### <a id="installing-icinga2"></a> Installing Icinga 2
 
