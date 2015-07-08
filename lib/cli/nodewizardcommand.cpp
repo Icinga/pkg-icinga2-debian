@@ -170,7 +170,7 @@ wizard_endpoint_loop_start:
 			Log(LogWarning, "cli", "Node to master connection setup skipped");
 			std::cout << "Connection setup skipped. Please configure your master to connect to this node.\n";
 		} else  {
-	  		std::cout << ConsoleColorTag(Console_Bold) << "Please fill out the master connection information:" << ConsoleColorTag(Console_Normal) << "\n";
+			std::cout << ConsoleColorTag(Console_Bold) << "Please fill out the master connection information:" << ConsoleColorTag(Console_Normal) << "\n";
 			std::cout << ConsoleColorTag(Console_Bold) << "Master endpoint host" << ConsoleColorTag(Console_Normal) << " (Your master's IP address or FQDN): ";
 
 			std::getline(std::cin, answer);
@@ -197,7 +197,7 @@ wizard_endpoint_loop_start:
 				tmp = "5665";
 
 			tmp.Trim();
-			endpoint_buffer += "," + answer;
+			endpoint_buffer += "," + tmp;
 		}
 
 		endpoints.push_back(endpoint_buffer);
@@ -394,6 +394,7 @@ wizard_ticket:
 		    << "  cert_path = SysconfDir + \"/icinga2/pki/\" + NodeName + \".crt\"\n"
 		    << "  key_path = SysconfDir + \"/icinga2/pki/\" + NodeName + \".key\"\n"
 		    << "  ca_path = SysconfDir + \"/icinga2/pki/ca.crt\"\n"
+		    << "\n"
 		    << "  accept_config = " << accept_config << "\n"
 		    << "  accept_commands = " << accept_commands << "\n";
 
