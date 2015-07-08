@@ -20,15 +20,16 @@ parentheses):
 
 * cmake
 * GNU make (make)
-* C++ compiler (gcc-c++ on RHEL, build-essential on Debian)
-* OpenSSL library and header files (openssl-devel on RHEL, libssl-dev on Debian)
+* C++ compiler (gcc-c++ >= 4.7 on RHEL/SUSE, build-essential on Debian, alternatively clang++)
+* OpenSSL library and header files >= 0.9.8 (openssl-devel on RHEL, libopenssl1-devel on SLES11,
+libopenssl-devel on SLES12, libssl-dev on Debian)
 * Boost library and header files (boost-devel on RHEL, libboost-all-dev on Debian)
 * GNU bison (bison)
 * GNU flex (flex) >= 2.5.35
 * recommended: libexecinfo on FreeBSD (automatically used when Icinga 2 is
                installed via port or package)
-* optional: MySQL (mysql-devel on RHEL, libmysqlclient-dev on Debian); set CMake
-             variable `ICINGA2_WITH_MYSQL` to `OFF` to disable this module
+* optional: MySQL (mysql-devel on RHEL, libmysqlclient-devel on SUSE, libmysqlclient-dev on Debian);
+            set CMake variable `ICINGA2_WITH_MYSQL` to `OFF` to disable this module
 * optional: PostgreSQL (postgresql-devel on RHEL, libpq-dev on Debian); set CMake
             variable `ICINGA2_WITH_PGSQL` to `OFF` to disable this module
 * optional: YAJL (yajl-devel on RHEL, libyajl-dev on Debian)

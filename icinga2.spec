@@ -66,7 +66,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.3.5
+Version: 2.3.6
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
@@ -90,9 +90,17 @@ Recommends:    monitoring-plugins
 BuildRequires: libyajl-devel
 %endif
 %endif
-BuildRequires: openssl-devel
+BuildRequires: libedit-devel
+BuildRequires: ncurses-devel
+%if "%{_vendor}" == "suse" && 0%{?suse_version} < 1210
+BuildRequires: gcc47-c++
+BuildRequires: libstdc++47-devel
+BuildRequires: libopenssl1-devel
+%else
 BuildRequires: gcc-c++
 BuildRequires: libstdc++-devel
+BuildRequires: openssl-devel
+%endif
 BuildRequires: cmake
 BuildRequires: flex >= 2.5.35
 BuildRequires: bison
@@ -151,8 +159,14 @@ Summary:      IDO MySQL database backend for Icinga 2
 Group:        Applications/System
 %if "%{_vendor}" == "suse"
 BuildRequires: libmysqlclient-devel
-%endif
+%if 0%{?suse_version} >= 1310
 BuildRequires: mysql-devel
+%endif
+
+%else
+BuildRequires: mysql-devel
+%endif #suse
+
 Requires: %{name} = %{version}-%{release}
 
 %description ido-mysql
