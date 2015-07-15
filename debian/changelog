@@ -3,7 +3,15 @@ icinga2 (2.3.6-1~debmon70+1) debmon-wheezy; urgency=medium
   * Rebuild for debmon-wheezy.
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 18 Sep 2014 08:12:04 +0200
-=======
+
+icinga2 (2.3.7-1) unstable; urgency=medium
+
+  * [c4d8f2b] Really enable ido-pgsql if we have to
+  * [35c654e] Allow nagios group to write/remove perfdata
+  * [0fff36a] Imported Upstream version 2.3.7
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 15 Jul 2015 11:41:51 +0200
+
 icinga2 (2.3.6-1) unstable; urgency=medium
 
   [ Alexander Wirt ]
