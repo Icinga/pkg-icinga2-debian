@@ -50,7 +50,7 @@ case "$1" in
         setperm nagios www-data 0750 /var/cache/icinga2
 
         setperm nagios nagios 0750 /var/spool/icinga2
-        setperm nagios nagios 0750 /var/spool/icinga2/perfdata
+        setperm nagios nagios 0770 /var/spool/icinga2/perfdata
         setperm nagios nagios 0750 /var/spool/icinga2/tmp
 
     ;;
