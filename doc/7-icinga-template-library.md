@@ -474,6 +474,7 @@ load_wload15    | **Optional.** The 15-minute warning threshold. Defaults to 3.
 load_cload1     | **Optional.** The 1-minute critical threshold. Defaults to 10.
 load_cload5     | **Optional.** The 5-minute critical threshold. Defaults to 6.
 load_cload15    | **Optional.** The 15-minute critical threshold. Defaults to 4.
+load_percpu     | **Optional.** Divide the load averages by the number of CPUs (when possible). Defaults to false.
 
 
 ## <a id="plugin-check-command-nrpe"></a> nrpe
@@ -729,19 +730,24 @@ Check command object for the `check_snmp` plugin, using SNMPv3 authentication an
 
 Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
 
-Name              | Description
-------------------|--------------
-snmpv3_address    | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
-snmpv3_user       | **Required.** The username to log in with.
-snmpv3_auth_alg   | **Optional.** The authentication algorithm. Defaults to SHA.
-snmpv3_seclevel   | **Optional.** The security level. Defaults to authPriv.
-snmpv3_auth_key   | **Required,** The authentication key. Required if `snmpv3_seclevel` is set to `authPriv` otherwise optional.
-snmpv3_priv_alg   | **Optional.** The encryption algorithm. Defaults to AES.
-snmpv3_priv_key   | **Required.** The encryption key.
-snmpv3_oid        | **Required.** The SNMP OID.
-snmpv3_warn       | **Optional.** The warning threshold.
-snmpv3_crit       | **Optional.** The critical threshold.
-snmpv3_label      | **Optional.** Prefix label for output value.
+Name                 | Description
+---------------------|--------------
+snmpv3_address       | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+snmpv3_getnext       | **Optional.** Use SNMP GETNEXT instead of SNMP GET.
+snmpv3_seclevel      | **Optional.** The security level. Defaults to authPriv.
+snmpv3_auth_alg      | **Optional.** The authentication algorithm. Defaults to SHA.
+snmpv3_user          | **Required.** The username to log in with.
+snmpv3_auth_key      | **Required,** The authentication key. Required if `snmpv3_seclevel` is set to `authPriv` otherwise optional.
+snmpv3_priv_key      | **Required.** The encryption key.
+snmpv3_oid           | **Required.** The SNMP OID.
+snmpv3_priv_alg      | **Optional.** The encryption algorithm. Defaults to AES.
+snmpv3_warn          | **Optional.** The warning threshold.
+snmpv3_crit          | **Optional.** The critical threshold.
+snmpv3_string        | **Optional.** Return OK state (for that OID) if STRING is an exact match.
+snmpv3_ereg          | **Optional.** Return OK state (for that OID) if extended regular expression REGEX matches.
+snmpv3_eregi         | **Optional.** Return OK state (for that OID) if case-insensitive extended REGEX matches.
+snmpv3_invert_search | **Optional.** Invert search result and return CRITICAL if found
+snmpv3_label         | **Optional.** Prefix label for output value.
 
 ## <a id="plugin-check-command-snmp-uptime"></a> snmp-uptime
 
@@ -891,6 +897,50 @@ Name            | Description
 ----------------|--------------
 users_wgreater  | **Optional.** The user count warning threshold. Defaults to 20.
 users_cgreater  | **Optional.** The user count critical threshold. Defaults to 50.
+
+
+## <a id="plugin-check-command-clamd"></a> clamd
+
+Check command object for the `check_clamd` plugin.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name               | Description
+-------------------|--------------
+clamd_address        | **Required.** The host's address or unix socket (must be an absolute path).
+clamd_port           | **Optional.** Port number (default: none).
+clamd_expect         | **Optional.** String to expect in server response (may be repeated).
+clamd_all            | **Optional.** All expect strings need to occur in server response. Defaults to false.
+clamd_escape_send    | **Optional.** Enable usage of \n, \r, \t or \\\\ in send string.
+clamd_send           | **Optional.** String to send to the server.
+clamd_escape_quit    | **Optional.** Enable usage of \n, \r, \t or \\\\ in quit string.
+clamd_quit           | **Optional.** String to send server to initiate a clean close of the connection.
+clamd_refuse         | **Optional.** Accept TCP refusals with states ok, warn, crit. Defaults to crit.
+clamd_mismatch       | **Optional.** Accept expected string mismatches with states ok, warn, crit. Defaults to warn.
+clamd_jail           | **Optional.** Hide output from TCP socket.
+clamd_maxbytes       | **Optional.** Close connection once more than this number of bytes are received.
+clamd_delay          | **Optional.** Seconds to wait between sending string and polling for response.
+clamd_certificate    | **Optional.** Minimum number of days a certificate has to be valid. 1st value is number of days for warning, 2nd is critical (if not specified: 0) - seperated by comma.
+clamd_ssl            | **Optional.** Use SSL for the connection. Defaults to false.
+clamd_wtime          | **Optional.** Response time to result in warning status (seconds).
+clamd_ctime          | **Optional.** Response time to result in critical status (seconds).
+clamd_timeout        | **Optional.** Seconds before connection times out. Defaults to 10.
+
+
+## <a id="plugin-check-command-mailq"></a> mailq
+
+Check command object for the `check_mailq` plugin.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                    | Description
+------------------------|--------------
+mailq_warning		| **Required.** Min. number of messages in queue to generate warning.
+mailq_critical		| **Required.** Min. number of messages in queue to generate critical alert ( w < c ).
+mailq_domain_warning	| **Optional.** Min. number of messages for same domain in queue to generate warning
+mailq_domain_critical	| **Optional.** Min. number of messages for same domain in queue to generate critical alert ( W < C ).
+mailq_timeout		| **Optional.** Plugin timeout in seconds (default = 15).
+mailq_servertype	| **Optional.** [ sendmail | qmail | postfix | exim | nullmailer ] (default = autodetect).
 
 
 # <a id="windows-plugins"></a>Icinga 2 Windows plugins
@@ -1171,6 +1221,12 @@ This command has the same custom attributes like the `nscp-local` check command.
 ## <a id="nscp-check-local-disk"></a> nscp-local-disk
 
 Check command object for the `check_drivesize` NSClient++ plugin.
+
+This command has the same custom attributes like the `nscp-local` check command.
+
+## <a id="nscp-check-local-counter"></a> nscp-local-counter
+
+Check command object for the `check_pdh` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
@@ -1509,6 +1565,33 @@ elasticsearch_port           | **Optional.** TCP port to probe.  The ElasticSear
 elasticsearch_prefix         | **Optional.** Optional prefix (e.g. 'es') for the ElasticSearch API. Defaults to ''.
 elasticsearch_yellowcritical | **Optional.** Instead of issuing a 'warning' for a yellow cluster state, issue a 'critical' alert. Defaults to false.
 
+### <a id="plugins-contrib-command-redis"></a> redis
+
+The plugin `redis` can measure response time, hitrate, memory utilization, check replication sync and more. It can also test data in a specified key (if necessary doing average or sum on range).
+It is provided by `William Leibzon` at [https://github.com](https://github.com/willixix/naglio-plugins/blob/master/check_redis.pl).
+
+Name                     | Description
+-------------------------|--------------------------------------------------------------------------------------------------------------
+redis_hostname           | **Required.** Hostname or IP Address to check. Defaults to "127.0.0.1".
+redis_port               | **Optional.** Port number to query. Default to "6379".
+redis_database           | **Optional.** Database name (usually a number) to query, needed for **redis_query**.
+redis_password           | **Optional.** Password for Redis authentication. Safer alternative is to put them in a file and use **redis_credentials**.
+redis_credentials        | **Optional.** Credentials file to read for Redis authentication.
+redis_timeout            | **Optional.** Allows to set timeout for execution of this plugin.
+redis_variables          | **Optional.** List of variables from info data to do threshold checks on.
+redis_warn               | **Optional.** This option can only be used if **redis_variables** is used and the number of values listed here must exactly match number of variables specified.
+redis_crit               | **Optional.** This option can only be used if **redis_variables** is used and the number of values listed here must exactly match number of variables specified.
+redis_perfparse          | **Optional.** This should only be used with variables and causes variable data not only to be printed as part of main status line but also as perfparse compatible output. Defaults to false.
+redis_perfvars           | **Optional.** This allows to list variables which values will go only into perfparse output (and not for threshold checking).
+redis_prev_perfdata      | **Optional.** If set to true previous performance data are used to calculate rate of change for counter statistics variables and for proper calculation of hitrate. Defaults to false.
+redis_rate_label         | **Optional.** Prefix or Suffix label used to create a new variable which has rate of change of another base variable. You can specify PREFIX or SUFFIX or both as one string separated by ",". Default if not specified is suffix "_rate".
+redis_query              | **Optional.** Option specifies key to query and optional variable name to assign the results to after. 
+redis_option             | **Optional.** Specifiers are separated by "," and must include NAME or PATTERN.
+redis_response_time      | **Optional.** If this is used plugin will measure and output connection response time in seconds. With **redis_perfparse** this would also be provided on perf variables.
+redis_hitrate            | **Optional.** Calculates Hitrate and specify values are interpreted as WARNING and CRITICAL thresholds.
+redis_memory_utilization | **Optional.** This calculates percent of total memory on system used by redis. Total_memory on server must be specified with **redis_total_memory**. If you specify by itself, the plugin will just output this info. Parameter values are interpreted as WARNING and CRITICAL thresholds.
+redis_total_memory       | **Optional.** Amount of memory on a system for memory utilization calculation. Use system memory or max_memory setting of redis.
+redis_replication_delay  | **Optional.** Allows to set threshold on replication delay info.
 
 ## <a id="plugins-contrib-ipmi"></a> IPMI Devices
 
@@ -1626,11 +1709,43 @@ iftraffic_warn		| **Optional.** Percent of bandwidth usage necessary to result i
 iftraffic_crit		| **Optional.** Percent of bandwidth usage necessary to result in critical status (defaults to `98%`).
 iftraffic_max_counter	| **Optional.** Maximum counter value of net devices in kilo/mega/giga/bytes.
 
+### <a id="plugins-contrib-command-interfaces"></a> interfaces
+
+The plugin [check_interfaces](https://www.netways.org/projects/check-interfaces)
+Check interfaces and utilization.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                      | Description
+--------------------------|---------------------------------------------------------
+interfaces_address        | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+interfaces_regex          | **Optional.** Interface list regexp.
+interfaces_exclude_regex  | **Optional.** Interface list negative regexp.
+interfaces_errors         | **Optional.** Number of in errors (CRC errors for cisco) to consider a warning (default 50).
+interface_out_errors      | **Optional.** Number of out errors (collisions for cisco) to consider a warning (default same as in errors).
+interfaces_perfdata       | **Optional.** perfdata from last check result.
+interfaces_prefix         | **Optional.** Prefix interface names with this label.
+interfaces_lastcheck      | **Optional.** Last checktime (unixtime).
+interfaces_bandwidth      | **Optional.** Bandwidth warn level in percent.
+interfaces_speed          | **Optional.** Override speed detection with this value (bits per sec).
+interfaces_trim           | **Optional.** Cut this number of characters from the start of interface descriptions.
+interfaces_mode           | **Optional.** Special operating mode (default,cisco,nonbulk,bintec).
+interfaces_auth_proto     | **Optional.** SNMPv3 Auth Protocol (SHA|MD5)
+interfaces_auth_phrase    | **Optional.** SNMPv3 Auth Phrase
+interfaces_priv_proto     | **Optional.** SNMPv3 Privacy Protocol (AES|DES)
+interfaces_priv_phrase    | **Optional.** SNMPv3 Privacy Phrase
+interfaces_user           | **Optional.** SNMPv3 User
+interfaces_down_is_ok     | **Optional.** Disables critical alerts for down interfaces.
+interfaces_aliases        | **Optional.** Retrieves the interface description.
+interfaces_match_aliases  | **Optional.** Also match against aliases (Option --aliases automatically enabled).
+interfaces_timeout        | **Optional.** Sets the SNMP timeout (in ms).
+interfaces_sleep          | **Optional.** Sleep between every SNMP query (in ms).
+
 ## <a id="plugins-contrib-web"></a> Web
 
 This category includes all plugins for web-based checks.
 
-## <a id="plugin-check-command-webinject"></a> webinject
+### <a id="plugin-check-command-webinject"></a> webinject
 
 Check command object for the [check_webinject](http://http://www.webinject.org/manual.html) plugin.
 
@@ -1644,6 +1759,47 @@ webinject_no_output     | **Optional.** Suppresses all output to STDOUT except t
 webinject_timeout       | **Optional.** The value [given in seconds] will be compared to the global time elapsed to run all the tests. If the tests have all been successful, but have taken more time than the 'globaltimeout' value, a warning message is sent back to Icinga.
 webinject_report_type   | **Optional.** This setting is used to enable output formatting that is compatible for use with specific external programs. The available values you can set this to are: nagios, mrtg, external and standard.
 webinject_testcase_file | **Optional.** When you launch WebInject in console mode, you can optionally supply an argument for a testcase file to run. It will look for this file in the directory that webinject.pl resides in. If no filename is passed from the command line, it will look in config.xml for testcasefile declarations. If no files are specified, it will look for a default file named 'testcases.xml' in the current [webinject] directory. If none of these are found, the engine will stop and give you an error.
+
+### <a id="plugin-check-command-jmx4perl"></a> jmx4perl
+
+The plugin `jmx4perl` utilizes the api provided by the jolokia web application to query java message beans on an application server. It is part of the perl module provided by Roland Huß on [cpan](http://search.cpan.org/~roland/jmx4perl/) including a detailed [documentation](http://search.cpan.org/~roland/jmx4perl/scripts/check_jmx4perl) containing installation tutorial, security advices und usage examples.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                         | Description
+-----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------
+jmx4perl_url                 | **Required.** URL to agent web application. Defaults to "http://$address$:8080/jolokia".
+jmx4perl_product             | **Optional.** Name of app server product (e.g. jboss), by default is uses an autodetection facility.
+jmx4perl_alias               | **Optional.** Alias name for attribute (e.g. MEMORY_HEAP_USED). All availables aliases can be viewed by executing `jmx4perl aliases` on the command line.
+jmx4perl_mbean               | **Optional.** MBean name (e.g. java.lang:type=Memory).
+jmx4perl_attribute           | **Optional.** Attribute name (e.g. HeapMemoryUsage).
+jmx4perl_operation           | **Optional.** Operation to execute.
+jmx4perl_value               | **Optional.** Shortcut for specifying mbean/attribute/path. Slashes within names must be escaped with backslash.
+jmx4perl_delta               | **Optional.** Switches on incremental mode. Optional argument are seconds used for normalizing.
+jmx4perl_path                | **Optional.** Inner path for extracting a single value from a complex attribute or return value (e.g. used).
+jmx4perl_target              | **Optional.** JSR-160 Service URL specifing the target server.
+jmx4perl_target_user         | **Optional.** Username to use for JSR-160 connection.
+jmx4perl_target_password     | **Optional.** Password to use for JSR-160 connection.
+jmx4perl_proxy               | **Optional.** Proxy to use.
+jmx4perl_user                | **Optional.** User for HTTP authentication.
+jmx4perl_password            | **Optional.** Password for HTTP authentication.
+jmx4perl_name                | **Optional.** Name to use for output, by default a standard value based on the MBean and attribute will be used.
+jmx4perl_method              | **Optional.** HTTP method to use, either get or post. By default a method is determined automatically based on the request type.
+jmx4perl_base                | **Optional.** Base name, which when given, interprets critical and warning values as relative in the range 0 .. 100%. Must be given in the form mbean/attribute/path.
+jmx4perl_base_mbean          | **Optional.** Base MBean name, interprets critical and warning values as relative in the range 0 .. 100%. Requires "jmx4perl_base_attribute".
+jmx4perl_base_attribute      | **Optional.** Base attribute for a relative check. Requires "jmx4perl_base_mbean".
+jmx4perl_base_path           | **Optional.** Base path for relative checks, where this path is used on the base attribute's value.
+jmx4perl_unit                | **Optional.** Unit of measurement of the data retreived. Recognized values are [B|KB|MN|GB|TB] for memory values and [us|ms|s|m|h|d] for time values.
+jmx4perl_null                | **Optional.** Value which should be used in case of a null return value of an operation or attribute. Defaults to null.
+jmx4perl_string              | **Optional.** Force string comparison for critical and warning checks. Defaults to false.
+jmx4perl_numeric             | **Optional.** Force numeric comparison for critical and warning checks. Defaults to false.
+jmx4perl_critical            | **Optional.** Critical threshold for value.
+jmx4perl_warning             | **Optional.** Warning threshold for value.
+jmx4perl_label               | **Optional.** Label to be used for printing out the result of the check. For placeholders which can be used see the documentation.
+jmx4perl_perfdata            | **Optional.** Whether performance data should be omitted, which are included by default. Defaults to "on" for numeric values, to "off" for strings.
+jmx4perl_unknown_is_critical | **Optional.** Map UNKNOWN errors to errors with a CRITICAL status. Defaults to false.
+jmx4perl_timeout             | **Optional.** Seconds before plugin times out. Defaults to "15".
+
 
 ## <a id="plugins-contrib-operating-system"></a> Operating System
 
@@ -1662,6 +1818,24 @@ mem_free     | **Optional.** Tell the plugin to check for free memory in opposit
 mem_cache    | **Optional.** If set to true plugin will count cache as free memory. Defaults to false.
 mem_warning  | **Required.** Specifiy the warning threshold as number interpreted as percent.
 mem_critical | **Required.** Specifiy the critical threshold as number interpreted as percent.
+
+### <a id="plugin-contrib-command-yum"></a> yum
+
+The plugin `yum` is used to check the YUM package management system for package updates. To differentiate between security and normal updates it requires the YUM security plugin installed. It is provied by `Christoph Anton Mitterer` on [https://github.com](https://github.com/calestyo/check_yum).
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                    | Description
+------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+yum_all_updates         | **Optional.** Set to true to not distinguish between security and non-security updates, but returns critical for any available update. This may be used if the YUM security plugin is absent or you want to maintain every single package at the latest version. You may want to use **yum_warn_on_any_update** instead of this option. Defaults to false.
+yum_warn_on_any_update  | **Optional.** Set to true to warn if there are any (non-security) package updates available. Defaults to false.
+yum_cache_only          | **Optional.** If set to true plugin runs entirely from cache and does not update the cache when running YUM. Useful if you have `yum makecache` cronned. Defaults to false.
+yum_no_warn_on_lock     | **Optional.** If set to true returns OK instead of WARNING when YUM is locked and fails to check for updates due to another instance running. Defaults to false.
+yum_no_warn_on_updates  | **Optional.** If set to true returns OK instead of WARNING even when updates are available. The plugin output still shows the number of available updates. Defaults to false.
+yum_enablerepo          | **Optional.** Explicitly enables a reposity when calling YUM. Can take a comma separated list of repositories. Note that enabling repositories can lead to unexpected results, for example when protected repositories are enabled.
+yum_disablerepo         | **Optional.** Explicitly disables a reposity when calling YUM. Can take a comma separated list of repositories. Note that enabling repositories can lead to unexpected results, for example when protected repositories are enabled.
+yum_installroot         | **Optional.** Specifies another installation root directory (for example a chroot).
+yum_timeout             | **Optional.** Set a timeout in seconds after which the plugin will exit (defaults to 55 seconds).
 
 ## <a id="plugins-contrib-virtualization"></a> Virtualization
 
@@ -1901,6 +2075,7 @@ vmware_exclude          | **Optional.** Blacklist VMs. No value defined as defau
 vmware_include          | **Optional.** Whitelist VMs. No value defined as default.
 vmware_isregexp         | **Optional.** Treat blacklist and whitelist expressions as regexp.
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
+vmware_openvmtools	| **Optional** Prevent CRITICAL state for installed and running Open VM Tools.
 
 
 ## <a id="plugins-contrib-vmware-esx-soap-host-check"></a> vmware-esx-soap-host-check
@@ -3600,6 +3775,7 @@ vmware_nosession        | **Optional.** No auth session - IT SHOULD BE USED FOR 
 vmware_username         | **Optional.** The username to connect to Host or vCenter server. No value defined as default.
 vmware_password         | **Optional.** The username's password. No value defined as default.
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
+vmware_openvmtools	| **Optional** Prevent CRITICAL state for installed and running Open VM Tools.
 
 
 ## <a id="plugins-contrib-vmware-esx-soap-vm-runtime-issues"></a> vmware-esx-soap-vm-runtime-issues
