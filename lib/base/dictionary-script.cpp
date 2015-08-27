@@ -21,6 +21,9 @@
 #include "base/function.hpp"
 #include "base/functionwrapper.hpp"
 #include "base/scriptframe.hpp"
+#include "base/array.hpp"
+#include "base/objectlock.hpp"
+#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -36,6 +39,13 @@ static void DictionarySet(const String& key, const Value& value)
 	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
 	Dictionary::Ptr self = static_cast<Dictionary::Ptr>(vframe->Self);
 	self->Set(key, value);
+}
+
+static Value DictionaryGet(const String& key)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Dictionary::Ptr self = static_cast<Dictionary::Ptr>(vframe->Self);
+	return self->Get(key);
 }
 
 static void DictionaryRemove(const String& key)
@@ -59,6 +69,18 @@ static Dictionary::Ptr DictionaryClone(void)
 	return self->ShallowClone();
 }
 
+static Array::Ptr DictionaryKeys(void)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Dictionary::Ptr self = static_cast<Dictionary::Ptr>(vframe->Self);
+	Array::Ptr keys = new Array();
+	ObjectLock olock(self);
+	BOOST_FOREACH(const Dictionary::Pair& kv, self) {
+		keys->Add(kv.first);
+	}
+	return keys;
+}
+
 Object::Ptr Dictionary::GetPrototype(void)
 {
 	static Dictionary::Ptr prototype;
@@ -67,9 +89,11 @@ Object::Ptr Dictionary::GetPrototype(void)
 		prototype = new Dictionary();
 		prototype->Set("len", new Function(WrapFunction(DictionaryLen)));
 		prototype->Set("set", new Function(WrapFunction(DictionarySet)));
+		prototype->Set("get", new Function(WrapFunction(DictionaryGet)));
 		prototype->Set("remove", new Function(WrapFunction(DictionaryRemove)));
 		prototype->Set("contains", new Function(WrapFunction(DictionaryContains)));
 		prototype->Set("clone", new Function(WrapFunction(DictionaryClone)));
+		prototype->Set("keys", new Function(WrapFunction(DictionaryKeys)));
 	}
 
 	return prototype;
