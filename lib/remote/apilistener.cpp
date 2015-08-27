@@ -21,6 +21,7 @@
 #include "remote/apiclient.hpp"
 #include "remote/endpoint.hpp"
 #include "remote/jsonrpc.hpp"
+#include "remote/apifunction.hpp"
 #include "base/convert.hpp"
 #include "base/netstring.hpp"
 #include "base/json.hpp"
@@ -41,6 +42,8 @@ REGISTER_TYPE(ApiListener);
 boost::signals2::signal<void(bool)> ApiListener::OnMasterChanged;
 
 REGISTER_STATSFUNCTION(ApiListenerStats, &ApiListener::StatsFunc);
+
+REGISTER_APIFUNCTION(Hello, icinga, &ApiListener::HelloAPIHandler);
 
 ApiListener::ApiListener(void)
 	: m_LogMessageCount(0)
@@ -797,16 +800,27 @@ std::pair<Dictionary::Ptr, Dictionary::Ptr> ApiListener::GetStatus(void)
 	Array::Ptr not_connected_endpoints = new Array();
 	Array::Ptr connected_endpoints = new Array();
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
-		if (endpoint->GetName() == GetIdentity())
+	Zone::Ptr my_zone = Zone::GetLocalZone();
+
+	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
+		/* only check endpoints in a) the same zone b) our parent zone c) immediate child zones */
+		if (my_zone != zone && my_zone != zone->GetParent() && zone != my_zone->GetParent()) {
+			Log(LogDebug, "ApiListener")
+			    << "Not checking connection to Zone '" << zone->GetName() << "' because it's not in the same zone, a parent or a child zone.";
 			continue;
+		}
 
-		count_endpoints++;
+		BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
+			if (endpoint->GetName() == GetIdentity())
+				continue;
 
-		if (!endpoint->IsConnected())
-			not_connected_endpoints->Add(endpoint->GetName());
-		else
-			connected_endpoints->Add(endpoint->GetName());
+			count_endpoints++;
+
+			if (!endpoint->IsConnected())
+				not_connected_endpoints->Add(endpoint->GetName());
+			else
+				connected_endpoints->Add(endpoint->GetName());
+		}
 	}
 
 	status->Set("num_endpoints", count_endpoints);
@@ -838,4 +852,9 @@ std::set<ApiClient::Ptr> ApiListener::GetAnonymousClients(void) const
 {
 	ObjectLock olock(this);
 	return m_AnonymousClients;
+}
+
+Value ApiListener::HelloAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
+{
+	return Empty;
 }
