@@ -1,3 +1,10 @@
+icinga2 (2.3.10-1) unstable; urgency=medium
+
+  * [129f6ea] Imported Upstream version 2.3.10
+  * [173da67] Merge systemd service file with upstreams implementation
+
+ -- Alexander Wirt <formorer@debian.org>  Sun, 06 Sep 2015 21:29:12 +0200
+
 icinga2 (2.3.9-1) unstable; urgency=medium
 
   * [a03c364] Imported Upstream version 2.3.9
