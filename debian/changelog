@@ -1,8 +1,15 @@
-icinga2 (2.3.9-1~debmon80+1) debmon-jessie; urgency=medium
+icinga2 (2.3.10-1~debmon80+1) debmon-jessie; urgency=medium
 
   * Rebuild for debmon-jessie.
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 27 Aug 2015 13:59:00 +0200
+
+icinga2 (2.3.10-1) unstable; urgency=medium
+
+  * [129f6ea] Imported Upstream version 2.3.10
+  * [173da67] Merge systemd service file with upstreams implementation
+
+ -- Alexander Wirt <formorer@debian.org>  Sun, 06 Sep 2015 21:29:12 +0200
 
 icinga2 (2.3.9-1) unstable; urgency=medium
 
