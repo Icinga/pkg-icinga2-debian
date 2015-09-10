@@ -1,3 +1,9 @@
+icinga2 (2.3.10-1~ppa1~precise2) precise; urgency=medium
+
+  * [ca674d4] safe-reload is in -bin on non multiarch platforms
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 10 Sep 2015 21:17:31 +0200
+
 icinga2 (2.3.10-1~ppa1~precise1) precise; urgency=medium
 
   * Rebuild for my ubuntu ppa
