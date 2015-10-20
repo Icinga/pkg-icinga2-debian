@@ -192,6 +192,16 @@ public:
 		return m_Data.find_first_not_of(ch, pos);
 	}
 
+	inline SizeType FindLastOf(const char *s, SizeType pos = NPos) const
+	{
+		return m_Data.find_last_of(s, pos);
+	}
+
+	inline SizeType FindLastOf(char ch, SizeType pos = NPos) const
+	{
+		return m_Data.find_last_of(ch, pos);
+	}
+
 	inline String SubStr(SizeType first, SizeType len = NPos) const
 	{
 		return m_Data.substr(first, len);
@@ -203,6 +213,18 @@ public:
 	}
 
 	void Trim(void);
+
+	inline void Append(int count, char ch)
+	{
+		m_Data.append(count, ch);
+	}
+
+	inline String Reverse(void) const
+	{
+		String t = m_Data;
+		std::reverse(t.m_Data.begin(), t.m_Data.end());
+		return t;
+	}
 
 	inline bool Contains(const String& str) const
 	{

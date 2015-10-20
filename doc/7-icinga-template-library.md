@@ -96,7 +96,8 @@ Name            | Description
 ----------------|--------------
 by_ssh_address  | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
 by_ssh_port     | **Optional.** The SSH port. Defaults to 22.
-by_ssh_command  | **Optional.** The command that should be executed.
+by_ssh_command  | **Required.** The command that should be executed. Can be an array if multiple arguments should be passed to `check_by_ssh`.
+by_ssh_arguments| **Optional.** A dictionary with arguments for the command. This works exactly like the 'arguments' dictionary for ordinary CheckCommands.
 by_ssh_logname  | **Optional.** The SSH username.
 by_ssh_identity | **Optional.** The SSH identity.
 by_ssh_quiet    | **Optional.** Whether to suppress SSH warnings. Defaults to false.
@@ -130,7 +131,15 @@ Custom attributes passed as [command parameters](3-monitoring-basics.md#command-
 Name                 | Description
 ---------------------|--------------
 dig_server           | **Optional.** The DNS server to query. Defaults to "127.0.0.1".
+dig_port	     | **Optional.** Port number (default: 53).
 dig_lookup           | **Optional.** The address that should be looked up.
+dig_record_type      | **Optional.** Record type to lookup (default: A).
+dig_expected_address | **Optional.** An address expected to be in the answer section. If not set, uses whatever was in -l.
+dig_arguments        | **Optional.** Pass STRING as argument(s) to dig.
+dig_retries	     | **Optional.** Number of retries passed to dig, timeout is divided by this value (Default: 3).
+dig_warning          | **Optional.** Response time to result in warning status (seconds).
+dig_critical         | **Optional.** Response time to result in critical status (seconds).
+dig_timeout          | **Optional.** Seconds before connection times out (default: 10).
 
 
 ## <a id="plugin-check-command-disk"></a> disk
@@ -435,6 +444,7 @@ Name            | Description
 ----------------|--------------
 imap_address    | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
 imap_port       | **Optional.** The port that should be checked. Defaults to 143.
+imap_timeout    | **Optional.** The timeout in seconds.
 
 
 ## <a id="plugin-check-command-ldap"></a> ldap
@@ -492,6 +502,8 @@ nrpe_no_ssl     | **Optional.** Whether to disable SSL or not. Defaults to `fals
 nrpe_timeout_unknown | **Optional.** Whether to set timeouts to unknown instead of critical state. Defaults to `false`.
 nrpe_timeout    | **Optional.** The timeout in seconds.
 nrpe_arguments	| **Optional.** Arguments that should be passed to the command. Multiple arguments must be defined as array.
+nrpe_ipv4	| **Optional.** Use IPv4 only.
+nrpe_ipv6	| **Optional.** Use IPv6 only.
 
 
 ## <a id="plugin-check-command-nscp"></a> nscp
@@ -625,6 +637,7 @@ Name            | Description
 ----------------|--------------
 pop_address     | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
 pop_port        | **Optional.** The port that should be checked. Defaults to 110.
+pop_timeout     | **Optional.** The timeout in seconds.
 
 
 ## <a id="plugin-check-command-processes"></a> procs
@@ -670,6 +683,7 @@ Name            | Description
 ----------------|--------------
 simap_address   | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
 simap_port      | **Optional.** The host's port.
+simap_timeout   | **Optional.** The timeout in seconds.
 
 
 ## <a id="plugin-check-command-smtp"></a> smtp
@@ -772,6 +786,7 @@ Name            | Description
 ----------------|--------------
 spop_address    | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
 spop_port       | **Optional.** The host's port.
+spop_timeout    | **Optional.** The timeout in seconds.
 
 
 ## <a id="plugin-check-command-ssh"></a> ssh
@@ -943,6 +958,28 @@ mailq_timeout		| **Optional.** Plugin timeout in seconds (default = 15).
 mailq_servertype	| **Optional.** [ sendmail | qmail | postfix | exim | nullmailer ] (default = autodetect).
 
 
+## <a id="plugin-check-command-pgsql"></a> pgsql
+
+Check command object for the `check_pgsql` plugin.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name			| Description
+------------------------|---------------------------------------------------------------
+pgsql_hostname		| **Optional.** Host name, IP Address, or unix socket (must be an absolute path). 
+pgsql_port		| **Optional.** Port number (default: 5432).
+pgsql_database		| **Optional.** Database to check (default: template1).
+pgsql_username		| **Optional.** Login name of user.
+pgsql_password		| **Optional.** Password (BIG SECURITY ISSUE).
+pgsql_options		| **Optional.** Connection parameters (keyword = value), see below.
+pgsql_warning		| **Optional.** Response time to result in warning status (seconds).
+pgsql_critical		| **Optional.** Response time to result in critical status (seconds).
+pgsql_timeout		| **Optional.** Seconds before connection times out (default: 10).
+pgsql_query		| **Optional.** SQL query to run. Only first column in first row will be read.
+pgsql_query_warning	| **Optional.** SQL query value to result in warning status (double).
+pgsql_query_critical	| **Optional.** SQL query value to result in critical status (double).
+
+
 # <a id="windows-plugins"></a>Icinga 2 Windows plugins
 
 To allow a basic monitoring of Windows clients Icinga 2 comes with a set of Windows only plugins. While trying to mirror the functionalities of their linux cousins from the monitoring-plugins package, the differences between Windows and Linux are too big to be able use the same CheckCommands for both systems.
@@ -998,6 +1035,12 @@ load\_win\_crit | **Optional**. The critical threshold.
 
 Check command object for the `check_memory.exe` plugin.
 The memory collection is instant.
+
+> **Note**
+>
+> Percentage based thresholds can be used by adding a '%' to the threshold
+> value. Keep in mind that memory\_win\_unit is applied before the
+> value is calculated.
 
 Custom attributes:
 
@@ -1100,6 +1143,11 @@ swap\_win\_unit | **Optional**. The unit to display the received value in, thres
 
 Check command object for `check_update.exe` plugin.
 Querying Microsoft for Windows updates can take multiple seconds to minutes. An update is treated as important when it has the WSUS flag for SecurityUpdates or CriticalUpdates.
+
+> **Note**
+>
+> The Network Services Account which runs Icinga 2 by default does not have the required
+> permissions to run this check.
 
 Custom attributes:
 
@@ -1585,7 +1633,7 @@ redis_perfparse          | **Optional.** This should only be used with variables
 redis_perfvars           | **Optional.** This allows to list variables which values will go only into perfparse output (and not for threshold checking).
 redis_prev_perfdata      | **Optional.** If set to true previous performance data are used to calculate rate of change for counter statistics variables and for proper calculation of hitrate. Defaults to false.
 redis_rate_label         | **Optional.** Prefix or Suffix label used to create a new variable which has rate of change of another base variable. You can specify PREFIX or SUFFIX or both as one string separated by ",". Default if not specified is suffix "_rate".
-redis_query              | **Optional.** Option specifies key to query and optional variable name to assign the results to after. 
+redis_query              | **Optional.** Option specifies key to query and optional variable name to assign the results to after.
 redis_option             | **Optional.** Specifiers are separated by "," and must include NAME or PATTERN.
 redis_response_time      | **Optional.** If this is used plugin will measure and output connection response time in seconds. With **redis_perfparse** this would also be provided on perf variables.
 redis_hitrate            | **Optional.** Calculates Hitrate and specify values are interpreted as WARNING and CRITICAL thresholds.
@@ -1741,6 +1789,57 @@ interfaces_match_aliases  | **Optional.** Also match against aliases (Option --a
 interfaces_timeout        | **Optional.** Sets the SNMP timeout (in ms).
 interfaces_sleep          | **Optional.** Sleep between every SNMP query (in ms).
 
+### <a id="plugins-contrib-command-nwc_health"></a> nwc_health
+
+The plugin [check_nwc_health](https://labs.consol.de/de/nagios/check_nwc_health/index.html)
+Check switches, router, there interfaces and utilization.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                      	| Description
+--------------------------------|---------------------------------------------------------
+nwc_health_timeout	  	| **Optional.** Seconds before plugin times out (default: 15)
+nwc_health_blacklist	  	| **Optional.** Blacklist some (missing/failed) components.
+nwc_health_hostname	  	| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+nwc_health_port		  	| **Optional.** The SNMP port to use (default: 161).
+nwc_health_domain	  	| **Optional.** The transport domain to use (default: udp/ipv4, other possible values: udp6, udp/ipv6, tcp, tcp4, tcp/ipv4, tcp6, tcp/ipv6).
+nwc_health_protocol	  	| **Optional.** The SNMP protocol to use (default: 2c, other possibilities: 1,3).
+nwc_health_community	  	| **Optional.** SNMP community of the server (SNMP v1/2 only).
+nwc_health_username	  	| **Optional.** The securityName for the USM security model (SNMPv3 only).
+nwc_health_authpassword	  	| **Optional.** The authentication password for SNMPv3.
+nwc_health_authprotocol	  	| **Optional.** The authentication protocol for SNMPv3 (md5|sha).
+nwc_health_privpassword   	| **Optional.** The password for authPriv security level.
+nwc_health_privprotocol		| **Optional.** The private protocol for SNMPv3 (des|aes|aes128|3des|3desde).
+nwc_health_contextengineid	| **Optional.** The context engine id for SNMPv3 (10 to 64 hex characters).
+nwc_health_contextname		| **Optional.** The context name for SNMPv3 (empty represents the default context).
+nwc_health_name			| **Optional.** The name of an interface (ifDescr).
+nwc_health_drecksptkdb		| **Optional.** This parameter must be used instead of --name, because Devel::ptkdb is stealing the latter from the command line.
+nwc_health_alias		| **Optional.** The alias name of a 64bit-interface (ifAlias)
+nwc_health_regexp		| **Optional.** A flag indicating that --name is a regular expression
+nwc_health_ifspeedin		| **Optional.** Override the ifspeed oid of an interface (only inbound)
+nwc_health_ifspeedout		| **Optional.** Override the ifspeed oid of an interface (only outbound)
+nwc_health_ifspeed		| **Optional.** Override the ifspeed oid of an interface
+nwc_health_units		| **Optional.** One of %, B, KB, MB, GB, Bit, KBi, MBi, GBi. (used for e.g. mode interface-usage)
+nwc_health_name2		| **Optional.** The secondary name of a component.
+nwc_health_role			| **Optional.** The role of this device in a hsrp group (active/standby/listen).
+nwc_health_report		| **Optional.** Can be used to shorten the output.
+nwc_health_lookback		| **Optional.** The amount of time you want to look back when calculating average rates. Use it for mode interface-errors or interface-usage. Without --lookback the time between two runs of check_nwc_health is the base for calculations. If you want your checkresult to be based for example on the past hour, use --lookback 3600.
+nwc_health_warning		| **Optional.** The warning threshold
+nwc_health_critical		| **Optional.** The critical threshold
+nwc_health_warningx		| **Optional.** The extended warning thresholds
+nwc_health_criticalx		| **Optional.** The extended critical thresholds
+nwc_health_mitigation		| **Optional.** The parameter allows you to change a critical error to a warning.
+nwc_health_selectedperfdata	| **Optional.** The parameter allows you to limit the list of performance data. It's a perl regexp. Only matching perfdata show up in the output.
+nwc_health_morphperfdata	| **Optional.** The parameter allows you to change performance data labels. It's a perl regexp and a substitution. --morphperfdata '(.*)ISATAP(.*)'='$1patasi$2'
+nwc_health_negate		| **Optional.** The parameter allows you to map exit levels, such as warning=critical.
+nwc_health_mymodules-dyn-dir	| **Optional.** A directory where own extensions can be found.
+nwc_health_servertype		| **Optional.** The type of the network device: cisco (default). Use it if auto-detection is not possible.
+nwc_health_statefilesdir	| **Optional.** An alternate directory where the plugin can save files.
+nwc_health_oids			| **Optional.** A list of oids which are downloaded and written to a cache file. Use it together with --mode oidcache.
+nwc_health_offline		| **Optional.** The maximum number of seconds since the last update of cache file before it is considered too old.
+nwc_health_multiline		| **Optional.** Multiline output
+
+
 ## <a id="plugins-contrib-web"></a> Web
 
 This category includes all plugins for web-based checks.
@@ -1799,6 +1898,25 @@ jmx4perl_label               | **Optional.** Label to be used for printing out t
 jmx4perl_perfdata            | **Optional.** Whether performance data should be omitted, which are included by default. Defaults to "on" for numeric values, to "off" for strings.
 jmx4perl_unknown_is_critical | **Optional.** Map UNKNOWN errors to errors with a CRITICAL status. Defaults to false.
 jmx4perl_timeout             | **Optional.** Seconds before plugin times out. Defaults to "15".
+
+
+### <a id="plugins-contrib-squid"></a> squid
+
+Plugin for monitoring [Squid](https://exchange.icinga.org/exchange/check_squid).
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                    | Description
+------------------------|----------------------------------------------------------------------------------
+squid_hostname		| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+squid_data		| **Optional.** Data to fetch (default: Connections) available data: Connections Cache Resources Memory FileDescriptors.
+squid_port		| **Optional.** Port number (default: 3128).
+squid_user		| **Optional.** WWW user
+squid_password		| **Optional.** WWW password
+squid_warning		| **Optional.** Warning threshold. See http://nagiosplug.sourceforge.net/developer-guidelines.html#THRESHOLDFORMAT for the threshold format.
+squid_critical		| **Optional.** Critical threshold. See http://nagiosplug.sourceforge.net/developer-guidelines.html#THRESHOLDFORMAT for the threshold format.
+squid_client		| **Optional.** Path of squidclient (default: /usr/bin/squidclient).
+squid_timeout		| **Optional.** Seconds before plugin times out (default: 15).
 
 
 ## <a id="plugins-contrib-operating-system"></a> Operating System
@@ -3801,3 +3919,34 @@ vmware_username         | **Optional.** The username to connect to Host or vCent
 vmware_password         | **Optional.** The username's password. No value defined as default.
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
+
+
+## <a id="plugins-contrib-hardware"></a> Hardware
+
+This category includes all plugins for various hardware checks.
+
+### <a id="plugins-contrib-command-hpasm"></a> hpasm
+
+The plugin [check_hpasm](https://labs.consol.de/de/nagios/check_hpasm/index.html) is a plugin to monitor HP hardware through the HP Insight Agent via SNMP.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                    	| Description
+--------------------------------|-----------------------------------------------------------------------
+hpasm_hostname			| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+hpasm_community			| **Optional.** SNMP community of the server (SNMP v1/2 only).
+hpasm_protocol			| **Optional.** The SNMP protocol to use (default: 2c, other possibilities: 1,3).
+hpasm_port			| **Optional.** The SNMP port to use (default: 161).
+hpasm_blacklist			| **Optional.** Blacklist some (missing/failed) components.
+hpasm_ignore-dimms		| **Optional.** Ignore "N/A"-DIMM status on misc. servers (e.g. older DL320).
+hpasm_ignore-fan-redundancy	| **Optional.** Ignore missing redundancy partners.
+hpasm_customthresholds		| **Optional.** Use custom thresholds for certain temperatures.
+hpasm_eventrange		| **Optional.** Period of time before critical IML events respecively become warnings or vanish. A range is descibed as a number and a unit (s, m, h, d), e.g. --eventrange 1h/20m.
+hpasm_perfdata			| **Optional.** Output performance data. If your performance data string becomes too long and is truncated by Nagios, then you can use --perfdata=short instead. This will output temperature tags without location information.
+hpasm_username			| **Optional.** The securityName for the USM security model (SNMPv3 only).
+hpasm_authpassword		| **Optional.** The authentication password for SNMPv3.
+hpasm_authprotocol		| **Optional.** The authentication protocol for SNMPv3 (md5|sha).
+hpasm_privpassword		| **Optional.** The password for authPriv security level.
+hpasm_privprotocol		| **Optional.** The private protocol for SNMPv3 (des|aes|aes128|3des|3desde).
+hpasm_servertype		| **Optional.** The type of the server: proliant (default) or bladesystem.
+hpasm_eval-nics			| **Optional.** Check network interfaces (and groups). Try it and report me whyt you think about it. I need to build up some know how on this subject. If get an error and you think, it is not justified for your configuration, please tell me about it. (alwasy send the output of "snmpwalk -On .... 1.3.6.1.4.1.232" and a description how you setup your nics and why it is correct opposed to the plugins error message.

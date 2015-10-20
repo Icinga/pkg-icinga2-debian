@@ -373,6 +373,10 @@ void ApiListener::ApiTimerHandler(void)
 	Zone::Ptr my_zone = Zone::GetLocalZone();
 
 	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
+		/* don't connect to global zones */
+		if (zone->GetGlobal())
+			continue;
+
 		/* only connect to endpoints in a) the same zone b) our parent zone c) immediate child zones */
 		if (my_zone != zone && my_zone != zone->GetParent() && zone != my_zone->GetParent()) {
 			Log(LogDebug, "ApiListener")
@@ -456,7 +460,7 @@ void ApiListener::ApiTimerHandler(void)
 
 void ApiListener::RelayMessage(const MessageOrigin& origin, const DynamicObject::Ptr& secobj, const Dictionary::Ptr& message, bool log)
 {
-	m_RelayQueue.Enqueue(boost::bind(&ApiListener::SyncRelayMessage, this, origin, secobj, message, log));
+	m_RelayQueue.Enqueue(boost::bind(&ApiListener::SyncRelayMessage, this, origin, secobj, message, log), true);
 }
 
 void ApiListener::PersistMessage(const Dictionary::Ptr& message, const DynamicObject::Ptr& secobj)
@@ -511,9 +515,6 @@ void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObj
 	Log(LogNotice, "ApiListener")
 	    << "Relaying '" << message->Get("method") << "' message";
 
-	if (log)
-		PersistMessage(message, secobj);
-
 	if (origin.FromZone)
 		message->Set("originZone", origin.FromZone->GetName());
 
@@ -522,17 +523,37 @@ void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObj
 	Zone::Ptr my_zone = Zone::GetLocalZone();
 
 	std::vector<Endpoint::Ptr> skippedEndpoints;
+	std::set<Zone::Ptr> allZones;
 	std::set<Zone::Ptr> finishedZones;
+	std::set<Zone::Ptr> finishedLogZones;
 
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
-		/* don't relay messages to ourselves or disconnected endpoints */
-		if (endpoint->GetName() == GetIdentity() || !endpoint->IsConnected())
+		/* don't relay messages to ourselves */
+		if (endpoint->GetName() == GetIdentity())
 			continue;
 
 		Zone::Ptr target_zone = endpoint->GetZone();
 
-		/* don't relay the message to the zone through more than one endpoint */
-		if (finishedZones.find(target_zone) != finishedZones.end()) {
+		allZones.insert(target_zone);
+
+		/* only relay messages to zones which have access to the object */
+		if (!target_zone->CanAccessObject(secobj)) {
+			finishedLogZones.insert(target_zone);
+			continue;
+		}
+
+		/* don't relay messages to disconnected endpoints */
+		if (!endpoint->IsConnected()) {
+			if (target_zone == my_zone)
+				finishedLogZones.erase(target_zone);
+
+			continue;
+		}
+
+		finishedLogZones.insert(target_zone);
+
+		/* don't relay the message to the zone through more than one endpoint unless this is our own zone */
+		if (finishedZones.find(target_zone) != finishedZones.end() && target_zone != my_zone) {
 			skippedEndpoints.push_back(endpoint);
 			continue;
 		}
@@ -562,14 +583,13 @@ void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObj
 			continue;
 		}
 
-		/* only relay messages to zones which have access to the object */
-		if (!target_zone->CanAccessObject(secobj))
-			continue;
-
 		finishedZones.insert(target_zone);
 
 		SyncSendMessage(endpoint, message);
 	}
+
+	if (log && allZones.size() != finishedLogZones.size())
+		PersistMessage(message, secobj);
 
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, skippedEndpoints)
 		endpoint->SetLocalLogPosition(ts);
@@ -625,12 +645,14 @@ void ApiListener::LogGlobHandler(std::vector<int>& files, const String& file)
 {
 	String name = Utility::BaseName(file);
 
+	if (name == "current")
+		return;
+
 	int ts;
 
 	try {
 		ts = Convert::ToLong(name);
-	}
-	catch (const std::exception&) {
+	} catch (const std::exception&) {
 		return;
 	}
 
@@ -834,6 +856,17 @@ std::pair<Dictionary::Ptr, Dictionary::Ptr> ApiListener::GetStatus(void)
 	perfdata->Set("num_not_conn_endpoints", Convert::ToDouble(not_connected_endpoints->GetLength()));
 
 	return std::make_pair(status, perfdata);
+}
+
+double ApiListener::CalculateZoneLag(const Endpoint::Ptr& endpoint)
+{
+	double remoteLogPosition = endpoint->GetRemoteLogPosition();
+	double eplag = Utility::GetTime() - remoteLogPosition;
+
+	if ((endpoint->GetSyncing() || !endpoint->IsConnected()) && remoteLogPosition != 0)
+		return eplag;
+
+	return 0;
 }
 
 void ApiListener::AddAnonymousClient(const ApiClient::Ptr& aclient)
