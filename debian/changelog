@@ -1,3 +1,10 @@
+icinga2 (2.3.11-1) unstable; urgency=medium
+
+  * [b9e26af] Change ido database name/user to icinga2 for new installations
+  * [6d4fa9d] Imported Upstream version 2.3.11
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 20 Oct 2015 09:08:18 +0200
+
 icinga2 (2.3.10-1) unstable; urgency=medium
 
   * [129f6ea] Imported Upstream version 2.3.10
