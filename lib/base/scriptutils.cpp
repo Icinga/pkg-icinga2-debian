@@ -39,6 +39,7 @@ using namespace icinga;
 
 REGISTER_SCRIPTFUNCTION(regex, &ScriptUtils::Regex);
 REGISTER_SCRIPTFUNCTION(match, &Utility::Match);
+REGISTER_SCRIPTFUNCTION(cidr_match, &Utility::CidrMatch);
 REGISTER_SCRIPTFUNCTION(len, &ScriptUtils::Len);
 REGISTER_SCRIPTFUNCTION(union, &ScriptUtils::Union);
 REGISTER_SCRIPTFUNCTION(intersection, &ScriptUtils::Intersection);
@@ -58,6 +59,11 @@ REGISTER_SCRIPTFUNCTION(get_time, &Utility::GetTime);
 REGISTER_SCRIPTFUNCTION(basename, &Utility::BaseName);
 REGISTER_SCRIPTFUNCTION(dirname, &Utility::DirName);
 REGISTER_SCRIPTFUNCTION(msi_get_component_path, &ScriptUtils::MsiGetComponentPathShim);
+REGISTER_SCRIPTFUNCTION(escape_shell_cmd, &Utility::EscapeShellCmd);
+REGISTER_SCRIPTFUNCTION(escape_shell_arg, &Utility::EscapeShellArg);
+#ifdef _WIN32
+REGISTER_SCRIPTFUNCTION(escape_create_process_arg, &Utility::EscapeCreateProcessArg);
+#endif /* _WIN32 */
 
 String ScriptUtils::CastString(const Value& value)
 {
