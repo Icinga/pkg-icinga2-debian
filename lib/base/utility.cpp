@@ -143,6 +143,102 @@ bool Utility::Match(const String& pattern, const String& text)
 	return (match(pattern.CStr(), text.CStr()) == 0);
 }
 
+static bool ParseIp(const String& ip, char addr[16], int *proto)
+{
+	if (inet_pton(AF_INET, ip.CStr(), addr + 12) == 1) {
+		/* IPv4-mapped IPv6 address (::ffff:<ipv4-bits>) */
+		memset(addr, 0, 10);
+		memset(addr + 10, 0xff, 2);
+		*proto = AF_INET;
+
+		return true;
+	}
+
+	if (inet_pton(AF_INET6, ip.CStr(), addr) == 1) {
+		*proto = AF_INET6;
+
+		return true;
+	}
+
+	return false;
+}
+
+static void ParseIpMask(const String& ip, char mask[16], int *bits)
+{
+	String::SizeType slashp = ip.FindFirstOf("/");
+	String uip;
+
+	if (slashp == String::NPos) {
+		uip = ip;
+		*bits = 0;
+	} else {
+		uip = ip.SubStr(0, slashp);
+		*bits = Convert::ToLong(ip.SubStr(slashp + 1));
+	}
+
+	int proto;
+
+	if (!ParseIp(uip, mask, &proto))
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid IP address specified."));
+
+	if (proto == AF_INET) {
+		if (*bits > 32 || *bits < 0)
+			BOOST_THROW_EXCEPTION(std::invalid_argument("Mask must be between 0 and 32 for IPv4 CIDR masks."));
+
+		*bits += 96;
+	}
+
+	if (slashp == String::NPos)
+		*bits = 128;
+
+	if (*bits > 128 || *bits < 0)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Mask must be between 0 and 128 for IPv6 CIDR masks."));
+
+	for (int i = 0; i < 16; i++) {
+		int lbits = std::max(0, *bits - i * 8);
+
+		if (lbits >= 8)
+			continue;
+
+		if (mask[i] & (0xff >> lbits))
+			BOOST_THROW_EXCEPTION(std::invalid_argument("Masked-off bits must all be zero."));
+	}
+}
+
+static bool IpMaskCheck(char addr[16], char mask[16], int bits)
+{
+	for (int i = 0; i < 16; i++) {
+		if (bits < 8)
+			return !((addr[i] ^ mask[i]) >> (8 - bits));
+
+		if (mask[i] != addr[i])
+			return false;
+
+		bits -= 8;
+
+		if (bits == 0)
+			return true;
+	}
+
+	return true;
+}
+
+bool Utility::CidrMatch(const String& pattern, const String& ip)
+{
+	char mask[16];
+	int bits;
+
+	ParseIpMask(pattern, mask, &bits);
+
+	char addr[16];
+	int proto;
+
+	if (!ParseIp(ip, addr, &proto))
+		return false;
+
+	return IpMaskCheck(addr, mask, bits);
+}
+
 /**
  * Returns the directory component of a path. See dirname(3) for details.
  *
@@ -1015,6 +1111,40 @@ String Utility::EscapeShellArg(const String& s)
 
 	return result;
 }
+
+#ifdef _WIN32
+String Utility::EscapeCreateProcessArg(const String& arg)
+{
+	if (arg.FindFirstOf(" \t\n\v\"") == String::NPos)
+		return arg;
+
+	String result = "\"";
+
+	for (String::ConstIterator it = arg.Begin(); ; it++) {
+		int numBackslashes = 0;
+
+		while (it != arg.End() && *it == '\\') {
+			it++;
+			numBackslashes++;
+		}
+
+		if (it == arg.End()) {
+			result.Append(numBackslashes * 2, '\\');
+			break;
+		} else if (*it == '"') {
+			result.Append(numBackslashes * 2, '\\');
+			result.Append(1, *it);
+		} else {
+			result.Append(numBackslashes, '\\');
+			result.Append(1, *it);
+		}
+	}
+
+	result += "\"";
+
+	return result;
+}
+#endif /* _WIN32 */
 
 #ifdef _WIN32
 static void WindowsSetThreadName(const char *name)

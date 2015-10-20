@@ -1,14 +1,15 @@
-icinga2 (2.3.10-1~ppa1~precise2) precise; urgency=medium
-
-  * [ca674d4] safe-reload is in -bin on non multiarch platforms
-
- -- Alexander Wirt <formorer@debian.org>  Thu, 10 Sep 2015 21:17:31 +0200
-
-icinga2 (2.3.10-1~ppa1~precise1) precise; urgency=medium
+icinga2 (2.3.11-1~ppa1~precise1) precise; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+
+icinga2 (2.3.11-1) unstable; urgency=medium
+
+  * [b9e26af] Change ido database name/user to icinga2 for new installations
+  * [6d4fa9d] Imported Upstream version 2.3.11
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 20 Oct 2015 09:08:18 +0200
 
 icinga2 (2.3.10-1) unstable; urgency=medium
 
