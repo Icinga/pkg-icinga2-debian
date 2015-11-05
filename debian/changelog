@@ -1,3 +1,76 @@
+icinga2 (2.3.11-1) unstable; urgency=medium
+
+  * [b9e26af] Change ido database name/user to icinga2 for new installations
+  * [6d4fa9d] Imported Upstream version 2.3.11
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 20 Oct 2015 09:08:18 +0200
+
+icinga2 (2.3.10-1) unstable; urgency=medium
+
+  * [129f6ea] Imported Upstream version 2.3.10
+  * [173da67] Merge systemd service file with upstreams implementation
+
+ -- Alexander Wirt <formorer@debian.org>  Sun, 06 Sep 2015 21:29:12 +0200
+
+icinga2 (2.3.9-1) unstable; urgency=medium
+
+  * [a03c364] Imported Upstream version 2.3.9
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 27 Aug 2015 12:30:21 +0200
+
+icinga2 (2.3.8-1) unstable; urgency=medium
+
+  * [0f463b5] Imported Upstream version 2.3.8
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Mon, 20 Jul 2015 21:24:42 +0200
+
+icinga2 (2.3.7-1) unstable; urgency=medium
+
+  * [c4d8f2b] Really enable ido-pgsql if we have to
+  * [35c654e] Allow nagios group to write/remove perfdata
+  * [0fff36a] Imported Upstream version 2.3.7
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 15 Jul 2015 11:41:51 +0200
+
+icinga2 (2.3.6-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [7eaa5f9] Imported Upstream version 2.3.6
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 08 Jul 2015 10:57:35 +0200
+
+icinga2 (2.3.5-1) unstable; urgency=medium
+
+  * [64334db] Imported Upstream version 2.3.5
+  * [afffeeb] Remove obsolete patches
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 17 Jun 2015 14:48:59 +0200
+
+icinga2 (2.3.4-3) unstable; urgency=medium
+
+  * [392a0bf] Add patch to fix broken postrotate script
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 22 Apr 2015 09:42:11 +0200
+
+icinga2 (2.3.4-2) unstable; urgency=medium
+
+  * [54904c5] Fix upstream version in icinga2 --version
+  * [3bb3712] Add first autopkgtest (dep8) support
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 17:19:39 +0200
+
+icinga2 (2.3.4-1) unstable; urgency=medium
+
+  [ Achim Ledermüller ]
+  * [8009d66] Specify pidfile for status_of_proc in the init script
+
+  [ Alexander Wirt ]
+  * [2a5d1cb] Remove obsolete logrotate_use_service patch
+  * [43b9dd6] Imported Upstream version 2.3.4
+  * [be9777c] Recommend logrotate in icinga2-common
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 13:16:16 +0200
+
 icinga2 (2.3.3-1) unstable; urgency=medium
 
   * [8870a28] Imported Upstream version 2.3.3

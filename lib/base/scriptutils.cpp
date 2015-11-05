@@ -31,11 +31,15 @@
 #include <boost/regex.hpp>
 #include <algorithm>
 #include <set>
+#ifdef _WIN32
+#include <msi.h>
+#endif /* _WIN32 */
 
 using namespace icinga;
 
 REGISTER_SCRIPTFUNCTION(regex, &ScriptUtils::Regex);
 REGISTER_SCRIPTFUNCTION(match, &Utility::Match);
+REGISTER_SCRIPTFUNCTION(cidr_match, &Utility::CidrMatch);
 REGISTER_SCRIPTFUNCTION(len, &ScriptUtils::Len);
 REGISTER_SCRIPTFUNCTION(union, &ScriptUtils::Union);
 REGISTER_SCRIPTFUNCTION(intersection, &ScriptUtils::Intersection);
@@ -52,6 +56,14 @@ REGISTER_SCRIPTFUNCTION(string, &ScriptUtils::CastString);
 REGISTER_SCRIPTFUNCTION(number, &ScriptUtils::CastNumber);
 REGISTER_SCRIPTFUNCTION(bool, &ScriptUtils::CastBool);
 REGISTER_SCRIPTFUNCTION(get_time, &Utility::GetTime);
+REGISTER_SCRIPTFUNCTION(basename, &Utility::BaseName);
+REGISTER_SCRIPTFUNCTION(dirname, &Utility::DirName);
+REGISTER_SCRIPTFUNCTION(msi_get_component_path, &ScriptUtils::MsiGetComponentPathShim);
+REGISTER_SCRIPTFUNCTION(escape_shell_cmd, &Utility::EscapeShellCmd);
+REGISTER_SCRIPTFUNCTION(escape_shell_arg, &Utility::EscapeShellArg);
+#ifdef _WIN32
+REGISTER_SCRIPTFUNCTION(escape_create_process_arg, &Utility::EscapeCreateProcessArg);
+#endif /* _WIN32 */
 
 String ScriptUtils::CastString(const Value& value)
 {
@@ -104,6 +116,7 @@ Array::Ptr ScriptUtils::Union(const std::vector<Value>& arguments)
 		Array::Ptr arr = varr;
 
 		if (arr) {
+			ObjectLock olock(arr);
 			BOOST_FOREACH(const Value& value, arr) {
 				values.insert(value);
 			}
@@ -133,7 +146,10 @@ Array::Ptr ScriptUtils::Intersection(const std::vector<Value>& arguments)
 	Array::Ptr arr1 = arg1->ShallowClone();
 
 	for (std::vector<Value>::size_type i = 1; i < arguments.size(); i++) {
-		std::sort(arr1->Begin(), arr1->End());
+		{
+			ObjectLock olock(arr1);
+			std::sort(arr1->Begin(), arr1->End());
+		}
 
 		Array::Ptr arg2 = arguments[i];
 
@@ -141,11 +157,19 @@ Array::Ptr ScriptUtils::Intersection(const std::vector<Value>& arguments)
 			return result;
 
 		Array::Ptr arr2 = arg2->ShallowClone();
-		std::sort(arr2->Begin(), arr2->End());
+		{
+			ObjectLock olock(arr2);
+			std::sort(arr2->Begin(), arr2->End());
+		}
 
 		result->Resize(std::max(arr1->GetLength(), arr2->GetLength()));
-		Array::Iterator it = std::set_intersection(arr1->Begin(), arr1->End(), arr2->Begin(), arr2->End(), result->Begin());
-		result->Resize(it - result->Begin());
+		Array::SizeType len;
+		{
+			ObjectLock olock(arr1), xlock(arr2), ylock(result);
+			Array::Iterator it = std::set_intersection(arr1->Begin(), arr1->End(), arr2->Begin(), arr2->End(), result->Begin());
+			len = it - result->Begin();
+		}
+		result->Resize(len);
 		arr1 = result;
 	}
 
@@ -278,3 +302,18 @@ void ScriptUtils::Assert(const Value& arg)
 		BOOST_THROW_EXCEPTION(std::runtime_error("Assertion failed"));
 }
 
+String ScriptUtils::MsiGetComponentPathShim(const String& component)
+{
+#ifdef _WIN32
+	TCHAR productCode[39];
+	if (MsiGetProductCode(component.CStr(), productCode) != ERROR_SUCCESS)
+		return "";
+	TCHAR path[2048];
+	DWORD szPath = sizeof(path);
+	path[0] = '\0';
+	MsiGetComponentPath(productCode, component.CStr(), path, &szPath);
+	return path;
+#else /* _WIN32 */
+	return String();
+#endif /* _WIN32 */
+}

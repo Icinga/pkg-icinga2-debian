@@ -143,6 +143,102 @@ bool Utility::Match(const String& pattern, const String& text)
 	return (match(pattern.CStr(), text.CStr()) == 0);
 }
 
+static bool ParseIp(const String& ip, char addr[16], int *proto)
+{
+	if (inet_pton(AF_INET, ip.CStr(), addr + 12) == 1) {
+		/* IPv4-mapped IPv6 address (::ffff:<ipv4-bits>) */
+		memset(addr, 0, 10);
+		memset(addr + 10, 0xff, 2);
+		*proto = AF_INET;
+
+		return true;
+	}
+
+	if (inet_pton(AF_INET6, ip.CStr(), addr) == 1) {
+		*proto = AF_INET6;
+
+		return true;
+	}
+
+	return false;
+}
+
+static void ParseIpMask(const String& ip, char mask[16], int *bits)
+{
+	String::SizeType slashp = ip.FindFirstOf("/");
+	String uip;
+
+	if (slashp == String::NPos) {
+		uip = ip;
+		*bits = 0;
+	} else {
+		uip = ip.SubStr(0, slashp);
+		*bits = Convert::ToLong(ip.SubStr(slashp + 1));
+	}
+
+	int proto;
+
+	if (!ParseIp(uip, mask, &proto))
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid IP address specified."));
+
+	if (proto == AF_INET) {
+		if (*bits > 32 || *bits < 0)
+			BOOST_THROW_EXCEPTION(std::invalid_argument("Mask must be between 0 and 32 for IPv4 CIDR masks."));
+
+		*bits += 96;
+	}
+
+	if (slashp == String::NPos)
+		*bits = 128;
+
+	if (*bits > 128 || *bits < 0)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Mask must be between 0 and 128 for IPv6 CIDR masks."));
+
+	for (int i = 0; i < 16; i++) {
+		int lbits = std::max(0, *bits - i * 8);
+
+		if (lbits >= 8)
+			continue;
+
+		if (mask[i] & (0xff >> lbits))
+			BOOST_THROW_EXCEPTION(std::invalid_argument("Masked-off bits must all be zero."));
+	}
+}
+
+static bool IpMaskCheck(char addr[16], char mask[16], int bits)
+{
+	for (int i = 0; i < 16; i++) {
+		if (bits < 8)
+			return !((addr[i] ^ mask[i]) >> (8 - bits));
+
+		if (mask[i] != addr[i])
+			return false;
+
+		bits -= 8;
+
+		if (bits == 0)
+			return true;
+	}
+
+	return true;
+}
+
+bool Utility::CidrMatch(const String& pattern, const String& ip)
+{
+	char mask[16];
+	int bits;
+
+	ParseIpMask(pattern, mask, &bits);
+
+	char addr[16];
+	int proto;
+
+	if (!ParseIp(ip, addr, &proto))
+		return false;
+
+	return IpMaskCheck(addr, mask, bits);
+}
+
 /**
  * Returns the directory component of a path. See dirname(3) for details.
  *
@@ -175,7 +271,7 @@ String Utility::DirName(const String& path)
 #ifndef _WIN32
 	result = dirname(dir);
 #else /* _WIN32 */
-	if (!PathRemoveFileSpec(dir)) {
+	if (dir[0] != 0 && !PathRemoveFileSpec(dir)) {
 		free(dir);
 
 		BOOST_THROW_EXCEPTION(win32_error()
@@ -387,18 +483,9 @@ String Utility::NewUniqueID(void)
 	return id;
 }
 
-/**
- * Calls the specified callback for each file matching the path specification.
- *
- * @param pathSpec The path specification.
- * @param callback The callback which is invoked for each matching file.
- * @param type The file type (a combination of GlobFile and GlobDirectory)
- */
-bool Utility::Glob(const String& pathSpec, const boost::function<void (const String&)>& callback, int type)
-{
-	std::vector<String> files, dirs;
-
 #ifdef _WIN32
+static bool GlobHelper(const String& pathSpec, int type, std::vector<String>& files, std::vector<String>& dirs)
+{
 	HANDLE handle;
 	WIN32_FIND_DATA wfd;
 
@@ -411,16 +498,16 @@ bool Utility::Glob(const String& pathSpec, const boost::function<void (const Str
 			return false;
 
 		BOOST_THROW_EXCEPTION(win32_error()
-		    << boost::errinfo_api_function("FindFirstFile")
+			<< boost::errinfo_api_function("FindFirstFile")
 			<< errinfo_win32_error(errorCode)
-		    << boost::errinfo_file_name(pathSpec));
+			<< boost::errinfo_file_name(pathSpec));
 	}
 
 	do {
 		if (strcmp(wfd.cFileName, ".") == 0 || strcmp(wfd.cFileName, "..") == 0)
 			continue;
 
-		String path = DirName(pathSpec) + "/" + wfd.cFileName;
+		String path = Utility::DirName(pathSpec) + "/" + wfd.cFileName;
 
 		if ((wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && (type & GlobDirectory))
 			dirs.push_back(path);
@@ -430,9 +517,65 @@ bool Utility::Glob(const String& pathSpec, const boost::function<void (const Str
 
 	if (!FindClose(handle)) {
 		BOOST_THROW_EXCEPTION(win32_error()
-		    << boost::errinfo_api_function("FindClose")
-		    << errinfo_win32_error(GetLastError()));
+			<< boost::errinfo_api_function("FindClose")
+			<< errinfo_win32_error(GetLastError()));
 	}
+
+	return true;
+}
+#endif /* _WIN32 */
+
+/**
+ * Calls the specified callback for each file matching the path specification.
+ *
+ * @param pathSpec The path specification.
+ * @param callback The callback which is invoked for each matching file.
+ * @param type The file type (a combination of GlobFile and GlobDirectory)
+ */
+bool Utility::Glob(const String& pathSpec, const boost::function<void (const String&)>& callback, int type)
+{
+	std::vector<String> files, dirs;
+
+#ifdef _WIN32
+	std::vector<String> tokens;
+	boost::algorithm::split(tokens, pathSpec, boost::is_any_of("\\/"));
+
+	String part1;
+
+	for (std::vector<String>::size_type i = 0; i < tokens.size() - 1; i++) {
+		const String& token = tokens[i];
+
+		if (!part1.IsEmpty())
+			part1 += "/";
+
+		part1 += token;
+
+		if (token.FindFirstOf("?*") != String::NPos) {
+			String part2;
+
+			for (std::vector<String>::size_type k = i + 1; k < tokens.size(); k++) {
+				if (!part2.IsEmpty())
+					part2 += "/";
+
+				part2 += tokens[k];
+			}
+
+			std::vector<String> files2, dirs2;
+
+			if (!GlobHelper(part1, GlobDirectory, files2, dirs2))
+				return false;
+
+			BOOST_FOREACH(const String& dir, dirs2) {
+				if (!Utility::Glob(dir + "/" + part2, callback, type))
+					return false;
+			}
+
+			return true;
+		}
+	}
+
+	if (!GlobHelper(part1 + "/" + tokens[tokens.size() - 1], type, files, dirs))
+		return false;
 #else /* _WIN32 */
 	glob_t gr;
 
@@ -968,6 +1111,40 @@ String Utility::EscapeShellArg(const String& s)
 
 	return result;
 }
+
+#ifdef _WIN32
+String Utility::EscapeCreateProcessArg(const String& arg)
+{
+	if (arg.FindFirstOf(" \t\n\v\"") == String::NPos)
+		return arg;
+
+	String result = "\"";
+
+	for (String::ConstIterator it = arg.Begin(); ; it++) {
+		int numBackslashes = 0;
+
+		while (it != arg.End() && *it == '\\') {
+			it++;
+			numBackslashes++;
+		}
+
+		if (it == arg.End()) {
+			result.Append(numBackslashes * 2, '\\');
+			break;
+		} else if (*it == '"') {
+			result.Append(numBackslashes * 2, '\\');
+			result.Append(1, *it);
+		} else {
+			result.Append(numBackslashes, '\\');
+			result.Append(1, *it);
+		}
+	}
+
+	result += "\"";
+
+	return result;
+}
+#endif /* _WIN32 */
 
 #ifdef _WIN32
 static void WindowsSetThreadName(const char *name)

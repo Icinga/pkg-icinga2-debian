@@ -53,7 +53,7 @@ is removed (may happen before or after the actual end time!).
 
 ### <a id="scheduling-downtime"></a> Scheduling a downtime
 
-This can either happen through a web interface or by sending an [external command](4-advanced-topics.md#external-commands)
+This can either happen through a web interface or by sending an [external command](5-advanced-topics.md#external-commands)
 to the external command pipe provided by the `ExternalCommandListener` configuration.
 
 Fixed downtimes require a start and end time (a duration will be ignored).
@@ -207,6 +207,166 @@ Use the `period` attribute to assign time periods to
       users = [ "icingaadmin" ]
       period = "workhours"
     }
+
+## <a id="use-functions-object-config"></a> Use Functions in Object Configuration
+
+There is a limited scope where functions can be used as object attributes such as:
+
+* As value for [Custom Attributes](3-monitoring-basics.md#custom-attributes-functions)
+* Returning boolean expressions for [set_if](5-advanced-topics.md#use-functions-command-arguments-setif) inside command arguments
+* Returning a [command](5-advanced-topics.md#use-functions-command-attribute) array inside command objects
+
+The other way around you can create objects dynamically using your own global functions.
+
+> **Note**
+>
+> Functions called inside command objects share the same global scope as runtime macros.
+> Therefore you can access host custom attributes like `host.vars.os`, or any other
+> object attribute from inside the function definition used for [set_if](5-advanced-topics.md#use-functions-command-arguments-setif) or [command](5-advanced-topics.md#use-functions-command-attribute).
+
+Tips when implementing functions:
+
+* Use [log()](20-library-reference.md#global-functions) to dump variables. You can see the output
+inside the `icinga2.log` file depending in your log severity
+* Use the `icinga2 console` to test basic functionality (e.g. iterating over a dictionary)
+* Build them step-by-step. You can always refactor your code later on.
+
+### <a id="use-functions-command-arguments-setif"></a> Use Functions in Command Arguments set_if
+
+The `set_if` attribute inside the command arguments definition in the
+[CheckCommand object definition](6-object-types.md#objecttype-checkcommand) is primarly used to
+evaluate whether the command parameter should be set or not.
+
+By default you can evaluate runtime macros for their existance, and if the result is not an empty
+string the command parameter is passed. This becomes fairly complicated when want to evaluate
+multiple conditions and attributes.
+
+The following example was found on the community support channels. The user had defined a host
+dictionary named `compellent` with the key `disks`. This was then used inside service apply for rules.
+
+    object Host "dict-host" {
+      check_command = "check_compellent"
+      vars.compellent["disks"] = {
+        file = "/var/lib/check_compellent/san_disks.0.json",
+        checks = ["disks"]
+      }
+    }
+
+The more significant problem was to only add the command parameter `--disk` to the plugin call
+when the dictionary `compellent` contains the key `disks`, and omit it if not found.
+
+By defining `set_if` as [abbreviated lambda function](19-language-reference.md#nullary-lambdas)
+and evaluating the host custom attribute `compellent` containing the `disks` this problem was
+solved like this:
+
+    object CheckCommand "check_compellent" {
+      import "plugin-check-command"
+      command   = [ "/usr/bin/check_compellent" ]
+      arguments   = {
+        "--disks"  = {
+          set_if = {{
+            var host_vars = host.vars
+            log(host_vars)
+            var compel = host_vars.compellent
+            log(compel)
+            compel.contains("disks")
+          }}
+        }
+      }
+    }
+
+This implementation uses the dictionary type method [contains](20-library-reference.md#dictionary-contains)
+and will fail if `host.vars.compellent` is not of the type `Dictionary`.
+Therefore you can extend the checks using the [typeof](19-language-reference.md#types) function.
+
+You can test the types using the `icinga2 console`:
+
+    # icinga2 console
+    Icinga (version: v2.3.0-193-g3eb55ad)
+    <1> => srv_vars.compellent["check_a"] = { file="outfile_a.json", checks = [ "disks", "fans" ] }
+    null
+    <2> => srv_vars.compellent["check_b"] = { file="outfile_b.json", checks = [ "power", "voltages" ] }
+    null
+    <3> => typeof(srv_vars.compellent)
+    type 'Dictionary'
+    <4> =>
+
+The more programmatic approach for `set_if` could look like this:
+
+        "--disks" = {
+          set_if = {{
+            var srv_vars = service.vars
+            if(len(srv_vars) > 0) {
+              if (typeof(srv_vars.compellent) == Dictionary) {
+                return srv_vars.compellent.contains("disks")
+              } else {
+                log(LogInformationen, "checkcommand set_if", "custom attribute compellent_checks is not a dictionary, ignoring it.")
+                return false
+              }
+            } else {
+              log(LogWarning, "checkcommand set_if", "empty custom attributes")
+              return false
+            }
+          }}
+        }
+
+
+### <a id="use-functions-command-attribute"></a> Use Functions as Command Attribute
+
+This comes in handy for [NotificationCommands](6-object-types.md#objecttype-notificationcommand)
+or [EventCommands](6-object-types.md#objecttype-eventcommand) which does not require
+a returned checkresult including state/output.
+
+The following example was taken from the community support channels. The requirement was to
+specify a custom attribute inside the notification apply rule and decide which notification
+script to call based on that.
+
+    object User "short-dummy" {
+    }
+    
+    object UserGroup "short-dummy-group" {
+      assign where user.name == "short-dummy"
+    }
+    
+    apply Notification "mail-admins-short" to Host {
+       import "mail-host-notification"
+       command = "mail-host-notification-test"
+       user_groups = [ "short-dummy-group" ]
+       vars.short = true
+       assign where host.vars.notification.mail
+    }
+
+The solution is fairly simple: The `command` attribute is implemented as function returning
+an array required by the caller Icinga 2.
+The local variable `mailscript` sets the default value for the notification scrip location.
+If the notification custom attribute `short` is set, it will override the local variable `mailscript`
+with a new value.
+The `mailscript` variable is then used to compute the final notification command array being
+returned.
+
+You can omit the `log()` calls, they only help debugging.
+
+    object NotificationCommand "mail-host-notification-test" {
+      import "plugin-notification-command"
+      command = {{
+        log("command as function")
+        var mailscript = "mail-host-notification-long.sh"
+        if (notification.vars.short) {
+           mailscript = "mail-host-notification-short.sh"
+        }
+        log("Running command")
+        log(mailscript)
+    
+        var cmd = [ SysconfDir + "/icinga2/scripts/" + mailscript ]
+        log(LogCritical, "me", cmd)
+        return cmd
+      }}
+    
+      env = {
+      }
+    }
+
+
 
 ## <a id="access-object-attributes-at-runtime"></a> Access Object Attributes at Runtime
 
@@ -412,17 +572,17 @@ The performance data can be passed to external applications which aggregate and
 store them in their backends. These tools usually generate graphs for historical
 reporting and trending.
 
-Well-known addons processing Icinga performance data are PNP4Nagios,
-inGraph and Graphite.
+Well-known addons processing Icinga performance data are [PNP4Nagios](14-addons-plugins.md#addons-graphing-pnp),
+[Graphite](14-addons-plugins.md#addons-graphing-graphite) or [OpenTSDB](5-advanced-topics.md#opentsdb-writer).
 
 ### <a id="writing-performance-data-files"></a> Writing Performance Data Files
 
-PNP4Nagios, inGraph and Graphios use performance data collector daemons to fetch
+PNP4Nagios and Graphios use performance data collector daemons to fetch
 the current performance files for their backend updates.
 
-Therefore the Icinga 2 `PerfdataWriter` object allows you to define
-the output template format for host and services backed with Icinga 2
-runtime vars.
+Therefore the Icinga 2 [PerfdataWriter](6-object-types.md#objecttype-perfdatawriter)
+feature allows you to define the output template format for host and services helped
+with Icinga 2 runtime vars.
 
     host_format_template = "DATATYPE::HOSTPERFDATA\tTIMET::$icinga.timet$\tHOSTNAME::$host.name$\tHOSTPERFDATA::$host.perfdata$\tHOSTCHECKCOMMAND::$host.check_command$\tHOSTSTATE::$host.state$\tHOSTSTATETYPE::$host.state_type$"
     service_format_template = "DATATYPE::SERVICEPERFDATA\tTIMET::$icinga.timet$\tHOSTNAME::$host.name$\tSERVICEDESC::$service.name$\tSERVICEPERFDATA::$service.perfdata$\tSERVICECHECKCOMMAND::$service.check_command$\tHOSTSTATE::$host.state$\tHOSTSTATETYPE::$host.state_type$\tSERVICESTATE::$service.state$\tSERVICESTATETYPE::$service.state_type$"
@@ -440,8 +600,9 @@ remove the processed files.
 
 ### <a id="graphite-carbon-cache-writer"></a> Graphite Carbon Cache Writer
 
-While there are some Graphite collector scripts and daemons like Graphios available for
-Icinga 1.x it's more reasonable to directly process the check and plugin performance
+While there are some [Graphite](14-addons-plugins.md#addons-graphing-graphite)
+collector scripts and daemons like Graphios available for Icinga 1.x it's more
+reasonable to directly process the check and plugin performance
 in memory in Icinga 2. Once there are new metrics available, Icinga 2 will directly
 write them to the defined Graphite Carbon daemon tcp socket.
 
@@ -449,8 +610,8 @@ You can enable the feature using
 
     # icinga2 feature enable graphite
 
-By default the `GraphiteWriter` object expects the Graphite Carbon Cache to listen at
-`127.0.0.1` on TCP port `2003`.
+By default the [GraphiteWriter](6-object-types.md#objecttype-graphitewriter) feature
+expects the Graphite Carbon Cache to listen at `127.0.0.1` on TCP port `2003`.
 
 The current naming schema is
 
@@ -462,7 +623,7 @@ You can customize the metric prefix name by using the `host_name_template` and
 
 The example below uses [runtime macros](3-monitoring-basics.md#runtime-macros) and a
 [global constant](19-language-reference.md#constants) named `GraphiteEnv`. The constant name
-is freely definable and should be put in the [constants.conf](5-configuring-icinga-2.md#constants-conf) file.
+is freely definable and should be put in the [constants.conf](4-configuring-icinga-2.md#constants-conf) file.
 
     const GraphiteEnv = "icinga.env1"
 

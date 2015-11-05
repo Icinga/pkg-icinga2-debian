@@ -58,7 +58,7 @@ public:
 	{
 		boost::shared_ptr<ScriptFrame> vframe;
 
-		if (!self.IsEmpty())
+		if (!self.IsEmpty() || self.IsString())
 			vframe = boost::make_shared<ScriptFrame>(self); /* passes self to the callee using a TLS variable */
 		else
 			vframe = boost::make_shared<ScriptFrame>();
@@ -206,7 +206,7 @@ public:
 
 	static inline Value GetField(const Value& context, const String& field, const DebugInfo& debugInfo = DebugInfo())
 	{
-		if (context.IsEmpty())
+		if (context.IsEmpty() && !context.IsString())
 			return Empty;
 
 		if (!context.IsObject())
@@ -255,6 +255,9 @@ public:
 
 	static inline void SetField(const Object::Ptr& context, const String& field, const Value& value, const DebugInfo& debugInfo = DebugInfo())
 	{
+		if (!context)
+			BOOST_THROW_EXCEPTION(ScriptError("Cannot set field '" + field + "' on a value that is not an object.", debugInfo));
+
 		Dictionary::Ptr dict = dynamic_pointer_cast<Dictionary>(context);
 
 		if (dict) {

@@ -21,6 +21,7 @@
 #include "remote/apiclient.hpp"
 #include "remote/endpoint.hpp"
 #include "remote/jsonrpc.hpp"
+#include "remote/apifunction.hpp"
 #include "base/convert.hpp"
 #include "base/netstring.hpp"
 #include "base/json.hpp"
@@ -41,6 +42,8 @@ REGISTER_TYPE(ApiListener);
 boost::signals2::signal<void(bool)> ApiListener::OnMasterChanged;
 
 REGISTER_STATSFUNCTION(ApiListenerStats, &ApiListener::StatsFunc);
+
+REGISTER_APIFUNCTION(Hello, icinga, &ApiListener::HelloAPIHandler);
 
 ApiListener::ApiListener(void)
 	: m_LogMessageCount(0)
@@ -367,58 +370,51 @@ void ApiListener::ApiTimerHandler(void)
 		}
 	}
 
-	if (IsMaster()) {
-		Zone::Ptr my_zone = Zone::GetLocalZone();
+	Zone::Ptr my_zone = Zone::GetLocalZone();
 
-		BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
-			/* only connect to endpoints in a) the same zone b) our parent zone c) immediate child zones */
-			if (my_zone != zone && my_zone != zone->GetParent() && zone != my_zone->GetParent()) {
+	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
+		/* don't connect to global zones */
+		if (zone->GetGlobal())
+			continue;
+
+		/* only connect to endpoints in a) the same zone b) our parent zone c) immediate child zones */
+		if (my_zone != zone && my_zone != zone->GetParent() && zone != my_zone->GetParent()) {
+			Log(LogDebug, "ApiListener")
+			    << "Not connecting to Zone '" << zone->GetName() << "' because it's not in the same zone, a parent or a child zone.";
+			continue;
+		}
+
+		BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
+			/* don't connect to ourselves */
+			if (endpoint->GetName() == GetIdentity()) {
 				Log(LogDebug, "ApiListener")
-				    << "Not connecting to Zone '" << zone->GetName() << "' because it's not in the same zone, a parent or a child zone.";
+				    << "Not connecting to Endpoint '" << endpoint->GetName() << "' because that's us.";
 				continue;
 			}
 
-			bool connected = false;
-
-			BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
-				if (endpoint->IsConnected()) {
-					connected = true;
-					break;
-				}
-			}
-
-			/* don't connect to an endpoint if we already have a connection to the zone */
-			if (connected) {
+			/* don't try to connect to endpoints which don't have a host and port */
+			if (endpoint->GetHost().IsEmpty() || endpoint->GetPort().IsEmpty()) {
 				Log(LogDebug, "ApiListener")
-				    << "Not connecting to Zone '" << zone->GetName() << "' because we're already connected to it.";
+				    << "Not connecting to Endpoint '" << endpoint->GetName() << "' because the host/port attributes are missing.";
 				continue;
 			}
 
-			BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
-				/* don't connect to ourselves */
-				if (endpoint->GetName() == GetIdentity()) {
-					Log(LogDebug, "ApiListener")
-					    << "Not connecting to Endpoint '" << endpoint->GetName() << "' because that's us.";
-					continue;
-				}
-
-				/* don't try to connect to endpoints which don't have a host and port */
-				if (endpoint->GetHost().IsEmpty() || endpoint->GetPort().IsEmpty()) {
-					Log(LogDebug, "ApiListener")
-					    << "Not connecting to Endpoint '" << endpoint->GetName() << "' because the host/port attributes are missing.";
-					continue;
-				}
-
-				/* don't try to connect if there's already a connection attempt */
-				if (endpoint->GetConnecting()) {
-					Log(LogDebug, "ApiListener")
-					    << "Not connecting to Endpoint '" << endpoint->GetName() << "' because we're already trying to connect to it.";
-					continue;
-				}
-
-				boost::thread thread(boost::bind(&ApiListener::AddConnection, this, endpoint));
-				thread.detach();
+			/* don't try to connect if there's already a connection attempt */
+			if (endpoint->GetConnecting()) {
+				Log(LogDebug, "ApiListener")
+				    << "Not connecting to Endpoint '" << endpoint->GetName() << "' because we're already trying to connect to it.";
+				continue;
 			}
+
+			/* don't try to connect if we're already connected */
+			if (endpoint->IsConnected()) {
+				Log(LogDebug, "ApiListener")
+				    << "Not connecting to Endpoint '" << endpoint->GetName() << "' because we're already connected to it.";
+				continue;
+			}
+
+			boost::thread thread(boost::bind(&ApiListener::AddConnection, this, endpoint));
+			thread.detach();
 		}
 	}
 
@@ -464,7 +460,7 @@ void ApiListener::ApiTimerHandler(void)
 
 void ApiListener::RelayMessage(const MessageOrigin& origin, const DynamicObject::Ptr& secobj, const Dictionary::Ptr& message, bool log)
 {
-	m_RelayQueue.Enqueue(boost::bind(&ApiListener::SyncRelayMessage, this, origin, secobj, message, log));
+	m_RelayQueue.Enqueue(boost::bind(&ApiListener::SyncRelayMessage, this, origin, secobj, message, log), true);
 }
 
 void ApiListener::PersistMessage(const Dictionary::Ptr& message, const DynamicObject::Ptr& secobj)
@@ -519,9 +515,6 @@ void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObj
 	Log(LogNotice, "ApiListener")
 	    << "Relaying '" << message->Get("method") << "' message";
 
-	if (log)
-		PersistMessage(message, secobj);
-
 	if (origin.FromZone)
 		message->Set("originZone", origin.FromZone->GetName());
 
@@ -530,17 +523,37 @@ void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObj
 	Zone::Ptr my_zone = Zone::GetLocalZone();
 
 	std::vector<Endpoint::Ptr> skippedEndpoints;
+	std::set<Zone::Ptr> allZones;
 	std::set<Zone::Ptr> finishedZones;
+	std::set<Zone::Ptr> finishedLogZones;
 
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
-		/* don't relay messages to ourselves or disconnected endpoints */
-		if (endpoint->GetName() == GetIdentity() || !endpoint->IsConnected())
+		/* don't relay messages to ourselves */
+		if (endpoint->GetName() == GetIdentity())
 			continue;
 
 		Zone::Ptr target_zone = endpoint->GetZone();
 
-		/* don't relay the message to the zone through more than one endpoint */
-		if (finishedZones.find(target_zone) != finishedZones.end()) {
+		allZones.insert(target_zone);
+
+		/* only relay messages to zones which have access to the object */
+		if (!target_zone->CanAccessObject(secobj)) {
+			finishedLogZones.insert(target_zone);
+			continue;
+		}
+
+		/* don't relay messages to disconnected endpoints */
+		if (!endpoint->IsConnected()) {
+			if (target_zone == my_zone)
+				finishedLogZones.erase(target_zone);
+
+			continue;
+		}
+
+		finishedLogZones.insert(target_zone);
+
+		/* don't relay the message to the zone through more than one endpoint unless this is our own zone */
+		if (finishedZones.find(target_zone) != finishedZones.end() && target_zone != my_zone) {
 			skippedEndpoints.push_back(endpoint);
 			continue;
 		}
@@ -570,14 +583,13 @@ void ApiListener::SyncRelayMessage(const MessageOrigin& origin, const DynamicObj
 			continue;
 		}
 
-		/* only relay messages to zones which have access to the object */
-		if (!target_zone->CanAccessObject(secobj))
-			continue;
-
 		finishedZones.insert(target_zone);
 
 		SyncSendMessage(endpoint, message);
 	}
+
+	if (log && allZones.size() != finishedLogZones.size())
+		PersistMessage(message, secobj);
 
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, skippedEndpoints)
 		endpoint->SetLocalLogPosition(ts);
@@ -633,12 +645,14 @@ void ApiListener::LogGlobHandler(std::vector<int>& files, const String& file)
 {
 	String name = Utility::BaseName(file);
 
+	if (name == "current")
+		return;
+
 	int ts;
 
 	try {
 		ts = Convert::ToLong(name);
-	}
-	catch (const std::exception&) {
+	} catch (const std::exception&) {
 		return;
 	}
 
@@ -808,16 +822,27 @@ std::pair<Dictionary::Ptr, Dictionary::Ptr> ApiListener::GetStatus(void)
 	Array::Ptr not_connected_endpoints = new Array();
 	Array::Ptr connected_endpoints = new Array();
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
-		if (endpoint->GetName() == GetIdentity())
+	Zone::Ptr my_zone = Zone::GetLocalZone();
+
+	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
+		/* only check endpoints in a) the same zone b) our parent zone c) immediate child zones */
+		if (my_zone != zone && my_zone != zone->GetParent() && zone != my_zone->GetParent()) {
+			Log(LogDebug, "ApiListener")
+			    << "Not checking connection to Zone '" << zone->GetName() << "' because it's not in the same zone, a parent or a child zone.";
 			continue;
+		}
 
-		count_endpoints++;
+		BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
+			if (endpoint->GetName() == GetIdentity())
+				continue;
 
-		if (!endpoint->IsConnected())
-			not_connected_endpoints->Add(endpoint->GetName());
-		else
-			connected_endpoints->Add(endpoint->GetName());
+			count_endpoints++;
+
+			if (!endpoint->IsConnected())
+				not_connected_endpoints->Add(endpoint->GetName());
+			else
+				connected_endpoints->Add(endpoint->GetName());
+		}
 	}
 
 	status->Set("num_endpoints", count_endpoints);
@@ -831,6 +856,17 @@ std::pair<Dictionary::Ptr, Dictionary::Ptr> ApiListener::GetStatus(void)
 	perfdata->Set("num_not_conn_endpoints", Convert::ToDouble(not_connected_endpoints->GetLength()));
 
 	return std::make_pair(status, perfdata);
+}
+
+double ApiListener::CalculateZoneLag(const Endpoint::Ptr& endpoint)
+{
+	double remoteLogPosition = endpoint->GetRemoteLogPosition();
+	double eplag = Utility::GetTime() - remoteLogPosition;
+
+	if ((endpoint->GetSyncing() || !endpoint->IsConnected()) && remoteLogPosition != 0)
+		return eplag;
+
+	return 0;
 }
 
 void ApiListener::AddAnonymousClient(const ApiClient::Ptr& aclient)
@@ -849,4 +885,9 @@ std::set<ApiClient::Ptr> ApiListener::GetAnonymousClients(void) const
 {
 	ObjectLock olock(this);
 	return m_AnonymousClients;
+}
+
+Value ApiListener::HelloAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
+{
+	return Empty;
 }

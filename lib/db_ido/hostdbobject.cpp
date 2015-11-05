@@ -122,7 +122,7 @@ Dictionary::Ptr HostDbObject::GetStatusFields(void) const
 		fields->Set("check_source", cr->GetCheckSource());
 	}
 
-	fields->Set("current_state", host->IsReachable() ? host->GetState() : 2);
+	fields->Set("current_state", CompatUtility::GetHostCurrentState(host));
 	fields->Set("has_been_checked", CompatUtility::GetCheckableHasBeenChecked(host));
 	fields->Set("should_be_scheduled", host->GetEnableActiveChecks());
 	fields->Set("current_check_attempt", host->GetCheckAttempt());
@@ -144,11 +144,8 @@ Dictionary::Ptr HostDbObject::GetStatusFields(void) const
 	fields->Set("next_notification", DbValue::FromTimestamp(CompatUtility::GetCheckableNotificationNextNotification(host)));
 	fields->Set("no_more_notifications", Empty);
 	fields->Set("notifications_enabled", CompatUtility::GetCheckableNotificationsEnabled(host));
-	{
-		ObjectLock olock(host);
-		fields->Set("problem_has_been_acknowledged", CompatUtility::GetCheckableProblemHasBeenAcknowledged(host));
-		fields->Set("acknowledgement_type", CompatUtility::GetCheckableAcknowledgementType(host));
-	}
+	fields->Set("problem_has_been_acknowledged", CompatUtility::GetCheckableProblemHasBeenAcknowledged(host));
+	fields->Set("acknowledgement_type", CompatUtility::GetCheckableAcknowledgementType(host));
 	fields->Set("current_notification_number", CompatUtility::GetCheckableNotificationNotificationNumber(host));
 	fields->Set("passive_checks_enabled", CompatUtility::GetCheckablePassiveChecksEnabled(host));
 	fields->Set("active_checks_enabled", CompatUtility::GetCheckableActiveChecksEnabled(host));

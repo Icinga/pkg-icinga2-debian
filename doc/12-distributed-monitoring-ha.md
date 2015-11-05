@@ -19,13 +19,25 @@ is in effect - all alive instances continue to do their job, and history will be
 
 Before you start deploying, keep the following things in mind:
 
-* Your [SSL CA and certificates](12-distributed-monitoring-ha.md#manual-certificate-generation) are mandatory for secure communication
-* Get pen and paper or a drawing board and design your nodes and zones!
-    * all nodes in a cluster zone are providing high availability functionality and trust each other
-    * cluster zones can be built in a Top-Down-design where the child trusts the parent
-    * communication between zones happens bi-directional which means that a DMZ-located node can still reach the master node, or vice versa
-* Update firewall rules and ACLs
-* Decide whether to use the built-in [configuration syncronization](12-distributed-monitoring-ha.md#cluster-zone-config-sync) or use an external tool (Puppet, Ansible, Chef, Salt, etc) to manage the configuration deployment
+Your [SSL CA and certificates](13-distributed-monitoring-ha.md#manual-certificate-generation) are mandatory for secure communication.
+
+Communication between zones requires one of these connection directions:
+
+* The parent zone nodes are able to connect to the child zone nodes (`parent => child`).
+* The child zone nodes are able to connect to the parent zone nodes (`parent <= child`).
+* Both connnection directions work.
+
+Update firewall rules and ACLs.
+
+* Icinga 2 master, satellite and client instances communicate using the default tcp port `5665`.
+
+Get pen and paper or a drawing board and design your nodes and zones!
+
+* Keep the [naming convention](13-distributed-monitoring-ha.md#cluster-naming-convention) for nodes in mind.
+* All nodes (endpoints) in a cluster zone provide high availability functionality and trust each other.
+* Cluster zones can be built in a Top-Down-design where the child trusts the parent.
+
+Decide whether to use the built-in [configuration syncronization](13-distributed-monitoring-ha.md#cluster-zone-config-sync) or use an external tool (Puppet, Ansible, Chef, Salt, etc) to manage the configuration deployment.
 
 
 > **Tip**
@@ -86,16 +98,18 @@ If you're planning to use your existing CA and certificates please note that you
 use wildcard certificates. The common name (CN) is mandatory for the cluster communication and
 therefore must be unique for each connecting instance.
 
-### <a id="cluster-naming-convention"></a> Cluster Naming Convention
+## <a id="cluster-naming-convention"></a> Cluster Naming Convention
 
 The SSL certificate common name (CN) will be used by the [ApiListener](6-object-types.md#objecttype-apilistener)
 object to determine the local authority. This name must match the local [Endpoint](6-object-types.md#objecttype-endpoint)
 object name.
 
-Example:
+Certificate generation for host with the FQDN `icinga2a`:
 
     # icinga2 pki new-cert --cn icinga2a --key icinga2a.key --csr icinga2a.csr
     # icinga2 pki sign-csr --csr icinga2a.csr --cert icinga2a.crt
+
+Add a new `Endpoint` object named `icinga2a`:
 
     # vim zones.conf
 
@@ -119,6 +133,8 @@ the same name as used for the endpoint name and common name above. If not set, t
 
     const NodeName = "icinga2a"
 
+If you're using the host's FQDN everywhere, you're on the safe side. The setup wizards
+will do the very same.
 
 ## <a id="cluster-configuration"></a> Cluster Configuration
 
@@ -263,12 +279,15 @@ configuration from the parent zone. You can define that in the
 attribute accordingly.
 
 You should remove the sample config included in `conf.d` by commenting the `recursive_include`
-statement in [icinga2.conf](5-configuring-icinga-2.md#icinga2-conf):
+statement in [icinga2.conf](4-configuring-icinga-2.md#icinga2-conf):
 
     //include_recursive "conf.d"
 
-Better use a dedicated directory name like `cluster` or similar, and include that
-one if your nodes require local configuration not being synced to other nodes. That's
+This applies to any other non-used configuration directories as well (e.g. `repository.d`
+if not used).
+
+Better use a dedicated directory name for local configuration like `local` or similar, and
+include that one if your nodes require local configuration not being synced to other nodes. That's
 useful for local [health checks](12-distributed-monitoring-ha.md#cluster-health-check) for example.
 
 > **Note**
@@ -276,6 +295,7 @@ useful for local [health checks](12-distributed-monitoring-ha.md#cluster-health-
 > In a [high availability](12-distributed-monitoring-ha.md#cluster-scenarios-high-availability)
 > setup only one assigned node can act as configuration master. All other zone
 > member nodes **must not** have the `/etc/icinga2/zones.d` directory populated.
+
 
 These zone packages are then distributed to all nodes in the same zone, and
 to their respective target zone instances.
@@ -321,7 +341,7 @@ process.
 
 > **Note**
 >
-> `zones.d` must not be included in [icinga2.conf](5-configuring-icinga-2.md#icinga2-conf). Icinga 2 automatically
+> `zones.d` must not be included in [icinga2.conf](4-configuring-icinga-2.md#icinga2-conf). Icinga 2 automatically
 > determines the required include directory. This can be overridden using the
 > [global constant](19-language-reference.md#constants) `ZonesDir`.
 
@@ -336,7 +356,7 @@ on your configuration master unique.
 > Only put templates, groups, etc into this zone. DO NOT add checkable objects such as
 > hosts or services here. If they are checked by all instances globally, this will lead
 > into duplicated check results and unclear state history. Not easy to troubleshoot too -
-> you've been warned.
+> you have been warned.
 
 That is not necessary by defining a global zone shipping all those templates. By setting
 `global = true` you ensure that this zone serving common configuration templates will be
@@ -361,12 +381,10 @@ your zone configuration visible to all nodes.
       global = true
     }
 
-> **Note**
->
-> If the remote node does not have this zone configured, it will ignore the configuration
-> update, if it accepts synchronized configuration.
+If the remote node does not have this zone configured, it will ignore the configuration
+update, if it accepts synchronized configuration.
 
-If you don't require any global configuration, skip this setting.
+If you do not require any global configuration, skip this setting.
 
 ### <a id="zone-config-sync-permissions"></a> Zone Configuration Synchronisation Permissions
 
@@ -389,13 +407,89 @@ master instances anymore.
 > problems with the configuration synchronisation.
 
 
+### <a id="zone-config-sync-best-practice"></a> Zone Configuration Synchronisation Best Practice
+
+The configuration synchronisation works with multiple hierarchies. The following example
+illustrate a quite common setup where the master is reponsible for configuration deployment:
+
+* [High-Availability master zone](12-distributed-monitoring-ha.md#distributed-monitoring-high-availability)
+* [Distributed satellites](12-distributed-monitoring-ha.md#)
+* [Remote clients](10-icinga2-client.md#icinga2-client-scenarios) connected to the satellite
+
+While you could use the clients with local configuration and service discovery on the satellite/master
+**bottom up**, the configuration sync could be more reasonable working **top-down** in a cascaded scenario.
+
+Take pen and paper and draw your network scenario including the involved zone and endpoint names.
+Once you've added them to your zones.conf as connection and permission configuration, start over with
+the actual configuration organization:
+
+* Ensure that `command` object definitions are globally available. That way you can use the
+`command_endpoint` configuration more easily on clients as [command execution bridge](10-icinga2-client.md#icinga2-client-configuration-command-bridge)
+* Generic `Templates`, `timeperiods`, `downtimes` should be synchronized in a global zone as well.
+* [Apply rules](3-monitoring-basics.md#using-apply) can be synchronized globally. Keep in mind that they are evaluated on each instance,
+and might require additional filters (e.g. `match("icinga2*", NodeName) or similar based on the zone information.
+* [Apply rules](3-monitoring-basics.md#using-apply) specified inside zone directories will only affect endpoints in the same zone or below.
+* Host configuration must be put into the specific zone directory.
+* Duplicated host and service objects (also generated by faulty apply rules) will generate a configuration error.
+* Consider using custom constants in your host/service configuration. Each instance may set their local value, e.g. for `PluginDir`.
+
+This example specifies the following hierarchy over three levels:
+
+* `ha-master` zone with two child zones `dmz1-checker` and `dmz2-checker`
+* `dmz1-checker` has two client child zones `dmz1-client1` and `dmz1-client2`
+* `dmz2-checker` has one client child zone `dmz2-client9`
+
+The configuration tree could look like this:
+
+    # tree /etc/icinga2/zones.d
+    /etc/icinga2/zones.d
+    ├── dmz1-checker
+    │   └── health.conf
+    ├── dmz1-client1
+    │   └── hosts.conf
+    ├── dmz1-client2
+    │   └── hosts.conf
+    ├── dmz2-checker
+    │   └── health.conf
+    ├── dmz2-client9
+    │   └── hosts.conf
+    ├── global-templates
+    │   ├── apply_notifications.conf
+    │   ├── apply_services.conf
+    │   ├── commands.conf
+    │   ├── groups.conf
+    │   ├── templates.conf
+    │   └── users.conf
+    ├── ha-master
+    │   └── health.conf
+    └── README
+    
+    7 directories, 13 files
+
+If you prefer a different naming schema for directories or files names, go for it. If you
+are unsure about the best method, join the [support channels](1-about.md#support) and discuss
+with the community.
+
+If you are planning to synchronize local service health checks inside a zone, look into the
+[command endpoint](12-distributed-monitoring-ha.md#cluster-health-check-command-endpoint)
+explainations.
+
+
+
 ## <a id="cluster-health-check"></a> Cluster Health Check
 
-The Icinga 2 [ITL](7-icinga-template-library.md#icinga-template-library) ships an internal check command checking all configured
-`EndPoints` in the cluster setup. The check result will become critical if
-one or more configured nodes are not connected.
+The Icinga 2 [ITL](7-icinga-template-library.md#icinga-template-library) provides
+an internal check command checking all configured `EndPoints` in the cluster setup.
+The check result will become critical if one or more configured nodes are not connected.
 
 Example:
+
+    object Host "icinga2a" {
+      display_name = "Health Checks on icinga2a"
+
+      address = "192.168.33.10"
+      check_command = "hostalive"
+    }
 
     object Service "cluster" {
         check_command = "cluster"
@@ -421,6 +515,31 @@ Example for the `checker` zone checking the connection to the `master` zone:
       vars.cluster_zone = "master"
 
       host_name = "icinga2b"
+    }
+
+## <a id="cluster-health-check-command-endpoint"></a> Cluster Health Check with Command Endpoints
+
+If you are planning to sync the zone configuration inside a [High-Availability]()
+cluster zone, you can also use the `command_endpoint` object attribute to
+pin host/service checks to a specific endpoint inside the same zone.
+
+This requires the `accept_commands` setting inside the [ApiListener](12-distributed-monitoring-ha.md#configure-apilistener-object)
+object set to `true` similar to the [remote client command execution bridge](10-icinga2-client.md#icinga2-client-configuration-command-bridge)
+setup.
+
+Make sure to set `command_endpoint` to the correct endpoint instance.
+The example below assumes that the endpoint name is the same as the
+host name configured for health checks. If it differs, define a host
+custom attribute providing [this information](10-icinga2-client.md#icinga2-client-configuration-command-bridge-master-config).
+
+    apply Service "cluster-ha" {
+      check_command = "cluster"
+      check_interval = 5s
+      retry_interval = 1s
+      /* make sure host.name is the same as endpoint name */
+      command_endpoint = host.name
+
+      assign where regex("^icinga2[a|b]", host.name)
     }
 
 
@@ -455,8 +574,6 @@ You'll need to think about the following:
 * Combine that with command execution brdiges on remote clients and also satellites
 
 
-
-
 ### <a id="cluster-scenarios-security"></a> Security in Cluster Scenarios
 
 While there are certain capabilities to ensure the safe communication between all
@@ -477,13 +594,10 @@ Even further all commands are distributed amongst connected nodes. For example, 
 re-schedule a check or acknowledge a problem on the master, and it gets replicated to the
 actual slave checker node.
 
-DB IDO on the left, graphite on the right side - works (if you disable
-[DB IDO HA](12-distributed-monitoring-ha.md#high-availability-db-ido)).
-Icinga Web 2 on the left, checker and notifications on the right side - works too.
-Everything on the left and on the right side - make sure to deal with
-[load-balanced notifications and checks](12-distributed-monitoring-ha.md#high-availability-features) in a
-[HA zone](12-distributed-monitoring-ha.md#cluster-scenarios-high-availability).
-
+> **Note**
+>
+> All features must be same on all endpoints inside an [HA zone](12-distributed-monitoring-ha.md#cluster-scenarios-high-availability).
+> There are additional [High-Availability-enabled features](12-distributed-monitoring-ha.md#high-availability-features) available.
 
 ### <a id="cluster-scenarios-distributed-zones"></a> Distributed Zones
 
@@ -689,18 +803,24 @@ By default the following features provide advanced HA functionality:
 
 ### <a id="high-availability-checks"></a> High Availability with Checks
 
-All nodes in the same zone load-balance the check execution. When one instance
-fails the other nodes will automatically take over the reamining checks.
+All instances within the same zone (e.g. the `master` zone as HA cluster) must
+have the `checker` feature enabled.
 
-> **Note**
->
-> If a node should not check anything, disable the `checker` feature explicitely and
-> reload Icinga 2.
+Example:
 
-    # icinga2 feature disable checker
-    # service icinga2 reload
+    # icinga2 feature enable checker
+
+All nodes in the same zone load-balance the check execution. When one instance shuts down
+the other nodes will automatically take over the reamining checks.
 
 ### <a id="high-availability-notifications"></a> High Availability with Notifications
+
+All instances within the same zone (e.g. the `master` zone as HA cluster) must
+have the `notification` feature enabled.
+
+Example:
+
+    # icinga2 feature enable notification
 
 Notifications are load balanced amongst all nodes in a zone. By default this functionality
 is enabled.
@@ -716,7 +836,6 @@ have the DB IDO feature enabled.
 Example DB IDO MySQL:
 
     # icinga2 feature enable ido-mysql
-    The feature 'ido-mysql' is already enabled.
 
 By default the DB IDO feature only runs on one node. All other nodes in the same zone disable
 the active IDO database connection at runtime. The node with the active DB IDO connection is
@@ -779,7 +898,7 @@ Special scenarios might require multiple cluster nodes running on a single host.
 By default Icinga 2 and its features will place their runtime data below the prefix
 `LocalStateDir`. By default packages will set that path to `/var`.
 You can either set that variable as constant configuration
-definition in [icinga2.conf](5-configuring-icinga-2.md#icinga2-conf) or pass it as runtime variable to
+definition in [icinga2.conf](4-configuring-icinga-2.md#icinga2-conf) or pass it as runtime variable to
 the Icinga 2 daemon.
 
     # icinga2 -c /etc/icinga2/node1/icinga2.conf -DLocalStateDir=/opt/node1/var

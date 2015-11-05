@@ -6,6 +6,7 @@ Function                        | Description
 --------------------------------|-----------------------
 regex(pattern, text)            | Returns true if the regex pattern matches the text, false otherwise.
 match(pattern, text)            | Returns true if the wildcard pattern matches the text, false otherwise.
+cidr_match(pattern, ip)         | Returns true if the CIDR pattern matches the IP address, false otherwise. IPv4 addresses are converted to IPv4-mapped IPv6 addresses before being matched against the pattern.
 len(value)                      | Returns the length of the value, i.e. the number of elements for an array or dictionary, or the length of the string in bytes.
 union(array, array, ...)        | Returns an array containing all unique elements from the specified arrays.
 intersection(array, array, ...) | Returns an array containing all unique elements which are common to all specified arrays.
@@ -19,6 +20,11 @@ log(severity, facility, value)  | Writes a message to the log. `severity` can be
 typeof(value)                   | Returns the type object for a value.
 get_time()                      | Returns the current UNIX timestamp.
 parse_performance_data(pd)      | Parses a performance data string and returns an array describing the values.
+dirname(path)                   | Returns the directory portion of the specified path.
+basename(path)                  | Returns the filename portion of the specified path.
+escape\_shell\_arg(text)        | Escapes a string for use as a single shell argument.
+escape\_shell\_cmd(text)        | Escapes shell meta characters in a string.
+escape\_create\_process\_arg(text)| (Windows only) Escapes a string for use as an argument for CreateProcess().
 exit(integer)                   | Terminates the application.
 
 ## <a id="object-accessor-functions"></a> Object Accessor Functions
@@ -494,6 +500,14 @@ Signature:
 
 Returns a copy of the string.
 
+### <a id="string-reverse"></a> String#reverse
+
+Signature:
+
+    function reverse();
+
+Returns a copy of the string in reverse order.
+
 ## <a id="array-type"></a> Array type
 
 ### <a id="array-add"></a> Array#add
@@ -552,6 +566,14 @@ Signature:
 Sets the element at the zero-based index to the specified value. The `index` must refer to an element
 which already exists in the array.
 
+### <a id="array-get"></a> Array#get
+
+Signature:
+
+    function get(index);
+
+Retrieves the element at the specified zero-based index.
+
 ### <a id="array-sort"></a> Array#sort
 
 Signature:
@@ -570,7 +592,13 @@ Signature:
 
 Joins all elements of the array using the specified separator.
 
-## <a id="dictionary-type"></a> Dictionary type
+### <a id="array-reverse"></a> Array#reverse
+
+Signature:
+
+    function reverse();
+
+Returns a new array with all elements of the current array in reverse order.
 
 ### <a id="dictionary-clone"></a> Dictionary#clone
 
@@ -613,6 +641,23 @@ Signature:
     function set(key, value);
 
 Creates or updates an item with the specified `key` and `value`.
+
+### <a id="dictionary-get"></a> Dictionary#get
+
+Signature:
+
+    function get(key);
+
+Retrieves the value for the specified `key`. Returns `null` if they `key` does not exist
+in the dictionary.
+
+### <a id="dictionary-keys"></a> Dictionary#keys
+
+Signature:
+
+    function keys();
+
+Returns a list of keys for all items that are currently in the dictionary.
 
 ## <a id="scriptfunction-type"></a> Function type
 

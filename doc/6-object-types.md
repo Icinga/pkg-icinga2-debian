@@ -11,7 +11,7 @@ description are explained as well.
 ApiListener objects are used for distributed monitoring setups
 specifying the certificate files used for ssl authorization.
 
-The `NodeName` constant must be defined in [constants.conf](5-configuring-icinga-2.md#constants-conf).
+The `NodeName` constant must be defined in [constants.conf](4-configuring-icinga-2.md#constants-conf).
 
 Example:
 
@@ -82,11 +82,10 @@ Configuration Attributes:
   Name            |Description
   ----------------|----------------
   execute         |**Required.** The "execute" script method takes care of executing the check. In virtually all cases you should import the "plugin-check-command" template to take care of this setting.
-  command         |**Required.** The command. This can either be an array of individual command arguments. Alternatively a string can be specified in which case the shell interpreter (usually /bin/sh) takes care of parsing the command. When using the "arguments" attribute this must be an array.
+  command         |**Required.** The command. This can either be an array of individual command arguments. Alternatively a string can be specified in which case the shell interpreter (usually /bin/sh) takes care of parsing the command. When using the "arguments" attribute this must be an array. Can be specified as function for advanced implementations.
   env             |**Optional.** A dictionary of macros which should be exported as environment variables prior to executing the command.
   vars            |**Optional.** A dictionary containing custom attributes that are specific to this command.
   timeout         |**Optional.** The command timeout in seconds. Defaults to 60 seconds.
-  zone		  |**Optional.** The zone this object is a member of.
   arguments       |**Optional.** A dictionary of command arguments.
 
 
@@ -128,12 +127,12 @@ CheckCommand:
 
   Option      | Description
   ------------|--------------
-  value       | Optional argument value.
+  value       | Optional argument value set by a macro string or a function call.
   key 	      | Optional argument key overriding the key identifier.
   description | Optional argument description.
   required    | Required argument. Execution error if not set. Defaults to false (optional).
   skip_key    | Use the value as argument and skip the key.
-  set_if      | Argument is added if the macro resolves to a defined numeric value. String values are not supported.
+  set_if      | Argument is added if the macro resolves to a defined numeric or boolean value. String values are not supported. Function calls returning a value are supported too.
   order       | Set if multiple arguments require a defined argument order.
   repeat_key  | If the argument value is an array, repeat the argument key, or not. Defaults to true (repeat).
 
@@ -254,7 +253,6 @@ Configuration Attributes:
   disable_notifications |**Optional.** Whether to disable notifications when this dependency fails. Defaults to true.
   ignore_soft_states    |**Optional.** Whether to ignore soft states for the reachability calculation. Defaults to true.
   period                |**Optional.** Time period during which this dependency is enabled.
-  zone		        |**Optional.** The zone this object is a member of.
   states    	        |**Optional.** A list of state filters when this dependency should be OK. Defaults to [ OK, Warning ] for services and [ Up ] for hosts.
 
 Available state filters:
@@ -319,31 +317,6 @@ Configuration Attributes:
   host            |**Optional.** The hostname/IP address of the remote Icinga 2 instance.
   port            |**Optional.** The service name/port of the remote Icinga 2 instance. Defaults to `5665`.
   log_duration    |**Optional.** Duration for keeping replay logs on connection loss. Defaults to `1d`.
-
-
-## <a id="objecttype-zone"></a> Zone
-
-Zone objects are used to specify which Icinga 2 instances are located in a zone.
-
-Example:
-
-    object Zone "config-ha-master" {
-      endpoints = [ "icinga2a", "icinga2b" ]
-
-    }
-
-    object Zone "check-satellite" {
-      endpoints = [ "icinga2c" ]
-      parent = "config-ha-master"
-    }
-
-Configuration Attributes:
-
-  Name            |Description
-  ----------------|----------------
-  endpoints       |**Optional.** Dictionary with endpoints located in this zone.
-  parent          |**Optional.** The name of the parent zone.
-  global          |**Optional.** Whether configuration files for this zone should be synced to all endpoints. Defaults to false.
 
 
 ## <a id="objecttype-eventcommand"></a> EventCommand
@@ -913,7 +886,6 @@ Configuration Attributes:
   env             |**Optional.** A dictionary of macros which should be exported as environment variables prior to executing the command.
   vars            |**Optional.** A dictionary containing custom attributes that are specific to this command.
   timeout         |**Optional.** The command timeout in seconds. Defaults to 60 seconds.
-  zone		  |**Optional.** The zone this object is a member of.
   arguments       |**Optional.** A dictionary of command arguments.
 
 Command arguments can be used the same way as for [CheckCommand objects](6-object-types.md#objecttype-checkcommand-arguments).
@@ -1002,7 +974,7 @@ ScheduledDowntime objects can be used to set up recurring downtimes for hosts/se
 > to just create a `ScheduledDowntime` template and use the `apply` keyword to assign the
 > scheduled downtime to a number of hosts or services. Use the `to` keyword to set the specific target
 > type for `Host` or `Service`.
-> Check the [recurring downtimes](4-advanced-topics.md#recurring-downtimes) example for details.
+> Check the [recurring downtimes](5-advanced-topics.md#recurring-downtimes) example for details.
 
 Example:
 
@@ -1031,7 +1003,6 @@ Configuration Attributes:
   comment         |**Required.** A comment for the downtime.
   fixed           |**Optional.** Whether this is a fixed downtime. Defaults to true.
   duration        |**Optional.** How long the downtime lasts. Only has an effect for flexible (non-fixed) downtimes.
-  zone		  |**Optional.** The zone this object is a member of.
   ranges          |**Required.** A dictionary containing information which days and durations apply to this timeperiod.
 
 ScheduledDowntime objects have composite names, i.e. their names are based
@@ -1186,7 +1157,7 @@ Configuration Attributes:
 
   Name            |Description
   ----------------|----------------
-  severity        |**Optional.** The minimum severity for this log. Can be "debug", "notice", "information", "notice", "warning" or "critical". Defaults to "warning".
+  severity        |**Optional.** The minimum severity for this log. Can be "debug", "notice", "information", "warning" or "critical". Defaults to "warning".
 
 
 ## <a id="objecttype-timeperiod"></a> TimePeriod
@@ -1194,23 +1165,46 @@ Configuration Attributes:
 Time periods can be used to specify when hosts/services should be checked or to limit
 when notifications should be sent out.
 
-Example:
+Examples:
 
-    object TimePeriod "24x7" {
+    object TimePeriod "nonworkhours" {
       import "legacy-timeperiod"
 
-      display_name = "Icinga 2 24x7 TimePeriod"
+      display_name = "Icinga 2 TimePeriod for non working hours"
 
       ranges = {
-        monday = "00:00-24:00"
-        tuesday = "00:00-24:00"
-        wednesday = "00:00-24:00"
-        thursday = "00:00-24:00"
-        friday = "00:00-24:00"
+        monday = "00:00-8:00,17:00-24:00"
+        tuesday = "00:00-8:00,17:00-24:00"
+        wednesday = "00:00-8:00,17:00-24:00"
+        thursday = "00:00-8:00,17:00-24:00"
+        friday = "00:00-8:00,16:00-24:00"
         saturday = "00:00-24:00"
         sunday = "00:00-24:00"
       }
     }
+
+    object TimePeriod "exampledays" {
+        import "legacy-timeperiod"
+
+        display_name = "Icinga 2 TimePeriod for random example days"
+
+        ranges = {
+            //We still believe in Santa, no peeking!
+            //Applies every 25th of December every year
+            "december 25" = "00:00-24:00"
+
+            //Any point in time can be specified,
+            //but you still have to use a range
+            "2038-01-19" = "03:13-03:15"
+
+            //Evey 3rd day from the second monday of February
+            //to 8th of November
+            "monday 2 february - november 8 / 3" = "00:00-24:00"
+        }
+    }
+
+
+Additional examples can be found [within the icinga documentation](http://docs.icinga.org/latest/en/objectdefinitions.html#objectdefinitions-timeperiod).
 
 Configuration Attributes:
 
@@ -1218,7 +1212,6 @@ Configuration Attributes:
   ----------------|----------------
   display_name    |**Optional.** A short description of the time period.
   update          |**Required.** The "update" script method takes care of updating the internal representation of the time period. In virtually all cases you should import the "legacy-timeperiod" template to take care of this setting.
-  zone		  |**Optional.** The zone this object is a member of.
   ranges          |**Required.** A dictionary containing information which days and durations apply to this timeperiod.
 
 The `/etc/icinga2/conf.d/timeperiods.conf` file is usually used to define
@@ -1285,7 +1278,6 @@ Configuration Attributes:
   period          |**Optional.** The name of a time period which determines when a notification for this user should be triggered. Not set by default.
   types           |**Optional.** A set of type filters when this notification should be triggered. By default everything is matched.
   states          |**Optional.** A set of state filters when this notification should be triggered. By default everything is matched.
-  zone		  |**Optional.** The zone this object is a member of.
 
 Runtime Attributes:
 
@@ -1313,7 +1305,6 @@ Configuration Attributes:
   ----------------|----------------
   display_name    |**Optional.** A short description of the user group.
   groups          |**Optional.** An array of nested group names.
-  zone            |**Optional.** The zone this object is a member of.
 
 
 ## <a id="objecttype-zone"></a> Zone

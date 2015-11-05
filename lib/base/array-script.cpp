@@ -40,6 +40,13 @@ static void ArraySet(int index, const Value& value)
 	self->Set(index, value);
 }
 
+static Value ArrayGet(int index)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Array::Ptr self = static_cast<Array::Ptr>(vframe->Self);
+	return self->Get(index);
+}
+
 static void ArrayAdd(const Value& value)
 {
 	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
@@ -123,6 +130,13 @@ static Value ArrayJoin(const Value& separator)
 	return result;
 }
 
+static Array::Ptr ArrayReverse(void)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Array::Ptr self = static_cast<Array::Ptr>(vframe->Self);
+	return self->Reverse();
+}
+
 Object::Ptr Array::GetPrototype(void)
 {
 	static Dictionary::Ptr prototype;
@@ -131,6 +145,7 @@ Object::Ptr Array::GetPrototype(void)
 		prototype = new Dictionary();
 		prototype->Set("len", new Function(WrapFunction(ArrayLen)));
 		prototype->Set("set", new Function(WrapFunction(ArraySet)));
+		prototype->Set("get", new Function(WrapFunction(ArrayGet)));
 		prototype->Set("add", new Function(WrapFunction(ArrayAdd)));
 		prototype->Set("remove", new Function(WrapFunction(ArrayRemove)));
 		prototype->Set("contains", new Function(WrapFunction(ArrayContains)));
@@ -138,6 +153,7 @@ Object::Ptr Array::GetPrototype(void)
 		prototype->Set("sort", new Function(WrapFunction(ArraySort)));
 		prototype->Set("clone", new Function(WrapFunction(ArrayClone)));
 		prototype->Set("join", new Function(WrapFunction(ArrayJoin)));
+		prototype->Set("reverse", new Function(WrapFunction(ArrayReverse)));
 	}
 
 	return prototype;

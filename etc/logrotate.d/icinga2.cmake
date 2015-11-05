@@ -1,30 +1,28 @@
 @CMAKE_INSTALL_FULL_LOCALSTATEDIR@/log/icinga2/icinga2.log @CMAKE_INSTALL_FULL_LOCALSTATEDIR@/log/icinga2/debug.log {
-       	daily
+	daily
 	rotate 7
-	su @ICINGA2_USER@ @ICINGA2_GROUP@
 	compress
 	delaycompress
-       	missingok
-       	notifempty
-       	create 644 @ICINGA2_USER@ @ICINGA2_GROUP@
-	copytruncate
+	missingok
+	notifempty
+	create 644 @ICINGA2_USER@ @ICINGA2_GROUP@
 	postrotate
-		if ! killall -q -USR1 icinga2; then
-			exit 1
+		if service icinga2 status > /dev/null; then
+			if [ -e @ICINGA2_RUNDIR@/icinga2/icinga2.pid ]; then
+				kill -USR1 $(cat @ICINGA2_RUNDIR@/icinga2/icinga2.pid)
+			fi
 		fi
-       	endscript
+	endscript
 }
 
 @CMAKE_INSTALL_FULL_LOCALSTATEDIR@/log/icinga2/error.log {
 	daily
-	su @ICINGA2_USER@ @ICINGA2_GROUP@
 	rotate 90
 	compress
 	delaycompress
 	missingok
 	notifempty
 	create 644 @ICINGA2_USER@ @ICINGA2_GROUP@
-	copytruncate
 	# TODO: figure out how to get Icinga to re-open this log file
 }
 

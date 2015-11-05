@@ -45,7 +45,7 @@ void DbEvents::StaticInitialize(void)
 	/* Status */
 	Checkable::OnCommentAdded.connect(boost::bind(&DbEvents::AddComment, _1, _2));
 	Checkable::OnCommentRemoved.connect(boost::bind(&DbEvents::RemoveComment, _1, _2));
-	Checkable::OnDowntimeAdded.connect(boost::bind(&DbEvents::AddDowntime, _1, _2));
+	Checkable::OnDowntimeAdded.connect(boost::bind(&DbEvents::AddDowntime, _1, _2, true));
 	Checkable::OnDowntimeRemoved.connect(boost::bind(&DbEvents::RemoveDowntime, _1, _2));
 	Checkable::OnDowntimeTriggered.connect(boost::bind(&DbEvents::TriggerDowntime, _1, _2));
 	Checkable::OnAcknowledgementSet.connect(boost::bind(&DbEvents::AddAcknowledgement, _1, _4));
@@ -79,7 +79,7 @@ void DbEvents::StaticInitialize(void)
 	Checkable::OnDowntimeRemoved.connect(boost::bind(&DbEvents::AddRemoveDowntimeLogHistory, _1, _2));
 
 	Checkable::OnFlappingChanged.connect(boost::bind(&DbEvents::AddFlappingHistory, _1, _2));
-	Checkable::OnNewCheckResult.connect(boost::bind(&DbEvents::AddServiceCheckHistory, _1, _2));
+	Checkable::OnNewCheckResult.connect(boost::bind(&DbEvents::AddCheckableCheckHistory, _1, _2));
 
 	Checkable::OnEventCommandExecuted.connect(boost::bind(&DbEvents::AddEventHandlerHistory, _1));
 
@@ -469,17 +469,18 @@ void DbEvents::AddDowntimes(const Checkable::Ptr& checkable)
 	ObjectLock olock(downtimes);
 
 	BOOST_FOREACH(const Dictionary::Pair& kv, downtimes) {
-		AddDowntime(checkable, kv.second);
+		AddDowntime(checkable, kv.second, false);
 	}
 }
 
-void DbEvents::AddDowntime(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime)
+void DbEvents::AddDowntime(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime, bool remove_existing)
 {
 	/*
 	 * make sure to delete any old downtime to avoid multiple inserts from
 	 * configured ScheduledDowntime dumps and CreateNextDowntime() calls
 	 */
-	RemoveDowntime(checkable, downtime);
+	if (remove_existing)
+		RemoveDowntime(checkable, downtime);
 	AddDowntimeInternal(checkable, downtime, false);
 }
 
@@ -523,15 +524,12 @@ void DbEvents::AddDowntimeByType(const Checkable::Ptr& checkable, const Downtime
 	fields1->Set("author_name", downtime->GetAuthor());
 	fields1->Set("comment_data", downtime->GetComment());
 	fields1->Set("triggered_by_id", Service::GetDowntimeByID(downtime->GetTriggeredBy()));
-	fields1->Set("is_fixed", downtime->GetFixed());
+	fields1->Set("is_fixed", downtime->GetFixed() ? 1 : 0);
 	fields1->Set("duration", downtime->GetDuration());
 	fields1->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->GetStartTime()));
 	fields1->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->GetEndTime()));
-	fields1->Set("was_started", Empty);
-	fields1->Set("actual_start_time", Empty);
-	fields1->Set("actual_start_time_usec", Empty);
-	fields1->Set("is_in_effect", Empty);
-	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
+	fields1->Set("was_started", 0);
+	fields1->Set("is_in_effect", 0);
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	String node = IcingaApplication::GetInstance()->GetNodeName();
@@ -610,6 +608,37 @@ void DbEvents::RemoveDowntime(const Checkable::Ptr& checkable, const Downtime::P
 	query3.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	DbObject::OnQuery(query3);
+
+	/* host/service status */
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
+
+	DbQuery query4;
+	if (service)
+		query4.Table = "servicestatus";
+	else
+		query4.Table = "hoststatus";
+
+	query4.Type = DbQueryInsert | DbQueryUpdate;
+	query4.Category = DbCatState;
+	query4.StatusUpdate = true;
+	query4.Object = DbObject::GetOrCreateByObject(checkable);
+
+	Dictionary::Ptr fields4 = new Dictionary();
+	fields4->Set("scheduled_downtime_depth", checkable->GetDowntimeDepth());
+
+	query4.Fields = fields4;
+
+	query4.WhereCriteria = new Dictionary();
+	if (service)
+		query4.WhereCriteria->Set("service_object_id", service);
+	else
+		query4.WhereCriteria->Set("host_object_id", host);
+
+	query4.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
+
+	DbObject::OnQuery(query4);
 }
 
 void DbEvents::TriggerDowntime(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime)
@@ -876,8 +905,8 @@ void DbEvents::AddStateChangeHistory(const Checkable::Ptr& checkable, const Chec
 	Log(LogDebug, "DbEvents")
 	    << "add state change history for '" << checkable->GetName() << "'";
 
-	double now = Utility::GetTime();
-	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
+	double ts = cr->GetExecutionEnd();
+	std::pair<unsigned long, unsigned long> state_time_bag = CompatUtility::ConvertTimestamp(ts);
 
 	DbQuery query1;
 	query1.Table = "statehistory";
@@ -889,8 +918,8 @@ void DbEvents::AddStateChangeHistory(const Checkable::Ptr& checkable, const Chec
 	tie(host, service) = GetHostService(checkable);
 
 	Dictionary::Ptr fields1 = new Dictionary();
-	fields1->Set("state_time", DbValue::FromTimestamp(time_bag.first));
-	fields1->Set("state_time_usec", time_bag.second);
+	fields1->Set("state_time", DbValue::FromTimestamp(state_time_bag.first));
+	fields1->Set("state_time_usec", state_time_bag.second);
 	fields1->Set("object_id", checkable);
 	fields1->Set("state_change", 1); /* service */
 	fields1->Set("state", service ? static_cast<int>(service->GetState()) : static_cast<int>(host->GetState()));
@@ -963,8 +992,8 @@ void DbEvents::AddCheckResultLogHistory(const Checkable::Ptr& checkable, const C
 		msgbuf << "SERVICE ALERT: "
 		       << host->GetName() << ";"
 		       << service->GetShortName() << ";"
-		       << Service::StateToString(static_cast<ServiceState>(state_after)) << ";"
-		       << Service::StateTypeToString(static_cast<StateType>(stateType_after)) << ";"
+		       << Service::StateToString(service->GetState()) << ";"
+		       << Service::StateTypeToString(service->GetStateType()) << ";"
 		       << attempt_after << ";"
 		       << output << ""
 		       << "";
@@ -988,15 +1017,10 @@ void DbEvents::AddCheckResultLogHistory(const Checkable::Ptr& checkable, const C
 				return;
 		}
 	} else {
-		String state = Host::StateToString(Host::CalculateState(static_cast<ServiceState>(state_after)));
-
-		if (!reachable_after)
-			state = "UNREACHABLE";
-
 		msgbuf << "HOST ALERT: "
 		       << host->GetName() << ";"
-		       << state << ";"
-		       << Service::StateTypeToString(static_cast<StateType>(stateType_after)) << ";"
+		       << CompatUtility::GetHostStateString(host) << ";"
+		       << Host::StateTypeToString(host->GetStateType()) << ";"
 		       << attempt_after << ";"
 		       << output << ""
 		       << "";
@@ -1286,13 +1310,13 @@ void DbEvents::AddFlappingHistory(const Checkable::Ptr& checkable, FlappingState
 }
 
 /* servicechecks */
-void DbEvents::AddServiceCheckHistory(const Checkable::Ptr& checkable, const CheckResult::Ptr &cr)
+void DbEvents::AddCheckableCheckHistory(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
 {
 	if (!cr)
 		return;
 
 	Log(LogDebug, "DbEvents")
-	    << "add service check history for '" << checkable->GetName() << "'";
+	    << "add checkable check history for '" << checkable->GetName() << "'";
 
 	Host::Ptr host;
 	Service::Ptr service;
@@ -1306,21 +1330,21 @@ void DbEvents::AddServiceCheckHistory(const Checkable::Ptr& checkable, const Che
 	query1.Category = DbCatCheck;
 
 	Dictionary::Ptr fields1 = new Dictionary();
-	double execution_time = Service::CalculateExecutionTime(cr);
-
 	fields1->Set("check_type", CompatUtility::GetCheckableCheckType(checkable));
 	fields1->Set("current_check_attempt", checkable->GetCheckAttempt());
 	fields1->Set("max_check_attempts", checkable->GetMaxCheckAttempts());
 	fields1->Set("state_type", checkable->GetStateType());
 
-	double now = Utility::GetTime();
-	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
+	double start = cr->GetExecutionStart();
+	std::pair<unsigned long, unsigned long> time_bag_start = CompatUtility::ConvertTimestamp(start);
 
-	double end = now + execution_time;
+	double end = cr->GetExecutionEnd();
 	std::pair<unsigned long, unsigned long> time_bag_end = CompatUtility::ConvertTimestamp(end);
 
-	fields1->Set("start_time", DbValue::FromTimestamp(time_bag.first));
-	fields1->Set("start_time_usec", time_bag.second);
+	double execution_time = Service::CalculateExecutionTime(cr);
+
+	fields1->Set("start_time", DbValue::FromTimestamp(time_bag_start.first));
+	fields1->Set("start_time_usec", time_bag_start.second);
 	fields1->Set("end_time", DbValue::FromTimestamp(time_bag_end.first));
 	fields1->Set("end_time_usec", time_bag_end.second);
 	fields1->Set("command_object_id", checkable->GetCheckCommand());

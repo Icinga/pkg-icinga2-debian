@@ -208,6 +208,7 @@ for				return T_FOR;
 if				return T_IF;
 else				return T_ELSE;
 while				return T_WHILE;
+throw				return T_THROW;
 =\>				return T_FOLLOWS;
 \<\<				return T_SHIFT_LEFT;
 \>\>				return T_SHIFT_RIGHT;
@@ -251,9 +252,9 @@ in				return T_IN;
 \>				return T_GREATER_THAN;
 }
 
-\(				{ yyextra->m_IgnoreNewlines++; return '('; }
-\)				{ yyextra->m_IgnoreNewlines--; return ')'; }
-[\r\n]+				{ yycolumn -= strlen(yytext) - 1; if (!yyextra->m_IgnoreNewlines) { return T_NEWLINE; } }
+\(				{ yyextra->m_IgnoreNewlines.push(true); return '('; }
+\)				{ yyextra->m_IgnoreNewlines.pop(); return ')'; }
+[\r\n]+				{ yycolumn -= strlen(yytext) - 1; if (!yyextra->m_IgnoreNewlines.top()) { return T_NEWLINE; } }
 <<EOF>>				{ if (!yyextra->m_Eof) { yyextra->m_Eof = true; return T_NEWLINE; } else { yyterminate(); } }
 .				return yytext[0];
 

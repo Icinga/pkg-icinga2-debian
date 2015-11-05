@@ -255,38 +255,33 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 	if (cr->GetExecutionEnd() == 0)
 		cr->SetExecutionEnd(now);
 
-	if (origin.IsLocal())
+	if (origin.IsLocal()) {
+		Log(LogDebug, "Checkable")
+		    << "No origin or local origin for object '" << GetName()
+		    << "', setting " << IcingaApplication::GetInstance()->GetNodeName()
+		    << " as check_source.";
 		cr->SetCheckSource(IcingaApplication::GetInstance()->GetNodeName());
+	}
 
 	Endpoint::Ptr command_endpoint = GetCommandEndpoint();
 
+	/* override check source if command_endpoint was defined */
+	if (command_endpoint && !GetExtension("agent_check")) {
+		Log(LogDebug, "Checkable")
+		    << "command_endpoint found for object '" << GetName()
+		    << "', setting " << command_endpoint->GetName()
+		    << " as check_source.";
+		cr->SetCheckSource(command_endpoint->GetName());
+	}
+
+	/* agent checks go through the api */
 	if (command_endpoint && GetExtension("agent_check")) {
-		/* agent checks go through the api */
 		ApiListener::Ptr listener = ApiListener::GetInstance();
 
 		if (listener) {
 			/* send message back to its origin */
 			Dictionary::Ptr message = ApiEvents::MakeCheckResultMessage(this, cr);
 			listener->SyncSendMessage(command_endpoint, message);
-
-			/* HA cluster zone nodes must also process the check result locally
-			 * by fetching the real host/service object if existing
-			 */
-			Host::Ptr tempHost;
-			Service::Ptr tempService;
-			tie(tempHost, tempService) = GetHostService(this);
-			Host::Ptr realHost = Host::GetByName(tempHost->GetName());
-			if (realHost) {
-				Value agent_service_name = GetExtension("agent_service_name");
-				if (!agent_service_name.IsEmpty()) {
-					Checkable::Ptr realCheckable;
-					realCheckable = realHost->GetServiceByShortName(agent_service_name);
-					if (realCheckable) {
-						realCheckable->ProcessCheckResult(cr, origin);
-					}
-				}
-			}
-
 		}
 
 		return;
@@ -338,9 +333,12 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 	} else {
 		if (old_attempt >= GetMaxCheckAttempts()) {
 			SetStateType(StateTypeHard);
-		} else if (old_stateType == StateTypeSoft || old_state == ServiceOK) {
+		} else if (old_stateType == StateTypeSoft && old_state != ServiceOK) {
 			SetStateType(StateTypeSoft);
-			attempt = old_attempt + 1;
+			attempt = old_attempt + 1; //NOT-OK -> NOT-OK counter
+		} else if (old_state == ServiceOK) {
+			SetStateType(StateTypeSoft);
+			attempt = 1; //OK -> NOT-OK transition, reset the counter
 		} else {
 			attempt = old_attempt;
 		}

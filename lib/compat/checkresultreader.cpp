@@ -17,6 +17,7 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
+#include "icinga/compatutility.hpp"
 #include "compat/checkresultreader.hpp"
 #include "icinga/service.hpp"
 #include "icinga/pluginutility.hpp"
@@ -54,6 +55,8 @@ void CheckResultReader::StatsFunc(const Dictionary::Ptr& status, const Array::Pt
  */
 void CheckResultReader::Start(void)
 {
+	ObjectImpl<CheckResultReader>::Start();
+
 	m_ReadTimer = new Timer();
 	m_ReadTimer->OnTimerExpired.connect(boost::bind(&CheckResultReader::ReadTimerHandler, this));
 	m_ReadTimer->SetInterval(5);
@@ -67,7 +70,7 @@ void CheckResultReader::ReadTimerHandler(void) const
 {
 	CONTEXT("Processing check result files in '" + GetSpoolDir() + "'");
 
-	Utility::Glob(GetSpoolDir() + "/c??????.ok", boost::bind(&CheckResultReader::ProcessCheckResultFile, this, _1));
+	Utility::Glob(GetSpoolDir() + "/c??????.ok", boost::bind(&CheckResultReader::ProcessCheckResultFile, this, _1), GlobFile);
 }
 
 void CheckResultReader::ProcessCheckResultFile(const String& path) const
@@ -113,6 +116,8 @@ void CheckResultReader::ProcessCheckResultFile(const String& path) const
 		    << boost::errinfo_errno(errno)
 		    << boost::errinfo_file_name(crfile));
 
+	Checkable::Ptr checkable;
+
 	Host::Ptr host = Host::GetByName(attrs["host_name"]);
 
 	if (!host) {
@@ -122,36 +127,37 @@ void CheckResultReader::ProcessCheckResultFile(const String& path) const
 		return;
 	}
 
-	Service::Ptr service = host->GetServiceByShortName(attrs["service_description"]);
+	if (attrs.find("service_description") != attrs.end()) {
+		Service::Ptr service = host->GetServiceByShortName(attrs["service_description"]);
 
-	if (!service) {
-		Log(LogWarning, "CheckResultReader")
-		    << "Ignoring checkresult file for host '" << attrs["host_name"]
-		    << "', service '" << attrs["service_description"] << "': Service does not exist.";
+		if (!service) {
+			Log(LogWarning, "CheckResultReader")
+			    << "Ignoring checkresult file for host '" << attrs["host_name"]
+			    << "', service '" << attrs["service_description"] << "': Service does not exist.";
 
-		return;
-	}
+			return;
+		}
+
+		checkable = service;
+	} else
+		checkable = host;
 
 	CheckResult::Ptr result = new CheckResult();
-	std::pair<String, Value> co = PluginUtility::ParseCheckOutput(attrs["output"]);
+	String output = CompatUtility::UnEscapeString(attrs["output"]);
+	std::pair<String, Value> co = PluginUtility::ParseCheckOutput(output);
 	result->SetOutput(co.first);
 	result->SetPerformanceData(PluginUtility::SplitPerfdata(co.second));
 	result->SetState(PluginUtility::ExitStatusToState(Convert::ToLong(attrs["return_code"])));
 	result->SetExecutionStart(Convert::ToDouble(attrs["start_time"]));
 	result->SetExecutionEnd(Convert::ToDouble(attrs["finish_time"]));
 
-	service->ProcessCheckResult(result);
+	checkable->ProcessCheckResult(result);
 
 	Log(LogDebug, "CheckResultReader")
-	    << "Processed checkresult file for host '" << attrs["host_name"]
-	    << "', service '" << attrs["service_description"] << "'";
+	    << "Processed checkresult file for object '" << checkable->GetName() << "'";
 
-	{
-		ObjectLock olock(service);
-
-		/* Reschedule the next check. The side effect of this is that for as long
-		 * as we receive check result files for a service we won't execute any
-		 * active checks. */
-		service->SetNextCheck(Utility::GetTime() + service->GetCheckInterval());
-	}
+	/* Reschedule the next check. The side effect of this is that for as long
+	 * as we receive check result files for a host/service we won't execute any
+	 * active checks. */
+	checkable->SetNextCheck(Utility::GetTime() + checkable->GetCheckInterval());
 }

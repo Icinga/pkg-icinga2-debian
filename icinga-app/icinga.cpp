@@ -45,8 +45,9 @@ using namespace icinga;
 namespace po = boost::program_options;
 
 #ifdef _WIN32
-SERVICE_STATUS l_SvcStatus;
-SERVICE_STATUS_HANDLE l_SvcStatusHandle;
+static SERVICE_STATUS l_SvcStatus;
+static SERVICE_STATUS_HANDLE l_SvcStatusHandle;
+static HANDLE l_Job;
 #endif /* _WIN32 */
 
 static std::vector<String> GetLogLevelCompletionSuggestions(const String& arg)
@@ -497,7 +498,7 @@ static int SetupService(bool install, int argc, char **argv)
 	for (int i = 0; i < argc; i++)
 		szArgs += " " + Utility::EscapeShellArg(argv[i]);
 
-	SC_HANDLE schService = OpenService(schSCManager, "icinga2", DELETE | SERVICE_STOP | SERVICE_QUERY_STATUS);
+	SC_HANDLE schService = OpenService(schSCManager, "icinga2", SERVICE_ALL_ACCESS);
 
 	if (schService != NULL) {
 		SERVICE_STATUS status;
@@ -519,21 +520,7 @@ static int SetupService(bool install, int argc, char **argv)
 				return 1;
 			}
 		}
-
-		if (!DeleteService(schService)) {
-			printf("DeleteService failed (%d)\n", GetLastError());
-			CloseServiceHandle(schService);
-			CloseServiceHandle(schSCManager);
-			return 1;
-		}
-
-		if (!install)
-			printf("Service uninstalled successfully\n");
-
-		CloseServiceHandle(schService);
-	}
-
-	if (install) {
+	} else if (install) {
 		schService = CreateService(
 			schSCManager,
 			"icinga2",
@@ -553,11 +540,25 @@ static int SetupService(bool install, int argc, char **argv)
 			printf("CreateService failed (%d)\n", GetLastError());
 			CloseServiceHandle(schSCManager);
 			return 1;
-		} else
-			printf("Service installed successfully\n");
+		}	
+	} else {
+		printf("Service isn't installed.\n");
+		CloseServiceHandle(schSCManager);
+		return 0;
+	}
 
+	if (!install) {
+		if (!DeleteService(schService)) {
+			printf("DeleteService failed (%d)\n", GetLastError());
+			CloseServiceHandle(schService);
+			CloseServiceHandle(schSCManager);
+			return 1;
+		}
+
+		printf("Service uninstalled successfully\n");
+	} else {
 		ChangeServiceConfig(schService, SERVICE_NO_CHANGE, SERVICE_AUTO_START,
-		    SERVICE_ERROR_NORMAL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+		    SERVICE_ERROR_NORMAL, szArgs.CStr(), NULL, NULL, NULL, NULL, NULL, NULL);
 
 		SERVICE_DESCRIPTION sdDescription = { "The Icinga 2 monitoring application" };
 		ChangeServiceConfig2(schService, SERVICE_CONFIG_DESCRIPTION, &sdDescription);
@@ -569,9 +570,10 @@ static int SetupService(bool install, int argc, char **argv)
 			return 1;
 		}
 
-		CloseServiceHandle(schService);
+		printf("Service installed successfully\n");
 	}
 
+	CloseServiceHandle(schService);
 	CloseServiceHandle(schSCManager);
 
 	return 0;
@@ -605,7 +607,7 @@ VOID WINAPI ServiceControlHandler(DWORD dwCtrl)
 {
 	if (dwCtrl == SERVICE_CONTROL_STOP) {
 		ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 0);
-		Application::RequestShutdown();
+		TerminateJobObject(l_Job, 0);
 	}
 }
 
@@ -620,11 +622,58 @@ VOID WINAPI ServiceMain(DWORD argc, LPSTR *argv)
 
 	ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
 
-	int rc = Main();
+	l_Job = CreateJobObject(NULL, NULL);
 
-	ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, rc);
+	for (;;) {
+		LPSTR arg = argv[0];
+		String args;
+		int uargc = Application::GetArgC();
+		char **uargv = Application::GetArgV();
 
-	Application::Exit(rc);
+		args += Utility::EscapeShellArg(Application::GetExePath(uargv[0]));
+
+		for (int i = 2; i < uargc && uargv[i]; i++) {
+			if (args != "")
+				args += " ";
+
+			args += Utility::EscapeShellArg(uargv[i]);
+		}
+
+		STARTUPINFO si = { sizeof(si) };
+		PROCESS_INFORMATION pi;
+
+		char *uargs = strdup(args.CStr());
+
+		BOOL res = CreateProcess(NULL, uargs, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+
+		free(uargs);
+
+		if (!res)
+			break;
+
+		CloseHandle(pi.hThread);
+
+		AssignProcessToJobObject(l_Job, pi.hProcess);
+
+		if (WaitForSingleObject(pi.hProcess, INFINITE) != WAIT_OBJECT_0)
+			break;
+
+		DWORD exitStatus;
+		
+		if (!GetExitCodeProcess(pi.hProcess, &exitStatus))
+			break;
+
+		if (exitStatus != 7)
+			break;
+	}
+
+	TerminateJobObject(l_Job, 0);
+
+	CloseHandle(l_Job);
+
+	ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
+
+	Application::Exit(0);
 }
 #endif /* _WIN32 */
 

@@ -51,10 +51,12 @@ SLES/openSUSE:
 Install the `boost`, `python` and `icinga2` pretty printers. Absolute paths are required,
 so please make sure to update the installation paths accordingly (`pwd`).
 
-Boost Pretty Printers:
-
     $ mkdir -p ~/.gdb_printers && cd ~/.gdb_printers
-    $ git clone https://github.com/ruediger/Boost-Pretty-Printer.git && cd Boost-Pretty-Printer
+
+Boost Pretty Printers compatible with Python 3:
+
+    $ git clone https://github.com/mateidavid/Boost-Pretty-Printer.git && cd Boost-Pretty-Printer
+    $ git checkout python-3
     $ pwd
     /home/michi/.gdb_printers/Boost-Pretty-Printer
 
@@ -71,33 +73,37 @@ Icinga 2 Pretty Printers:
 Now you'll need to modify/setup your `~/.gdbinit` configuration file.
 You can download the one from Icinga 2 and modify all paths.
 
-Example on Fedora:
+Example on Fedora 22:
 
     $ wget https://raw.githubusercontent.com/Icinga/icinga2/master/tools/debug/gdb/gdbinit -O ~/.gdbinit
     $ vim ~/.gdbinit
 
     set print pretty on
-
+    
     python
     import sys
     sys.path.insert(0, '/home/michi/.gdb_printers/icinga2')
     from icingadbg import register_icinga_printers
     register_icinga_printers()
     end
-
+    
     python
     import sys
     sys.path.insert(0, '/home/michi/.gdb_printers/python')
     from libstdcxx.v6.printers import register_libstdcxx_printers
-    register_libstdcxx_printers(None)
+    try:
+        register_libstdcxx_printers(None)
+    except:
+        pass
     end
-
+    
     python
     import sys
     sys.path.insert(0, '/home/michi/.gdb_printers/Boost-Pretty-Printer')
-    from boost.printers import register_printer_gen
-    register_printer_gen(None)
+    import boost_print
+    boost_print.register_printers()
     end
+
 
 If you are getting the following error when running gdb, the `libstdcxx`
 printers are already preloaded in your environment and you can remove
@@ -108,8 +114,9 @@ the duplicate import in your `~/.gdbinit` file.
 ### <a id="development-debug-gdb-run"></a> GDB Run
 
 Call GDB with the binary and all arguments and run it in foreground.
+If VFork causes trouble disable it inside the gdb run.
 
-    # gdb --args /usr/sbin/icinga2 daemon -x debug
+    # gdb --args /usr/sbin/icinga2 daemon -x debug -DUseVfork=0
 
 > **Note**
 >
@@ -128,6 +135,14 @@ Continue after breakpoint.
 
     (gdb) c
 
+### <a id="development-debug-gdb-coredump"></a> GDB Core Dump
+
+Either attach to the running process using `gdb -p PID` or start
+a new gdb run.
+
+    (gdb) r
+    (gdb) generate-core-file
+
 ### <a id="development-debug-gdb-backtrace"></a> GDB Backtrace
 
 If Icinga 2 aborted its operation abnormally, generate a backtrace.
@@ -135,11 +150,13 @@ If Icinga 2 aborted its operation abnormally, generate a backtrace.
     (gdb) bt
     (gdb) bt full
 
->**Tip**
->
-> If you're opening an issue at [https://dev.icinga.org] make sure
-> to attach as much detail as possible.
+Generate a full backtrace for all threads and store it into a new file
+(e.g. for debugging dead locks):
 
+    # gdb -p PID -batch -ex "thread apply all bt full" -ex "detach" -ex "q" > gdb_bt.log
+
+If you're opening an issue at [https://dev.icinga.org] make sure
+to attach as much detail as possible.
 
 ### <a id="development-debug-gdb-backtrace-stepping"></a> GDB Backtrace Stepping
 

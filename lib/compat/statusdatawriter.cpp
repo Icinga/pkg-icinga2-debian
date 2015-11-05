@@ -355,7 +355,7 @@ void StatusDataWriter::DumpCheckableStatusAttrs(std::ostream& fp, const Checkabl
 		fp << "\t" << "current_state=" << service->GetState() << "\n"
 		   << "\t" << "last_hard_state=" << service->GetLastHardState() << "\n";
 	} else {
-		fp << "\t" << "current_state=" << (host->IsReachable() ? host->GetState() : 2) << "\n"
+		fp << "\t" << "current_state=" << CompatUtility::GetHostCurrentState(host) << "\n"
 		   << "\t" << "last_hard_state=" << host->GetLastHardState() << "\n";
 	}
 
@@ -530,14 +530,9 @@ void StatusDataWriter::DumpCustomAttributes(std::ostream& fp, const CustomVarObj
 			value = JsonEncode(kv.second);
 			is_json = true;
 		} else
-			value = kv.second;
+			value = CompatUtility::EscapeString(kv.second);
 
-		fp << "\t";
-
-		if (!CompatUtility::IsLegacyAttribute(object, kv.first))
-			fp << "_";
-
-		fp << kv.first << "\t" << value << "\n";
+		fp << "\t" "_" << kv.first << "\t" << value << "\n";
 	}
 
 	if (is_json)

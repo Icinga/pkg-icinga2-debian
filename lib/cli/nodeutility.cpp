@@ -273,13 +273,17 @@ int NodeUtility::GenerateNodeIcingaConfig(const std::vector<std::string>& endpoi
 		if (tokens.size() > 1) {
 			String host = tokens[1];
 			host.Trim();
-			my_master_endpoint->Set("host", host);
+
+			if (!host.IsEmpty())
+				my_master_endpoint->Set("host", host);
 		}
 
 		if (tokens.size() > 2) {
 			String port = tokens[2];
 			port.Trim();
-			my_master_endpoint->Set("port", port);
+
+			if (!port.IsEmpty())
+				my_master_endpoint->Set("port", port);
 		}
 
 		String cn = tokens[0];
@@ -310,7 +314,7 @@ int NodeUtility::GenerateNodeIcingaConfig(const std::vector<std::string>& endpoi
 	Array::Ptr my_zone_members = new Array();
 	my_zone_members->Add(nodename);
 
-	my_zone->Set("__name", nodename);
+	my_zone->Set("__name", zonename);
 	my_zone->Set("__type", "Zone");
 	my_zone->Set("parent", master_zone_name); //set the master zone as parent
 	my_zone->Set("//this is the local node", nodename);

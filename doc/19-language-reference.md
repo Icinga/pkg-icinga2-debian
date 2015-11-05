@@ -185,7 +185,7 @@ in       | 7          | "foo" in [ "foo", "bar" ] (true)              | Element 
 ^        | 10          | 17 ^ 12 (29)                                  | Bitwise XOR
 &#124;   | 11          | 2 &#124; 3 (3)                                | Binary OR
 &&       | 13         | true && false (false), 3 && 7 (7), 0 && 7 (0) | Logical AND
-&#124;&#124; | 14     | true &#124;&#124; false (true), 0 || 7 (7)| Logical OR
+&#124;&#124; | 14     | true &#124;&#124; false (true), 0 &#124;&#124; 7 (7)| Logical OR
 =        | 12         | a = 3                                         | Assignment
 =>       | 15         | x => x * x (function with arg x)              | Lambda, for loop
 
@@ -759,6 +759,17 @@ Iterating over dictionaries can be accomplished in a similar manner:
 The `continue` and `break` keywords can be used to control how the loop is executed: The `continue` keyword
 skips over the remaining expressions for the loop body and begins the next loop evaluation. The `break` keyword
 breaks out of the loop.
+
+## <a id="throw"></a> Exceptions
+
+Built-in commands may throw exceptions to signal errors such as invalid arguments. User scripts can throw exceptions
+using the `throw` keyword.
+
+Example:
+
+    throw "An error occurred."
+
+There is currently no way for scripts to catch exceptions.
 
 ## <a id="types"></a> Types
 

@@ -482,41 +482,30 @@ ExpressionResult SetExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint)
 	if (m_Op != OpSetLiteral) {
 		Value object = VMOps::GetField(parent, index, m_DebugInfo);
 
-		Expression *lhs = MakeLiteral(object);
-		Expression *rhs = MakeLiteral(operand2);
-
 		switch (m_Op) {
 			case OpSetAdd:
-				operand2 = AddExpression(lhs, rhs, m_DebugInfo).Evaluate(frame, dhint);
-				CHECK_RESULT(operand2);
+				operand2 = object + operand2;
 				break;
 			case OpSetSubtract:
-				operand2 = SubtractExpression(lhs, rhs, m_DebugInfo).Evaluate(frame, dhint);
-				CHECK_RESULT(operand2);
+				operand2 = object - operand2;
 				break;
 			case OpSetMultiply:
-				operand2 = MultiplyExpression(lhs, rhs, m_DebugInfo).Evaluate(frame, dhint);
-				CHECK_RESULT(operand2);
+				operand2 = object * operand2;
 				break;
 			case OpSetDivide:
-				operand2 = DivideExpression(lhs, rhs, m_DebugInfo).Evaluate(frame, dhint);
-				CHECK_RESULT(operand2);
+				operand2 = object / operand2;
 				break;
 			case OpSetModulo:
-				operand2 = ModuloExpression(lhs, rhs, m_DebugInfo).Evaluate(frame, dhint);
-				CHECK_RESULT(operand2);
+				operand2 = object % operand2;
 				break;
 			case OpSetXor:
-				operand2 = XorExpression(lhs, rhs, m_DebugInfo).Evaluate(frame, dhint);
-				CHECK_RESULT(operand2);
+				operand2 = object ^ operand2;
 				break;
 			case OpSetBinaryAnd:
-				operand2 = BinaryAndExpression(lhs, rhs, m_DebugInfo).Evaluate(frame, dhint);
-				CHECK_RESULT(operand2);
+				operand2 = object & operand2;
 				break;
 			case OpSetBinaryOr:
-				operand2 = BinaryOrExpression(lhs, rhs, m_DebugInfo).Evaluate(frame, dhint);
-				CHECK_RESULT(operand2);
+				operand2 = object | operand2;
 				break;
 			default:
 				VERIFY(!"Invalid opcode.");
@@ -604,8 +593,12 @@ bool IndexerExpression::GetReference(ScriptFrame& frame, bool init_dict, Value *
 		psdhint = *dhint;
 
 	if (m_Operand1->GetReference(frame, init_dict, &vparent, &vindex, &psdhint)) {
-		if (init_dict && VMOps::GetField(vparent, vindex, m_Operand1->GetDebugInfo()).IsEmpty())
-			VMOps::SetField(vparent, vindex, new Dictionary(), m_Operand1->GetDebugInfo());
+		if (init_dict) {
+			Value old_value =  VMOps::GetField(vparent, vindex, m_Operand1->GetDebugInfo());
+
+			if (old_value.IsEmpty() && !old_value.IsString())
+				VMOps::SetField(vparent, vindex, new Dictionary(), m_Operand1->GetDebugInfo());
+		}
 
 		*parent = VMOps::GetField(vparent, vindex, m_DebugInfo);
 		free_psd = true;
@@ -668,6 +661,14 @@ void icinga::BindToScope(Expression *& expr, ScopeSpecifier scopeSpec)
 		delete expr;
 		expr = new_expr;
 	}
+}
+
+ExpressionResult ThrowExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
+{
+	ExpressionResult messageres = m_Message->Evaluate(frame);
+	CHECK_RESULT(messageres);
+	Value message = messageres.GetValue();
+	BOOST_THROW_EXCEPTION(ScriptError(message, m_DebugInfo));
 }
 
 ExpressionResult ImportExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const

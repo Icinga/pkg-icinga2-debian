@@ -635,6 +635,7 @@ void LivestatusQuery::ExecuteScriptHelper(const Stream::Ptr& stream)
 	try {
 		ScriptFrame frame;
 		frame.Locals = lsf.Locals;
+		frame.Self = lsf.Locals;
 		result = expr->Evaluate(frame);
 	} catch (const ScriptError& ex) {
 		delete expr;
@@ -674,7 +675,7 @@ void LivestatusQuery::SendResponse(const Stream::Ptr& stream, int code, const St
 		try {
 			stream->Write(data.CStr(), data.GetLength());
 		} catch (const std::exception&) {
-			Log(LogCritical, "LivestatusQuery", "Cannot write to TCP socket.");
+			Log(LogCritical, "LivestatusQuery", "Cannot write query response to socket.");
 		}
 	}
 }

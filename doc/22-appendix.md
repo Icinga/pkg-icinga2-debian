@@ -49,6 +49,7 @@ Additional details can be found in the [Icinga 1.x Documentation](http://docs.ic
   DEL_SVC_DOWNTIME                          | ;&lt;downtime_id&gt; (1)   | -
   SCHEDULE_HOST_DOWNTIME                    | ;&lt;host_name&gt;;&lt;start_time&gt;;&lt;end_time&gt;;&lt;fixed&gt;;&lt;trigger_id&gt;;&lt;duration&gt;;&lt;author&gt;;&lt;comment&gt; (8)  | -
   DEL_HOST_DOWNTIME                         | ;&lt;downtime_id&gt; (1)  | -
+  DEL_DOWNTIME_BY_HOST_NAME                 | ;&lt;host_name&gt;[;&lt;service_name;&gt;[;&lt;start_time;&gt;[;&lt;comment_text;&gt;]]] (1)  | -
   SCHEDULE_HOST_SVC_DOWNTIME                | ;&lt;host_name&gt;;&lt;start_time&gt;;&lt;end_time&gt;;&lt;fixed&gt;;&lt;trigger_id&gt;;&lt;duration&gt;;&lt;author&gt;;&lt;comment&gt; (8)  | -
   SCHEDULE_HOSTGROUP_HOST_DOWNTIME          | ;&lt;hostgroup_name&gt;;&lt;start_time&gt;;&lt;end_time&gt;;&lt;fixed&gt;;&lt;trigger_id&gt;;&lt;duration&gt;;&lt;author&gt;;&lt;comment&gt; (8)  | -
   SCHEDULE_HOSTGROUP_SVC_DOWNTIME           | ;&lt;hostgroup_name&gt;;&lt;start_time&gt;;&lt;end_time&gt;;&lt;fixed&gt;;&lt;trigger_id&gt;;&lt;duration&gt;;&lt;author&gt;;&lt;comment&gt; (8)  | -
@@ -161,13 +162,15 @@ database schema available on [http://docs.icinga.org/latest/en/db_model.html]
 
 Icinga 2 specific extensions are shown below:
 
-New tables: `endpoints`, `endpointstatus`
+New table: `endpointstatus`
 
   Table               | Column             | Type     | Default | Description
   --------------------|--------------------|----------|---------|-------------
   endpoints           | endpoint_object_id | bigint   | NULL    | FK: objects table
   endpoints           | identity           | TEXT     | NULL    | endpoint name
   endpoints           | node               | TEXT     | NULL    | local node name
+
+New table: `endpointstatus`
 
   Table               | Column             | Type     | Default | Description
   --------------------|--------------------|----------|---------|-------------
@@ -420,9 +423,10 @@ Not supported: `initial_state`, `pending_flex_downtime`, `check_flapping_recover
   no_more_notifications | int       | notification_interval == 0 && volatile == false.
   last_check            | int       | .
   last_state_change     | int       | .
-  last_time_up          | int       | .
-  last_time_down        | int       | .
-  last_time_unreachable | int       | .
+  last_time_ok          | int       | .
+  last_time_warning     | int       | .
+  last_time_critical    | int       | .
+  last_time_unknown     | int       | .
   is_flapping           | int       | .
   scheduled_downtime_depth | int    | .
   active_checks_enabled | int       | .
