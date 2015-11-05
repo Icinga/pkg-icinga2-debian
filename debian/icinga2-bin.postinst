@@ -21,17 +21,10 @@ enable_default_features() {
     # handle new default features here in the future
 }
 
-api_setup() {
-    # 'api setup' does not override already enabled api feature
-    icinga2 api setup
-}
-
 case "$1" in
     configure)
         # enable default features
         enable_default_features $@
-        # api setup
-        api_setup $@
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
