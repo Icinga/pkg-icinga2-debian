@@ -1,0 +1,6 @@
+Debian source infos for icinga2
+===============================
+
+Please make sure to build this with backports enabled in the chroot.
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Tue, 10 Nov 2015 15:49:20 +0100
