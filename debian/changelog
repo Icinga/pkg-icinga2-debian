@@ -1,3 +1,18 @@
+icinga2 (2.3.11-1~debmon60+1) debmon-squeeze; urgency=medium
+
+  [ Markus Frosch ]
+  * Rebuild for debmon-squeeze.
+  * [e1dd11b] Support older debhelper for squeeze, no systemd
+  * [7688491] No multiarch handling for squeeze
+  * [652d49b] Add local gbp conf
+  * [0c7e4e0] Debian squeeze needs Apache2 version module
+  * [227713b] Add source README for squeeze
+
+  [ Gunnar Beutner ]
+  * [b1bc4e3] Update ICINGA2_RUNDIR for Debian squeeze
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Tue, 10 Nov 2015 14:28:15 +0100
+
 icinga2 (2.3.11-1) unstable; urgency=medium
 
   * [b9e26af] Change ido database name/user to icinga2 for new installations
