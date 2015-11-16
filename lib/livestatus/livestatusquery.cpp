@@ -31,7 +31,6 @@
 #include "livestatus/orfilter.hpp"
 #include "livestatus/andfilter.hpp"
 #include "icinga/externalcommandprocessor.hpp"
-#include "config/configcompiler.hpp"
 #include "base/debug.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
@@ -52,36 +51,6 @@ using namespace icinga;
 
 static int l_ExternalCommands = 0;
 static boost::mutex l_QueryMutex;
-static std::map<String, LivestatusScriptFrame> l_LivestatusScriptFrames;
-static Timer::Ptr l_FrameCleanupTimer;
-static boost::mutex l_LivestatusScriptMutex;
-
-static void ScriptFrameCleanupHandler(void)
-{
-	boost::mutex::scoped_lock lock(l_LivestatusScriptMutex);
-
-	std::vector<String> cleanup_keys;
-
-	typedef std::pair<String, LivestatusScriptFrame> KVPair;
-
-	BOOST_FOREACH(const KVPair& kv, l_LivestatusScriptFrames) {
-		if (kv.second.Seen < Utility::GetTime() - 1800)
-			cleanup_keys.push_back(kv.first);
-	}
-
-	BOOST_FOREACH(const String& key, cleanup_keys)
-		l_LivestatusScriptFrames.erase(key);
-}
-
-static void InitScriptFrameCleanup(void)
-{
-	l_FrameCleanupTimer = new Timer();
-	l_FrameCleanupTimer->OnTimerExpired.connect(boost::bind(ScriptFrameCleanupHandler));
-	l_FrameCleanupTimer->SetInterval(30);
-	l_FrameCleanupTimer->Start();
-}
-
-INITIALIZE_ONCE(InitScriptFrameCleanup);
 
 LivestatusQuery::LivestatusQuery(const std::vector<String>& lines, const String& compat_log_path)
 	: m_KeepAlive(false), m_OutputFormat("csv"), m_ColumnHeaders(true), m_Limit(-1), m_ErrorCode(0),
@@ -123,16 +92,6 @@ LivestatusQuery::LivestatusQuery(const std::vector<String>& lines, const String&
 	if (m_Verb == "COMMAND") {
 		m_KeepAlive = true;
 		m_Command = target;
-	} else if (m_Verb == "SCRIPT") {
-		m_Session = target;
-
-		for (unsigned int i = 1; i < lines.size(); i++) {
-			if (m_Command != "")
-				m_Command += "\n";
-			m_Command += lines[i];
-		}
-
-		return;
 	} else if (m_Verb == "GET") {
 		m_Table = target;
 	} else {
@@ -154,9 +113,7 @@ LivestatusQuery::LivestatusQuery(const std::vector<String>& lines, const String&
 
 		//OutputFormat:json or OutputFormat: json
 		if (line.GetLength() > col_index + 1)
-			params = line.SubStr(col_index + 1);
-
-		params.Trim();
+			params = line.SubStr(col_index + 1).Trim();
 
 		if (header == "ResponseHeader")
 			m_ResponseHeader = params;
@@ -405,34 +362,50 @@ Filter::Ptr LivestatusQuery::ParseFilter(const String& params, unsigned long& fr
 	return filter;
 }
 
-void LivestatusQuery::PrintResultSet(std::ostream& fp, const Array::Ptr& rs) const
+void LivestatusQuery::BeginResultSet(std::ostream& fp) const
+{
+	if (m_OutputFormat == "json" || m_OutputFormat == "python")
+		fp << "[";
+}
+
+void LivestatusQuery::EndResultSet(std::ostream& fp) const
+{
+	if (m_OutputFormat == "json" || m_OutputFormat == "python")
+		fp << "]";
+}
+
+void LivestatusQuery::AppendResultRow(std::ostream& fp, const Array::Ptr& row, bool& first_row) const
 {
 	if (m_OutputFormat == "csv") {
-		ObjectLock olock(rs);
+		bool first = true;
 
-		BOOST_FOREACH(const Array::Ptr& row, rs) {
-			bool first = true;
+		ObjectLock rlock(row);
+		BOOST_FOREACH(const Value& value, row) {
+			if (first)
+				first = false;
+			else
+				fp << m_Separators[1];
 
-			ObjectLock rlock(row);
-			BOOST_FOREACH(const Value& value, row) {
-				if (first)
-					first = false;
-				else
-					fp << m_Separators[1];
-
-				if (value.IsObjectType<Array>())
-					PrintCsvArray(fp, value, 0);
-				else
-					fp << value;
-			}
-
-			fp << m_Separators[0];
+			if (value.IsObjectType<Array>())
+				PrintCsvArray(fp, value, 0);
+			else
+				fp << value;
 		}
+
+		fp << m_Separators[0];
 	} else if (m_OutputFormat == "json") {
-		fp << JsonEncode(rs);
+		if (!first_row)
+			fp << ", ";
+
+		fp << JsonEncode(row);
 	} else if (m_OutputFormat == "python") {
-		PrintPythonArray(fp, rs);
+		if (!first_row)
+			fp << ", ";
+
+		PrintPythonArray(fp, row);
 	}
+
+	first_row = false;
 }
 
 void LivestatusQuery::PrintCsvArray(std::ostream& fp, const Array::Ptr& array, int level) const
@@ -505,7 +478,9 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 	else
 		columns = table->GetColumnNames();
 
-	Array::Ptr rs = new Array();
+	std::ostringstream result;
+	bool first_row = true;
+	BeginResultSet(result);
 
 	if (m_Aggregators.empty()) {
 		Array::Ptr header = new Array();
@@ -517,8 +492,6 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 
 		BOOST_FOREACH(const String& columnName, columns)
 			column_objs.push_back(std::make_pair(columnName, table->GetColumn(columnName)));
-
-		rs->Reserve(1 + objects.size());
 
 		BOOST_FOREACH(const LivestatusRowValue& object, objects) {
 			Array::Ptr row = new Array();
@@ -533,11 +506,11 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 			}
 
 			if (m_ColumnHeaders) {
-				rs->Add(header);
+				AppendResultRow(result, header, first_row);
 				m_ColumnHeaders = false;
 			}
 
-			rs->Add(row);
+			AppendResultRow(result, row, first_row);
 		}
 	} else {
 		std::vector<double> stats(m_Aggregators.size(), 0);
@@ -565,7 +538,7 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 				header->Add("stats_" + Convert::ToString(i));
 			}
 
-			rs->Add(header);
+			AppendResultRow(result, header, first_row);
 		}
 
 		Array::Ptr row = new Array();
@@ -589,11 +562,10 @@ void LivestatusQuery::ExecuteGetHelper(const Stream::Ptr& stream)
 		for (size_t i = 0; i < m_Aggregators.size(); i++)
 			row->Add(stats[i]);
 
-		rs->Add(row);
+		AppendResultRow(result, row, first_row);
 	}
 
-	std::ostringstream result;
-	PrintResultSet(result, rs);
+	EndResultSet(result);
 
 	SendResponse(stream, LivestatusErrorOK, result.str());
 }
@@ -610,53 +582,6 @@ void LivestatusQuery::ExecuteCommandHelper(const Stream::Ptr& stream)
 	    << "Executing command: " << m_Command;
 	ExternalCommandProcessor::Execute(m_Command);
 	SendResponse(stream, LivestatusErrorOK, "");
-}
-
-void LivestatusQuery::ExecuteScriptHelper(const Stream::Ptr& stream)
-{
-	Log(LogInformation, "LivestatusQuery")
-	    << "Executing expression: " << m_Command;
-
-	m_ResponseHeader = "fixed16";
-
-	LivestatusScriptFrame& lsf = l_LivestatusScriptFrames[m_Session];
-	lsf.Seen = Utility::GetTime();
-
-	if (!lsf.Locals)
-		lsf.Locals = new Dictionary();
-
-	String fileName = "<" + Convert::ToString(lsf.NextLine) + ">";
-	lsf.NextLine++;
-
-	lsf.Lines[fileName] = m_Command;
-
-	Expression *expr = ConfigCompiler::CompileText(fileName, m_Command);
-	Value result;
-	try {
-		ScriptFrame frame;
-		frame.Locals = lsf.Locals;
-		frame.Self = lsf.Locals;
-		result = expr->Evaluate(frame);
-	} catch (const ScriptError& ex) {
-		delete expr;
-
-		DebugInfo di = ex.GetDebugInfo();
-
-		std::ostringstream msgbuf;
-
-		msgbuf << di.Path << ": " << lsf.Lines[di.Path] << "\n"
-		    << String(di.Path.GetLength() + 2, ' ')
-		    << String(di.FirstColumn, ' ') << String(di.LastColumn - di.FirstColumn + 1, '^') << "\n"
-		    << ex.what() << "\n";
-
-		SendResponse(stream, LivestatusErrorQuery, msgbuf.str());
-		return;
-	} catch (...) {
-		delete expr;
-		throw;
-	}
-	delete expr;
-	SendResponse(stream, LivestatusErrorOK, JsonEncode(Serialize(result, FAState | FAConfig), true));
 }
 
 void LivestatusQuery::ExecuteErrorHelper(const Stream::Ptr& stream)
@@ -706,8 +631,6 @@ bool LivestatusQuery::Execute(const Stream::Ptr& stream)
 			ExecuteGetHelper(stream);
 		else if (m_Verb == "COMMAND")
 			ExecuteCommandHelper(stream);
-		else if (m_Verb == "SCRIPT")
-			ExecuteScriptHelper(stream);
 		else if (m_Verb == "ERROR")
 			ExecuteErrorHelper(stream);
 		else

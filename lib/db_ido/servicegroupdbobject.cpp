@@ -49,20 +49,3 @@ Dictionary::Ptr ServiceGroupDbObject::GetStatusFields(void) const
 {
 	return Empty;
 }
-
-void ServiceGroupDbObject::OnConfigUpdate(void)
-{
-	ServiceGroup::Ptr group = static_pointer_cast<ServiceGroup>(GetObject());
-
-	BOOST_FOREACH(const Service::Ptr& service, group->GetMembers()) {
-		DbQuery query1;
-		query1.Table = DbType::GetByName("ServiceGroup")->GetTable() + "_members";
-		query1.Type = DbQueryInsert;
-		query1.Category = DbCatConfig;
-		query1.Fields = new Dictionary();
-		query1.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
-		query1.Fields->Set("servicegroup_id", DbValue::FromObjectInsertID(group));
-		query1.Fields->Set("service_object_id", service);
-		OnQuery(query1);
-	}
-}

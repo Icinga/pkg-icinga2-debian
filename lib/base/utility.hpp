@@ -23,11 +23,11 @@
 #include "base/i2-base.hpp"
 #include "base/string.hpp"
 #include "base/array.hpp"
-#include <typeinfo>
+#include "base/threadpool.hpp"
 #include <boost/function.hpp>
 #include <boost/thread/tss.hpp>
+#include <typeinfo>
 #include <vector>
-#include "base/threadpool.hpp"
 
 namespace icinga
 {
@@ -82,8 +82,8 @@ public:
 
 	static bool Glob(const String& pathSpec, const boost::function<void (const String&)>& callback, int type = GlobFile | GlobDirectory);
 	static bool GlobRecursive(const String& path, const String& pattern, const boost::function<void (const String&)>& callback, int type = GlobFile | GlobDirectory);
-	static bool MkDir(const String& path, int flags);
-	static bool MkDirP(const String& path, int flags);
+	static void MkDir(const String& path, int mode);
+	static void MkDirP(const String& path, int mode);
 	static bool SetFileOwnership(const String& file, const String& user, const String& group);
 
 	static void QueueAsyncCallback(const boost::function<void (void)>& callback, SchedulerPolicy policy = DefaultScheduler);
@@ -95,17 +95,12 @@ public:
 	static String FormatDateTime(const char *format, double ts);
 	static String FormatErrorNumber(int code);
 
-	static void LoadExtensionLibrary(const String& library);
-
-	static void AddDeferredInitializer(const boost::function<void(void)>& callback);
-	static void ExecuteDeferredInitializers(void);
-
 #ifndef _WIN32
-	static void SetNonBlocking(int fd);
-	static void SetCloExec(int fd);
+	static void SetNonBlocking(int fd, bool nb = true);
+	static void SetCloExec(int fd, bool cloexec = true);
 #endif /* _WIN32 */
 
-	static void SetNonBlockingSocket(SOCKET s);
+	static void SetNonBlockingSocket(SOCKET s, bool nb = true);
 
 	static String EscapeShellCmd(const String& s);
 	static String EscapeShellArg(const String& s);
@@ -113,7 +108,7 @@ public:
 	static String EscapeCreateProcessArg(const String& arg);
 #endif /* _WIN32 */
 
-	static String EscapeString(const String& s, const String& chars);
+	static String EscapeString(const String& s, const String& chars, const bool illegal);
 	static String UnescapeString(const String& s);
 
 	static void SetThreadName(const String& name, bool os = true);
@@ -132,6 +127,7 @@ public:
 
 	static bool PathExists(const String& path);
 
+	static void RemoveDirRecursive(const String& path);
 	static void CopyFile(const String& source, const String& target);
 
 	static Value LoadJsonFile(const String& path);
@@ -139,12 +135,10 @@ public:
 
 private:
 	Utility(void);
+	static void CollectPaths(const String& path, std::vector<String>& paths);
 
 	static boost::thread_specific_ptr<String> m_ThreadName;
 	static boost::thread_specific_ptr<unsigned int> m_RandSeed;
-
-	static boost::thread_specific_ptr<std::vector<boost::function<void(void)> > >& GetDeferredInitializers(void);
-
 };
 
 }

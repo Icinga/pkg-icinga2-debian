@@ -388,72 +388,6 @@ void Utility::Sleep(double timeout)
 }
 
 /**
- * Loads the specified library.
- *
- * @param library The name of the library.
- */
-void Utility::LoadExtensionLibrary(const String& library)
-{
-	String path;
-#if defined(_WIN32)
-	path = library + ".dll";
-#elif defined(__APPLE__)
-	path = "lib" + library + ".dylib";
-#else /* __APPLE__ */
-	path = "lib" + library + ".so";
-#endif /* _WIN32 */
-
-	Log(LogInformation, "Utility")
-	    << "Loading library '" << path << "'";
-
-#ifdef _WIN32
-	HMODULE hModule = LoadLibrary(path.CStr());
-
-	if (hModule == NULL) {
-		BOOST_THROW_EXCEPTION(win32_error()
-		    << boost::errinfo_api_function("LoadLibrary")
-		    << errinfo_win32_error(GetLastError())
-		    << boost::errinfo_file_name(path));
-	}
-#else /* _WIN32 */
-	void *hModule = dlopen(path.CStr(), RTLD_NOW | RTLD_GLOBAL);
-
-	if (hModule == NULL) {
-		BOOST_THROW_EXCEPTION(std::runtime_error("Could not load library '" + path + "': " + dlerror()));
-	}
-#endif /* _WIN32 */
-
-	ExecuteDeferredInitializers();
-}
-
-boost::thread_specific_ptr<std::vector<boost::function<void(void)> > >& Utility::GetDeferredInitializers(void)
-{
-	static boost::thread_specific_ptr<std::vector<boost::function<void(void)> > > initializers;
-	return initializers;
-}
-
-void Utility::ExecuteDeferredInitializers(void)
-{
-	if (!GetDeferredInitializers().get())
-		return;
-
-	BOOST_FOREACH(const boost::function<void(void)>& callback, *GetDeferredInitializers().get()) {
-		VERIFY(callback);
-		callback();
-	}
-
-	GetDeferredInitializers().reset();
-}
-
-void Utility::AddDeferredInitializer(const boost::function<void(void)>& callback)
-{
-	if (!GetDeferredInitializers().get())
-		GetDeferredInitializers().reset(new std::vector<boost::function<void(void)> >());
-
-	GetDeferredInitializers().get()->push_back(callback);
-}
-
-/**
  * Generates a new unique ID.
  *
  * @returns The new unique ID.
@@ -761,32 +695,60 @@ bool Utility::GlobRecursive(const String& path, const String& pattern, const boo
 }
 
 
-bool Utility::MkDir(const String& path, int flags)
+void Utility::MkDir(const String& path, int flags)
 {
 #ifndef _WIN32
 	if (mkdir(path.CStr(), flags) < 0 && errno != EEXIST) {
 #else /*_ WIN32 */
 	if (mkdir(path.CStr()) < 0 && errno != EEXIST) {
 #endif /* _WIN32 */
-		//TODO handle missing dirs properly
-		return false;
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("mkdir")
+		    << boost::errinfo_errno(errno));
 	}
-
-	return true;
 }
 
-bool Utility::MkDirP(const String& path, int flags)
+void Utility::MkDirP(const String& path, int mode)
 {
 	size_t pos = 0;
 
-	bool ret = true;
-
-	while (ret && pos != String::NPos) {
+	while (pos != String::NPos) {
 		pos = path.Find("/", pos + 1);
-		ret = MkDir(path.SubStr(0, pos), flags);
+		MkDir(path.SubStr(0, pos), mode);
+	}
+}
+
+void Utility::RemoveDirRecursive(const String& path)
+{
+	std::vector<String> paths;
+	Utility::GlobRecursive(path, "*", boost::bind(&Utility::CollectPaths, _1, boost::ref(paths)), GlobFile | GlobDirectory);
+
+	/* This relies on the fact that GlobRecursive lists the parent directory
+	   first before recursing into subdirectories. */
+	std::reverse(paths.begin(), paths.end());
+
+	BOOST_FOREACH(const String& path, paths) {
+		if (remove(path.CStr()) < 0)
+			BOOST_THROW_EXCEPTION(posix_error()
+			    << boost::errinfo_api_function("remove")
+			    << boost::errinfo_errno(errno)
+			    << boost::errinfo_file_name(path));
 	}
 
-	return ret;
+#ifndef _WIN32
+	if (rmdir(path.CStr()) < 0)
+#else /* _WIN32 */
+	if (_rmdir(path.CStr()) < 0)
+#endif /* _WIN32 */
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("rmdir")
+		    << boost::errinfo_errno(errno)
+		    << boost::errinfo_file_name(path));
+}
+
+void Utility::CollectPaths(const String& path, std::vector<String>& paths)
+{
+	paths.push_back(path);
 }
 
 void Utility::CopyFile(const String& source, const String& target)
@@ -844,7 +806,7 @@ bool Utility::SetFileOwnership(const String& file, const String& user, const Str
 }
 
 #ifndef _WIN32
-void Utility::SetNonBlocking(int fd)
+void Utility::SetNonBlocking(int fd, bool nb)
 {
 	int flags = fcntl(fd, F_GETFL, 0);
 
@@ -854,14 +816,19 @@ void Utility::SetNonBlocking(int fd)
 		    << boost::errinfo_errno(errno));
 	}
 
-	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+	if (nb)
+		flags |= O_NONBLOCK;
+	else
+		flags &= ~O_NONBLOCK;
+
+	if (fcntl(fd, F_SETFL, flags) < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("fcntl")
 		    << boost::errinfo_errno(errno));
 	}
 }
 
-void Utility::SetCloExec(int fd)
+void Utility::SetCloExec(int fd, bool cloexec)
 {
 	int flags = fcntl(fd, F_GETFD, 0);
 
@@ -871,7 +838,12 @@ void Utility::SetCloExec(int fd)
 		    << boost::errinfo_errno(errno));
 	}
 
-	if (fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0) {
+	if (cloexec)
+		flags |= FD_CLOEXEC;
+	else
+		flags &= ~FD_CLOEXEC;
+
+	if (fcntl(fd, F_SETFD, flags) < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("fcntl")
 		    << boost::errinfo_errno(errno));
@@ -879,13 +851,13 @@ void Utility::SetCloExec(int fd)
 }
 #endif /* _WIN32 */
 
-void Utility::SetNonBlockingSocket(SOCKET s)
+void Utility::SetNonBlockingSocket(SOCKET s, bool nb)
 {
 #ifndef _WIN32
-	SetNonBlocking(s);
+	SetNonBlocking(s, nb);
 #else /* _WIN32 */
-	unsigned long lTrue = 1;
-	ioctlsocket(s, FIONBIO, &lTrue);
+	unsigned long lflag = nb;
+	ioctlsocket(s, FIONBIO, &lflag);
 #endif /* _WIN32 */
 }
 
@@ -1017,7 +989,7 @@ String Utility::FormatErrorNumber(int code) {
 	String result = "Unknown error.";
 
 	DWORD rc = FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER |
-		FORMAT_MESSAGE_FROM_SYSTEM, NULL, code, 0, (char *)&message,
+		FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, code, 0, (char *)&message,
 		0, NULL);
 
 	if (rc != 0) {
@@ -1390,16 +1362,25 @@ static int HexDecode(char hc)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid hex character."));
 }
 
-String Utility::EscapeString(const String& s, const String& chars)
+String Utility::EscapeString(const String& s, const String& chars, const bool illegal)
 {
 	std::ostringstream result;
-
-	BOOST_FOREACH(char ch, s) {
-		if (chars.FindFirstOf(ch) != String::NPos || ch == '%') {
-			result << '%';
-			HexEncode(ch, result);
-		} else
-			result << ch;
+	if (illegal) {
+		BOOST_FOREACH(char ch, s) {
+			if (chars.FindFirstOf(ch) != String::NPos || ch == '%') {
+				result << '%';
+				HexEncode(ch, result);
+			} else
+				result << ch;
+		}
+	} else {
+		BOOST_FOREACH(char ch, s) {
+			if (chars.FindFirstOf(ch) == String::NPos || ch == '%') {
+				result << '%';
+				HexEncode(ch, result);
+			} else
+				result << ch;
+		}
 	}
 
 	return result.str();

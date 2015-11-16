@@ -18,7 +18,8 @@
  ******************************************************************************/
 
 #include "icinga/checkcommand.hpp"
-#include "base/dynamictype.hpp"
+#include "icinga/checkcommand.tcpp"
+#include "base/configtype.hpp"
 
 using namespace icinga;
 

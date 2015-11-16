@@ -21,9 +21,11 @@
 #define ARRAY_H
 
 #include "base/i2-base.hpp"
+#include "base/objectlock.hpp"
 #include "base/value.hpp"
 #include <boost/range/iterator.hpp>
 #include <vector>
+#include <set>
 
 namespace icinga
 {
@@ -45,12 +47,43 @@ public:
 
 	typedef std::vector<Value>::size_type SizeType;
 
+	inline Array(void)
+	{ }
+
+	inline ~Array(void)
+	{ }
+
 	Value Get(unsigned int index) const;
 	void Set(unsigned int index, const Value& value);
 	void Add(const Value& value);
 
-	Iterator Begin(void);
-	Iterator End(void);
+	/**
+	 * Returns an iterator to the beginning of the array.
+	 *
+	 * Note: Caller must hold the object lock while using the iterator.
+	 *
+	 * @returns An iterator.
+	 */
+	inline Iterator Begin(void)
+	{
+		ASSERT(OwnsLock());
+
+		return m_Data.begin();
+	}
+
+	/**
+	 * Returns an iterator to the end of the array.
+	 *
+	 * Note: Caller must hold the object lock while using the iterator.
+	 *
+	 * @returns An iterator.
+	 */
+	inline Iterator End(void)
+	{
+		ASSERT(OwnsLock());
+
+		return m_Data.end();
+	}
 
 	size_t GetLength(void) const;
 	bool Contains(const Value& value) const;
@@ -69,7 +102,27 @@ public:
 
 	static Object::Ptr GetPrototype(void);
 
+	template<typename T>
+	static Array::Ptr FromVector(const std::vector<T>& v)
+	{
+		Array::Ptr result = new Array();
+		ObjectLock olock(result);
+		std::copy(v.begin(), v.end(), std::back_inserter(result->m_Data));
+		return result;
+	}
+
+	template<typename T>
+	std::set<T> ToSet(void)
+	{
+		ObjectLock olock(this);
+		return std::set<T>(Begin(), End());
+	}
+
+	virtual Object::Ptr Clone(void) const override;
+
 	Array::Ptr Reverse(void) const;
+
+	virtual String ToString(void) const override;
 
 private:
 	std::vector<Value> m_Data; /**< The data for the array. */

@@ -18,275 +18,372 @@
  ******************************************************************************/
 
 #include "remote/apiclient.hpp"
-#include "remote/apilistener.hpp"
-#include "remote/apifunction.hpp"
-#include "remote/jsonrpc.hpp"
-#include "base/dynamictype.hpp"
-#include "base/objectlock.hpp"
-#include "base/utility.hpp"
+#include "remote/base64.hpp"
+#include "base/json.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
-#include <boost/thread/once.hpp>
+#include "base/convert.hpp"
+#include <boost/foreach.hpp>
 
 using namespace icinga;
 
-static Value SetLogPositionHandler(const MessageOrigin& origin, const Dictionary::Ptr& params);
-REGISTER_APIFUNCTION(SetLogPosition, log, &SetLogPositionHandler);
-static Value RequestCertificateHandler(const MessageOrigin& origin, const Dictionary::Ptr& params);
-REGISTER_APIFUNCTION(RequestCertificate, pki, &RequestCertificateHandler);
-
-static boost::once_flag l_ApiClientOnceFlag = BOOST_ONCE_INIT;
-static Timer::Ptr l_ApiClientTimeoutTimer;
-
-ApiClient::ApiClient(const String& identity, bool authenticated, const TlsStream::Ptr& stream, ConnectionRole role)
-	: m_Identity(identity), m_Authenticated(authenticated), m_Stream(stream), m_Role(role), m_Seen(Utility::GetTime()),
-	  m_NextHeartbeat(0), m_HeartbeatTimeout(0)
+ApiClient::ApiClient(const String& host, const String& port,
+    const String& user, const String& password)
+    : m_Connection(new HttpClientConnection(host, port, true)), m_User(user), m_Password(password)
 {
-	boost::call_once(l_ApiClientOnceFlag, &ApiClient::StaticInitialize);
-
-	if (authenticated)
-		m_Endpoint = Endpoint::GetByName(identity);
+	m_Connection->Start();
 }
 
-void ApiClient::StaticInitialize(void)
+void ApiClient::GetTypes(const TypesCompletionCallback& callback) const
 {
-	l_ApiClientTimeoutTimer = new Timer();
-	l_ApiClientTimeoutTimer->OnTimerExpired.connect(boost::bind(&ApiClient::TimeoutTimerHandler));
-	l_ApiClientTimeoutTimer->SetInterval(15);
-	l_ApiClientTimeoutTimer->Start();
-}
+	Url::Ptr url = new Url();
+	url->SetScheme("https");
+	url->SetHost(m_Connection->GetHost());
+	url->SetPort(m_Connection->GetPort());
 
-void ApiClient::Start(void)
-{
-	m_Stream->RegisterDataHandler(boost::bind(&ApiClient::DataAvailableHandler, this));
-	if (m_Stream->IsDataAvailable())
-		DataAvailableHandler();
-}
-
-String ApiClient::GetIdentity(void) const
-{
-	return m_Identity;
-}
-
-bool ApiClient::IsAuthenticated(void) const
-{
-	return m_Authenticated;
-}
-
-Endpoint::Ptr ApiClient::GetEndpoint(void) const
-{
-	return m_Endpoint;
-}
-
-TlsStream::Ptr ApiClient::GetStream(void) const
-{
-	return m_Stream;
-}
-
-ConnectionRole ApiClient::GetRole(void) const
-{
-	return m_Role;
-}
-
-void ApiClient::SendMessage(const Dictionary::Ptr& message)
-{
-	m_WriteQueue.Enqueue(boost::bind(&ApiClient::SendMessageSync, ApiClient::Ptr(this), message), true);
-}
-
-void ApiClient::SendMessageSync(const Dictionary::Ptr& message)
-{
-	try {
-		ObjectLock olock(m_Stream);
-		if (m_Stream->IsEof())
-			return;
-		JsonRpc::SendMessage(m_Stream, message);
-	} catch (const std::exception& ex) {
-		std::ostringstream info;
-		info << "Error while sending JSON-RPC message for identity '" << m_Identity << "'";
-		Log(LogWarning, "ApiClient")
-		    << info.str();
-		Log(LogDebug, "ApiClient")
-		    << info.str() << "\n" << DiagnosticInformation(ex);
-
-		Disconnect();
-	}
-}
-
-void ApiClient::Disconnect(void)
-{
-	Log(LogWarning, "ApiClient")
-	    << "API client disconnected for identity '" << m_Identity << "'";
-
-	if (m_Endpoint)
-		m_Endpoint->RemoveClient(this);
-	else {
-		ApiListener::Ptr listener = ApiListener::GetInstance();
-		listener->RemoveAnonymousClient(this);
-	}
-
-	m_Stream->Close();
-}
-
-bool ApiClient::ProcessMessage(void)
-{
-	Dictionary::Ptr message;
-
-	StreamReadStatus srs = JsonRpc::ReadMessage(m_Stream, &message, m_Context);
-
-	if (srs != StatusNewItem)
-		return false;
-
-	m_Seen = Utility::GetTime();
-
-	if (m_HeartbeatTimeout != 0)
-		m_NextHeartbeat = Utility::GetTime() + m_HeartbeatTimeout;
-
-	if (m_Endpoint && message->Contains("ts")) {
-		double ts = message->Get("ts");
-
-		/* ignore old messages */
-		if (ts < m_Endpoint->GetRemoteLogPosition())
-			return true;
-
-		m_Endpoint->SetRemoteLogPosition(ts);
-	}
-
-	MessageOrigin origin;
-	origin.FromClient = this;
-
-	if (m_Endpoint) {
-		if (m_Endpoint->GetZone() != Zone::GetLocalZone())
-			origin.FromZone = m_Endpoint->GetZone();
-		else
-			origin.FromZone = Zone::GetByName(message->Get("originZone"));
-	}
-
-	String method = message->Get("method");
-
-	Log(LogNotice, "ApiClient")
-	    << "Received '" << method << "' message from '" << m_Identity << "'";
-
-	Dictionary::Ptr resultMessage = new Dictionary();
+	std::vector<String> path;
+	path.push_back("v1");
+	path.push_back("types");
+	url->SetPath(path);
 
 	try {
-		ApiFunction::Ptr afunc = ApiFunction::GetByName(method);
-
-		if (!afunc)
-			BOOST_THROW_EXCEPTION(std::invalid_argument("Function '" + method + "' does not exist."));
-
-		resultMessage->Set("result", afunc->Invoke(origin, message->Get("params")));
+		boost::shared_ptr<HttpRequest> req = m_Connection->NewRequest();
+		req->RequestMethod = "GET";
+		req->RequestUrl = url;
+		req->AddHeader("Authorization", "Basic " + Base64::Encode(m_User + ":" + m_Password));
+		req->AddHeader("Accept", "application/json");
+		m_Connection->SubmitRequest(req, boost::bind(TypesHttpCompletionCallback, _1, _2, callback));
 	} catch (const std::exception& ex) {
-		//TODO: Add a user readable error message for the remote caller
-		resultMessage->Set("error", DiagnosticInformation(ex));
-		std::ostringstream info;
-		info << "Error while processing message for identity '" << m_Identity << "'";
-		Log(LogWarning, "ApiClient")
-		    << info.str();
-		Log(LogDebug, "ApiClient")
-		    << info.str() << "\n" << DiagnosticInformation(ex);
+		callback(boost::current_exception(), std::vector<ApiType::Ptr>());
 	}
-
-	if (message->Contains("id")) {
-		resultMessage->Set("jsonrpc", "2.0");
-		resultMessage->Set("id", message->Get("id"));
-		JsonRpc::SendMessage(m_Stream, resultMessage);
-	}
-
-	return true;
 }
 
-void ApiClient::DataAvailableHandler(void)
+void ApiClient::TypesHttpCompletionCallback(HttpRequest& request, HttpResponse& response,
+    const TypesCompletionCallback& callback)
 {
-	boost::mutex::scoped_lock lock(m_DataHandlerMutex);
+	Dictionary::Ptr result;
+
+	String body;
+	char buffer[1024];
+	size_t count;
+
+	while ((count = response.ReadBody(buffer, sizeof(buffer))) > 0)
+		body += String(buffer, buffer + count);
 
 	try {
-		while (ProcessMessage())
-			; /* empty loop body */
+		if (response.StatusCode < 200 || response.StatusCode > 299) {
+			std::string message = "HTTP request failed; Code: " + Convert::ToString(response.StatusCode) + "; Body: " + body;
+
+			BOOST_THROW_EXCEPTION(ScriptError(message));
+		}
+
+		std::vector<ApiType::Ptr> types;
+
+		result = JsonDecode(body);
+
+		Array::Ptr results = result->Get("results");
+
+		ObjectLock olock(results);
+		BOOST_FOREACH(const Dictionary::Ptr typeInfo, results)
+		{
+			ApiType::Ptr type = new ApiType();;
+			type->Abstract = typeInfo->Get("abstract");
+			type->BaseName = typeInfo->Get("base");
+			type->Name = typeInfo->Get("name");
+			type->PluralName = typeInfo->Get("plural_name");
+			// TODO: attributes
+			types.push_back(type);
+		}
+
+		callback(boost::exception_ptr(), types);
 	} catch (const std::exception& ex) {
-		Log(LogWarning, "ApiClient")
-		    << "Error while reading JSON-RPC message for identity '" << m_Identity << "': " << DiagnosticInformation(ex);
+		Log(LogCritical, "ApiClient")
+		    << "Error while decoding response: " << DiagnosticInformation(ex);
+		callback(boost::current_exception(), std::vector<ApiType::Ptr>());
+	}
 
-		Disconnect();
+}
+
+void ApiClient::GetObjects(const String& pluralType, const ObjectsCompletionCallback& callback,
+    const std::vector<String>& names, const std::vector<String>& attrs, const std::vector<String>& joins, bool all_joins) const
+{
+	Url::Ptr url = new Url();
+	url->SetScheme("https");
+	url->SetHost(m_Connection->GetHost());
+	url->SetPort(m_Connection->GetPort());
+
+	std::vector<String> path;
+	path.push_back("v1");
+	path.push_back("objects");
+	path.push_back(pluralType);
+	url->SetPath(path);
+
+	std::map<String, std::vector<String> > params;
+
+	BOOST_FOREACH(const String& name, names) {
+		params[pluralType.ToLower()].push_back(name);
+	}
+
+	BOOST_FOREACH(const String& attr, attrs) {
+		params["attrs"].push_back(attr);
+	}
+
+	BOOST_FOREACH(const String& join, joins) {
+		params["joins"].push_back(join);
+	}
+
+	params["all_joins"].push_back(all_joins ? "1" : "0");
+
+	url->SetQuery(params);
+
+	try {
+		boost::shared_ptr<HttpRequest> req = m_Connection->NewRequest();
+		req->RequestMethod = "GET";
+		req->RequestUrl = url;
+		req->AddHeader("Authorization", "Basic " + Base64::Encode(m_User + ":" + m_Password));
+		req->AddHeader("Accept", "application/json");
+		m_Connection->SubmitRequest(req, boost::bind(ObjectsHttpCompletionCallback, _1, _2, callback));
+	} catch (const std::exception& ex) {
+		callback(boost::current_exception(), std::vector<ApiObject::Ptr>());
 	}
 }
 
-Value SetLogPositionHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
+void ApiClient::ObjectsHttpCompletionCallback(HttpRequest& request,
+    HttpResponse& response, const ObjectsCompletionCallback& callback)
 {
-	if (!params)
-		return Empty;
+	Dictionary::Ptr result;
 
-	double log_position = params->Get("log_position");
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
+	String body;
+	char buffer[1024];
+	size_t count;
 
-	if (!endpoint)
-		return Empty;
+	while ((count = response.ReadBody(buffer, sizeof(buffer))) > 0)
+		body += String(buffer, buffer + count);
 
-	if (log_position > endpoint->GetLocalLogPosition())
-		endpoint->SetLocalLogPosition(log_position);
+	try {
+		if (response.StatusCode < 200 || response.StatusCode > 299) {
+			std::string message = "HTTP request failed; Code: " + Convert::ToString(response.StatusCode) + "; Body: " + body;
 
-	return Empty;
-}
-
-Value RequestCertificateHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	if (!params)
-		return Empty;
-
-	Dictionary::Ptr result = new Dictionary();
-
-	if (!origin.FromClient->IsAuthenticated()) {
-		ApiListener::Ptr listener = ApiListener::GetInstance();
-		String salt = listener->GetTicketSalt();
-
-		if (salt.IsEmpty()) {
-			result->Set("error", "Ticket salt is not configured.");
-			return result;
+			BOOST_THROW_EXCEPTION(ScriptError(message));
 		}
 
-		String ticket = params->Get("ticket");
-		String realTicket = PBKDF2_SHA1(origin.FromClient->GetIdentity(), salt, 50000);
+		std::vector<ApiObject::Ptr> objects;
 
-		if (ticket != realTicket) {
-			result->Set("error", "Invalid ticket.");
-			return result;
+		result = JsonDecode(body);
+
+		Array::Ptr results = result->Get("results");
+
+		if (results) {
+			ObjectLock olock(results);
+			BOOST_FOREACH(const Dictionary::Ptr objectInfo, results) {
+				ApiObject::Ptr object = new ApiObject();
+
+				object->Name = objectInfo->Get("name");
+				object->Type = objectInfo->Get("type");
+
+				Dictionary::Ptr attrs = objectInfo->Get("attrs");
+
+				if (attrs) {
+					ObjectLock olock(attrs);
+					BOOST_FOREACH(const Dictionary::Pair& kv, attrs) {
+						object->Attrs[object->Type.ToLower() + "." + kv.first] = kv.second;
+					}
+				}
+
+				Dictionary::Ptr joins = objectInfo->Get("joins");
+
+				if (joins) {
+					ObjectLock olock(joins);
+					BOOST_FOREACH(const Dictionary::Pair& kv, joins) {
+						Dictionary::Ptr attrs = kv.second;
+
+						if (attrs) {
+							ObjectLock olock(attrs);
+							BOOST_FOREACH(const Dictionary::Pair& kv2, attrs) {
+								object->Attrs[kv.first + "." + kv2.first] = kv2.second;
+							}
+						}
+					}
+				}
+
+				Array::Ptr used_by = objectInfo->Get("used_by");
+
+				if (used_by) {
+					ObjectLock olock(used_by);
+					BOOST_FOREACH(const Dictionary::Ptr& refInfo, used_by) {
+						ApiObjectReference ref;
+						ref.Name = refInfo->Get("name");
+						ref.Type = refInfo->Get("type");
+						object->UsedBy.push_back(ref);
+					}
+				}
+
+				objects.push_back(object);
+			}
 		}
+
+		callback(boost::exception_ptr(), objects);
+	} catch (const std::exception& ex) {
+		Log(LogCritical, "ApiClient")
+			<< "Error while decoding response: " << DiagnosticInformation(ex);
+		callback(boost::current_exception(), std::vector<ApiObject::Ptr>());
 	}
-
-	boost::shared_ptr<X509> cert = origin.FromClient->GetStream()->GetPeerCertificate();
-
-	EVP_PKEY *pubkey = X509_get_pubkey(cert.get());
-	X509_NAME *subject = X509_get_subject_name(cert.get());
-
-	boost::shared_ptr<X509> newcert = CreateCertIcingaCA(pubkey, subject);
-	result->Set("cert", CertificateToString(newcert));
-
-	String cacertfile = GetIcingaCADir() + "/ca.crt";
-	boost::shared_ptr<X509> cacert = GetX509Certificate(cacertfile);
-	result->Set("ca", CertificateToString(cacert));
-
-	return result;
 }
 
-void ApiClient::CheckLiveness(void)
+void ApiClient::ExecuteScript(const String& session, const String& command, bool sandboxed,
+    const ExecuteScriptCompletionCallback& callback) const
 {
-	if (m_Seen < Utility::GetTime() - 60 && (!m_Endpoint || !m_Endpoint->GetSyncing())) {
-		Log(LogInformation, "ApiClient")
-		    <<  "No messages for identity '" << m_Identity << "' have been received in the last 60 seconds.";
-		Disconnect();
+	Url::Ptr url = new Url();
+	url->SetScheme("https");
+	url->SetHost(m_Connection->GetHost());
+	url->SetPort(m_Connection->GetPort());
+
+	std::vector<String> path;
+	path.push_back("v1");
+	path.push_back("console");
+	path.push_back("execute-script");
+	url->SetPath(path);
+
+	std::map<String, std::vector<String> > params;
+	params["session"].push_back(session);
+	params["command"].push_back(command);
+	params["sandboxed"].push_back(sandboxed ? "1" : "0");
+	url->SetQuery(params);
+
+	try {
+		boost::shared_ptr<HttpRequest> req = m_Connection->NewRequest();
+		req->RequestMethod = "POST";
+		req->RequestUrl = url;
+		req->AddHeader("Authorization", "Basic " + Base64::Encode(m_User + ":" + m_Password));
+		req->AddHeader("Accept", "application/json");
+		m_Connection->SubmitRequest(req, boost::bind(ExecuteScriptHttpCompletionCallback, _1, _2, callback));
+	} catch (const std::exception& ex) {
+		callback(boost::current_exception(), Empty);
 	}
 }
 
-void ApiClient::TimeoutTimerHandler(void)
+void ApiClient::ExecuteScriptHttpCompletionCallback(HttpRequest& request,
+    HttpResponse& response, const ExecuteScriptCompletionCallback& callback)
 {
-	ApiListener::Ptr listener = ApiListener::GetInstance();
+	Dictionary::Ptr result;
 
-	BOOST_FOREACH(const ApiClient::Ptr& client, listener->GetAnonymousClients()) {
-		client->CheckLiveness();
-	}
+	String body;
+	char buffer[1024];
+	size_t count;
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
-		BOOST_FOREACH(const ApiClient::Ptr& client, endpoint->GetClients()) {
-			client->CheckLiveness();
+	while ((count = response.ReadBody(buffer, sizeof(buffer))) > 0)
+		body += String(buffer, buffer + count);
+
+	try {
+		if (response.StatusCode < 200 || response.StatusCode > 299) {
+			std::string message = "HTTP request failed; Code: " + Convert::ToString(response.StatusCode) + "; Body: " + body;
+
+			BOOST_THROW_EXCEPTION(ScriptError(message));
 		}
+
+		result = JsonDecode(body);
+
+		Array::Ptr results = result->Get("results");
+		Value result;
+		bool incompleteExpression = false;
+		String errorMessage = "Unexpected result from API.";
+
+		if (results && results->GetLength() > 0) {
+			Dictionary::Ptr resultInfo = results->Get(0);
+			errorMessage = resultInfo->Get("status");
+
+			if (resultInfo->Get("code") >= 200 && resultInfo->Get("code") <= 299) {
+				result = resultInfo->Get("result");
+			} else {
+				DebugInfo di;
+				Dictionary::Ptr debugInfo = resultInfo->Get("debug_info");
+				if (debugInfo) {
+					di.Path = debugInfo->Get("path");
+					di.FirstLine = debugInfo->Get("first_line");
+					di.FirstColumn = debugInfo->Get("first_column");
+					di.LastLine = debugInfo->Get("last_line");
+					di.LastColumn = debugInfo->Get("last_column");
+				}
+				bool incompleteExpression = resultInfo->Get("incomplete_expression");
+				BOOST_THROW_EXCEPTION(ScriptError(errorMessage, di, incompleteExpression));
+			}
+		}
+
+		callback(boost::exception_ptr(), result);
+	} catch (const std::exception& ex) {
+		callback(boost::current_exception(), Empty);
+	}
+}
+
+void ApiClient::AutocompleteScript(const String& session, const String& command, bool sandboxed,
+    const AutocompleteScriptCompletionCallback& callback) const
+{
+	Url::Ptr url = new Url();
+	url->SetScheme("https");
+	url->SetHost(m_Connection->GetHost());
+	url->SetPort(m_Connection->GetPort());
+
+	std::vector<String> path;
+	path.push_back("v1");
+	path.push_back("console");
+	path.push_back("auto-complete-script");
+	url->SetPath(path);
+
+	std::map<String, std::vector<String> > params;
+	params["session"].push_back(session);
+	params["command"].push_back(command);
+	params["sandboxed"].push_back(sandboxed ? "1" : "0");
+	url->SetQuery(params);
+
+	try {
+		boost::shared_ptr<HttpRequest> req = m_Connection->NewRequest();
+		req->RequestMethod = "POST";
+		req->RequestUrl = url;
+		req->AddHeader("Authorization", "Basic " + Base64::Encode(m_User + ":" + m_Password));
+		req->AddHeader("Accept", "application/json");
+		m_Connection->SubmitRequest(req, boost::bind(AutocompleteScriptHttpCompletionCallback, _1, _2, callback));
+	} catch (const std::exception& ex) {
+		callback(boost::current_exception(), Array::Ptr());
+	}
+}
+
+void ApiClient::AutocompleteScriptHttpCompletionCallback(HttpRequest& request,
+    HttpResponse& response, const AutocompleteScriptCompletionCallback& callback)
+{
+	Dictionary::Ptr result;
+
+	String body;
+	char buffer[1024];
+	size_t count;
+
+	while ((count = response.ReadBody(buffer, sizeof(buffer))) > 0)
+		body += String(buffer, buffer + count);
+
+	try {
+		if (response.StatusCode < 200 || response.StatusCode > 299) {
+			std::string message = "HTTP request failed; Code: " + Convert::ToString(response.StatusCode) + "; Body: " + body;
+
+			BOOST_THROW_EXCEPTION(ScriptError(message));
+		}
+
+		result = JsonDecode(body);
+
+		Array::Ptr results = result->Get("results");
+		Array::Ptr suggestions;
+		String errorMessage = "Unexpected result from API.";
+
+		if (results && results->GetLength() > 0) {
+			Dictionary::Ptr resultInfo = results->Get(0);
+			errorMessage = resultInfo->Get("status");
+
+			if (resultInfo->Get("code") >= 200 && resultInfo->Get("code") <= 299)
+				suggestions = resultInfo->Get("suggestions");
+			else
+				BOOST_THROW_EXCEPTION(ScriptError(errorMessage));
+		}
+
+		callback(boost::exception_ptr(), suggestions);
+	} catch (const std::exception& ex) {
+		callback(boost::current_exception(), Array::Ptr());
 	}
 }

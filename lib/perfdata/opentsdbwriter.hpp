@@ -22,7 +22,7 @@
 
 #include "perfdata/opentsdbwriter.thpp"
 #include "icinga/service.hpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "base/tcpsocket.hpp"
 #include "base/timer.hpp"
 #include <fstream>
@@ -44,7 +44,7 @@ public:
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
 protected:
-	virtual void Start(void);
+	virtual void Start(bool runtimeCreated) override;
 
 private:
 	Stream::Ptr m_Stream;

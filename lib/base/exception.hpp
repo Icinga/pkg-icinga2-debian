@@ -26,6 +26,8 @@
 #include "base/context.hpp"
 #include "base/utility.hpp"
 #include "base/debuginfo.hpp"
+#include "base/dictionary.hpp"
+#include "base/configobject.hpp"
 #include <sstream>
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/errinfo_errno.hpp>
@@ -53,15 +55,45 @@ public:
 	ScriptError(const String& message, const DebugInfo& di, bool incompleteExpr = false);
 	~ScriptError(void) throw();
 
-	virtual const char *what(void) const throw();
+	virtual const char *what(void) const throw() override;
 
 	DebugInfo GetDebugInfo(void) const;
 	bool IsIncompleteExpression(void) const;
+
+	bool IsHandledByDebugger(void) const;
+	void SetHandledByDebugger(bool handled);
 
 private:
 	String m_Message;
 	DebugInfo m_DebugInfo;
 	bool m_IncompleteExpr;
+	bool m_HandledByDebugger;
+};
+
+/*
+ * @ingroup base
+ */
+class I2_BASE_API ValidationError : virtual public user_error
+{
+public:
+	ValidationError(const ConfigObject::Ptr& object, const std::vector<String>& attributePath, const String& message);
+	~ValidationError(void) throw();
+
+	virtual const char *what(void) const throw() override;
+
+	ConfigObject::Ptr GetObject(void) const;
+	std::vector<String> GetAttributePath(void) const;
+	String GetMessage(void) const;
+
+	void SetDebugHint(const Dictionary::Ptr& dhint);
+	Dictionary::Ptr GetDebugHint(void) const;
+
+private:
+	ConfigObject::Ptr m_Object;
+	std::vector<String> m_AttributePath;
+	String m_Message;
+	String m_What;
+	Dictionary::Ptr m_DebugHint;
 };
 
 I2_BASE_API StackTrace *GetLastExceptionStack(void);
@@ -96,7 +128,7 @@ public:
 	posix_error(void);
 	virtual ~posix_error(void) throw();
 
-	virtual const char *what(void) const throw();
+	virtual const char *what(void) const throw() override;
 
 private:
 	mutable char *m_Message;
@@ -119,7 +151,15 @@ typedef boost::error_info<struct errinfo_getaddrinfo_error_, int> errinfo_getadd
 
 inline std::string to_string(const errinfo_getaddrinfo_error& e)
 {
-	return "[errinfo_getaddrinfo_error] = " + String(gai_strerror(e.value())) + "\n";
+	String msg;
+
+#ifdef _WIN32
+	msg = gai_strerrorA(e.value());
+#else /* _WIN32 */
+	msg = gai_strerror(e.value());
+#endif /* _WIN32 */
+
+	return "[errinfo_getaddrinfo_error] = " + String(msg) + "\n";
 }
 
 struct errinfo_message_;

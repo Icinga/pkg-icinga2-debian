@@ -28,7 +28,7 @@
 
 using namespace icinga;
 
-bool ExecuteExpression(Expression *expression)
+static bool ExecuteExpression(Expression *expression)
 {
 	if (!expression)
 		return false;
@@ -44,25 +44,43 @@ bool ExecuteExpression(Expression *expression)
 	return true;
 }
 
-void IncludeZoneDirRecursive(const String& path, bool& success)
+static void IncludeZoneDirRecursive(const String& path, const String& package, bool& success)
 {
 	String zoneName = Utility::BaseName(path);
 
+	/* register this zone path for cluster config sync */
+	ConfigCompiler::RegisterZoneDir("_etc", path, zoneName);
+
 	std::vector<Expression *> expressions;
-	Utility::GlobRecursive(path, "*.conf", boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, zoneName), GlobFile);
+	Utility::GlobRecursive(path, "*.conf", boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, zoneName, package), GlobFile);
 	DictExpression expr(expressions);
 	if (!ExecuteExpression(&expr))
 		success = false;
 }
 
-void IncludeNonLocalZone(const String& zonePath, bool& success)
+static void IncludeNonLocalZone(const String& zonePath, const String& package, bool& success)
 {
 	String etcPath = Application::GetZonesDir() + "/" + Utility::BaseName(zonePath);
 
 	if (Utility::PathExists(etcPath) || Utility::PathExists(zonePath + "/.authoritative"))
 		return;
 
-	IncludeZoneDirRecursive(zonePath, success);
+	IncludeZoneDirRecursive(zonePath, package, success);
+}
+
+static void IncludePackage(const String& packagePath, bool& success)
+{
+	String packageName = Utility::BaseName(packagePath);
+	
+	if (Utility::PathExists(packagePath + "/include.conf")) {
+		Expression *expr = ConfigCompiler::CompileFile(packagePath + "/include.conf",
+		    String(), packageName);
+		
+		if (!ExecuteExpression(expr))
+			success = false;
+			
+		delete expr;
+	}
 }
 
 bool DaemonUtility::ValidateConfigFiles(const std::vector<std::string>& configs, const String& objectsFile)
@@ -73,7 +91,7 @@ bool DaemonUtility::ValidateConfigFiles(const std::vector<std::string>& configs,
 
 	if (!configs.empty()) {
 		BOOST_FOREACH(const String& configPath, configs) {
-			Expression *expression = ConfigCompiler::CompileFile(configPath);
+			Expression *expression = ConfigCompiler::CompileFile(configPath, String(), "_etc");
 			success = ExecuteExpression(expression);
 			delete expression;
 			if (!success)
@@ -87,43 +105,46 @@ bool DaemonUtility::ValidateConfigFiles(const std::vector<std::string>& configs,
 
 	String zonesEtcDir = Application::GetZonesDir();
 	if (!zonesEtcDir.IsEmpty() && Utility::PathExists(zonesEtcDir))
-		Utility::Glob(zonesEtcDir + "/*", boost::bind(&IncludeZoneDirRecursive, _1, boost::ref(success)), GlobDirectory);
+		Utility::Glob(zonesEtcDir + "/*", boost::bind(&IncludeZoneDirRecursive, _1, "_etc", boost::ref(success)), GlobDirectory);
 
 	if (!success)
 		return false;
 
 	String zonesVarDir = Application::GetLocalStateDir() + "/lib/icinga2/api/zones";
 	if (Utility::PathExists(zonesVarDir))
-		Utility::Glob(zonesVarDir + "/*", boost::bind(&IncludeNonLocalZone, _1, boost::ref(success)), GlobDirectory);
+		Utility::Glob(zonesVarDir + "/*", boost::bind(&IncludeNonLocalZone, _1, "_cluster", boost::ref(success)), GlobDirectory);
 
 	if (!success)
 		return false;
 
-	String name, fragment;
-	BOOST_FOREACH(boost::tie(name, fragment), ConfigFragmentRegistry::GetInstance()->GetItems()) {
-		Expression *expression = ConfigCompiler::CompileText(name, fragment);
-		success = ExecuteExpression(expression);
-		delete expression;
-		if (!success)
-			return false;
+	String packagesVarDir = Application::GetLocalStateDir() + "/lib/icinga2/api/packages";
+	if (Utility::PathExists(packagesVarDir))
+		Utility::Glob(packagesVarDir + "/*", boost::bind(&IncludePackage, _1, boost::ref(success)), GlobDirectory);
+
+	if (!success)
+		return false;
+
+	String appType = ScriptGlobal::Get("ApplicationType", &Empty);
+
+	if (ConfigItem::GetItems(appType).empty()) {
+		ConfigItemBuilder::Ptr builder = new ConfigItemBuilder();
+		builder->SetType(appType);
+		builder->SetName("app");
+		ConfigItem::Ptr item = builder->Compile();
+		item->Register();
 	}
 
 	return true;
 }
 
-bool DaemonUtility::LoadConfigFiles(const std::vector<std::string>& configs, const String& appType,
-									const String& objectsFile, const String& varsfile)
+bool DaemonUtility::LoadConfigFiles(const std::vector<std::string>& configs,
+    const String& objectsFile, const String& varsfile)
 {
 	if (!DaemonUtility::ValidateConfigFiles(configs, objectsFile))
 		return false;
 
-	ConfigItemBuilder::Ptr builder = new ConfigItemBuilder();
-	builder->SetType(appType);
-	builder->SetName("application");
-	ConfigItem::Ptr item = builder->Compile();
-	item->Register();
-
-	bool result = ConfigItem::CommitItems();
+	WorkQueue upq(25000, Application::GetConcurrency());
+	bool result = ConfigItem::CommitItems(upq);
 
 	if (!result)
 		return false;

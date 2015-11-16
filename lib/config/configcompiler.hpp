@@ -22,7 +22,6 @@
 
 #include "config/i2-config.hpp"
 #include "config/expression.hpp"
-#include "config/configtype.hpp"
 #include "base/debuginfo.hpp"
 #include "base/registry.hpp"
 #include "base/initialize.hpp"
@@ -65,6 +64,12 @@ struct EItemInfo
 	CompilerDebugInfo DebugInfo;
 };
 
+struct ZoneFragment
+{
+	String Tag;
+	String Path;
+};
+
 /**
  * The configuration compiler can be used to compile a configuration file
  * into a number of configuration items.
@@ -74,14 +79,18 @@ struct EItemInfo
 class I2_CONFIG_API ConfigCompiler
 {
 public:
-	explicit ConfigCompiler(const String& path, std::istream *input, const String& zone = String());
+	explicit ConfigCompiler(const String& path, std::istream *input,
+	    const String& zone = String(), const String& package = String());
 	virtual ~ConfigCompiler(void);
 
 	Expression *Compile(void);
 
-	static Expression *CompileStream(const String& path, std::istream *stream, const String& zone = String());
-	static Expression *CompileFile(const String& path, const String& zone = String());
-	static Expression *CompileText(const String& path, const String& text, const String& zone = String());
+	static Expression *CompileStream(const String& path, std::istream *stream,
+	    const String& zone = String(), const String& package = String());
+	static Expression *CompileFile(const String& path, const String& zone = String(),
+	    const String& package = String());
+	static Expression *CompileText(const String& path, const String& text,
+	    const String& zone = String(), const String& package = String());
 
 	static void AddIncludeSearchDir(const String& dir);
 
@@ -89,16 +98,25 @@ public:
 
 	void SetZone(const String& zone);
 	String GetZone(void) const;
+	
+	void SetPackage(const String& package);
+	String GetPackage(void) const;
 
-	static void CollectIncludes(std::vector<Expression *>& expressions, const String& file, const String& zone);
+	static void CollectIncludes(std::vector<Expression *>& expressions,
+	    const String& file, const String& zone, const String& package);
 
-	/* internally used methods */
-	Expression *HandleInclude(const String& include, bool search, const DebugInfo& debuginfo = DebugInfo());
-	Expression *HandleIncludeRecursive(const String& path, const String& pattern, const DebugInfo& debuginfo = DebugInfo());
-	void HandleLibrary(const String& library);
+	static Expression *HandleInclude(const String& relativeBase, const String& path, bool search,
+	    const String& zone, const String& package, const DebugInfo& debuginfo = DebugInfo());
+	static Expression *HandleIncludeRecursive(const String& relativeBase, const String& path,
+	    const String& pattern, const String& zone, const String& package, const DebugInfo& debuginfo = DebugInfo());
+	static Expression *HandleIncludeZones(const String& relativeBase, const String& tag,
+	    const String& path, const String& pattern, const String& package, const DebugInfo& debuginfo = DebugInfo());
 
 	size_t ReadInput(char *buffer, size_t max_bytes);
 	void *GetScanner(void) const;
+
+	static std::vector<ZoneFragment> GetZoneDirs(const String& zone);
+	static void RegisterZoneDir(const String& tag, const String& ppath, const String& zoneName);
 
 private:
 	boost::promise<boost::shared_ptr<Expression> > m_Promise;
@@ -106,15 +124,18 @@ private:
 	String m_Path;
 	std::istream *m_Input;
 	String m_Zone;
+	String m_Package;
 
 	void *m_Scanner;
 
 	static std::vector<String> m_IncludeSearchDirs;
+	static boost::mutex m_ZoneDirsMutex;
+	static std::map<String, std::vector<ZoneFragment> > m_ZoneDirs;
 
 	void InitializeScanner(void);
 	void DestroyScanner(void);
 
-	void HandleIncludeZone(const String& tag, const String& path, const String& pattern, std::vector<Expression *>& expressions);
+	static void HandleIncludeZone(const String& relativeBase, const String& tag, const String& path, const String& pattern, const String& package, std::vector<Expression *>& expressions);
 
 public:
 	bool m_Eof;
@@ -122,9 +143,6 @@ public:
 
 	std::ostringstream m_LexBuffer;
 	CompilerDebugInfo m_LocationBegin;
-
-	std::stack<TypeRuleList::Ptr> m_RuleLists;
-	ConfigType::Ptr m_Type;
 
 	std::stack<bool> m_IgnoreNewlines;
 	std::stack<bool> m_Apply;
@@ -137,22 +155,6 @@ public:
 	std::stack<String> m_FVVar;
 	std::stack<Expression *> m_FTerm;
 };
-
-class I2_CONFIG_API ConfigFragmentRegistry : public Registry<ConfigFragmentRegistry, String>
-{
-public:
-	static ConfigFragmentRegistry *GetInstance(void);
-};
-
-#define REGISTER_CONFIG_FRAGMENT(id, name, fragment) \
-	namespace { \
-		void RegisterConfigFragment(void) \
-		{ \
-			icinga::ConfigFragmentRegistry::GetInstance()->Register(name, fragment); \
-		} \
-		\
-		INITIALIZE_ONCE(RegisterConfigFragment); \
-	}
 
 }
 

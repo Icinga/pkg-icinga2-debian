@@ -18,8 +18,9 @@
  ******************************************************************************/
 
 #include "icinga/icingastatuswriter.hpp"
+#include "icinga/icingastatuswriter.tcpp"
 #include "icinga/cib.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
 #include "base/application.hpp"
@@ -33,13 +34,13 @@ using namespace icinga;
 
 REGISTER_TYPE(IcingaStatusWriter);
 
-REGISTER_STATSFUNCTION(IcingaStatusWriterStats, &IcingaStatusWriter::StatsFunc);
+REGISTER_STATSFUNCTION(IcingaStatusWriter, &IcingaStatusWriter::StatsFunc);
 
 void IcingaStatusWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const IcingaStatusWriter::Ptr& icingastatuswriter, DynamicType::GetObjectsByType<IcingaStatusWriter>()) {
+	BOOST_FOREACH(const IcingaStatusWriter::Ptr& icingastatuswriter, ConfigType::GetObjectsByType<IcingaStatusWriter>()) {
 		nodes->Set(icingastatuswriter->GetName(), 1); //add more stats
 	}
 
@@ -55,9 +56,12 @@ void IcingaStatusWriter::StatsFunc(const Dictionary::Ptr& status, const Array::P
 /**
  * Starts the component.
  */
-void IcingaStatusWriter::Start(void)
+void IcingaStatusWriter::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<IcingaStatusWriter>::Start(runtimeCreated);
+
+	/* TODO: remove in versions > 2.4 */
+	Log(LogWarning, "IcingaStatusWriter", "This feature was deprecated in 2.4 and will be removed in future Icinga 2 releases.");
 
 	m_StatusTimer = new Timer();
 	m_StatusTimer->SetInterval(GetUpdateInterval());

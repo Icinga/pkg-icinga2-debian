@@ -53,11 +53,11 @@ public:
 	static void EvaluateApplyRules(const intrusive_ptr<Host>& host);
 	static void EvaluateApplyRules(const intrusive_ptr<Service>& service);
 
-	static void ValidateRanges(const String& location, const ScheduledDowntime::Ptr& object);
+	virtual void ValidateRanges(const Dictionary::Ptr& value, const ValidationUtils& utils) override;
 
 protected:
-	virtual void OnAllConfigLoaded(void);
-	virtual void Start(void);
+	virtual void OnAllConfigLoaded(void) override;
+	virtual void Start(bool runtimeCreated) override;
 
 private:
 	static void TimerProc(void);

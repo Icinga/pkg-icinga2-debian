@@ -33,12 +33,17 @@ libopenssl-devel on SLES12, libssl-dev on Debian)
 * optional: PostgreSQL (postgresql-devel on RHEL, libpq-dev on Debian); set CMake
             variable `ICINGA2_WITH_PGSQL` to `OFF` to disable this module
 * optional: YAJL (yajl-devel on RHEL, libyajl-dev on Debian)
+* optional: libedit (libedit-devel on CentOS (RHEL requires rhel-7-server-optional-rpms
+            repository for el7 e.g.), libedit-dev on Debian)
+* optional: Termcap (libtermcap-devel on RHEL, not necessary on Debian) - only
+            required if libedit doesn't already link against termcap/ncurses
+* optional: libwxgtk2.8-dev or newer (wxGTK-devel and wxBase) - only required when building the Icinga 2 Studio
 
 Note: RHEL5 ships an ancient flex version. Updated packages are available for
 example from the repoforge buildtools repository.
 
 * x86: http://mirror.hs-esslingen.de/repoforge/redhat/el5/en/i386/buildtools/
-* x86\_64: http://mirror.hs-esslingen.de/repoforge/redhat/el5/en/x86_64/buildtools/
+* x86\_64: http://mirror.hs-esslingen.de/repoforge/redhat/el5/en/x86\_64/buildtools/
 
 ### User Requirements
 
@@ -126,6 +131,15 @@ the Debian packaging Git repository (https://anonscm.debian.org/cgit/pkg-nagios/
 into your source tree and run the following command:
 
     $ dpkg-buildpackage -uc -us
+
+### Building Post Install Tasks
+
+After building Icinga 2 yourself, your package build system should at least run the following post
+install requirements:
+
+* enable the `checker`, `notification` and `mainlog` feature by default
+* run 'icinga2 api setup' in order to enable the `api` feature and generate SSL certificates for the node
+
 
 ## Running Icinga 2
 

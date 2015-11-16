@@ -18,6 +18,7 @@
  ******************************************************************************/
 
 #include "icinga/service.hpp"
+#include "icinga/service.tcpp"
 #include "icinga/servicegroup.hpp"
 #include "icinga/scheduleddowntime.hpp"
 #include "icinga/pluginutility.hpp"
@@ -26,6 +27,8 @@
 #include "base/utility.hpp"
 #include <boost/foreach.hpp>
 #include <boost/bind/apply.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 using namespace icinga;
 
@@ -41,9 +44,24 @@ String ServiceNameComposer::MakeName(const String& shortName, const Object::Ptr&
 	return service->GetHostName() + "!" + shortName;
 }
 
+Dictionary::Ptr ServiceNameComposer::ParseName(const String& name) const
+{
+	std::vector<String> tokens;
+	boost::algorithm::split(tokens, name, boost::is_any_of("!"));
+
+	if (tokens.size() < 2)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid Service name."));
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("host_name", tokens[0]);
+	result->Set("name", tokens[1]);
+
+	return result;
+}
+
 void Service::OnAllConfigLoaded(void)
 {
-	Checkable::OnAllConfigLoaded();
+	ObjectImpl<Service>::OnAllConfigLoaded();
 
 	m_Host = Host::GetByName(GetHostName());
 
@@ -97,6 +115,18 @@ Service::Ptr Service::GetByNamePair(const String& hostName, const String& servic
 Host::Ptr Service::GetHost(void) const
 {
 	return m_Host;
+}
+
+void Service::SaveLastState(ServiceState state, double timestamp)
+{
+	if (state == ServiceOK)
+		SetLastStateOK(timestamp);
+	else if (state == ServiceWarning)
+		SetLastStateWarning(timestamp);
+	else if (state == ServiceCritical)
+		SetLastStateCritical(timestamp);
+	else if (state == ServiceUnknown)
+		SetLastStateUnknown(timestamp);
 }
 
 ServiceState Service::StateFromString(const String& state)

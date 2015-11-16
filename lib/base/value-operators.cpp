@@ -159,7 +159,7 @@ bool Value::operator==(const Value& rhs) const
 {
 	if (IsNumber() && rhs.IsNumber())
 		return Get<double>() == rhs.Get<double>();
-	else if ((IsBoolean() || IsNumber() || IsEmpty()) && (rhs.IsBoolean() || rhs.IsNumber() || rhs.IsEmpty()) && !(IsEmpty() && rhs.IsEmpty()))
+	else if ((IsBoolean() || IsNumber()) && (rhs.IsBoolean() || rhs.IsNumber()) && !(IsEmpty() && rhs.IsEmpty()))
 		return static_cast<double>(*this) == static_cast<double>(rhs);
 
 	if (IsString() && rhs.IsString())
@@ -275,7 +275,7 @@ Value icinga::operator+(int lhs, const Value& rhs)
 
 Value icinga::operator-(const Value& lhs, const Value& rhs)
 {
-	if ((lhs.IsNumber() || lhs.IsEmpty()) && (rhs.IsNumber() || rhs.IsEmpty()) && !(lhs.IsEmpty() && rhs.IsEmpty()))
+	if ((lhs.IsNumber() || lhs.IsEmpty()) && !lhs.IsString() && (rhs.IsNumber() || rhs.IsEmpty()) && !rhs.IsString() && !(lhs.IsEmpty() && rhs.IsEmpty()))
 		return static_cast<double>(lhs) - static_cast<double>(rhs);
 	else if ((lhs.IsObjectType<Array>() || lhs.IsEmpty()) && (rhs.IsObjectType<Array>() || rhs.IsEmpty()) && !(lhs.IsEmpty() && rhs.IsEmpty())) {
 		if (lhs.IsEmpty())

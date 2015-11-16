@@ -37,6 +37,7 @@ option(ICINGA2_WITH_HELLO "Build the hello module" OFF)
 option(ICINGA2_WITH_LIVESTATUS "Build the Livestatus module" ON)
 option(ICINGA2_WITH_NOTIFICATION "Build the notification module" ON)
 option(ICINGA2_WITH_PERFDATA "Build the perfdata module" ON)
+option(ICINGA2_WITH_STUDIO "Build the Icinga Studio application" OFF)
 
 file(STRINGS icinga2.spec VERSION_LINE REGEX "^Version: ")
 string(REPLACE "Version: " "" ICINGA2_VERSION ${VERSION_LINE})
@@ -100,6 +101,12 @@ if(NOT YAJL_FOUND)
   set(YAJL_LIBRARIES "yajl")
 endif()
 
+find_package(Editline)
+set(HAVE_EDITLINE "${EDITLINE_FOUND}")
+
+find_package(Termcap)
+set(HAVE_TERMCAP "${TERMCAP_FOUND}")
+
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/lib
   ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/lib
@@ -108,11 +115,11 @@ include_directories(
 #set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 if(APPLE)
-  set(CMAKE_INSTALL_NAME_DIR "@executable_path/../lib/icinga2")
+  set(CMAKE_INSTALL_NAME_DIR "@executable_path/..")
   set(CMAKE_MACOSX_RPATH 0)
 endif(APPLE)
 
-if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Qunused-arguments -g")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments -g")
 endif()
@@ -136,8 +143,10 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
   endif()
 
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--gc-sections")
+  if(NOT CMAKE_SYSTEM_NAME MATCHES AIX AND NOT CMAKE_SYSTEM_NAME MATCHES OpenBSD AND NOT CMAKE_SYSTEM_NAME MATCHES SunOS)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections -Wl,--no-export-dynamic -Bsymbolic-functions -Wl,--dynamic-list-cpp-typeinfo -Wl,--dynamic-list-data")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--gc-sections -Wl,--no-export-dynamic -Bsymbolic-functions -Wl,--dynamic-list-cpp-typeinfo -Wl,--dynamic-list-data")
+  endif()
 endif()
 
 if(ICINGA2_LTO_BUILD)
@@ -190,6 +199,29 @@ if(HAVE_LIBEXECINFO)
   set(HAVE_BACKTRACE_SYMBOLS TRUE)
 endif()
 
+if(UNIX)
+  include(CheckCXXCompilerFlag)
+  check_cxx_compiler_flag("-std=c++11" CXX_FLAG_CXX11)
+  check_cxx_compiler_flag("-std=c++0x" CXX_FLAG_CXX0X)
+  if(CXX_FLAG_CXX11)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+  elseif(CXX_FLAG_CXX0X)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+  endif()
+
+  check_cxx_compiler_flag("-Wno-inconsistent-missing-override" CXX_FLAG_NO_OVERRIDE_WARNING)
+  if(CXX_FLAG_NO_OVERRIDE_WARNING)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-inconsistent-missing-override")
+  endif()
+endif()
+
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles("class Base { public: virtual void test(void) { } }; class Derived : public Base { virtual void test(void) override { } }; int main(){}" CXX_FEATURE_OVERRIDE)
+
+if(NOT CXX_FEATURE_OVERRIDE)
+  add_definitions("-Doverride=")
+endif()
+
 configure_file(config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h ESCAPE_QUOTES)
 
 install(
@@ -213,6 +245,10 @@ add_subdirectory(test)
 add_subdirectory(agent)
 add_subdirectory(plugins)
 
+if(ICINGA2_WITH_STUDIO)
+  add_subdirectory(icinga-studio)
+endif()
+
 set(CPACK_PACKAGE_NAME "Icinga2")
 set(CPACK_PACKAGE_VENDOR "Icinga Development Team")
 set(CPACK_PACKAGE_VERSION ${ICINGA2_VERSION})
@@ -225,7 +261,7 @@ set(CPACK_NSIS_INSTALLED_ICON_NAME "sbin\\\\icinga2.exe")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
 
 set(CPACK_NSIS_EXECUTABLES_DIRECTORY "sbin")
-set(CPACK_PACKAGE_EXECUTABLES "Icinga2SetupAgent;Icinga 2 Agent Wizard")
+set(CPACK_PACKAGE_EXECUTABLES "Icinga2SetupAgent;Icinga 2 Agent Wizard;icinga-studio;Icinga Studio")
 set(CPACK_NSIS_MUI_FINISHPAGE_RUN "Icinga2SetupAgent")
 set(CPACK_NSIS_EXTRA_PREINSTALL_COMMANDS "nsExec::Exec 'net stop icinga2'")
 set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "${CPACK_NSIS_EXTRA_INSTALL_COMMANDS}\nnsExec::Exec 'icacls \\\"$INSTDIR\\\" /grant *S-1-5-20:(oi)(ci)m'")
@@ -256,7 +292,7 @@ if(WIN32)
   endif()
     
   if (NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/NSCP-Win32.msi OR NOT ${NSCP_SHA256SUM} STREQUAL "226cef0154daf1f9b93d0e168068e723e2be407548e5c4772557401d87535b48")
-    file(DOWNLOAD http://files.nsclient.org/released/NSCP-0.4.3.143-Win32.msi ${CMAKE_CURRENT_BINARY_DIR}/NSCP-Win32.msi SHOW_PROGRESS)
+    file(DOWNLOAD https://github.com/mickem/nscp/releases/download/0.4.3.143/NSCP-0.4.3.143-Win32.msi ${CMAKE_CURRENT_BINARY_DIR}/NSCP-Win32.msi SHOW_PROGRESS)
   endif()
 
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/NSCP-Win32.msi DESTINATION ${CMAKE_INSTALL_SBINDIR})

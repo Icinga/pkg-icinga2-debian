@@ -44,21 +44,14 @@ public:
 	/* Notifications */
 	TimePeriod::Ptr GetPeriod(void) const;
 
-	static void ValidateFilters(const String& location, const User::Ptr& attrs);
-
-	bool GetEnableNotifications(void) const;
-	void SetEnableNotifications(bool enabled, const MessageOrigin& origin = MessageOrigin());
-
-	int GetModifiedAttributes(void) const;
-	void SetModifiedAttributes(int flags, const MessageOrigin& origin = MessageOrigin());
-
-	static boost::signals2::signal<void (const User::Ptr&, bool, const MessageOrigin&)> OnEnableNotificationsChanged;
+	virtual void ValidateStates(const Array::Ptr& value, const ValidationUtils& utils) override;
+	virtual void ValidateTypes(const Array::Ptr& value, const ValidationUtils& utils) override;
 
 protected:
-	virtual void Stop(void);
+	virtual void Stop(bool runtimeRemoved) override;
 
-	virtual void OnConfigLoaded(void);
-	virtual void OnAllConfigLoaded(void);
+	virtual void OnConfigLoaded(void) override;
+	virtual void OnAllConfigLoaded(void) override;
 private:
 	mutable boost::mutex m_UserMutex;
 };

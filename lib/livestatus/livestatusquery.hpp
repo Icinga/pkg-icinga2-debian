@@ -40,18 +40,6 @@ enum LivestatusError
 	LivestatusErrorQuery = 452
 };
 
-struct LivestatusScriptFrame
-{
-	double Seen;
-	int NextLine;
-	std::map<String, String> Lines;
-	Dictionary::Ptr Locals;
-
-	LivestatusScriptFrame(void)
-		: Seen(0), NextLine(1)
-	{ }
-};
-
 /**
  * @ingroup livestatus
  */
@@ -92,24 +80,25 @@ private:
 	/* Parameters for invalid queries. */
 	int m_ErrorCode;
 	String m_ErrorMessage;
-	
+
 	unsigned long m_LogTimeFrom;
 	unsigned long m_LogTimeUntil;
 	String m_CompatLogPath;
 
-	void PrintResultSet(std::ostream& fp, const Array::Ptr& rs) const;
+	void BeginResultSet(std::ostream& fp) const;
+	void EndResultSet(std::ostream& fp) const;
+	void AppendResultRow(std::ostream& fp, const Array::Ptr& row, bool& first_row) const;
 	void PrintCsvArray(std::ostream& fp, const Array::Ptr& array, int level) const;
 	void PrintPythonArray(std::ostream& fp, const Array::Ptr& array) const;
 	static String QuoteStringPython(const String& str);
 
 	void ExecuteGetHelper(const Stream::Ptr& stream);
 	void ExecuteCommandHelper(const Stream::Ptr& stream);
-	void ExecuteScriptHelper(const Stream::Ptr& stream);
 	void ExecuteErrorHelper(const Stream::Ptr& stream);
 
 	void SendResponse(const Stream::Ptr& stream, int code, const String& data);
 	void PrintFixed16(const Stream::Ptr& stream, int code, const String& data);
-	
+
 	static Filter::Ptr ParseFilter(const String& params, unsigned long& from, unsigned long& until);
 };
 

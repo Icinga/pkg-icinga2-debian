@@ -21,7 +21,7 @@
 #define ENDPOINTDBOBJECT_H
 
 #include "db_ido/dbobject.hpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "remote/endpoint.hpp"
 
 namespace icinga
@@ -41,8 +41,8 @@ public:
 
 	static void StaticInitialize(void);
 
-	virtual Dictionary::Ptr GetConfigFields(void) const;
-	virtual Dictionary::Ptr GetStatusFields(void) const;
+	virtual Dictionary::Ptr GetConfigFields(void) const override;
+	virtual Dictionary::Ptr GetStatusFields(void) const override;
 
 private:
 	static void UpdateConnectedStatus(const Endpoint::Ptr& endpoint);

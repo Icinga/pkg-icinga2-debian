@@ -19,6 +19,7 @@
 
 #include "base/exception.hpp"
 #include <boost/thread/tss.hpp>
+#include <boost/foreach.hpp>
 
 #ifdef HAVE_CXXABI_H
 #	include <cxxabi.h>
@@ -136,16 +137,56 @@ String icinga::DiagnosticInformation(const std::exception& ex, bool verbose, Sta
 
 	String message = ex.what();
 
+	const ValidationError *vex = dynamic_cast<const ValidationError *>(&ex);
+
 	if (message.IsEmpty())
-		result << boost::diagnostic_information(ex);
+		result << boost::diagnostic_information(ex) << "\n";
 	else
-		result << "Error: " << message;
+		result << "Error: " << message << "\n";
 
 	const ScriptError *dex = dynamic_cast<const ScriptError *>(&ex);
 
-	if (dex && !dex->GetDebugInfo().Path.IsEmpty()) {
-		result << "\nLocation:\n";
-		ShowCodeFragment(result, dex->GetDebugInfo());
+	if (dex && !dex->GetDebugInfo().Path.IsEmpty())
+		ShowCodeLocation(result, dex->GetDebugInfo());
+
+	if (vex) {
+		DebugInfo di;
+
+		ConfigObject::Ptr dobj = vex->GetObject();
+		if (dobj)
+			di = dobj->GetDebugInfo();
+
+		Dictionary::Ptr currentHint = vex->GetDebugHint();
+		Array::Ptr messages;
+
+		if (currentHint) {
+			BOOST_FOREACH(const String& attr, vex->GetAttributePath()) {
+				Dictionary::Ptr props = currentHint->Get("properties");
+
+				if (!props)
+					break;
+
+				currentHint = props->Get(attr);
+
+				if (!currentHint)
+					break;
+
+				messages = currentHint->Get("messages");
+			}
+		}
+
+		if (messages && messages->GetLength() > 0) {
+			Array::Ptr message = messages->Get(messages->GetLength() - 1);
+
+			di.Path = message->Get(1);
+			di.FirstLine = message->Get(2);
+			di.FirstColumn = message->Get(3);
+			di.LastLine = message->Get(4);
+			di.LastColumn = message->Get(5);
+		}
+
+		if (!di.Path.IsEmpty())
+			ShowCodeLocation(result, di);
 	}
 
 	const user_error *uex = dynamic_cast<const user_error *>(&ex);
@@ -209,7 +250,7 @@ ScriptError::ScriptError(const String& message)
 { }
 
 ScriptError::ScriptError(const String& message, const DebugInfo& di, bool incompleteExpr)
-	: m_Message(message), m_DebugInfo(di), m_IncompleteExpr(incompleteExpr)
+	: m_Message(message), m_DebugInfo(di), m_IncompleteExpr(incompleteExpr), m_HandledByDebugger(false)
 { }
 
 ScriptError::~ScriptError(void) throw()
@@ -228,6 +269,16 @@ DebugInfo ScriptError::GetDebugInfo(void) const
 bool ScriptError::IsIncompleteExpression(void) const
 {
 	return m_IncompleteExpr;;
+}
+
+bool ScriptError::IsHandledByDebugger(void) const
+{
+	return m_HandledByDebugger;
+}
+
+void ScriptError::SetHandledByDebugger(bool handled)
+{
+	m_HandledByDebugger = handled;
 }
 
 posix_error::posix_error(void)
@@ -268,5 +319,59 @@ const char *posix_error::what(void) const throw()
 	}
 
 	return m_Message;
+}
+
+ValidationError::ValidationError(const ConfigObject::Ptr& object, const std::vector<String>& attributePath, const String& message)
+	: m_Object(object), m_AttributePath(attributePath), m_Message(message)
+{
+	String path;
+
+	BOOST_FOREACH(const String& attribute, attributePath) {
+		if (!path.IsEmpty())
+			path += " -> ";
+
+		path += "'" + attribute + "'";
+	}
+
+	Type::Ptr type = object->GetReflectionType();
+	m_What = "Validation failed for object '" + object->GetName() + "' of type '" + type->GetName() + "'";
+
+	if (!path.IsEmpty())
+		m_What += "; Attribute " + path;
+
+	m_What += ": " + message;
+}
+
+ValidationError::~ValidationError(void) throw()
+{ }
+
+const char *ValidationError::what(void) const throw()
+{
+	return m_What.CStr();
+}
+
+ConfigObject::Ptr ValidationError::GetObject(void) const
+{
+	return m_Object;
+}
+
+std::vector<String> ValidationError::GetAttributePath(void) const
+{
+	return m_AttributePath;
+}
+
+String ValidationError::GetMessage(void) const
+{
+	return m_Message;
+}
+
+void ValidationError::SetDebugHint(const Dictionary::Ptr& dhint)
+{
+	m_DebugHint = dhint;
+}
+
+Dictionary::Ptr ValidationError::GetDebugHint(void) const
+{
+	return m_DebugHint;
 }
 

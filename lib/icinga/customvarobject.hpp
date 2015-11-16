@@ -22,32 +22,11 @@
 
 #include "icinga/i2-icinga.hpp"
 #include "icinga/customvarobject.thpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "remote/messageorigin.hpp"
 
 namespace icinga
 {
-
-enum ModifiedAttributeType
-{
-	ModAttrNotificationsEnabled = 1,
-	ModAttrActiveChecksEnabled = 2,
-	ModAttrPassiveChecksEnabled = 4,
-	ModAttrEventHandlerEnabled = 8,
-	ModAttrFlapDetectionEnabled = 16,
-	ModAttrFailurePredictionEnabled = 32,
-	ModAttrPerformanceDataEnabled = 64,
-	ModAttrObsessiveHandlerEnabled = 128,
-	ModAttrEventHandlerCommand = 256,
-	ModAttrCheckCommand = 512,
-	ModAttrNormalCheckInterval = 1024,
-	ModAttrRetryCheckInterval = 2048,
-	ModAttrMaxCheckAttempts = 4096,
-	ModAttrFreshnessChecksEnabled = 8192,
-	ModAttrCheckTimeperiod = 16384,
-	ModAttrCustomVariable = 32768,
-	ModAttrNotificationTimeperiod = 65536
-};
 
 /**
  * An object with custom variable attribute.
@@ -59,17 +38,7 @@ class I2_ICINGA_API CustomVarObject : public ObjectImpl<CustomVarObject>
 public:
 	DECLARE_OBJECT(CustomVarObject);
 
-	static boost::signals2::signal<void (const CustomVarObject::Ptr&, const Dictionary::Ptr& vars, const MessageOrigin&)> OnVarsChanged;
-
-	static void ValidateCustomAttributes(const String& location, const CustomVarObject::Ptr& object);
-
-	Dictionary::Ptr GetVars(void) const;
-	void SetVars(const Dictionary::Ptr& vars, const MessageOrigin& origin = MessageOrigin());
-
-	virtual int GetModifiedAttributes(void) const;
-	virtual void SetModifiedAttributes(int flags, const MessageOrigin& origin = MessageOrigin());
-
-	bool IsVarOverridden(const String& name) const;
+	virtual void ValidateVars(const Dictionary::Ptr& value, const ValidationUtils& utils) override;
 };
 
 }
