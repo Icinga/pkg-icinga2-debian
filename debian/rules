@@ -25,7 +25,7 @@ override_dh_auto_configure:
 		-DICINGA2_COMMAND_GROUP=www-data \
 		-DICINGA2_GIT_VERSION_INFO=false \
 		-DICINGA2_PLUGINDIR=/usr/lib/nagios/plugins \
-		-DICINGA2_WITH_STUDIO=true
+		-DICINGA2_WITH_STUDIO=false
 
 override_dh_auto_install:
 	dh_auto_install
