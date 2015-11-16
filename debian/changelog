@@ -1,3 +1,12 @@
+icinga2 (2.4.0-1~debmon60+1) UNRELEASED; urgency=medium
+
+  * Rebuild for debmon-squeeze.
+  * [7473327] libicinga2 non-multiarch for squeeze
+  * [418ffad] Disable icinga2-studio package on squeeze
+  * [cebe7ec] help dh_shlibdeps on squeeze find the libraries
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Mon, 16 Nov 2015 14:19:57 +0100
+
 icinga2 (2.4.0-1) unstable; urgency=medium
 
   [ Gunnar Beutner ]
