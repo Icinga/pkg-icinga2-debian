@@ -18,30 +18,33 @@
  ******************************************************************************/
 
 #include "db_ido/dbconnection.hpp"
+#include "db_ido/dbconnection.tcpp"
 #include "db_ido/dbvalue.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "icinga/host.hpp"
 #include "icinga/service.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
 #include "base/logger.hpp"
-#include "base/function.hpp"
 #include "base/exception.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(DbConnection);
-REGISTER_SCRIPTFUNCTION(ValidateFailoverTimeout, &DbConnection::ValidateFailoverTimeout);
 
 Timer::Ptr DbConnection::m_ProgramStatusTimer;
 boost::once_flag DbConnection::m_OnceFlag = BOOST_ONCE_INIT;
 
+DbConnection::DbConnection(void)
+	: m_QueryStats(15 * 60)
+{ }
+
 void DbConnection::OnConfigLoaded(void)
 {
-	DynamicObject::OnConfigLoaded();
+	ConfigObject::OnConfigLoaded();
 
 	if (!GetEnableHa()) {
 		Log(LogDebug, "DbConnection")
@@ -53,16 +56,17 @@ void DbConnection::OnConfigLoaded(void)
 	boost::call_once(m_OnceFlag, InitializeDbTimer);
 }
 
-void DbConnection::Start(void)
+void DbConnection::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<DbConnection>::Start(runtimeCreated);
 
 	DbObject::OnQuery.connect(boost::bind(&DbConnection::ExecuteQuery, this, _1));
+	ConfigObject::OnActiveChanged.connect(boost::bind(&DbConnection::UpdateObject, this, _1));
 }
 
 void DbConnection::Resume(void)
 {
-	DynamicObject::Resume();
+	ConfigObject::Resume();
 
 	Log(LogInformation, "DbConnection")
 	    << "Resuming IDO connection: " << GetName();
@@ -75,7 +79,7 @@ void DbConnection::Resume(void)
 
 void DbConnection::Pause(void)
 {
-	DynamicObject::Pause();
+	ConfigObject::Pause();
 
 	Log(LogInformation, "DbConnection")
 	     << "Pausing IDO connection: " << GetName();
@@ -140,7 +144,7 @@ void DbConnection::ProgramStatusHandler(void)
 
 	query2.Fields = new Dictionary();
 	query2.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
-	query2.Fields->Set("program_version", Application::GetVersion());
+	query2.Fields->Set("program_version", Application::GetAppVersion());
 	query2.Fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
 	query2.Fields->Set("program_start_time", DbValue::FromTimestamp(Application::GetStartTime()));
 	query2.Fields->Set("is_currently_running", 1);
@@ -166,10 +170,10 @@ void DbConnection::ProgramStatusHandler(void)
 	query3.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
 	DbObject::OnQuery(query3);
 
-	InsertRuntimeVariable("total_services", std::distance(DynamicType::GetObjectsByType<Service>().first, DynamicType::GetObjectsByType<Service>().second));
-	InsertRuntimeVariable("total_scheduled_services", std::distance(DynamicType::GetObjectsByType<Service>().first, DynamicType::GetObjectsByType<Service>().second));
-	InsertRuntimeVariable("total_hosts", std::distance(DynamicType::GetObjectsByType<Host>().first, DynamicType::GetObjectsByType<Host>().second));
-	InsertRuntimeVariable("total_scheduled_hosts", std::distance(DynamicType::GetObjectsByType<Host>().first, DynamicType::GetObjectsByType<Host>().second));
+	InsertRuntimeVariable("total_services", std::distance(ConfigType::GetObjectsByType<Service>().first, ConfigType::GetObjectsByType<Service>().second));
+	InsertRuntimeVariable("total_scheduled_services", std::distance(ConfigType::GetObjectsByType<Service>().first, ConfigType::GetObjectsByType<Service>().second));
+	InsertRuntimeVariable("total_hosts", std::distance(ConfigType::GetObjectsByType<Host>().first, ConfigType::GetObjectsByType<Host>().second));
+	InsertRuntimeVariable("total_scheduled_hosts", std::distance(ConfigType::GetObjectsByType<Host>().first, ConfigType::GetObjectsByType<Host>().second));
 }
 
 void DbConnection::CleanUpHandler(void)
@@ -347,20 +351,32 @@ void DbConnection::ExecuteQuery(const DbQuery&)
 	/* Default handler does nothing. */
 }
 
+void DbConnection::UpdateObject(const ConfigObject::Ptr& object)
+{
+	if (!GetConnected())
+		return;
+
+	DbObject::Ptr dbobj = DbObject::GetOrCreateByObject(object);
+
+	if (dbobj) {
+		bool active = object->IsActive();
+
+		if (active) {
+			ActivateObject(dbobj);
+
+			dbobj->SendConfigUpdate();
+			dbobj->SendStatusUpdate();
+		} else
+			DeactivateObject(dbobj);
+	}
+}
+
 void DbConnection::UpdateAllObjects(void)
 {
-	DynamicType::Ptr type;
-	BOOST_FOREACH(const DynamicType::Ptr& dt, DynamicType::GetTypes()) {
-		BOOST_FOREACH(const DynamicObject::Ptr& object, dt->GetObjects()) {
-			DbObject::Ptr dbobj = DbObject::GetOrCreateByObject(object);
-
-			if (dbobj) {
-				if (!GetObjectActive(dbobj))
-					ActivateObject(dbobj);
-
-				dbobj->SendConfigUpdate();
-				dbobj->SendStatusUpdate();
-			}
+	ConfigType::Ptr type;
+	BOOST_FOREACH(const ConfigType::Ptr& dt, ConfigType::GetTypes()) {
+		BOOST_FOREACH(const ConfigObject::Ptr& object, dt->GetObjects()) {
+			UpdateObject(object);
 		}
 	}
 }
@@ -409,10 +425,24 @@ void DbConnection::PrepareDatabase(void)
 	}
 }
 
-void DbConnection::ValidateFailoverTimeout(const String& location, const DbConnection::Ptr& object)
+void DbConnection::ValidateFailoverTimeout(double value, const ValidationUtils& utils)
 {
-	if (object->GetFailoverTimeout() < 60) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": Failover timeout minimum is 60s.", object->GetDebugInfo()));
-	}
+	ObjectImpl<DbConnection>::ValidateFailoverTimeout(value, utils);
+
+	if (value < 60)
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("failover_timeout"), "Failover timeout minimum is 60s."));
+}
+
+void DbConnection::IncreaseQueryCount(void)
+{
+	double now = Utility::GetTime();
+
+	boost::mutex::scoped_lock lock(m_StatsMutex);
+	m_QueryStats.InsertValue(now, 1);
+}
+
+int DbConnection::GetQueryCount(RingBuffer::SizeType span) const
+{
+	boost::mutex::scoped_lock lock(m_StatsMutex);
+	return m_QueryStats.GetValues(span);
 }

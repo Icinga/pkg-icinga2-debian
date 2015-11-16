@@ -22,7 +22,7 @@
 
 #include "db_ido/dbobject.hpp"
 #include "icinga/usergroup.hpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 
 namespace icinga
 {
@@ -39,11 +39,8 @@ public:
 
 	UserGroupDbObject(const DbType::Ptr& type, const String& name1, const String& name2);
 
-	virtual Dictionary::Ptr GetConfigFields(void) const;
-	virtual Dictionary::Ptr GetStatusFields(void) const;
-
-protected:
-	virtual void OnConfigUpdate(void);
+	virtual Dictionary::Ptr GetConfigFields(void) const override;
+	virtual Dictionary::Ptr GetStatusFields(void) const override;
 };
 
 }

@@ -1,0 +1,3 @@
+?package(icinga2-studio):needs="X11|wm" section="Applications/Network"\
+  title="Icinga Studio" command="/usr/bin/icinga-studio" \
+  icon="/usr/share/icinga2-studio/icinga.ico"

@@ -66,7 +66,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.3.11
+Version: 2.4.0
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
@@ -106,8 +106,8 @@ BuildRequires: flex >= 2.5.35
 BuildRequires: bison
 BuildRequires: make
 
-%if 0%{?build_icinga_org} && "%{_vendor}" == "redhat" && (0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5")
-# el5 requires packages.icinga.org
+%if 0%{?build_icinga_org} && "%{_vendor}" == "redhat" && (0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5" || 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6")
+# el5 and el6 require packages.icinga.org
 BuildRequires: boost153-devel
 %else
 %if 0%{?build_icinga_org} && "%{_vendor}" == "suse" && 0%{?suse_version} < 1310
@@ -201,6 +201,26 @@ Conflicts:    icinga-gui-config
 Icinga 1.x Classic UI Standalone configuration with locations
 for Icinga 2.
 
+%if "%{_vendor}" == "redhat" && !(0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5" || 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6")
+%global selinux_variants mls targeted
+%{!?_selinux_policy_version: %global _selinux_policy_version %(sed -e 's,.*selinux-policy-\\([^/]*\\)/.*,\\1,' /usr/share/selinux/devel/policyhelp 2>/dev/null)}
+%global modulename %{name}
+
+%package selinux
+Summary:        SELinux policy module supporting icinga2
+Group:          System Environment/Base
+BuildRequires:  checkpolicy, selinux-policy-devel, /usr/share/selinux/devel/policyhelp, hardlink
+%if "%{_selinux_policy_version}" != ""
+Requires:       selinux-policy >= %{_selinux_policy_version}
+%endif
+Requires:       %{name} = %{version}-%{release}
+Requires(post):   /usr/sbin/semodule, /sbin/restorecon
+Requires(postun): /usr/sbin/semodule, /sbin/restorecon
+
+%description selinux
+SELinux policy module supporting icinga2
+%endif
+
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -217,7 +237,7 @@ CMAKE_OPTS="-DCMAKE_INSTALL_PREFIX=/usr \
          -DICINGA2_GROUP=%{icinga_group} \
          -DICINGA2_COMMAND_GROUP=%{icingacmd_group}"
 %if "%{_vendor}" == "redhat"
-%if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5"
+%if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5" || 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6"
 # Boost_VERSION 1.41.0 vs 101400 - disable build tests
 # details in https://dev.icinga.org/issues/5033
 CMAKE_OPTS="$CMAKE_OPTS -DBOOST_LIBRARYDIR=/usr/lib/boost153 \
@@ -226,6 +246,9 @@ CMAKE_OPTS="$CMAKE_OPTS -DBOOST_LIBRARYDIR=/usr/lib/boost153 \
  -DBoost_NO_SYSTEM_PATHS=TRUE \
  -DBUILD_TESTING=FALSE \
  -DBoost_NO_BOOST_CMAKE=TRUE"
+%endif
+%if 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6"
+CMAKE_OPTS="$CMAKE_OPTS -DBUILD_TESTING=FALSE"
 %endif
 %endif
 
@@ -251,6 +274,16 @@ cmake $CMAKE_OPTS -DCMAKE_C_FLAGS:STRING="%{optflags} %{?march_flag}" -DCMAKE_CX
 
 make %{?_smp_mflags}
 
+%if "%{_vendor}" == "redhat" && !(0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5" || 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6")
+cd tools/selinux
+for selinuxvariant in %{selinux_variants}
+do
+  make NAME=${selinuxvariant} -f /usr/share/selinux/devel/Makefile
+  mv %{modulename}.pp %{modulename}.pp.${selinuxvariant}
+  make NAME=${selinuxvariant} -f /usr/share/selinux/devel/Makefile clean
+done
+cd -
+%endif
 
 %install
 make install \
@@ -275,6 +308,18 @@ mkdir -p "%{buildroot}%{_localstatedir}/adm/fillup-templates/"
 mv "%{buildroot}%{_sysconfdir}/sysconfig/%{name}" "%{buildroot}%{_localstatedir}/adm/fillup-templates/sysconfig.%{name}"
 %endif
 
+%if "%{_vendor}" == "redhat" && !(0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5" || 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6")
+cd tools/selinux
+for selinuxvariant in %{selinux_variants}
+do
+  install -d %{buildroot}%{_datadir}/selinux/${selinuxvariant}
+  install -p -m 644 %{modulename}.pp.${selinuxvariant} \
+    %{buildroot}%{_datadir}/selinux/${selinuxvariant}/%{modulename}.pp
+done
+cd -
+
+/usr/sbin/hardlink -cv %{buildroot}%{_datadir}/selinux
+%endif
 
 %clean
 [ "%{buildroot}" != "/" ] && [ -d "%{buildroot}" ] && rm -rf %{buildroot}
@@ -289,17 +334,22 @@ getent passwd %{icinga_user} >/dev/null || %{_sbindir}/useradd -c "icinga" -s /s
   %service_add_pre %{name}.service
 %endif
 %endif
-exit 0
 
 %if "%{_vendor}" == "suse"
 %verifyscript bin
 %verify_permissions -e %{_rundir}/%{name}/cmd
+%endif
+
+%post bin
+
+# suse
+%if "%{_vendor}" == "suse"
 
 %if 0%{?suse_version} >= 1310
-%post bin
 %set_permissions %{_rundir}/%{name}/cmd
 %endif
-%endif
+
+%endif #suse/rhel
 
 %post common
 # suse
@@ -455,6 +505,30 @@ fi
 
 exit 0
 
+%if "%{_vendor}" == "redhat" && !(0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5" || 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6")
+%post selinux
+for selinuxvariant in %{selinux_variants}
+do
+  /usr/sbin/semodule -s ${selinuxvariant} -i \
+    %{_datadir}/selinux/${selinuxvariant}/%{modulename}.pp &> /dev/null || :
+done
+/sbin/fixfiles -R icinga2-bin restore &> /dev/null || :
+/sbin/fixfiles -R icinga2-common restore &> /dev/null || :
+/sbin/semanage port -a -t icinga2_port_t -p tcp 5665 &> /dev/null || :
+
+%postun selinux
+if [ $1 -eq 0 ] ; then
+  /sbin/semanage port -d -t icinga2_port_t -p tcp 5665 &> /dev/null || :
+  for selinuxvariant in %{selinux_variants}
+  do
+     /usr/sbin/semodule -s ${selinuxvariant} -r %{modulename} &> /dev/null || :
+  done
+  /sbin/fixfiles -R icinga2-bin restore &> /dev/null || :
+  /sbin/fixfiles -R icinga2-common restore &> /dev/null || :
+fi
+%endif
+
+
 %files
 %defattr(-,root,root,-)
 %doc COPYING
@@ -467,6 +541,8 @@ exit 0
 %exclude %{_libdir}/%{name}/libdb_ido_pgsql*
 %dir %{_libdir}/%{name}
 %{_libdir}/%{name}/*.so*
+%dir %{_libdir}/%{name}/sbin
+%{_libdir}/%{name}/sbin/%{name}
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/include
 %{_mandir}/man8/%{name}.8.gz
@@ -498,7 +574,7 @@ exit 0
 %else
 %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
 %endif
-%attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}
+%attr(0750,root,%{icinga_group}) %dir %{_sysconfdir}/%{name}
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/conf.d
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/features-available
 %exclude %{_sysconfdir}/%{name}/features-available/ido-*.conf
@@ -508,7 +584,7 @@ exit 0
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/repository.d
 %attr(0750,%{icinga_user},%{icinga_group}) %dir %{_sysconfdir}/%{name}/zones.d
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/%{name}.conf
-%config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/init.conf
+%config(noreplace) %attr(0640,root,%{icinga_group}) %{_sysconfdir}/%{name}/init.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/constants.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/zones.conf
 %config(noreplace) %attr(0640,%{icinga_user},%{icinga_group}) %{_sysconfdir}/%{name}/conf.d/*.conf
@@ -550,5 +626,12 @@ exit 0
 %config(noreplace) %{icingaclassicconfdir}/cgi.cfg
 %config(noreplace) %{apacheconfdir}/icinga.conf
 %config(noreplace) %attr(0640,root,%{apachegroup}) %{icingaclassicconfdir}/passwd
+
+%if "%{_vendor}" == "redhat" && !(0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5" || 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6")
+%files selinux
+%defattr(-,root,root,0755)
+%doc tools/selinux/*
+%{_datadir}/selinux/*/%{modulename}.pp
+%endif
 
 %changelog

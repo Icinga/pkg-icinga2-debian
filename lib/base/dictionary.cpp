@@ -21,11 +21,12 @@
 #include "base/objectlock.hpp"
 #include "base/debug.hpp"
 #include "base/primitivetype.hpp"
+#include "base/configwriter.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
-REGISTER_PRIMITIVE_TYPE(Dictionary, Dictionary::GetPrototype());
+REGISTER_PRIMITIVE_TYPE(Dictionary, Object, Dictionary::GetPrototype());
 
 /**
  * Retrieves a value from a dictionary.
@@ -35,7 +36,6 @@ REGISTER_PRIMITIVE_TYPE(Dictionary, Dictionary::GetPrototype());
  */
 Value Dictionary::Get(const String& key) const
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	std::map<String, Value>::const_iterator it = m_Data.find(key);
@@ -47,6 +47,26 @@ Value Dictionary::Get(const String& key) const
 }
 
 /**
+ * Retrieves a value from a dictionary.
+ *
+ * @param key The key whose value should be retrieved.
+ * @param result The value of the dictionary item (only set when the key exists)
+ * @returns true if the key exists, false otherwise.
+ */
+bool Dictionary::Get(const String& key, Value *result) const
+{
+	ObjectLock olock(this);
+
+	std::map<String, Value>::const_iterator it = m_Data.find(key);
+
+	if (it == m_Data.end())
+		return false;
+
+	*result = it->second;
+	return true;
+}
+
+/**
  * Sets a value in the dictionary.
  *
  * @param key The key.
@@ -54,42 +74,11 @@ Value Dictionary::Get(const String& key) const
  */
 void Dictionary::Set(const String& key, const Value& value)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
-	std::pair<std::map<String, Value>::iterator, bool> ret;
-	ret = m_Data.insert(std::make_pair(key, value));
-	if (!ret.second)
-		ret.first->second = value;
+	m_Data[key] = value;
 }
 
-/**
- * Returns an iterator to the beginning of the dictionary.
- *
- * Note: Caller must hold the object lock while using the iterator.
- *
- * @returns An iterator.
- */
-Dictionary::Iterator Dictionary::Begin(void)
-{
-	ASSERT(OwnsLock());
-
-	return m_Data.begin();
-}
-
-/**
- * Returns an iterator to the end of the dictionary.
- *
- * Note: Caller must hold the object lock while using the iterator.
- *
- * @returns An iterator.
- */
-Dictionary::Iterator Dictionary::End(void)
-{
-	ASSERT(OwnsLock());
-
-	return m_Data.end();
-}
 
 /**
  * Returns the number of elements in the dictionary.
@@ -98,7 +87,6 @@ Dictionary::Iterator Dictionary::End(void)
  */
 size_t Dictionary::GetLength(void) const
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	return m_Data.size();
@@ -112,7 +100,6 @@ size_t Dictionary::GetLength(void) const
  */
 bool Dictionary::Contains(const String& key) const
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	return (m_Data.find(key) != m_Data.end());
@@ -125,7 +112,6 @@ bool Dictionary::Contains(const String& key) const
  */
 void Dictionary::Remove(const String& key)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	Dictionary::Iterator it;
@@ -138,23 +124,10 @@ void Dictionary::Remove(const String& key)
 }
 
 /**
- * Removes the item specified by the iterator from the dictionary.
- *
- * @param it The iterator.
- */
-void Dictionary::Remove(Dictionary::Iterator it)
-{
-	ASSERT(OwnsLock());
-
-	m_Data.erase(it);
-}
-
-/**
  * Removes all dictionary items.
  */
 void Dictionary::Clear(void)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	m_Data.clear();
@@ -162,7 +135,6 @@ void Dictionary::Clear(void)
 
 void Dictionary::CopyTo(const Dictionary::Ptr& dest) const
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
@@ -183,6 +155,24 @@ Dictionary::Ptr Dictionary::ShallowClone(void) const
 }
 
 /**
+ * Makes a deep clone of a dictionary
+ * and its elements.
+ *
+ * @returns a copy of the dictionary.
+ */
+Object::Ptr Dictionary::Clone(void) const
+{
+	Dictionary::Ptr dict = new Dictionary();
+
+	ObjectLock olock(this);
+	BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
+		dict->Set(kv.first, kv.second.Clone());
+	}
+
+	return dict;
+}
+
+/**
  * Returns an array containing all keys
  * which are currently set in this directory.
  *
@@ -190,7 +180,6 @@ Dictionary::Ptr Dictionary::ShallowClone(void) const
  */
 std::vector<String> Dictionary::GetKeys(void) const
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	std::vector<String> keys;
@@ -200,4 +189,11 @@ std::vector<String> Dictionary::GetKeys(void) const
 	}
 
 	return keys;
+}
+
+String Dictionary::ToString(void) const
+{
+	std::ostringstream msgbuf;
+	ConfigWriter::EmitScope(msgbuf, 1, const_cast<Dictionary *>(this));
+	return msgbuf.str();
 }

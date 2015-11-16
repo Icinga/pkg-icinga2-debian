@@ -19,10 +19,12 @@
 
 #include "base/logger.hpp"
 
+library base;
+
 namespace icinga
 {
 
-class StreamLogger : Logger
+abstract class StreamLogger : Logger
 {
 };
 

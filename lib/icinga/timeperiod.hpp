@@ -39,16 +39,16 @@ public:
 
 	static void StaticInitialize(void);
 
-	virtual void Start(void);
+	virtual void Start(bool runtimeCreated) override;
 
 	void UpdateRegion(double begin, double end, bool clearExisting);
 
-	virtual bool GetIsInside(void) const;
+	virtual bool GetIsInside(void) const override;
 
 	bool IsInside(double ts) const;
 	double FindNextTransition(double begin);
 
-	static void ValidateRanges(const String& location, const TimePeriod::Ptr& object);
+	virtual void ValidateRanges(const Dictionary::Ptr& value, const ValidationUtils& utils) override;
 
 private:
 	void AddSegment(double s, double end);

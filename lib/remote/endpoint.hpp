@@ -27,7 +27,7 @@
 namespace icinga
 {
 
-class ApiClient;
+class JsonRpcConnection;
 class Zone;
 
 /**
@@ -41,25 +41,25 @@ public:
 	DECLARE_OBJECT(Endpoint);
 	DECLARE_OBJECTNAME(Endpoint);
 
-	static boost::signals2::signal<void(const Endpoint::Ptr&, const intrusive_ptr<ApiClient>&)> OnConnected;
-	static boost::signals2::signal<void(const Endpoint::Ptr&, const intrusive_ptr<ApiClient>&)> OnDisconnected;
+	static boost::signals2::signal<void(const Endpoint::Ptr&, const intrusive_ptr<JsonRpcConnection>&)> OnConnected;
+	static boost::signals2::signal<void(const Endpoint::Ptr&, const intrusive_ptr<JsonRpcConnection>&)> OnDisconnected;
 
-	void AddClient(const intrusive_ptr<ApiClient>& client);
-	void RemoveClient(const intrusive_ptr<ApiClient>& client);
-	std::set<intrusive_ptr<ApiClient> > GetClients(void) const;
+	void AddClient(const intrusive_ptr<JsonRpcConnection>& client);
+	void RemoveClient(const intrusive_ptr<JsonRpcConnection>& client);
+	std::set<intrusive_ptr<JsonRpcConnection> > GetClients(void) const;
 
 	intrusive_ptr<Zone> GetZone(void) const;
 
-	bool IsConnected(void) const;
+	virtual bool GetConnected(void) const override;
 
 	static Endpoint::Ptr GetLocalEndpoint(void);
 
 protected:
-	virtual void OnAllConfigLoaded(void);
+	virtual void OnAllConfigLoaded(void) override;
 
 private:
 	mutable boost::mutex m_ClientsLock;
-	std::set<intrusive_ptr<ApiClient> > m_Clients;
+	std::set<intrusive_ptr<JsonRpcConnection> > m_Clients;
 	intrusive_ptr<Zone> m_Zone;
 };
 

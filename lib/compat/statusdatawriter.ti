@@ -17,13 +17,15 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "base/application.hpp"
+
+library compat;
 
 namespace icinga
 {
 
-class StatusDataWriter : DynamicObject
+class StatusDataWriter : ConfigObject
 {
 	[config] String status_path {
 		default {{{ return Application::GetLocalStateDir() + "/cache/icinga2/status.dat"; }}}

@@ -26,7 +26,7 @@
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
 #include "base/function.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 
 using namespace icinga;
 
@@ -97,7 +97,7 @@ void IcingaCheckTask::ScriptFunc(const Checkable::Ptr& service, const CheckResul
 	perfdata->Add(new PerfdataValue("num_hosts_acknowledged", hs.hosts_acknowledged));
 
 	cr->SetOutput("Icinga 2 has been running for " + Utility::FormatDuration(uptime) +
-	    ". Version: " + Application::GetVersion());
+	    ". Version: " + Application::GetAppVersion());
 	cr->SetPerformanceData(perfdata);
 	cr->SetState(ServiceOK);
 

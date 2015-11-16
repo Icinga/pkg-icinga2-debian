@@ -18,8 +18,12 @@
  ******************************************************************************/
 
 #include "icinga/icingaapplication.hpp"
+#include "icinga/icingaapplication.tcpp"
 #include "icinga/cib.hpp"
-#include "base/dynamictype.hpp"
+#include "icinga/macroprocessor.hpp"
+#include "config/configcompiler.hpp"
+#include "base/configwriter.hpp"
+#include "base/configtype.hpp"
 #include "base/logger.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
@@ -39,13 +43,6 @@ INITIALIZE_ONCE(&IcingaApplication::StaticInitialize);
 
 void IcingaApplication::StaticInitialize(void)
 {
-	ScriptGlobal::Set("EnableNotifications", true);
-	ScriptGlobal::Set("EnableEventHandlers", true);
-	ScriptGlobal::Set("EnableFlapping", true);
-	ScriptGlobal::Set("EnableHostChecks", true);
-	ScriptGlobal::Set("EnableServiceChecks", true);
-	ScriptGlobal::Set("EnablePerfdata", true);
-
 	String node_name = Utility::GetFQDN();
 
 	if (node_name.IsEmpty()) {
@@ -59,15 +56,17 @@ void IcingaApplication::StaticInitialize(void)
 	}
 
 	ScriptGlobal::Set("NodeName", node_name);
+
+	ScriptGlobal::Set("ApplicationType", "IcingaApplication");
 }
 
-REGISTER_STATSFUNCTION(IcingaApplicationStats, &IcingaApplication::StatsFunc);
+REGISTER_STATSFUNCTION(IcingaApplication, &IcingaApplication::StatsFunc);
 
 void IcingaApplication::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const IcingaApplication::Ptr& icingaapplication, DynamicType::GetObjectsByType<IcingaApplication>()) {
+	BOOST_FOREACH(const IcingaApplication::Ptr& icingaapplication, ConfigType::GetObjectsByType<IcingaApplication>()) {
 		Dictionary::Ptr stats = new Dictionary();
 		stats->Set("node_name", icingaapplication->GetNodeName());
 		stats->Set("enable_notifications", icingaapplication->GetEnableNotifications());
@@ -78,7 +77,7 @@ void IcingaApplication::StatsFunc(const Dictionary::Ptr& status, const Array::Pt
 		stats->Set("enable_perfdata", icingaapplication->GetEnablePerfdata());
 		stats->Set("pid", Utility::GetPid());
 		stats->Set("program_start", Application::GetStartTime());
-		stats->Set("version", Application::GetVersion());
+		stats->Set("version", Application::GetAppVersion());
 
 		nodes->Set(icingaapplication->GetName(), stats);
 	}
@@ -101,6 +100,22 @@ int IcingaApplication::Main(void)
 	l_RetentionTimer->OnTimerExpired.connect(boost::bind(&IcingaApplication::DumpProgramState, this));
 	l_RetentionTimer->Start();
 
+	/* restore modified attributes */
+	if (Utility::PathExists(GetModAttrPath())) {
+		Expression *expression = ConfigCompiler::CompileFile(GetModAttrPath());
+
+		if (expression) {
+			try {
+				ScriptFrame frame;
+				expression->Evaluate(frame);
+			} catch (const std::exception& ex) {
+				Log(LogCritical, "config", DiagnosticInformation(ex));
+			}
+		}
+
+		delete expression;
+	}
+
 	RunEventLoop();
 
 	Log(LogInformation, "IcingaApplication", "Icinga has shut down.");
@@ -110,8 +125,6 @@ int IcingaApplication::Main(void)
 
 void IcingaApplication::OnShutdown(void)
 {
-	ASSERT(!OwnsLock());
-
 	{
 		ObjectLock olock(this);
 		l_RetentionTimer->Stop();
@@ -120,24 +133,77 @@ void IcingaApplication::OnShutdown(void)
 	DumpProgramState();
 }
 
+static void PersistModAttrHelper(std::ofstream& fp, ConfigObject::Ptr& previousObject, const ConfigObject::Ptr& object, const String& attr, const Value& value)
+{
+	if (object != previousObject) {
+		if (previousObject) {
+			ConfigWriter::EmitRaw(fp, "\tobj.version = ");
+			ConfigWriter::EmitValue(fp, 0, previousObject->GetVersion());
+			ConfigWriter::EmitRaw(fp, "\n}\n\n");
+		}
+
+		ConfigWriter::EmitRaw(fp, "var obj = ");
+
+		Array::Ptr args1 = new Array();
+		args1->Add(object->GetReflectionType()->GetName());
+		args1->Add(object->GetName());
+		ConfigWriter::EmitFunctionCall(fp, "get_object", args1);
+
+		ConfigWriter::EmitRaw(fp, "\nif (obj) {\n");
+	}
+
+	ConfigWriter::EmitRaw(fp, "\tobj.");
+
+	Array::Ptr args2 = new Array();
+	args2->Add(attr);
+	args2->Add(value);
+	ConfigWriter::EmitFunctionCall(fp, "modify_attribute", args2);
+
+	ConfigWriter::EmitRaw(fp, "\n");
+
+	previousObject = object;
+}
+
 void IcingaApplication::DumpProgramState(void)
 {
-	DynamicObject::DumpObjects(GetStatePath());
+	ConfigObject::DumpObjects(GetStatePath());
+	DumpModifiedAttributes();
+}
+
+void IcingaApplication::DumpModifiedAttributes(void)
+{
+	String path = GetModAttrPath();
+	String pathtmp = path + ".tmp";
+
+	std::ofstream fp;
+	fp.open(pathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
+
+	ConfigObject::Ptr previousObject;
+	ConfigObject::DumpModifiedAttributes(boost::bind(&PersistModAttrHelper, boost::ref(fp), boost::ref(previousObject), _1, _2, _3));
+
+	if (previousObject) {
+		ConfigWriter::EmitRaw(fp, "\tobj.version = ");
+		ConfigWriter::EmitValue(fp, 0, previousObject->GetVersion());
+		ConfigWriter::EmitRaw(fp, "\n}\n");
+	}
+
+	fp.close();
+
+#ifdef _WIN32
+	_unlink(path.CStr());
+#endif /* _WIN32 */
+
+	if (rename(pathtmp.CStr(), path.CStr()) < 0) {
+		BOOST_THROW_EXCEPTION(posix_error()
+		    << boost::errinfo_api_function("rename")
+		    << boost::errinfo_errno(errno)
+		    << boost::errinfo_file_name(pathtmp));
+	}
 }
 
 IcingaApplication::Ptr IcingaApplication::GetInstance(void)
 {
 	return static_pointer_cast<IcingaApplication>(Application::GetInstance());
-}
-
-Dictionary::Ptr IcingaApplication::GetVars(void) const
-{
-	return ScriptGlobal::Get("Vars", &Empty);
-}
-
-String IcingaApplication::GetNodeName(void) const
-{
-	return ScriptGlobal::Get("NodeName");
 }
 
 bool IcingaApplication::ResolveMacro(const String& macro, const CheckResult::Ptr&, Value *result) const
@@ -230,110 +296,12 @@ bool IcingaApplication::ResolveMacro(const String& macro, const CheckResult::Ptr
 	return false;
 }
 
-bool IcingaApplication::GetEnableNotifications(void) const
+String IcingaApplication::GetNodeName(void) const
 {
-	if (!GetOverrideEnableNotifications().IsEmpty())
-		return GetOverrideEnableNotifications();
-	else
-		return ScriptGlobal::Get("EnableNotifications");
+	return ScriptGlobal::Get("NodeName");
 }
 
-void IcingaApplication::SetEnableNotifications(bool enabled)
+void IcingaApplication::ValidateVars(const Dictionary::Ptr& value, const ValidationUtils& utils)
 {
-	SetOverrideEnableNotifications(enabled);
-}
-
-void IcingaApplication::ClearEnableNotifications(void)
-{
-	SetOverrideEnableNotifications(Empty);
-}
-
-bool IcingaApplication::GetEnableEventHandlers(void) const
-{
-	if (!GetOverrideEnableEventHandlers().IsEmpty())
-		return GetOverrideEnableEventHandlers();
-	else
-		return ScriptGlobal::Get("EnableEventHandlers");
-}
-
-void IcingaApplication::SetEnableEventHandlers(bool enabled)
-{
-	SetOverrideEnableEventHandlers(enabled);
-}
-
-void IcingaApplication::ClearEnableEventHandlers(void)
-{
-	SetOverrideEnableEventHandlers(Empty);
-}
-
-bool IcingaApplication::GetEnableFlapping(void) const
-{
-	if (!GetOverrideEnableFlapping().IsEmpty())
-		return GetOverrideEnableFlapping();
-	else
-		return ScriptGlobal::Get("EnableFlapping");
-}
-
-void IcingaApplication::SetEnableFlapping(bool enabled)
-{
-	SetOverrideEnableFlapping(enabled);
-}
-
-void IcingaApplication::ClearEnableFlapping(void)
-{
-	SetOverrideEnableFlapping(Empty);
-}
-
-bool IcingaApplication::GetEnableHostChecks(void) const
-{
-	if (!GetOverrideEnableHostChecks().IsEmpty())
-		return GetOverrideEnableHostChecks();
-	else
-		return ScriptGlobal::Get("EnableHostChecks");
-}
-
-void IcingaApplication::SetEnableHostChecks(bool enabled)
-{
-	SetOverrideEnableHostChecks(enabled);
-}
-
-void IcingaApplication::ClearEnableHostChecks(void)
-{
-	SetOverrideEnableHostChecks(Empty);
-}
-
-bool IcingaApplication::GetEnableServiceChecks(void) const
-{
-	if (!GetOverrideEnableServiceChecks().IsEmpty())
-		return GetOverrideEnableServiceChecks();
-	else
-		return ScriptGlobal::Get("EnableServiceChecks");
-}
-
-void IcingaApplication::SetEnableServiceChecks(bool enabled)
-{
-	SetOverrideEnableServiceChecks(enabled);
-}
-
-void IcingaApplication::ClearEnableServiceChecks(void)
-{
-	SetOverrideEnableServiceChecks(Empty);
-}
-
-bool IcingaApplication::GetEnablePerfdata(void) const
-{
-	if (!GetOverrideEnablePerfdata().IsEmpty())
-		return GetOverrideEnablePerfdata();
-	else
-		return ScriptGlobal::Get("EnablePerfdata");
-}
-
-void IcingaApplication::SetEnablePerfdata(bool enabled)
-{
-	SetOverrideEnablePerfdata(enabled);
-}
-
-void IcingaApplication::ClearEnablePerfdata(void)
-{
-	SetOverrideEnablePerfdata(Empty);
+	MacroProcessor::ValidateCustomVars(this, value);
 }

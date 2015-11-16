@@ -24,10 +24,11 @@
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/context.hpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "base/scriptframe.hpp"
 #include "base/convert.hpp"
 #include "base/exception.hpp"
+#include <boost/assign.hpp>
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -349,6 +350,51 @@ bool MacroProcessor::ValidateMacroString(const String& macro)
 	}
 
 	return true;
+}
+
+void MacroProcessor::ValidateCustomVars(const ConfigObject::Ptr& object, const Dictionary::Ptr& value)
+{
+	if (!value)
+		return;
+
+	/* string, array, dictionary */
+	ObjectLock olock(value);
+	BOOST_FOREACH(const Dictionary::Pair& kv, value) {
+		const Value& varval = kv.second;
+
+		if (varval.IsObjectType<Dictionary>()) {
+			/* only one dictonary level */
+			Dictionary::Ptr varval_dict = varval;
+
+			ObjectLock xlock(varval_dict);
+			BOOST_FOREACH(const Dictionary::Pair& kv_var, varval_dict) {
+				if (!kv_var.second.IsString())
+					continue;
+
+				if (!ValidateMacroString(kv_var.second))
+					BOOST_THROW_EXCEPTION(ValidationError(object.get(), boost::assign::list_of<String>("vars")(kv.first)(kv_var.first), "Closing $ not found in macro format string '" + kv_var.second + "'."));
+			}
+		} else if (varval.IsObjectType<Array>()) {
+			/* check all array entries */
+			Array::Ptr varval_arr = varval;
+
+			ObjectLock ylock (varval_arr);
+			BOOST_FOREACH(const Value& arrval, varval_arr) {
+				if (!arrval.IsString())
+					continue;
+
+				if (!ValidateMacroString(arrval)) {
+					BOOST_THROW_EXCEPTION(ValidationError(object.get(), boost::assign::list_of<String>("vars")(kv.first), "Closing $ not found in macro format string '" + arrval + "'."));
+				}
+			}
+		} else {
+			if (!varval.IsString())
+				continue;
+
+			if (!ValidateMacroString(varval))
+				BOOST_THROW_EXCEPTION(ValidationError(object.get(), boost::assign::list_of<String>("vars")(kv.first), "Closing $ not found in macro format string '" + varval + "'."));
+		}
+	}
 }
 
 void MacroProcessor::AddArgumentHelper(const Array::Ptr& args, const String& key, const String& value,

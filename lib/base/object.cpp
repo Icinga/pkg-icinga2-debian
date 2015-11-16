@@ -25,7 +25,7 @@
 
 using namespace icinga;
 
-REGISTER_PRIMITIVE_TYPE(Object, Object::GetPrototype());
+DEFINE_TYPE_INSTANCE(Object);
 
 /**
  * Default constructor for the Object class.
@@ -48,7 +48,7 @@ Object::~Object(void)
  */
 String Object::ToString(void) const
 {
-	return "Object of type '" + Utility::GetTypeName(typeid(*this)) + "'";
+	return "Object of type '" + GetReflectionType()->GetName() + "'";
 }
 
 #ifdef I2_DEBUG
@@ -71,18 +71,49 @@ bool Object::OwnsLock(void) const
 }
 #endif /* I2_DEBUG */
 
-void Object::InflateMutex(void)
+void Object::SetField(int id, const Value&, bool, const Value&)
 {
-	m_Mutex.Inflate();
+	if (id == 0)
+		BOOST_THROW_EXCEPTION(std::runtime_error("Type field cannot be set."));
+	else
+		BOOST_THROW_EXCEPTION(std::runtime_error("Invalid field ID."));
 }
 
-void Object::SetField(int, const Value&)
+Value Object::GetField(int id) const
+{
+	if (id == 0)
+		return GetReflectionType()->GetName();
+	else
+		BOOST_THROW_EXCEPTION(std::runtime_error("Invalid field ID."));
+}
+
+void Object::Validate(int types, const ValidationUtils& utils)
+{
+	/* Nothing to do here. */
+}
+
+void Object::ValidateField(int id, const Value& value, const ValidationUtils& utils)
+{
+	/* Nothing to do here. */
+}
+
+void Object::NotifyField(int id, const Value& cookie)
 {
 	BOOST_THROW_EXCEPTION(std::runtime_error("Invalid field ID."));
 }
 
-Value Object::GetField(int) const
+Object::Ptr Object::NavigateField(int id) const
 {
 	BOOST_THROW_EXCEPTION(std::runtime_error("Invalid field ID."));
+}
+
+Object::Ptr Object::Clone(void) const
+{
+	BOOST_THROW_EXCEPTION(std::runtime_error("Object cannot be cloned."));
+}
+
+Type::Ptr Object::GetReflectionType(void) const
+{
+	return Object::TypeInstance;
 }
 

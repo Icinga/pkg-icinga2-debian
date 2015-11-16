@@ -17,15 +17,22 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
+
+library remote;
 
 namespace icinga
 {
 
-class Zone : DynamicObject
+class Zone : ConfigObject
 {
-	[config] String parent (ParentRaw);
-	[config] Array::Ptr endpoints (EndpointsRaw);
+	[config, navigation] name(Zone) parent (ParentRaw) {
+		navigate {{{
+			return Zone::GetByName(GetParentRaw());
+		}}}
+	};
+
+	[config] array(name(Endpoint)) endpoints (EndpointsRaw);
 	[config] bool global;
 };
 

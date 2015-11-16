@@ -30,45 +30,53 @@ namespace icinga
 class I2_BASE_API PrimitiveType : public Type
 {
 public:
-	PrimitiveType(const String& name);
+	PrimitiveType(const String& name, const String& base, const ObjectFactory& factory = ObjectFactory());
 
-	virtual String GetName(void) const;
-	virtual Type::Ptr GetBaseType(void) const;
-	virtual int GetAttributes(void) const;
-	virtual int GetFieldId(const String& name) const;
-	virtual Field GetFieldInfo(int id) const;
-	virtual int GetFieldCount(void) const;
+	virtual String GetName(void) const override;
+	virtual Type::Ptr GetBaseType(void) const override;
+	virtual int GetAttributes(void) const override;
+	virtual int GetFieldId(const String& name) const override;
+	virtual Field GetFieldInfo(int id) const override;
+	virtual int GetFieldCount(void) const override;
 
 protected:
-	virtual ObjectFactory GetFactory(void) const;
+	virtual ObjectFactory GetFactory(void) const override;
 
 private:
 	String m_Name;
+	String m_Base;
+	ObjectFactory m_Factory;
 };
 
 #define REGISTER_BUILTIN_TYPE(type, prototype)					\
 	namespace { namespace UNIQUE_NAME(prt) { namespace prt ## type {	\
 		void RegisterBuiltinType(void)					\
 		{								\
-			icinga::Type::Ptr t = new PrimitiveType(#type);		\
+			icinga::Type::Ptr t = new PrimitiveType(#type, "None"); \
 			t->SetPrototype(prototype);				\
 			icinga::Type::Register(t);				\
 		}								\
-		INITIALIZE_ONCE(RegisterBuiltinType);				\
+		INITIALIZE_ONCE_WITH_PRIORITY(RegisterBuiltinType, 15);		\
 	} } }
 
-#define REGISTER_PRIMITIVE_TYPE(type, prototype)				\
+#define REGISTER_PRIMITIVE_TYPE_FACTORY(type, base, prototype, factory)		\
 	namespace { namespace UNIQUE_NAME(prt) { namespace prt ## type {	\
 		void RegisterPrimitiveType(void)				\
 		{								\
-			icinga::Type::Ptr t = new PrimitiveType(#type);		\
+			icinga::Type::Ptr t = new PrimitiveType(#type, #base, factory);\
 			t->SetPrototype(prototype);				\
 			icinga::Type::Register(t);				\
 			type::TypeInstance = t;					\
 		}								\
-		INITIALIZE_ONCE(RegisterPrimitiveType);				\
+		INITIALIZE_ONCE_WITH_PRIORITY(RegisterPrimitiveType, 15);	\
 	} } }									\
 	DEFINE_TYPE_INSTANCE(type)
+
+#define REGISTER_PRIMITIVE_TYPE(type, base, prototype)				\
+	REGISTER_PRIMITIVE_TYPE_FACTORY(type, base, prototype, DefaultObjectFactory<type>)
+
+#define REGISTER_PRIMITIVE_TYPE_NOINST(type, base, prototype)			\
+	REGISTER_PRIMITIVE_TYPE_FACTORY(type, base, prototype, NULL)
 
 }
 

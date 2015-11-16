@@ -23,7 +23,7 @@
 #include "icinga/pluginutility.hpp"
 #include "icinga/service.hpp"
 #include "base/utility.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
 #include <boost/foreach.hpp>
@@ -62,11 +62,11 @@ String CompatUtility::GetCommandNamePrefix(const Command::Ptr command)
 		return Empty;
 
 	String prefix;
-	if (command->GetType() == DynamicType::GetByName("CheckCommand"))
+	if (command->GetType() == ConfigType::GetByName("CheckCommand"))
 		prefix = "check_";
-	else if (command->GetType() == DynamicType::GetByName("NotificationCommand"))
+	else if (command->GetType() == ConfigType::GetByName("NotificationCommand"))
 		prefix = "notification_";
-	else if (command->GetType() == DynamicType::GetByName("EventCommand"))
+	else if (command->GetType() == ConfigType::GetByName("EventCommand"))
 		prefix = "event_";
 
 	return prefix;
@@ -386,62 +386,6 @@ String CompatUtility::GetCustomAttributeConfig(const CustomVarObject::Ptr& objec
 		return Empty;
 
 	return vars->Get(name);
-}
-
-Array::Ptr CompatUtility::GetModifiedAttributesList(const CustomVarObject::Ptr& object)
-{
-	Array::Ptr mod_attr_list = new Array();
-
-	if (object->GetType() != DynamicType::GetByName("Host") &&
-	    object->GetType() != DynamicType::GetByName("Service") &&
-	    object->GetType() != DynamicType::GetByName("User") &&
-	    object->GetType() != DynamicType::GetByName("CheckCommand") &&
-	    object->GetType() != DynamicType::GetByName("EventCommand") &&
-	    object->GetType() != DynamicType::GetByName("NotificationCommand"))
-		return mod_attr_list;
-
-	int flags = object->GetModifiedAttributes();
-
-	if ((flags & ModAttrNotificationsEnabled))
-		mod_attr_list->Add("notifications_enabled");
-
-	if ((flags & ModAttrActiveChecksEnabled))
-		mod_attr_list->Add("active_checks_enabled");
-
-	if ((flags & ModAttrPassiveChecksEnabled))
-		mod_attr_list->Add("passive_checks_enabled");
-
-	if ((flags & ModAttrFlapDetectionEnabled))
-		mod_attr_list->Add("flap_detection_enabled");
-
-	if ((flags & ModAttrEventHandlerEnabled))
-		mod_attr_list->Add("event_handler_enabled");
-
-	if ((flags & ModAttrPerformanceDataEnabled))
-		mod_attr_list->Add("performance_data_enabled");
-
-	if ((flags & ModAttrNormalCheckInterval))
-		mod_attr_list->Add("check_interval");
-
-	if ((flags & ModAttrRetryCheckInterval))
-		mod_attr_list->Add("retry_interval");
-
-	if ((flags & ModAttrEventHandlerCommand))
-		mod_attr_list->Add("event_handler_command");
-
-	if ((flags & ModAttrCheckCommand))
-		mod_attr_list->Add("check_command");
-
-	if ((flags & ModAttrMaxCheckAttempts))
-		mod_attr_list->Add("max_check_attemps");
-
-	if ((flags & ModAttrCheckTimeperiod))
-		mod_attr_list->Add("check_timeperiod");
-
-	if ((flags & ModAttrCustomVariable))
-		mod_attr_list->Add("custom_variable");
-
-	return mod_attr_list;
 }
 
 /* notifications */

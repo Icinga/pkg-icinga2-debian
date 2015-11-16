@@ -18,7 +18,7 @@
  ******************************************************************************/
 
 #include "config/configitembuilder.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include <sstream>
 #include <boost/foreach.hpp>
 #include <boost/smart_ptr/make_shared.hpp>
@@ -65,6 +65,11 @@ void ConfigItemBuilder::SetZone(const String& zone)
 	m_Zone = zone;
 }
 
+void ConfigItemBuilder::SetPackage(const String& package)
+{
+	m_Package = package;
+}
+
 void ConfigItemBuilder::AddExpression(Expression *expr)
 {
 	m_Expressions.push_back(expr);
@@ -75,18 +80,29 @@ void ConfigItemBuilder::SetFilter(const boost::shared_ptr<Expression>& filter)
 	m_Filter = filter;
 }
 
+void ConfigItemBuilder::SetIgnoreOnError(bool ignoreOnError)
+{
+	m_IgnoreOnError = ignoreOnError;
+}
+
 ConfigItem::Ptr ConfigItemBuilder::Compile(void)
 {
 	if (m_Type.IsEmpty()) {
 		std::ostringstream msgbuf;
-		msgbuf << "The type name of an object may not be empty: " << m_DebugInfo;
-		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
+		msgbuf << "The type name of an object may not be empty";
+		BOOST_THROW_EXCEPTION(ScriptError(msgbuf.str(), m_DebugInfo));
 	}
 
-	if (!DynamicType::GetByName(m_Type)) {
+	if (!ConfigType::GetByName(m_Type)) {
 		std::ostringstream msgbuf;
-		msgbuf << "The type '" + m_Type + "' is unknown: " << m_DebugInfo;
-		BOOST_THROW_EXCEPTION(std::invalid_argument(msgbuf.str()));
+		msgbuf << "The type '" + m_Type + "' is unknown";
+		BOOST_THROW_EXCEPTION(ScriptError(msgbuf.str(), m_DebugInfo));
+	}
+
+	if (m_Name.FindFirstOf("!") != String::NPos) {
+		std::ostringstream msgbuf;
+		msgbuf << "Name for object '" << m_Name << "' of type '" << m_Type << "' is invalid: Object names may not contain '!'";
+		BOOST_THROW_EXCEPTION(ScriptError(msgbuf.str(), m_DebugInfo));
 	}
 
 	std::vector<Expression *> exprs;
@@ -94,7 +110,7 @@ ConfigItem::Ptr ConfigItemBuilder::Compile(void)
 	Array::Ptr templateArray = new Array();
 	templateArray->Add(m_Name);
 
-	exprs.push_back(new SetExpression(MakeIndexer(ScopeCurrent, "templates"), OpSetAdd,
+	exprs.push_back(new SetExpression(MakeIndexer(ScopeThis, "templates"), OpSetAdd,
 	    new LiteralExpression(templateArray), m_DebugInfo));
 
 	DictExpression *dexpr = new DictExpression(m_Expressions, m_DebugInfo);
@@ -105,6 +121,6 @@ ConfigItem::Ptr ConfigItemBuilder::Compile(void)
 	exprl->MakeInline();
 
 	return new ConfigItem(m_Type, m_Name, m_Abstract, exprl, m_Filter,
-	    m_DebugInfo, m_Scope, m_Zone);
+	    m_IgnoreOnError, m_DebugInfo, m_Scope, m_Zone, m_Package);
 }
 

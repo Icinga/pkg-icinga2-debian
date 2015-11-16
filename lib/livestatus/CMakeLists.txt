@@ -15,9 +15,7 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(livestatuslistener.ti livestatuslistener.thpp)
-
-mkembedconfig_target(livestatus-type.conf livestatus-type.cpp)
+mkclass_target(livestatuslistener.ti livestatuslistener.tcpp livestatuslistener.thpp)
 
 set(livestatus_SOURCES
   aggregator.cpp andfilter.cpp attributefilter.cpp
@@ -30,7 +28,7 @@ set(livestatus_SOURCES
   minaggregator.cpp negatefilter.cpp orfilter.cpp
   servicegroupstable.cpp servicestable.cpp statehisttable.cpp
   statustable.cpp stdaggregator.cpp sumaggregator.cpp table.cpp
-  timeperiodstable.cpp livestatus-type.cpp
+  timeperiodstable.cpp zonestable.cpp
 )
 
 if(ICINGA2_UNITY_BUILD)

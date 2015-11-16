@@ -17,17 +17,20 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/dynamicobject.hpp"
+#include "remote/i2-remote.hpp"
+#include "base/configobject.hpp"
 #include "base/application.hpp"
+
+library remote;
 
 namespace icinga
 {
 
-class ApiListener : DynamicObject
+class ApiListener : ConfigObject
 {
-	[config] String cert_path;
-	[config] String key_path;
-	[config] String ca_path;
+	[config, required] String cert_path;
+	[config, required] String key_path;
+	[config, required] String ca_path;
 	[config] String crl_path;
 
 	[config] String bind_host;
@@ -40,9 +43,9 @@ class ApiListener : DynamicObject
 
 	[config] String ticket_salt;
 
-	[state] double log_message_timestamp;
+	[state, no_user_modify] double log_message_timestamp;
 
-	String identity;
+	[no_user_modify] String identity;
 };
 
 }

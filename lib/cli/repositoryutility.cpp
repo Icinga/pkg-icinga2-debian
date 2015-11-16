@@ -19,8 +19,6 @@
 
 #include "cli/repositoryutility.hpp"
 #include "cli/clicommand.hpp"
-#include "config/configtype.hpp"
-#include "config/configcompiler.hpp"
 #include "base/logger.hpp"
 #include "base/application.hpp"
 #include "base/convert.hpp"
@@ -33,6 +31,7 @@
 #include "base/objectlock.hpp"
 #include "base/console.hpp"
 #include "base/serializer.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -189,10 +188,10 @@ void RepositoryUtility::PrintChangeLog(std::ostream& fp)
 	}
 }
 
-class RepositoryTypeRuleUtilities : public TypeRuleUtilities
+class RepositoryValidationUtils : public ValidationUtils
 {
 public:
-	virtual bool ValidateName(const String& type, const String& name, String *hint) const
+	virtual bool ValidateName(const String& type, const String& name) const
 	{
 		return true;
 	}
@@ -228,41 +227,20 @@ bool RepositoryUtility::AddObject(const std::vector<String>& object_paths, const
 	change->Set("command", "add");
 	change->Set("attrs", attrs);
 
+	Type::Ptr utype = Type::GetByName(type);
+	ASSERT(utype);
+
 	if (check_config) {
-		String fname, fragment;
-		BOOST_FOREACH(boost::tie(fname, fragment), ConfigFragmentRegistry::GetInstance()->GetItems()) {
-			Expression *expression = ConfigCompiler::CompileText(fname, fragment);
-			if (expression) {
-				ScriptFrame frame;
-				expression->Evaluate(frame);
-				delete expression;
-			}
-		}
+		try {
+			ConfigObject::Ptr object = static_pointer_cast<ConfigObject>(utype->Instantiate());
+			Deserialize(object, attrs, false, FAConfig);
+			object->SetName(name);
 
-		ConfigType::Ptr ctype = ConfigType::GetByName(type);
-
-		if (!ctype)
-			Log(LogCritical, "cli")
-			    << "No validation type available for '" << type << "'.";
-		else {
-			Dictionary::Ptr vattrs = attrs->ShallowClone();
-			vattrs->Set("__name", vattrs->Get("name"));
-			vattrs->Remove("name");
-			vattrs->Remove("import");
-			vattrs->Set("type", type);
-
-			Type::Ptr dtype = Type::GetByName(type);
-
-			Object::Ptr object = dtype->Instantiate();
-			Deserialize(object, vattrs, false, FAConfig);
-
-			try {
-				RepositoryTypeRuleUtilities utils;
-				ctype->ValidateItem(name, object, DebugInfo(), &utils);
-			} catch (const ScriptError& ex) {
-				Log(LogCritical, "config", DiagnosticInformation(ex));
-				return false;
-			}
+			RepositoryValidationUtils utils;
+			static_pointer_cast<ConfigObject>(object)->Validate(FAConfig, utils);
+		} catch (const ValidationError& ex) {
+			Log(LogCritical, "config", DiagnosticInformation(ex));
+			return false;
 		}
 	}
 
@@ -542,7 +520,7 @@ Dictionary::Ptr RepositoryUtility::GetObjectFromRepository(const String& filenam
 
 String RepositoryUtility::EscapeName(const String& name)
 {
-	return Utility::EscapeString(name, "<>:\"/\\|?*");
+	return Utility::EscapeString(name, "<>:\"/\\|?*", true);
 }
 
 String RepositoryUtility::UnescapeName(const String& name)
@@ -577,6 +555,8 @@ bool RepositoryUtility::GetChangeLog(const boost::function<void (const Dictionar
 {
 	std::vector<String> changelog;
 	String path = GetRepositoryChangeLogPath() + "/";
+
+	Utility::MkDirP(path, 0700);
 
 	Utility::Glob(path + "/*.change",
 	    boost::bind(&RepositoryUtility::CollectChangeLog, _1, boost::ref(changelog)), GlobFile);

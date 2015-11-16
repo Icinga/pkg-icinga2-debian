@@ -152,13 +152,13 @@ In addition to built-in attributes you can define your own attributes:
 
 Valid values for custom attributes include:
 
-* [Strings](19-language-reference.md#string-literals), [numbers](19-language-reference.md#numeric-literals) and [booleans](19-language-reference.md#boolean-literals)
-* [Arrays](19-language-reference.md#array) and [dictionaries](19-language-reference.md#dictionary)
+* [Strings](18-language-reference.md#string-literals), [numbers](18-language-reference.md#numeric-literals) and [booleans](18-language-reference.md#boolean-literals)
+* [Arrays](18-language-reference.md#array) and [dictionaries](18-language-reference.md#dictionary)
 * [Functions](3-monitoring-basics.md#custom-attributes-functions)
 
 ### <a id="custom-attributes-functions"></a> Functions as Custom Attributes
 
-Icinga 2 lets you specify [functions](19-language-reference.md#functions) for custom attributes.
+Icinga 2 lets you specify [functions](18-language-reference.md#functions) for custom attributes.
 The special case here is that whenever Icinga 2 needs the value for such a custom attribute it runs
 the function and uses whatever value the function returns:
 
@@ -170,7 +170,7 @@ the function and uses whatever value the function returns:
       vars.text = {{ Math.random() * 100 }}
     }
 
-This example uses the [abbreviated lambda syntax](19-language-reference.md#nullary-lambdas).
+This example uses the [abbreviated lambda syntax](18-language-reference.md#nullary-lambdas).
 
 These functions have access to a number of variables:
 
@@ -261,6 +261,11 @@ attribute.
 We can also directly refer to custom attributes, e.g. by using `$ping_wrta$`. Icinga
 automatically tries to find the closest match for the attribute you specified. The
 exact rules for this are explained in the next section.
+
+> **Note**
+>
+> When using the `$` sign as single character you must escape it with an
+> additional dollar character (`$$`).
 
 
 ### <a id="macro-evaluation-order"></a> Evaluation Order
@@ -425,15 +430,15 @@ The following macros provide global statistics:
 Instead of assigning each object ([Service](6-object-types.md#objecttype-service),
 [Notification](6-object-types.md#objecttype-notification), [Dependency](6-object-types.md#objecttype-dependency),
 [ScheduledDowntime](6-object-types.md#objecttype-scheduleddowntime))
-based on attribute identifiers for example `host_name` objects can be [applied](19-language-reference.md#apply).
+based on attribute identifiers for example `host_name` objects can be [applied](18-language-reference.md#apply).
 
 Before you start using the apply rules keep the following in mind:
 
 * Define the best match.
     * A set of unique [custom attributes](3-monitoring-basics.md#custom-attributes) for these hosts/services?
     * Or [group](3-monitoring-basics.md#groups) memberships, e.g. a host being a member of a hostgroup, applying services to it?
-    * A generic pattern [match](19-language-reference.md#function-calls) on the host/service name?
-    * [Multiple expressions combined](3-monitoring-basics.md#using-apply-expressions) with `&&` or `||` [operators](19-language-reference.md#expression-operators)
+    * A generic pattern [match](18-language-reference.md#function-calls) on the host/service name?
+    * [Multiple expressions combined](3-monitoring-basics.md#using-apply-expressions) with `&&` or `||` [operators](18-language-reference.md#expression-operators)
 * All expressions must return a boolean value (an empty string is equal to `false` e.g.)
 
 > **Note**
@@ -497,7 +502,7 @@ two condition passes: Either the `customer` host custom attribute is set to `cus
 `OR` the host custom attribute `always_notify` is set to `true`.
 
 The notification is ignored for services whose host name ends with `*internal`
-`OR` the `priority` custom attribute is [less than](19-language-reference.md#expression-operators) `2`.
+`OR` the `priority` custom attribute is [less than](18-language-reference.md#expression-operators) `2`.
 
     template Notification "cust-xy-notification" {
       users = [ "noc-xy", "mgmt-xy" ]
@@ -510,8 +515,6 @@ The notification is ignored for services whose host name ends with `*internal`
       assign where match("*has gold support 24x7*", service.notes) && (host.vars.customer == "customer-xy" || host.vars.always_notify == true)
       ignore where match("*internal", host.name) || (service.vars.priority < 2 && host.vars.is_clustered == true)
     }
-
-
 
 ### <a id="using-apply-services"></a> Apply Services to Hosts
 
@@ -552,6 +555,52 @@ In this example the `mail-noc` notification will be created as object for all se
 `notification.mail` custom attribute defined. The notification command is set to `mail-service-notification`
 and all members of the user group `noc` will get notified.
 
+It is also possible to generally apply a notification template and dynamically overwrite values from
+the template by checking for custom attributes. This can be achieved by using [conditional statements](18-language-reference.md#conditional-statements):
+
+    apply Notification "host-mail-noc" to Host {
+      import "mail-host-notification"
+
+      // replace interval inherited from `mail-host-notification` template with new notfication interval set by a host custom attribute
+      if (host.vars.notification_interval) {
+        interval = host.vars.notification_interval
+      }
+
+      // same with notification period
+      if (host.vars.notification_period) {
+        period = host.vars.notification_period
+      }
+
+      // Send SMS instead of email if the host's custom attribute `notification_type` is set to `sms`
+      if (host.vars.notification_type == "sms") {
+        command = "sms-host-notification"
+      } else {
+        command = "mail-host-notification"
+      }
+
+      user_groups = [ "noc" ]
+
+      assign where host.address
+    }
+
+In the example above, the notification template `mail-host-notification`, which contains all relevant
+notification settings, is applied on all host objects where the `host.address` is defined.
+Each host object is then checked for custom attributes (`host.vars.notification_interval`,
+`host.vars.notification_period` and `host.vars.notification_type`). Depending if the custom
+attibute is set or which value it has, the value from the notification template is dynamically
+overwritten.
+
+The corresponding Host object could look like this:
+
+    object Host "host1" {
+      import "host-linux-prod"
+      display_name = "host1"
+      address = "192.168.1.50"
+      vars.notification_interval = 1h
+      vars.notification_period = "24x7"
+      vars.notification_type = "sms"
+    }
+
 ### <a id="using-apply-dependencies"></a> Apply Dependencies to Hosts and Services
 
 Detailed examples can be found in the [dependencies](3-monitoring-basics.md#dependencies) chapter.
@@ -566,8 +615,8 @@ Detailed examples can be found in the [recurring downtimes](5-advanced-topics.md
 ### <a id="using-apply-for"></a> Using Apply For Rules
 
 Next to the standard way of using [apply rules](3-monitoring-basics.md#using-apply)
-there is the requirement of generating apply rules objects based on set (array or
-dictionary).
+there is the requirement of applying objects based on a set (array or
+dictionary) using [apply for](18-language-reference.md#apply-for) expressions.
 
 The sample configuration already includes a detailed example in [hosts.conf](4-configuring-icinga-2.md#hosts-conf)
 and [services.conf](4-configuring-icinga-2.md#services-conf) for this use case.
@@ -683,10 +732,10 @@ After `vars` is fully populated, all object attributes can be set calculated fro
 provided host attributes. For strings, you can use string concatention with the `+` operator.
 
 You can also specifiy the display_name, check command, interval, notes, notes_url, action_url, etc.
-attributes that way. Attribute strings can be [concatenated](19-language-reference.md#expression-operators),
+attributes that way. Attribute strings can be [concatenated](18-language-reference.md#expression-operators),
 for example for adding a more detailed service `display_name`.
 
-This example also uses [if conditions](19-language-reference.md#conditional-statements)
+This example also uses [if conditions](18-language-reference.md#conditional-statements)
 if specific values are not set, adding a local default value.
 The other way around you can override specific custom attributes inherited from a service template,
 if set.
@@ -925,7 +974,7 @@ hosts or with the `test_server` attribute set to `true` are not added to this
 group.
 
 Details on the `assign where` syntax can be found in the
-[Language Reference](19-language-reference.md#apply)
+[Language Reference](18-language-reference.md#apply)
 
 ## <a id="notifications"></a> Notifications
 
@@ -940,7 +989,7 @@ refining the notifications being actually sent.
 There are many ways of sending notifications, e.g. by e-mail, XMPP,
 IRC, Twitter, etc. On its own Icinga 2 does not know how to send notifications.
 Instead it relies on external mechanisms such as shell scripts to notify users.
-More notification methods are listed in the [addons and plugins](13-addons-plugins.md#notification-scripts-interfaces)
+More notification methods are listed in the [addons and plugins](14-addons-plugins.md#notification-scripts-interfaces)
 chapter.
 
 A notification specification requires one or more users (and/or user groups)
@@ -965,7 +1014,7 @@ Details on troubleshooting notification problems can be found [here](16-troubles
 
 > **Note**
 >
-> Make sure that the [notification](8-cli-commands.md#features) feature is enabled
+> Make sure that the [notification](8-cli-commands.md#enable-features) feature is enabled
 > in order to execute notification commands.
 
 You should choose which information you (and your notified users) are interested in
@@ -1182,7 +1231,7 @@ using the `check_command` attribute.
 
 > **Note**
 >
-> Make sure that the [checker](8-cli-commands.md#features) feature is enabled in order to
+> Make sure that the [checker](8-cli-commands.md#enable-features) feature is enabled in order to
 > execute checks.
 
 #### <a id="command-plugin-integration"></a> Integrate the Plugin with a CheckCommand Definition
@@ -1216,7 +1265,7 @@ Next step is to understand how [command parameters](3-monitoring-basics.md#comma
 are being passed from a host or service object, and add a [CheckCommand](6-object-types.md#objecttype-checkcommand)
 definition based on these required parameters and/or default values.
 
-Please continue reading in the [plugins section](13-addons-plugins.md#plugins) for additional integration examples.
+Please continue reading in the [plugins section](14-addons-plugins.md#plugins) for additional integration examples.
 
 #### <a id="command-passing-parameters"></a> Passing Check Command Parameters from Host or Service
 
@@ -1475,7 +1524,7 @@ interfaces (E-Mail, XMPP, IRC, Twitter, etc).
 
 > **Note**
 >
-> Make sure that the [notification](8-cli-commands.md#features) feature is enabled
+> Make sure that the [notification](8-cli-commands.md#enable-features) feature is enabled
 > in order to execute notification commands.
 
 Below is an example using runtime macros from Icinga 2 (such as `$service.output$` for
@@ -1725,7 +1774,7 @@ Rephrased: If the parent service object changes into the `Warning` state, this
 dependency will fail and render all child objects (hosts or services) unreachable.
 
 You can determine the child's reachability by querying the `is_reachable` attribute
-in for example [DB IDO](22-appendix.md#schema-db-ido-extensions).
+in for example [DB IDO](23-appendix.md#schema-db-ido-extensions).
 
 ### <a id="dependencies-implicit-host-service"></a> Implicit Dependencies for Services on Host
 

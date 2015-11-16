@@ -17,16 +17,17 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
+#include "db_ido_pgsql/idopgsqlconnection.hpp"
+#include "db_ido_pgsql/idopgsqlconnection.tcpp"
 #include "db_ido/dbtype.hpp"
 #include "db_ido/dbvalue.hpp"
-#include "db_ido_pgsql/idopgsqlconnection.hpp"
 #include "icinga/perfdatavalue.hpp"
 #include "base/logger.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
 #include "base/utility.hpp"
 #include "base/application.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/exception.hpp"
 #include "base/context.hpp"
 #include "base/statsfunction.hpp"
@@ -35,30 +36,33 @@
 
 using namespace icinga;
 
-#define SCHEMA_VERSION "1.13.0"
-
 REGISTER_TYPE(IdoPgsqlConnection);
 
-REGISTER_STATSFUNCTION(IdoPgsqlConnectionStats, &IdoPgsqlConnection::StatsFunc);
+REGISTER_STATSFUNCTION(IdoPgsqlConnection, &IdoPgsqlConnection::StatsFunc);
 
 IdoPgsqlConnection::IdoPgsqlConnection(void)
-	: m_QueryQueue(500000), m_Connection(NULL)
+	: m_QueryQueue(500000)
 { }
 
 void IdoPgsqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const IdoPgsqlConnection::Ptr& idopgsqlconnection, DynamicType::GetObjectsByType<IdoPgsqlConnection>()) {
+	BOOST_FOREACH(const IdoPgsqlConnection::Ptr& idopgsqlconnection, ConfigType::GetObjectsByType<IdoPgsqlConnection>()) {
 		size_t items = idopgsqlconnection->m_QueryQueue.GetLength();
 
 		Dictionary::Ptr stats = new Dictionary();
-		stats->Set("version", SCHEMA_VERSION);
+		stats->Set("version", idopgsqlconnection->GetSchemaVersion());
+		stats->Set("connected", idopgsqlconnection->GetConnected());
 		stats->Set("instance_name", idopgsqlconnection->GetInstanceName());
 		stats->Set("query_queue_items", items);
 
 		nodes->Set(idopgsqlconnection->GetName(), stats);
 
+		perfdata->Add(new PerfdataValue("idopgsqlconnection_" + idopgsqlconnection->GetName() + "_queries_rate", idopgsqlconnection->GetQueryCount(60) / 60.0));
+		perfdata->Add(new PerfdataValue("idopgsqlconnection_" + idopgsqlconnection->GetName() + "_queries_1min", idopgsqlconnection->GetQueryCount(60)));
+		perfdata->Add(new PerfdataValue("idopgsqlconnection_" + idopgsqlconnection->GetName() + "_queries_5mins", idopgsqlconnection->GetQueryCount(5 * 60)));
+		perfdata->Add(new PerfdataValue("idopgsqlconnection_" + idopgsqlconnection->GetName() + "_queries_15mins", idopgsqlconnection->GetQueryCount(15 * 60)));
 		perfdata->Add(new PerfdataValue("idopgsqlconnection_" + idopgsqlconnection->GetName() + "_query_queue_items", items));
 	}
 
@@ -69,7 +73,7 @@ void IdoPgsqlConnection::Resume(void)
 {
 	DbConnection::Resume();
 
-	m_Connection = NULL;
+	SetConnected(false);
 
 	m_QueryQueue.SetExceptionCallback(boost::bind(&IdoPgsqlConnection::ExceptionHandler, this, _1));
 
@@ -104,11 +108,9 @@ void IdoPgsqlConnection::ExceptionHandler(boost::exception_ptr exp)
 	Log(LogDebug, "IdoPgsqlConnection")
 	    << "Exception during database operation: " << DiagnosticInformation(exp);
 
-	boost::mutex::scoped_lock lock(m_ConnectionMutex);
-
-	if (m_Connection) {
+	if (GetConnected()) {
 		PQfinish(m_Connection);
-		m_Connection = NULL;
+		SetConnected(false);
 	}
 }
 
@@ -121,15 +123,13 @@ void IdoPgsqlConnection::Disconnect(void)
 {
 	AssertOnWorkQueue();
 
-	boost::mutex::scoped_lock lock(m_ConnectionMutex);
-
-	if (!m_Connection)
+	if (!GetConnected())
 		return;
 
 	Query("COMMIT");
-	PQfinish(m_Connection);
 
-	m_Connection = NULL;
+	PQfinish(m_Connection);
+	SetConnected(false);
 }
 
 void IdoPgsqlConnection::TxTimerHandler(void)
@@ -144,9 +144,9 @@ void IdoPgsqlConnection::NewTransaction(void)
 
 void IdoPgsqlConnection::InternalNewTransaction(void)
 {
-	boost::mutex::scoped_lock lock(m_ConnectionMutex);
+	AssertOnWorkQueue();
 
-	if (!m_Connection)
+	if (!GetConnected())
 		return;
 
 	Query("COMMIT");
@@ -164,21 +164,23 @@ void IdoPgsqlConnection::Reconnect(void)
 
 	CONTEXT("Reconnecting to PostgreSQL IDO database '" + GetName() + "'");
 
+	m_SessionToken = static_cast<int>(Utility::GetTime());
+
+	SetShouldConnect(true);
+
 	std::vector<DbObject::Ptr> active_dbobjs;
 
 	{
-		boost::mutex::scoped_lock lock(m_ConnectionMutex);
-
 		bool reconnect = false;
 
-		if (m_Connection) {
+		if (GetConnected()) {
 			/* Check if we're really still connected */
 			try {
 				Query("SELECT 1");
 				return;
 			} catch (const std::exception&) {
 				PQfinish(m_Connection);
-				m_Connection = NULL;
+				SetConnected(false);
 				reconnect = true;
 			}
 		}
@@ -208,7 +210,7 @@ void IdoPgsqlConnection::Reconnect(void)
 		if (PQstatus(m_Connection) != CONNECTION_OK) {
 			String message = PQerrorMessage(m_Connection);
 			PQfinish(m_Connection);
-			m_Connection = NULL;
+			SetConnected(false);
 
 			Log(LogCritical, "IdoPgsqlConnection")
 			    << "Connection to database '" << db << "' with user '" << user << "' on '" << host << ":" << port
@@ -216,6 +218,8 @@ void IdoPgsqlConnection::Reconnect(void)
 
 			BOOST_THROW_EXCEPTION(std::runtime_error(message));
 		}
+
+		SetConnected(true);
 
 		IdoPgsqlResult result;
 
@@ -232,7 +236,7 @@ void IdoPgsqlConnection::Reconnect(void)
 
 		if (!row) {
 			PQfinish(m_Connection);
-			m_Connection = NULL;
+			SetConnected(false);
 
 			Log(LogCritical, "IdoPgsqlConnection", "Schema does not provide any valid version! Verify your schema installation.");
 
@@ -241,13 +245,15 @@ void IdoPgsqlConnection::Reconnect(void)
 
 		String version = row->Get("version");
 
-		if (Utility::CompareVersion(SCHEMA_VERSION, version) < 0) {
+		SetSchemaVersion(version);
+
+		if (Utility::CompareVersion(IDO_COMPAT_SCHEMA_VERSION, version) < 0) {
 			PQfinish(m_Connection);
-			m_Connection = NULL;
+			SetConnected(false);
 
 			Log(LogCritical, "IdoPgsqlConnection")
 			    << "Schema version '" << version << "' does not match the required version '"
-			    << SCHEMA_VERSION << "'! Please check the upgrade documentation.";
+			    << IDO_COMPAT_SCHEMA_VERSION << "' (or newer)! Please check the upgrade documentation.";
 
 			Application::Exit(EXIT_FAILURE);
 		}
@@ -296,7 +302,8 @@ void IdoPgsqlConnection::Reconnect(void)
 
 				if (status_update_age < GetFailoverTimeout()) {
 					PQfinish(m_Connection);
-					m_Connection = NULL;
+					SetConnected(false);
+					SetShouldConnect(false);
 
 					return;
 				}
@@ -307,7 +314,7 @@ void IdoPgsqlConnection::Reconnect(void)
 					    << "Local endpoint '" << my_endpoint->GetName() << "' is not authoritative, bailing out.";
 
 					PQfinish(m_Connection);
-					m_Connection = NULL;
+					SetConnected(false);
 
 					return;
 				}
@@ -322,7 +329,7 @@ void IdoPgsqlConnection::Reconnect(void)
 		/* record connection */
 		Query("INSERT INTO " + GetTablePrefix() + "conninfo " +
 		    "(instance_id, connect_time, last_checkin_time, agent_name, agent_version, connect_type, data_start_time) VALUES ("
-		    + Convert::ToString(static_cast<long>(m_InstanceID)) + ", NOW(), NOW(), E'icinga2 db_ido_pgsql', E'" + Escape(Application::GetVersion())
+		    + Convert::ToString(static_cast<long>(m_InstanceID)) + ", NOW(), NOW(), E'icinga2 db_ido_pgsql', E'" + Escape(Application::GetAppVersion())
 		    + "', E'" + (reconnect ? "RECONNECT" : "INITIAL") + "', NOW())");
 
 		/* clear config tables for the initial config dump */
@@ -363,6 +370,18 @@ void IdoPgsqlConnection::Reconnect(void)
 			DeactivateObject(dbobj);
 		}
 	}
+
+	/* delete all customvariables without current session token */
+	ClearCustomVarTable("customvariables");
+	ClearCustomVarTable("customvariablestatus");
+
+	Query("COMMIT");
+	Query("BEGIN");
+}
+
+void IdoPgsqlConnection::ClearCustomVarTable(const String& table)
+{
+	Query("DELETE FROM " + GetTablePrefix() + table + " WHERE session_token <> " + Convert::ToString(m_SessionToken));
 }
 
 void IdoPgsqlConnection::ClearConfigTable(const String& table)
@@ -376,6 +395,8 @@ IdoPgsqlResult IdoPgsqlConnection::Query(const String& query)
 
 	Log(LogDebug, "IdoPgsqlConnection")
 	    << "Query: " << query;
+
+	IncreaseQueryCount();
 
 	PGresult *result = PQexec(m_Connection, query.CStr());
 
@@ -480,13 +501,14 @@ Dictionary::Ptr IdoPgsqlConnection::FetchRow(const IdoPgsqlResult& result, int r
 
 void IdoPgsqlConnection::ActivateObject(const DbObject::Ptr& dbobj)
 {
-	boost::mutex::scoped_lock lock(m_ConnectionMutex);
-	InternalActivateObject(dbobj);
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalActivateObject, this, dbobj));
 }
 
 void IdoPgsqlConnection::InternalActivateObject(const DbObject::Ptr& dbobj)
 {
-	if (!m_Connection)
+	AssertOnWorkQueue();
+
+	if (!GetConnected())
 		return;
 
 	DbReference dbref = GetObjectID(dbobj);
@@ -513,9 +535,14 @@ void IdoPgsqlConnection::InternalActivateObject(const DbObject::Ptr& dbobj)
 
 void IdoPgsqlConnection::DeactivateObject(const DbObject::Ptr& dbobj)
 {
-	boost::mutex::scoped_lock lock(m_ConnectionMutex);
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalDeactivateObject, this, dbobj));
+}
 
-	if (!m_Connection)
+void IdoPgsqlConnection::InternalDeactivateObject(const DbObject::Ptr& dbobj)
+{
+	AssertOnWorkQueue();
+
+	if (!GetConnected())
 		return;
 
 	DbReference dbref = GetObjectID(dbobj);
@@ -531,11 +558,14 @@ void IdoPgsqlConnection::DeactivateObject(const DbObject::Ptr& dbobj)
 	 * because the object is still in the database. */
 }
 
-/* caller must hold m_ConnectionMutex */
 bool IdoPgsqlConnection::FieldToEscapedString(const String& key, const Value& value, Value *result)
 {
 	if (key == "instance_id") {
 		*result = static_cast<long>(m_InstanceID);
+		return true;
+	}
+	if (key == "session_token") {
+		*result = m_SessionToken;
 		return true;
 	}
 	if (key == "notification_id") {
@@ -545,7 +575,7 @@ bool IdoPgsqlConnection::FieldToEscapedString(const String& key, const Value& va
 
 	Value rawvalue = DbValue::ExtractValue(value);
 
-	if (rawvalue.IsObjectType<DynamicObject>()) {
+	if (rawvalue.IsObjectType<ConfigObject>()) {
 		DbObject::Ptr dbobjcol = DbObject::GetOrCreateByObject(rawvalue);
 
 		if (!dbobjcol) {
@@ -603,12 +633,12 @@ void IdoPgsqlConnection::ExecuteQuery(const DbQuery& query)
 
 void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType *typeOverride)
 {
-	boost::mutex::scoped_lock lock(m_ConnectionMutex);
+	AssertOnWorkQueue();
 
 	if ((query.Category & GetCategories()) == 0)
 		return;
 
-	if (!m_Connection)
+	if (!GetConnected())
 		return;
 
 	if (query.Object && query.Object->GetObject()->GetExtension("agent_check").ToBool())
@@ -675,6 +705,9 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 	if (type == DbQueryInsert || type == DbQueryUpdate) {
 		std::ostringstream colbuf, valbuf;
 
+		if (type == DbQueryUpdate && query.Fields->GetLength() == 0)
+			return;
+
 		ObjectLock olock(query.Fields);
 
 		Value value;
@@ -715,8 +748,6 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 	Query(qbuf.str());
 
 	if (upsert && GetAffectedRows() == 0) {
-		lock.unlock();
-
 		DbQueryType to = DbQueryInsert;
 		InternalExecuteQuery(query, &to);
 
@@ -753,9 +784,9 @@ void IdoPgsqlConnection::CleanUpExecuteQuery(const String& table, const String& 
 
 void IdoPgsqlConnection::InternalCleanUpExecuteQuery(const String& table, const String& time_column, double max_age)
 {
-	boost::mutex::scoped_lock lock(m_ConnectionMutex);
+	AssertOnWorkQueue();
 
-	if (!m_Connection)
+	if (!GetConnected())
 		return;
 
 	Query("DELETE FROM " + GetTablePrefix() + table + " WHERE instance_id = " +
@@ -775,4 +806,9 @@ void IdoPgsqlConnection::FillIDCache(const DbType::Ptr& type)
 		index++;
 		SetInsertID(type, DbReference(row->Get("object_id")), DbReference(row->Get(type->GetTable() + "_id")));
 	}
+}
+
+int IdoPgsqlConnection::GetPendingQueryCount(void) const
+{
+	return m_QueryQueue.GetLength();
 }
