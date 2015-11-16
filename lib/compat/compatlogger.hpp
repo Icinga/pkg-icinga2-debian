@@ -41,10 +41,10 @@ public:
 
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
-	static void ValidateRotationMethod(const String& location, const CompatLogger::Ptr& object);
+	virtual void ValidateRotationMethod(const String& value, const ValidationUtils& utils) override;
 
 protected:
-	virtual void Start(void);
+	virtual void Start(bool runtimeCreated) override;
 
 private:
 	void WriteLine(const String& line);
@@ -54,9 +54,10 @@ private:
 	void NotificationSentHandler(const Notification::Ptr& notification, const Checkable::Ptr& service,
 	    const User::Ptr& user, NotificationType notification_type, CheckResult::Ptr const& cr,
 	    const String& author, const String& comment_text, const String& command_name);
-	void FlappingHandler(const Checkable::Ptr& service, FlappingState flapping_state);
-	void TriggerDowntimeHandler(const Checkable::Ptr& service, const Downtime::Ptr& downtime);
-	void RemoveDowntimeHandler(const Checkable::Ptr& service, const Downtime::Ptr& downtime);
+	void FlappingChangedHandler(const Checkable::Ptr& checkable);
+	void EnableFlappingChangedHandler(const Checkable::Ptr& checkable);
+	void TriggerDowntimeHandler(const Downtime::Ptr& downtime);
+	void RemoveDowntimeHandler(const Downtime::Ptr& downtime);
 	void ExternalCommandHandler(const String& command, const std::vector<String>& arguments);
 	void EventCommandHandler(const Checkable::Ptr& service);
 

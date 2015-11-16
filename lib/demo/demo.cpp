@@ -18,9 +18,10 @@
  ******************************************************************************/
 
 #include "demo/demo.hpp"
+#include "demo/demo.tcpp"
 #include "remote/apilistener.hpp"
 #include "remote/apifunction.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/logger.hpp"
 
 using namespace icinga;
@@ -32,9 +33,9 @@ REGISTER_APIFUNCTION(HelloWorld, demo, &Demo::DemoMessageHandler);
 /**
  * Starts the component.
  */
-void Demo::Start(void)
+void Demo::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<Demo>::Start(runtimeCreated);
 
 	m_DemoTimer = new Timer();
 	m_DemoTimer->SetInterval(5);
@@ -52,15 +53,16 @@ void Demo::DemoTimerHandler(void)
 
 	ApiListener::Ptr listener = ApiListener::GetInstance();
 	if (listener) {
-		listener->RelayMessage(MessageOrigin(), DynamicObject::Ptr(), message, true);
+		MessageOrigin::Ptr origin = new MessageOrigin();
+		listener->RelayMessage(origin, ConfigObject::Ptr(), message, true);
 		Log(LogInformation, "Demo", "Sent demo::HelloWorld message");
 	}
 }
 
-Value Demo::DemoMessageHandler(const MessageOrigin& origin, const Dictionary::Ptr&)
+Value Demo::DemoMessageHandler(const MessageOrigin::Ptr& origin, const Dictionary::Ptr&)
 {
 	Log(LogInformation, "Demo")
-	    << "Got demo message from '" << origin.FromClient->GetEndpoint()->GetName() << "'";
+	    << "Got demo message from '" << origin->FromClient->GetEndpoint()->GetName() << "'";
 
 	return Empty;
 }

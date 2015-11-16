@@ -18,7 +18,8 @@
  ******************************************************************************/
 
 #include "remote/zone.hpp"
-#include "remote/apiclient.hpp"
+#include "remote/zone.tcpp"
+#include "remote/jsonrpcconnection.hpp"
 #include "base/objectlock.hpp"
 #include <boost/foreach.hpp>
 
@@ -53,7 +54,7 @@ std::set<Endpoint::Ptr> Zone::GetEndpoints(void) const
 	return result;
 }
 
-bool Zone::CanAccessObject(const DynamicObject::Ptr& object)
+bool Zone::CanAccessObject(const ConfigObject::Ptr& object)
 {
 	Zone::Ptr object_zone;
 
@@ -96,3 +97,4 @@ Zone::Ptr Zone::GetLocalZone(void)
 
 	return local->GetZone();
 }
+

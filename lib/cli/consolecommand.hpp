@@ -21,6 +21,8 @@
 #define CONSOLECOMMAND_H
 
 #include "cli/clicommand.hpp"
+#include "base/exception.hpp"
+#include "base/scriptframe.hpp"
 
 namespace icinga
 {
@@ -35,12 +37,35 @@ class ConsoleCommand : public CLICommand
 public:
 	DECLARE_PTR_TYPEDEFS(ConsoleCommand);
 
-	virtual String GetDescription(void) const;
-	virtual String GetShortDescription(void) const;
-	virtual ImpersonationLevel GetImpersonationLevel(void) const;
+	static void StaticInitialize(void);
+
+	virtual String GetDescription(void) const override;
+	virtual String GetShortDescription(void) const override;
+	virtual ImpersonationLevel GetImpersonationLevel(void) const override;
 	virtual void InitParameters(boost::program_options::options_description& visibleDesc,
-	    boost::program_options::options_description& hiddenDesc) const;
-	virtual int Run(const boost::program_options::variables_map& vm, const std::vector<std::string>& ap) const;
+	    boost::program_options::options_description& hiddenDesc) const override;
+	virtual int Run(const boost::program_options::variables_map& vm, const std::vector<std::string>& ap) const override;
+
+	static int RunScriptConsole(ScriptFrame& scriptFrame, const String& addr = String(),
+	    const String& session = String(), const String& commandOnce = String());
+
+private:
+	mutable boost::mutex m_Mutex;
+	mutable boost::condition_variable m_CV;
+	mutable bool m_CommandReady;
+
+	static void ExecuteScriptCompletionHandler(boost::mutex& mutex, boost::condition_variable& cv,
+	    bool& ready, boost::exception_ptr eptr, const Value& result, Value& resultOut,
+	    boost::exception_ptr& eptrOut);
+	static void AutocompleteScriptCompletionHandler(boost::mutex& mutex, boost::condition_variable& cv,
+	    bool& ready, boost::exception_ptr eptr, const Array::Ptr& result, Array::Ptr& resultOut);
+
+#ifdef HAVE_EDITLINE
+	static char *ConsoleCompleteHelper(const char *word, int state);
+#endif /* HAVE_EDITLINE */
+
+	static void BreakpointHandler(ScriptFrame& frame, ScriptError *ex, const DebugInfo& di);
+
 };
 
 }

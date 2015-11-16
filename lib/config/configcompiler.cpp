@@ -21,6 +21,7 @@
 #include "config/configitem.hpp"
 #include "base/logger.hpp"
 #include "base/utility.hpp"
+#include "base/loader.hpp"
 #include "base/context.hpp"
 #include "base/exception.hpp"
 #include <fstream>
@@ -29,6 +30,8 @@
 using namespace icinga;
 
 std::vector<String> ConfigCompiler::m_IncludeSearchDirs;
+boost::mutex ConfigCompiler::m_ZoneDirsMutex;
+std::map<String, std::vector<ZoneFragment> > ConfigCompiler::m_ZoneDirs;
 
 /**
  * Constructor for the ConfigCompiler class.
@@ -38,8 +41,10 @@ std::vector<String> ConfigCompiler::m_IncludeSearchDirs;
  * @param input Input stream for the configuration file.
  * @param zone The zone.
  */
-ConfigCompiler::ConfigCompiler(const String& path, std::istream *input, const String& zone)
-	: m_Path(path), m_Input(input), m_Zone(zone), m_Eof(false), m_OpenBraces(0)
+ConfigCompiler::ConfigCompiler(const String& path, std::istream *input,
+    const String& zone, const String& package)
+	: m_Path(path), m_Input(input), m_Zone(zone), m_Package(package),
+	  m_Eof(false), m_OpenBraces(0)
 {
 	InitializeScanner();
 }
@@ -95,32 +100,45 @@ String ConfigCompiler::GetZone(void) const
 	return m_Zone;
 }
 
-void ConfigCompiler::CollectIncludes(std::vector<Expression *>& expressions, const String& file, const String& zone)
+void ConfigCompiler::SetPackage(const String& package)
 {
-	expressions.push_back(CompileFile(file, zone));
+	m_Package = package;
+}
+
+String ConfigCompiler::GetPackage(void) const
+{
+	return m_Package;
+}
+
+void ConfigCompiler::CollectIncludes(std::vector<Expression *>& expressions,
+    const String& file, const String& zone, const String& package)
+{
+	expressions.push_back(CompileFile(file, zone, package));
 }
 
 /**
  * Handles an include directive.
  *
- * @param include The path from the include directive.
+ * @param relativeBath The path this include is relative to.
+ * @param path The path from the include directive.
  * @param search Whether to search global include dirs.
  * @param debuginfo Debug information.
  */
-Expression *ConfigCompiler::HandleInclude(const String& include, bool search, const DebugInfo& debuginfo)
+Expression *ConfigCompiler::HandleInclude(const String& relativeBase, const String& path,
+    bool search, const String& zone, const String& package, const DebugInfo& debuginfo)
 {
-	String path;
+	String upath;
 
-	if (search || (include.GetLength() > 0 && include[0] == '/'))
-		path = include;
+	if (search || (path.GetLength() > 0 && path[0] == '/'))
+		upath = path;
 	else
-		path = Utility::DirName(GetPath()) + "/" + include;
+		upath = relativeBase + "/" + path;
 
-	String includePath = path;
+	String includePath = upath;
 
 	if (search) {
 		BOOST_FOREACH(const String& dir, m_IncludeSearchDirs) {
-			String spath = dir + "/" + include;
+			String spath = dir + "/" + path;
 
 			if (Utility::PathExists(spath)) {
 				includePath = spath;
@@ -131,9 +149,9 @@ Expression *ConfigCompiler::HandleInclude(const String& include, bool search, co
 
 	std::vector<Expression *> expressions;
 
-	if (!Utility::Glob(includePath, boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, m_Zone), GlobFile) && includePath.FindFirstOf("*?") == String::NPos) {
+	if (!Utility::Glob(includePath, boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, zone, package), GlobFile) && includePath.FindFirstOf("*?") == String::NPos) {
 		std::ostringstream msgbuf;
-		msgbuf << "Include file '" + include + "' does not exist";
+		msgbuf << "Include file '" + path + "' does not exist";
 		BOOST_THROW_EXCEPTION(ScriptError(msgbuf.str(), debuginfo));
 	}
 
@@ -145,32 +163,64 @@ Expression *ConfigCompiler::HandleInclude(const String& include, bool search, co
 /**
  * Handles recursive includes.
  *
+ * @param relativeBase The path this include is relative to.
  * @param path The directory path.
  * @param pattern The file pattern.
  * @param debuginfo Debug information.
  */
-Expression *ConfigCompiler::HandleIncludeRecursive(const String& path, const String& pattern, const DebugInfo&)
+Expression *ConfigCompiler::HandleIncludeRecursive(const String& relativeBase, const String& path,
+    const String& pattern, const String& zone, const String& package, const DebugInfo&)
 {
 	String ppath;
 
 	if (path.GetLength() > 0 && path[0] == '/')
 		ppath = path;
 	else
-		ppath = Utility::DirName(GetPath()) + "/" + path;
+		ppath = relativeBase + "/" + path;
 
 	std::vector<Expression *> expressions;
-	Utility::GlobRecursive(ppath, pattern, boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, m_Zone), GlobFile);
+	Utility::GlobRecursive(ppath, pattern, boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, zone, package), GlobFile);
 	return new DictExpression(expressions);
 }
 
-/**
- * Handles the library directive.
- *
- * @param library The name of the library.
- */
-void ConfigCompiler::HandleLibrary(const String& library)
+void ConfigCompiler::HandleIncludeZone(const String& relativeBase, const String& tag, const String& path, const String& pattern, const String& package, std::vector<Expression *>& expressions)
 {
-	Utility::LoadExtensionLibrary(library);
+	String zoneName = Utility::BaseName(path);
+
+	String ppath;
+
+	if (path.GetLength() > 0 && path[0] == '/')
+		ppath = path;
+	else
+		ppath = relativeBase + "/" + path;
+
+	RegisterZoneDir(tag, ppath, zoneName);
+
+	Utility::GlobRecursive(ppath, pattern, boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, zoneName, package), GlobFile);
+}
+
+/**
+ * Handles zone includes.
+ *
+ * @param relativeBase The path this include is relative to.
+ * @param tag The tag name.
+ * @param path The directory path.
+ * @param pattern The file pattern.
+ * @param debuginfo Debug information.
+ */
+Expression *ConfigCompiler::HandleIncludeZones(const String& relativeBase, const String& tag,
+    const String& path, const String& pattern, const String& package, const DebugInfo&)
+{
+	String ppath;
+
+	if (path.GetLength() > 0 && path[0] == '/')
+		ppath = path;
+	else
+		ppath = relativeBase + "/" + path;
+
+	std::vector<Expression *> expressions;
+	Utility::Glob(ppath + "/*", boost::bind(&ConfigCompiler::HandleIncludeZone, relativeBase, tag, _1, pattern, package, boost::ref(expressions)), GlobDirectory);
+	return new DictExpression(expressions);
 }
 
 /**
@@ -180,20 +230,21 @@ void ConfigCompiler::HandleLibrary(const String& library)
  * @param stream The input stream.
  * @returns Configuration items.
  */
-Expression *ConfigCompiler::CompileStream(const String& path, std::istream *stream, const String& zone)
+Expression *ConfigCompiler::CompileStream(const String& path,
+    std::istream *stream, const String& zone, const String& package)
 {
 	CONTEXT("Compiling configuration stream with name '" + path + "'");
 
 	stream->exceptions(std::istream::badbit);
 
-	ConfigCompiler ctx(path, stream, zone);
+	ConfigCompiler ctx(path, stream, zone, package);
 
 	try {
 		return ctx.Compile();
 	} catch (const ScriptError& ex) {
-		return new ThrowExpression(MakeLiteral(ex.what()), ex.GetDebugInfo());
+		return new ThrowExpression(MakeLiteral(ex.what()), ex.IsIncompleteExpression(), ex.GetDebugInfo());
 	} catch (const std::exception& ex) {
-		return new ThrowExpression(MakeLiteral(DiagnosticInformation(ex)));
+		return new ThrowExpression(MakeLiteral(DiagnosticInformation(ex)), false);
 	}
 }
 
@@ -203,7 +254,8 @@ Expression *ConfigCompiler::CompileStream(const String& path, std::istream *stre
  * @param path The path.
  * @returns Configuration items.
  */
-Expression *ConfigCompiler::CompileFile(const String& path, const String& zone)
+Expression *ConfigCompiler::CompileFile(const String& path, const String& zone,
+    const String& package)
 {
 	CONTEXT("Compiling configuration file '" + path + "'");
 
@@ -218,7 +270,7 @@ Expression *ConfigCompiler::CompileFile(const String& path, const String& zone)
 	Log(LogInformation, "ConfigCompiler")
 	    << "Compiling config file: " << path;
 
-	return CompileStream(path, &stream, zone);
+	return CompileStream(path, &stream, zone, package);
 }
 
 /**
@@ -228,10 +280,11 @@ Expression *ConfigCompiler::CompileFile(const String& path, const String& zone)
  * @param text The text.
  * @returns Configuration items.
  */
-Expression *ConfigCompiler::CompileText(const String& path, const String& text, const String& zone)
+Expression *ConfigCompiler::CompileText(const String& path, const String& text,
+    const String& zone, const String& package)
 {
 	std::stringstream stream(text);
-	return CompileStream(path, &stream, zone);
+	return CompileStream(path, &stream, zone, package);
 }
 
 /**
@@ -247,8 +300,23 @@ void ConfigCompiler::AddIncludeSearchDir(const String& dir)
 	m_IncludeSearchDirs.push_back(dir);
 }
 
-ConfigFragmentRegistry *ConfigFragmentRegistry::GetInstance(void)
+std::vector<ZoneFragment> ConfigCompiler::GetZoneDirs(const String& zone)
 {
-	return Singleton<ConfigFragmentRegistry>::GetInstance();
+	boost::mutex::scoped_lock lock(m_ZoneDirsMutex);
+	std::map<String, std::vector<ZoneFragment> >::const_iterator it = m_ZoneDirs.find(zone);
+	if (it == m_ZoneDirs.end())
+		return std::vector<ZoneFragment>();
+	else
+		return it->second;
+}
+
+void ConfigCompiler::RegisterZoneDir(const String& tag, const String& ppath, const String& zoneName)
+{
+	ZoneFragment zf;
+	zf.Tag = tag;
+	zf.Path = ppath;
+
+	boost::mutex::scoped_lock lock(m_ZoneDirsMutex);
+	m_ZoneDirs[zoneName].push_back(zf);
 }
 

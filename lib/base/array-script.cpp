@@ -101,7 +101,7 @@ static Array::Ptr ArraySort(const std::vector<Value>& args)
 	return arr;
 }
 
-static Array::Ptr ArrayClone(void)
+static Array::Ptr ArrayShallowClone(void)
 {
 	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
 	Array::Ptr self = static_cast<Array::Ptr>(vframe->Self);
@@ -143,17 +143,17 @@ Object::Ptr Array::GetPrototype(void)
 
 	if (!prototype) {
 		prototype = new Dictionary();
-		prototype->Set("len", new Function(WrapFunction(ArrayLen)));
+		prototype->Set("len", new Function(WrapFunction(ArrayLen), true));
 		prototype->Set("set", new Function(WrapFunction(ArraySet)));
 		prototype->Set("get", new Function(WrapFunction(ArrayGet)));
 		prototype->Set("add", new Function(WrapFunction(ArrayAdd)));
 		prototype->Set("remove", new Function(WrapFunction(ArrayRemove)));
-		prototype->Set("contains", new Function(WrapFunction(ArrayContains)));
+		prototype->Set("contains", new Function(WrapFunction(ArrayContains), true));
 		prototype->Set("clear", new Function(WrapFunction(ArrayClear)));
-		prototype->Set("sort", new Function(WrapFunction(ArraySort)));
-		prototype->Set("clone", new Function(WrapFunction(ArrayClone)));
-		prototype->Set("join", new Function(WrapFunction(ArrayJoin)));
-		prototype->Set("reverse", new Function(WrapFunction(ArrayReverse)));
+		prototype->Set("sort", new Function(WrapFunction(ArraySort), true));
+		prototype->Set("shallow_clone", new Function(WrapFunction(ArrayShallowClone), true));
+		prototype->Set("join", new Function(WrapFunction(ArrayJoin), true));
+		prototype->Set("reverse", new Function(WrapFunction(ArrayReverse), true));
 	}
 
 	return prototype;

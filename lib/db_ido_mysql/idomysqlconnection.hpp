@@ -31,6 +31,14 @@ namespace icinga
 
 typedef boost::shared_ptr<MYSQL_RES> IdoMysqlResult;
 
+typedef boost::function<void (const IdoMysqlResult&)> IdoAsyncCallback;
+
+struct IdoAsyncQuery
+{
+	String Query;
+	IdoAsyncCallback Callback;
+};
+
 /**
  * An IDO MySQL database connection.
  *
@@ -46,26 +54,30 @@ public:
 
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
-protected:
-	virtual void Resume(void);
-	virtual void Pause(void);
+	virtual int GetPendingQueryCount(void) const override;
 
-	virtual void ActivateObject(const DbObject::Ptr& dbobj);
-	virtual void DeactivateObject(const DbObject::Ptr& dbobj);
-	virtual void ExecuteQuery(const DbQuery& query);
-	virtual void CleanUpExecuteQuery(const String& table, const String& time_key, double time_value);
-	virtual void FillIDCache(const DbType::Ptr& type);
-	virtual void NewTransaction(void);
+protected:
+	virtual void Resume(void) override;
+	virtual void Pause(void) override;
+
+	virtual void ActivateObject(const DbObject::Ptr& dbobj) override;
+	virtual void DeactivateObject(const DbObject::Ptr& dbobj) override;
+	virtual void ExecuteQuery(const DbQuery& query) override;
+	virtual void CleanUpExecuteQuery(const String& table, const String& time_key, double time_value) override;
+	virtual void FillIDCache(const DbType::Ptr& type) override;
+	virtual void NewTransaction(void) override;
 
 private:
 	DbReference m_InstanceID;
+	int m_SessionToken;
 
 	WorkQueue m_QueryQueue;
 
-	boost::mutex m_ConnectionMutex;
-	bool m_Connected;
 	MYSQL m_Connection;
 	int m_AffectedRows;
+	int m_MaxPacketSize;
+
+	std::vector<IdoAsyncQuery> m_AsyncQueries;
 
 	Timer::Ptr m_ReconnectTimer;
 	Timer::Ptr m_TxTimer;
@@ -77,8 +89,12 @@ private:
 	Dictionary::Ptr FetchRow(const IdoMysqlResult& result);
 	void DiscardRows(const IdoMysqlResult& result);
 
+	void AsyncQuery(const String& query, const IdoAsyncCallback& callback = IdoAsyncCallback());
+	void FinishAsyncQueries(bool force = false);
+
 	bool FieldToEscapedString(const String& key, const Value& value, Value *result);
 	void InternalActivateObject(const DbObject::Ptr& dbobj);
+	void InternalDeactivateObject(const DbObject::Ptr& dbobj);
 
 	void Disconnect(void);
 	void Reconnect(void);
@@ -89,10 +105,12 @@ private:
 	void ReconnectTimerHandler(void);
 
 	void InternalExecuteQuery(const DbQuery& query, DbQueryType *typeOverride = NULL);
+	void FinishExecuteQuery(const DbQuery& query, int type, bool upsert);
 	void InternalCleanUpExecuteQuery(const String& table, const String& time_key, double time_value);
 	void InternalNewTransaction(void);
 
-	virtual void ClearConfigTable(const String& table);
+	virtual void ClearConfigTable(const String& table) override;
+	void ClearCustomVarTable(const String& table);
 
 	void ExceptionHandler(boost::exception_ptr exp);
 };

@@ -25,7 +25,12 @@
 #include "db_ido/dbobject.hpp"
 #include "db_ido/dbquery.hpp"
 #include "base/timer.hpp"
+#include "base/ringbuffer.hpp"
 #include <boost/thread/once.hpp>
+#include <boost/thread/mutex.hpp>
+
+#define IDO_CURRENT_SCHEMA_VERSION "1.14.0"
+#define IDO_COMPAT_SCHEMA_VERSION "1.14.0"
 
 namespace icinga
 {
@@ -39,6 +44,8 @@ class I2_DB_IDO_API DbConnection : public ObjectImpl<DbConnection>
 {
 public:
 	DECLARE_OBJECT(DbConnection);
+
+	DbConnection(void);
 
 	static void InitializeDbTimer(void);
 
@@ -64,13 +71,16 @@ public:
 	void SetStatusUpdate(const DbObject::Ptr& dbobj, bool hasupdate);
 	bool GetStatusUpdate(const DbObject::Ptr& dbobj) const;
 
-	static void ValidateFailoverTimeout(const String& location, const DbConnection::Ptr& object);
+	int GetQueryCount(RingBuffer::SizeType span) const;
+	virtual int GetPendingQueryCount(void) const = 0;
+
+	virtual void ValidateFailoverTimeout(double value, const ValidationUtils& utils) override;
 
 protected:
-	virtual void OnConfigLoaded(void);
-	virtual void Start(void);
-	virtual void Resume(void);
-	virtual void Pause(void);
+	virtual void OnConfigLoaded(void) override;
+	virtual void Start(bool runtimeCreated) override;
+	virtual void Resume(void) override;
+	virtual void Pause(void) override;
 
 	virtual void ExecuteQuery(const DbQuery& query) = 0;
 	virtual void ActivateObject(const DbObject::Ptr& dbobj) = 0;
@@ -80,9 +90,12 @@ protected:
 	virtual void FillIDCache(const DbType::Ptr& type) = 0;
 	virtual void NewTransaction(void) = 0;
 
+	void UpdateObject(const ConfigObject::Ptr& object);
 	void UpdateAllObjects(void);
 
 	void PrepareDatabase(void);
+
+	void IncreaseQueryCount(void);
 
 private:
 	std::map<DbObject::Ptr, DbReference> m_ObjectIDs;
@@ -102,6 +115,9 @@ private:
 
 	static void InsertRuntimeVariable(const String& key, const Value& value);
 	static void ProgramStatusHandler(void);
+
+	mutable boost::mutex m_StatsMutex;
+	RingBuffer m_QueryStats;
 };
 
 struct database_error : virtual std::exception, virtual boost::exception { };

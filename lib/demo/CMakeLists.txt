@@ -15,12 +15,10 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(demo.ti demo.thpp)
-
-mkembedconfig_target(demo-type.conf demo-type.cpp)
+mkclass_target(demo.ti demo.tcpp demo.thpp)
 
 set(demo_SOURCES
-  demo.cpp demo.thpp demo-type.cpp
+  demo.cpp demo.thpp
 )
 
 if(ICINGA2_UNITY_BUILD)
@@ -34,6 +32,7 @@ target_link_libraries(demo ${Boost_LIBRARIES} base config icinga remote)
 set_target_properties (
   demo PROPERTIES
   INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
+  DEFINE_SYMBOL I2_DEMO_BUILD
   FOLDER Components
 )
 

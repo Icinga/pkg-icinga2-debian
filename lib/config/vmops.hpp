@@ -46,22 +46,53 @@ class VMOps
 public:
 	static inline Value Variable(ScriptFrame& frame, const String& name, const DebugInfo& debugInfo = DebugInfo())
 	{
-		if (frame.Locals && frame.Locals->Contains(name))
-			return frame.Locals->Get(name);
+		Value value;
+		if (frame.Locals && frame.Locals->Get(name, &value))
+			return value;
 		else if (frame.Self.IsObject() && frame.Locals != static_cast<Object::Ptr>(frame.Self) && HasField(frame.Self, name))
-			return GetField(frame.Self, name, debugInfo);
+			return GetField(frame.Self, name, frame.Sandboxed, debugInfo);
 		else
 			return ScriptGlobal::Get(name);
 	}
 
+	static inline Value CopyConstructorCall(const Type::Ptr& type, const Value& value, const DebugInfo& debugInfo = DebugInfo())
+	{
+		if (type->GetName() == "String")
+			return Convert::ToString(value);
+		else if (type->GetName() == "Number")
+			return Convert::ToDouble(value);
+		else if (type->GetName() == "Boolean")
+			return Convert::ToBool(value);
+		else if (!value.IsEmpty() && !type->IsAssignableFrom(value.GetReflectionType()))
+			BOOST_THROW_EXCEPTION(ScriptError("Invalid cast: Tried to cast object of type '" + value.GetReflectionType()->GetName() + "' to type '" + type->GetName() + "'", debugInfo));
+		else
+			return value;
+	}
+
+	static inline Value ConstructorCall(const Type::Ptr& type, const DebugInfo& debugInfo = DebugInfo())
+	{
+		if (type->GetName() == "String")
+			return "";
+		else if (type->GetName() == "Number")
+			return 0;
+		else if (type->GetName() == "Boolean")
+			return false;
+		else {
+			Object::Ptr object = type->Instantiate();
+
+			if (!object)
+				BOOST_THROW_EXCEPTION(ScriptError("Failed to instantiate object of type '" + type->GetName() + "'", debugInfo));
+
+			return object;
+		}
+	}
+
 	static inline Value FunctionCall(ScriptFrame& frame, const Value& self, const Function::Ptr& func, const std::vector<Value>& arguments)
 	{
-		boost::shared_ptr<ScriptFrame> vframe;
-
+		ScriptFrame vframe;
+		
 		if (!self.IsEmpty() || self.IsString())
-			vframe = boost::make_shared<ScriptFrame>(self); /* passes self to the callee using a TLS variable */
-		else
-			vframe = boost::make_shared<ScriptFrame>();
+			vframe.Self = self;
 
 		return func->Invoke(arguments);
 	}
@@ -74,17 +105,17 @@ public:
 	}
 
 	static inline Value NewApply(ScriptFrame& frame, const String& type, const String& target, const String& name, const boost::shared_ptr<Expression>& filter,
-		const String& fkvar, const String& fvvar, const boost::shared_ptr<Expression>& fterm, std::map<String, Expression *> *closedVars,
-		const boost::shared_ptr<Expression>& expression, const DebugInfo& debugInfo = DebugInfo())
+		const String& package, const String& fkvar, const String& fvvar, const boost::shared_ptr<Expression>& fterm, std::map<String, Expression *> *closedVars,
+		bool ignoreOnError, const boost::shared_ptr<Expression>& expression, const DebugInfo& debugInfo = DebugInfo())
 	{
-		ApplyRule::AddRule(type, target, name, expression, filter, fkvar,
-		    fvvar, fterm, debugInfo, EvaluateClosedVars(frame, closedVars));
+		ApplyRule::AddRule(type, target, name, expression, filter, package, fkvar,
+		    fvvar, fterm, ignoreOnError, debugInfo, EvaluateClosedVars(frame, closedVars));
 
 		return Empty;
 	}
 
 	static inline Value NewObject(ScriptFrame& frame, bool abstract, const String& type, const String& name, const boost::shared_ptr<Expression>& filter,
-		const String& zone, std::map<String, Expression *> *closedVars, const boost::shared_ptr<Expression>& expression, const DebugInfo& debugInfo = DebugInfo())
+		const String& zone, const String& package, bool ignoreOnError, std::map<String, Expression *> *closedVars, const boost::shared_ptr<Expression>& expression, const DebugInfo& debugInfo = DebugInfo())
 	{
 		ConfigItemBuilder::Ptr item = new ConfigItemBuilder(debugInfo);
 
@@ -100,7 +131,7 @@ public:
 		}
 
 		if (!checkName.IsEmpty()) {
-			ConfigItem::Ptr oldItem = ConfigItem::GetObject(type, checkName);
+			ConfigItem::Ptr oldItem = ConfigItem::GetByTypeAndName(type, checkName);
 
 			if (oldItem) {
 				std::ostringstream msgbuf;
@@ -110,20 +141,15 @@ public:
 		}
 
 		item->SetType(type);
-
-		if (name.FindFirstOf("!") != String::NPos) {
-			std::ostringstream msgbuf;
-			msgbuf << "Name for object '" << name << "' of type '" << type << "' is invalid: Object names may not contain '!'";
-			BOOST_THROW_EXCEPTION(ScriptError(msgbuf.str(), debugInfo));
-		}
-
 		item->SetName(name);
 
 		item->AddExpression(new OwnedExpression(expression));
 		item->SetAbstract(abstract);
 		item->SetScope(EvaluateClosedVars(frame, closedVars));
 		item->SetZone(zone);
+		item->SetPackage(package);
 		item->SetFilter(filter);
+		item->SetIgnoreOnError(ignoreOnError);
 		item->Compile()->Register();
 
 		return Empty;
@@ -193,7 +219,7 @@ public:
 			Object::Ptr object = type->GetPrototype();
 
 			if (object && HasField(object, field))
-				return GetField(object, field, debugInfo);
+				return GetField(object, field, false, debugInfo);
 
 			type = type->GetBaseType();
 		} while (type);
@@ -204,7 +230,7 @@ public:
 			return Empty;
 	}
 
-	static inline Value GetField(const Value& context, const String& field, const DebugInfo& debugInfo = DebugInfo())
+	static inline Value GetField(const Value& context, const String& field, bool sandboxed = false, const DebugInfo& debugInfo = DebugInfo())
 	{
 		if (context.IsEmpty() && !context.IsString())
 			return Empty;
@@ -217,8 +243,9 @@ public:
 		Dictionary::Ptr dict = dynamic_pointer_cast<Dictionary>(object);
 
 		if (dict) {
-			if (dict->Contains(field))
-				return dict->Get(field);
+			Value value;
+			if (dict->Get(field, &value))
+				return value;
 			else
 				return GetPrototypeField(context, field, false, debugInfo);
 		}
@@ -249,6 +276,13 @@ public:
 
 		if (fid == -1)
 			return GetPrototypeField(context, field, true, debugInfo);
+
+		if (sandboxed) {
+			Field fieldInfo = type->GetFieldInfo(fid);
+
+			if (fieldInfo.Attributes & FANoUserView)
+				BOOST_THROW_EXCEPTION(ScriptError("Accessing the field '" + field + "' for type '" + type->GetName() + "' is not allowed in sandbox mode."));
+		}
 
 		return object->GetField(fid);
 	}
@@ -288,9 +322,13 @@ public:
 		try {
 			context->SetField(fid, value);
 		} catch (const boost::bad_lexical_cast&) {
-			BOOST_THROW_EXCEPTION(ScriptError("Attribute '" + field + "' cannot be set to value of type '" + value.GetTypeName() + "'", debugInfo));
+			Field fieldInfo = type->GetFieldInfo(fid);
+			Type::Ptr ftype = Type::GetByName(fieldInfo.TypeName);
+			BOOST_THROW_EXCEPTION(ScriptError("Attribute '" + field + "' cannot be set to value of type '" + value.GetTypeName() + "', expected '" + ftype->GetName() + "'", debugInfo));
 		} catch (const std::bad_cast&) {
-			BOOST_THROW_EXCEPTION(ScriptError("Attribute '" + field + "' cannot be set to value of type '" + value.GetTypeName() + "'", debugInfo));
+			Field fieldInfo = type->GetFieldInfo(fid);
+			Type::Ptr ftype = Type::GetByName(fieldInfo.TypeName);
+			BOOST_THROW_EXCEPTION(ScriptError("Attribute '" + field + "' cannot be set to value of type '" + value.GetTypeName() + "', expected '" + ftype->GetName() + "'", debugInfo));
 		}
 	}
 
@@ -301,16 +339,15 @@ private:
 		if (arguments.size() < funcargs.size())
 			BOOST_THROW_EXCEPTION(std::invalid_argument("Too few arguments for function"));
 
-		ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
-		ScriptFrame frame(vframe->Self);
+		ScriptFrame *frame = ScriptFrame::GetCurrentFrame();
 
 		if (closedVars)
-			closedVars->CopyTo(frame.Locals);
+			closedVars->CopyTo(frame->Locals);
 
 		for (std::vector<Value>::size_type i = 0; i < std::min(arguments.size(), funcargs.size()); i++)
-			frame.Locals->Set(funcargs[i], arguments[i]);
+			frame->Locals->Set(funcargs[i], arguments[i]);
 
-		return expr->Evaluate(frame);
+		return expr->Evaluate(*frame);
 	}
 
 	static inline Dictionary::Ptr EvaluateClosedVars(ScriptFrame& frame, std::map<String, Expression *> *closedVars)

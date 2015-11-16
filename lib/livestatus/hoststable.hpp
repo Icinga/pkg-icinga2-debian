@@ -40,11 +40,11 @@ public:
 	static void AddColumns(Table *table, const String& prefix = String(),
 	    const Column::ObjectAccessor& objectAccessor = Column::ObjectAccessor());
 
-	virtual String GetName(void) const;
-	virtual String GetPrefix(void) const;
+	virtual String GetName(void) const override;
+	virtual String GetPrefix(void) const override;
 
 protected:
-	virtual void FetchRows(const AddRowFunction& addRowFn);
+	virtual void FetchRows(const AddRowFunction& addRowFn) override;
 
 	static Object::Ptr HostGroupAccessor(const Value& row, LivestatusGroupByType groupByType, const Object::Ptr& groupByObject);
 
@@ -101,8 +101,6 @@ protected:
 	static Value ScheduledDowntimeDepthAccessor(const Value& row);
 	static Value ActiveChecksEnabledAccessor(const Value& row);
 	static Value CheckOptionsAccessor(const Value& row);
-	static Value ModifiedAttributesAccessor(const Value& row);
-	static Value ModifiedAttributesListAccessor(const Value& row);
 	static Value CheckIntervalAccessor(const Value& row);
 	static Value RetryIntervalAccessor(const Value& row);
 	static Value NotificationIntervalAccessor(const Value& row);
@@ -146,6 +144,7 @@ protected:
 	static Value CheckSourceAccessor(const Value& row);
 	static Value IsReachableAccessor(const Value& row);
 	static Value CVIsJsonAccessor(const Value& row);
+	static Value OriginalAttributesAccessor(const Value& row);
 };
 
 }

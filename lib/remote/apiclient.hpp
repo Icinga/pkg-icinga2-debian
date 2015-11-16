@@ -20,73 +20,108 @@
 #ifndef APICLIENT_H
 #define APICLIENT_H
 
-#include "remote/endpoint.hpp"
-#include "base/tlsstream.hpp"
-#include "base/timer.hpp"
-#include "base/workqueue.hpp"
-#include "remote/i2-remote.hpp"
+#include "remote/httpclientconnection.hpp"
+#include "base/value.hpp"
+#include "base/exception.hpp"
+#include <vector>
 
 namespace icinga
 {
 
-enum ClientRole
+struct ApiFieldAttributes
 {
-	ClientInbound,
-	ClientOutbound
+public:
+	bool Config;
+	bool Navigation;
+	bool NoUserModify;
+	bool NouserView;
+	bool Required;
+	bool State;
 };
 
-struct MessageOrigin;
+class ApiType;
 
-/**
- * An API client connection.
- *
- * @ingroup remote
- */
+struct ApiField
+{
+public:
+	String Name;
+	int ID;
+	int ArrayRank;
+	ApiFieldAttributes FieldAttributes;
+	String TypeName;
+	intrusive_ptr<ApiType> Type;
+};
+
+class I2_REMOTE_API ApiType : public Object
+{
+public:
+	DECLARE_PTR_TYPEDEFS(ApiType);
+
+	String Name;
+	String PluralName;
+	String BaseName;
+	ApiType::Ptr Base;
+	bool Abstract;
+	std::map<String, ApiField> Fields;
+	std::vector<String> PrototypeKeys;
+};
+
+struct ApiObjectReference
+{
+public:
+	String Name;
+	String Type;
+};
+
+struct I2_REMOTE_API ApiObject : public Object
+{
+public:
+	DECLARE_PTR_TYPEDEFS(ApiObject);
+
+	String Name;
+	String Type;
+	std::map<String, Value> Attrs;
+	std::vector<ApiObjectReference> UsedBy;
+};
+
 class I2_REMOTE_API ApiClient : public Object
 {
 public:
 	DECLARE_PTR_TYPEDEFS(ApiClient);
 
-	ApiClient(const String& identity, bool authenticated, const TlsStream::Ptr& stream, ConnectionRole role);
+	ApiClient(const String& host, const String& port,
+	    const String& user, const String& password);
 
-	void Start(void);
+	typedef boost::function<void(boost::exception_ptr, const std::vector<ApiType::Ptr>&)> TypesCompletionCallback;
+	void GetTypes(const TypesCompletionCallback& callback) const;
 
-	String GetIdentity(void) const;
-	bool IsAuthenticated(void) const;
-	Endpoint::Ptr GetEndpoint(void) const;
-	TlsStream::Ptr GetStream(void) const;
-	ConnectionRole GetRole(void) const;
+	typedef boost::function<void(boost::exception_ptr, const std::vector<ApiObject::Ptr>&)> ObjectsCompletionCallback;
+	void GetObjects(const String& pluralType, const ObjectsCompletionCallback& callback,
+	    const std::vector<String>& names = std::vector<String>(),
+	    const std::vector<String>& attrs = std::vector<String>(),
+	    const std::vector<String>& joins = std::vector<String>(), bool all_joins = false) const;
 
-	void Disconnect(void);
-
-	void SendMessage(const Dictionary::Ptr& request);
-
-	static void HeartbeatTimerHandler(void);
-	static Value HeartbeatAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params);
+	typedef boost::function<void(boost::exception_ptr, const Value&)> ExecuteScriptCompletionCallback;
+	void ExecuteScript(const String& session, const String& command, bool sandboxed,
+	    const ExecuteScriptCompletionCallback& callback) const;
+	
+	typedef boost::function<void(boost::exception_ptr, const Array::Ptr&)> AutocompleteScriptCompletionCallback;
+	void AutocompleteScript(const String& session, const String& command, bool sandboxed,
+	    const AutocompleteScriptCompletionCallback& callback) const;
 
 private:
-	String m_Identity;
-	bool m_Authenticated;
-	Endpoint::Ptr m_Endpoint;
-	TlsStream::Ptr m_Stream;
-	ConnectionRole m_Role;
-	double m_Seen;
-	double m_NextHeartbeat;
-	double m_HeartbeatTimeout;
-	Timer::Ptr m_TimeoutTimer;
-	boost::mutex m_DataHandlerMutex;
+	HttpClientConnection::Ptr m_Connection;
+	String m_User;
+	String m_Password;
 
-	StreamReadContext m_Context;
-
-	WorkQueue m_WriteQueue;
-
-	bool ProcessMessage(void);
-	void DataAvailableHandler(void);
-	void SendMessageSync(const Dictionary::Ptr& request);
-
-	static void StaticInitialize(void);
-	static void TimeoutTimerHandler(void);
-	void CheckLiveness(void);
+	static void TypesHttpCompletionCallback(HttpRequest& request,
+	    HttpResponse& response, const TypesCompletionCallback& callback);
+	static void ObjectsHttpCompletionCallback(HttpRequest& request,
+	    HttpResponse& response, const ObjectsCompletionCallback& callback);
+	static void ExecuteScriptHttpCompletionCallback(HttpRequest& request,
+	    HttpResponse& response, const ExecuteScriptCompletionCallback& callback);
+	static void AutocompleteScriptHttpCompletionCallback(HttpRequest& request,
+	    HttpResponse& response, const AutocompleteScriptCompletionCallback& callback);
 };
 
 }

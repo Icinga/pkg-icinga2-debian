@@ -23,7 +23,7 @@
 #include "icinga/eventcommand.hpp"
 #include "icinga/notificationcommand.hpp"
 #include "icinga/compatutility.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
 #include <boost/foreach.hpp>
@@ -44,8 +44,8 @@ void CommandsTable::AddColumns(Table *table, const String& prefix,
 	table->AddColumn(prefix + "custom_variable_names", Column(&CommandsTable::CustomVariableNamesAccessor, objectAccessor));
 	table->AddColumn(prefix + "custom_variable_values", Column(&CommandsTable::CustomVariableValuesAccessor, objectAccessor));
 	table->AddColumn(prefix + "custom_variables", Column(&CommandsTable::CustomVariablesAccessor, objectAccessor));
-	table->AddColumn(prefix + "modified_attributes", Column(&CommandsTable::ModifiedAttributesAccessor, objectAccessor));
-	table->AddColumn(prefix + "modified_attributes_list", Column(&CommandsTable::ModifiedAttributesListAccessor, objectAccessor));
+	table->AddColumn(prefix + "modified_attributes", Column(&Table::ZeroAccessor, objectAccessor));
+	table->AddColumn(prefix + "modified_attributes_list", Column(&Table::ZeroAccessor, objectAccessor));
 }
 
 String CommandsTable::GetName(void) const
@@ -60,17 +60,17 @@ String CommandsTable::GetPrefix(void) const
 
 void CommandsTable::FetchRows(const AddRowFunction& addRowFn)
 {
-	BOOST_FOREACH(const DynamicObject::Ptr& object, DynamicType::GetObjectsByType<CheckCommand>()) {
+	BOOST_FOREACH(const ConfigObject::Ptr& object, ConfigType::GetObjectsByType<CheckCommand>()) {
 		if (!addRowFn(object, LivestatusGroupByNone, Empty))
 			return;
 	}
 
-	BOOST_FOREACH(const DynamicObject::Ptr& object, DynamicType::GetObjectsByType<EventCommand>()) {
+	BOOST_FOREACH(const ConfigObject::Ptr& object, ConfigType::GetObjectsByType<EventCommand>()) {
 		if (!addRowFn(object, LivestatusGroupByNone, Empty))
 			return;
 	}
 
-	BOOST_FOREACH(const DynamicObject::Ptr& object, DynamicType::GetObjectsByType<NotificationCommand>()) {
+	BOOST_FOREACH(const ConfigObject::Ptr& object, ConfigType::GetObjectsByType<NotificationCommand>()) {
 		if (!addRowFn(object, LivestatusGroupByNone, Empty))
 			return;
 	}
@@ -184,25 +184,4 @@ Value CommandsTable::CustomVariablesAccessor(const Value& row)
 	}
 
 	return cv;
-}
-
-Value CommandsTable::ModifiedAttributesAccessor(const Value& row)
-{
-	Command::Ptr command = static_cast<Command::Ptr>(row);
-
-	if (!command)
-		return Empty;
-
-	/* not supported */
-	return command->GetModifiedAttributes();
-}
-
-Value CommandsTable::ModifiedAttributesListAccessor(const Value& row)
-{
-	Command::Ptr command = static_cast<Command::Ptr>(row);
-
-	if (!command)
-		return Empty;
-
-	return CompatUtility::GetModifiedAttributesList(command);
 }

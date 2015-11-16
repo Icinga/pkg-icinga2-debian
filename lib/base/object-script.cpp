@@ -32,13 +32,29 @@ static String ObjectToString(void)
 	return self->ToString();
 }
 
+static void ObjectNotifyAttribute(const String& attribute)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Object::Ptr self = static_cast<Object::Ptr>(vframe->Self);
+	self->NotifyField(self->GetReflectionType()->GetFieldId(attribute));
+}
+
+static Object::Ptr ObjectClone(void)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Object::Ptr self = static_cast<Object::Ptr>(vframe->Self);
+	return self->Clone();
+}
+
 Object::Ptr Object::GetPrototype(void)
 {
 	static Dictionary::Ptr prototype;
 
 	if (!prototype) {
 		prototype = new Dictionary();
-		prototype->Set("to_string", new Function(WrapFunction(ObjectToString)));
+		prototype->Set("to_string", new Function(WrapFunction(ObjectToString), true));
+		prototype->Set("notify_attribute", new Function(WrapFunction(ObjectNotifyAttribute), false));
+		prototype->Set("clone", new Function(WrapFunction(ObjectClone), true));
 	}
 
 	return prototype;

@@ -21,6 +21,7 @@
 #include "cli/nodeutility.hpp"
 #include "cli/pkiutility.hpp"
 #include "cli/featureutility.hpp"
+#include "cli/apisetuputility.hpp"
 #include "base/logger.hpp"
 #include "base/console.hpp"
 #include "base/application.hpp"
@@ -125,7 +126,7 @@ int NodeWizardCommand::Run(const boost::program_options::variables_map& vm, cons
 			answer = Utility::GetFQDN();
 
 		String cn = answer;
-		cn.Trim();
+		cn = cn.Trim();
 
 		std::cout << ConsoleColorTag(Console_Bold) << "Please specifiy the local zone name" << ConsoleColorTag(Console_Normal) << " [" << cn << "]: ";
 
@@ -136,7 +137,7 @@ int NodeWizardCommand::Run(const boost::program_options::variables_map& vm, cons
 			answer = cn;
 
 		String local_zone = answer;
-		local_zone.Trim();
+		local_zone = local_zone.Trim();
 
 		std::vector<std::string> endpoints;
 
@@ -158,7 +159,7 @@ wizard_endpoint_loop_start:
 		}
 
 		endpoint_buffer = answer;
-		endpoint_buffer.Trim();
+		endpoint_buffer = endpoint_buffer.Trim();
 
 		std::cout << "Do you want to establish a connection to the master " << ConsoleColorTag(Console_Bold) << "from this node?" << ConsoleColorTag(Console_Normal) << " [Y/n]: ";
 
@@ -182,7 +183,8 @@ wizard_endpoint_loop_start:
 			}
 
 			String tmp = answer;
-			tmp.Trim();
+			tmp = tmp.Trim();
+
 			endpoint_buffer += "," + tmp;
 			master_endpoint_name = tmp; //store the endpoint name for later
 
@@ -196,8 +198,7 @@ wizard_endpoint_loop_start:
 			else
 				tmp = "5665";
 
-			tmp.Trim();
-			endpoint_buffer += "," + tmp;
+			endpoint_buffer += "," + tmp.Trim();
 		}
 
 		endpoints.push_back(endpoint_buffer);
@@ -227,7 +228,7 @@ wizard_master_host:
 			goto wizard_master_host;
 
 		String master_host = answer;
-		master_host.Trim();
+		master_host = master_host.Trim();
 
 		std::cout << ConsoleColorTag(Console_Bold) << "Port" << ConsoleColorTag(Console_Normal) << " [5665]: ";
 
@@ -238,18 +239,11 @@ wizard_master_host:
 			answer = "5665";
 
 		String master_port = answer;
-		master_port.Trim();
+		master_port = master_port.Trim();
 
 		/* workaround for fetching the master cert */
 		String pki_path = PkiUtility::GetPkiPath();
-		String node_cert = pki_path + "/" + cn + ".crt";
-		String node_key = pki_path + "/" + cn + ".key";
-
-		if (!Utility::MkDirP(pki_path, 0700)) {
-			Log(LogCritical, "cli")
-			    << "Could not create local pki directory '" << pki_path << "'.";
-			return 1;
-		}
+		Utility::MkDirP(pki_path, 0700);
 
 		String user = ScriptGlobal::Get("RunAsUser");
 		String group = ScriptGlobal::Get("RunAsGroup");
@@ -258,6 +252,9 @@ wizard_master_host:
 			Log(LogWarning, "cli")
 			    << "Cannot set ownership for user '" << user << "' group '" << group << "' on file '" << pki_path << "'. Verify it yourself!";
 		}
+
+		String node_cert = pki_path + "/" + cn + ".crt";
+		String node_key = pki_path + "/" + cn + ".key";
 
 		if (Utility::PathExists(node_key))
 			NodeUtility::CreateBackupFile(node_key, true);
@@ -278,7 +275,7 @@ wizard_master_host:
 
 		//save-cert and store the master certificate somewhere
 
-		Log(LogInformation, "cli", "Generating self-signed certifiate:");
+		Log(LogInformation, "cli", "Generating self-signed certificate:");
 
 		Log(LogInformation, "cli")
 		    << "Fetching public certificate from master ("
@@ -309,7 +306,7 @@ wizard_ticket:
 			goto wizard_ticket;
 
 		String ticket = answer;
-		ticket.Trim();
+		ticket = ticket.Trim();
 
 		Log(LogInformation, "cli")
 		    << "Processing self-signed certificate request. Ticket '" << ticket << "'.\n";
@@ -342,7 +339,7 @@ wizard_ticket:
 		boost::algorithm::to_lower(answer);
 
 		String bind_host = answer;
-		bind_host.Trim();
+		bind_host = bind_host.Trim();
 
 		std::cout << "Bind Port []: ";
 
@@ -350,7 +347,7 @@ wizard_ticket:
 		boost::algorithm::to_lower(answer);
 
 		String bind_port = answer;
-		bind_port.Trim();
+		bind_port = bind_port.Trim();
 
 		std::cout << ConsoleColorTag(Console_Bold) << "Accept config from master?" << ConsoleColorTag(Console_Normal) << " [y/N]: ";
 		std::getline(std::cin, answer);
@@ -452,92 +449,27 @@ wizard_ticket:
 			answer = Utility::GetFQDN();
 
 		String cn = answer;
-		cn.Trim();
+		cn = cn.Trim();
 
-		if (PkiUtility::NewCa() > 0) {
-			Log(LogWarning, "cli", "Found CA, skipping and using the existing one.");
+		/* check whether the user wants to generate a new certificate or not */
+		String existing_path = PkiUtility::GetPkiPath() + "/" + cn + ".crt";
+
+		std::cout << ConsoleColorTag(Console_Normal) << "Checking for existing certificates for common name '" << cn << "'...\n";
+
+		if (Utility::PathExists(existing_path)) {
+			std::cout << "Certificate '" << existing_path << "' for CN '" << cn << "' already existing. Skipping certificate generation.\n";
+		} else {
+			std::cout << "Certificates not yet generated. Running 'api setup' now.\n";
+			ApiSetupUtility::SetupMasterCertificates(cn);
 		}
 
-		String pki_path = PkiUtility::GetPkiPath();
+		std::cout << ConsoleColorTag(Console_Bold) << "Generating master configuration for Icinga 2.\n" << ConsoleColorTag(Console_Normal);
+		ApiSetupUtility::SetupMasterApiUser();
 
-		if (!Utility::MkDirP(pki_path, 0700)) {
-			Log(LogCritical, "cli")
-			    << "Could not create local pki directory '" << pki_path << "'.";
-			return 1;
-		}
-
-		String user = ScriptGlobal::Get("RunAsUser");
-		String group = ScriptGlobal::Get("RunAsGroup");
-
-		if (!Utility::SetFileOwnership(pki_path, user, group)) {
-			Log(LogWarning, "cli")
-			    << "Cannot set ownership for user '" << user << "' group '" << group << "' on file '" << pki_path << "'. Verify it yourself!";
-		}
-
-		String key = pki_path + "/" + cn + ".key";
-		String csr = pki_path + "/" + cn + ".csr";
-
-		Log(LogInformation, "cli")
-		    << "Generating new CSR in '" << csr << "'.";
-
-		if (Utility::PathExists(key))
-			NodeUtility::CreateBackupFile(key, true);
-		if (Utility::PathExists(csr))
-			NodeUtility::CreateBackupFile(csr);
-
-		if (PkiUtility::NewCert(cn, key, csr, "") > 0) {
-			Log(LogCritical, "cli", "Failed to create certificate signing request.");
-			return 1;
-		}
-
-		/* Sign the CSR with the CA key */
-		String cert = pki_path + "/" + cn + ".crt";
-
-		Log(LogInformation, "cli")
-		    << "Signing CSR with CA and writing certificate to '" << cert << "'.";
-
-		if (Utility::PathExists(cert))
-			NodeUtility::CreateBackupFile(cert);
-
-		if (PkiUtility::SignCsr(csr, cert) != 0) {
-			Log(LogCritical, "cli", "Could not sign CSR.");
-			return 1;
-		}
-
-		/* Copy CA certificate to /etc/icinga2/pki */
-
-		String ca_path = PkiUtility::GetLocalCaPath();
-		String ca = ca_path + "/ca.crt";
-		String ca_key = ca_path + "/ca.key";
-		String serial = ca_path + "/serial.txt";
-		String target_ca = pki_path + "/ca.crt";
-
-		Log(LogInformation, "cli")
-		    << "Copying CA certificate to '" << target_ca << "'.";
-
-		if (Utility::PathExists(target_ca))
-			NodeUtility::CreateBackupFile(target_ca);
-
-		/* does not overwrite existing files! */
-		Utility::CopyFile(ca, target_ca);
-
-		/* fix permissions: root -> icinga daemon user */
-		std::vector<String> files;
-		files.push_back(ca_path);
-		files.push_back(ca);
-		files.push_back(ca_key);
-		files.push_back(serial);
-		files.push_back(target_ca);
-		files.push_back(key);
-		files.push_back(csr);
-		files.push_back(cert);
-
-		BOOST_FOREACH(const String& file, files) {
-			if (!Utility::SetFileOwnership(file, user, group)) {
-				Log(LogWarning, "cli")
-				    << "Cannot set ownership for user '" << user << "' group '" << group << "' on file '" << file << "'. Verify it yourself!";
-			}
-		}
+		if (!FeatureUtility::CheckFeatureEnabled("api"))
+			ApiSetupUtility::SetupMasterEnableApi();
+		else
+			std::cout << "'api' feature already enabled.\n";
 
 		NodeUtility::GenerateNodeMasterIcingaConfig(cn);
 
@@ -549,7 +481,7 @@ wizard_ticket:
 		boost::algorithm::to_lower(answer);
 
 		String bind_host = answer;
-		bind_host.Trim();
+		bind_host = bind_host.Trim();
 
 		std::cout << ConsoleColorTag(Console_Bold) << "Bind Port" << ConsoleColorTag(Console_Normal) << " []: ";
 
@@ -557,14 +489,9 @@ wizard_ticket:
 		boost::algorithm::to_lower(answer);
 
 		String bind_port = answer;
-		bind_port.Trim();
+		bind_port = bind_port.Trim();
 
-		Log(LogInformation, "cli", "Enabling the APIlistener feature.");
-
-		std::vector<std::string> enable;
-		enable.push_back("api");
-		FeatureUtility::EnableFeatures(enable);
-
+		/* api feature is always enabled, check above */
 		String apipath = FeatureUtility::GetFeaturesAvailablePath() + "/api.conf";
 		NodeUtility::CreateBackupFile(apipath);
 

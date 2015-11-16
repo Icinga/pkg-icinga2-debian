@@ -18,10 +18,11 @@
  ******************************************************************************/
 
 #include "perfdata/perfdatawriter.hpp"
+#include "perfdata/perfdatawriter.tcpp"
 #include "icinga/service.hpp"
 #include "icinga/macroprocessor.hpp"
 #include "icinga/icingaapplication.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/convert.hpp"
@@ -34,24 +35,23 @@
 using namespace icinga;
 
 REGISTER_TYPE(PerfdataWriter);
-REGISTER_SCRIPTFUNCTION(ValidateFormatTemplates, &PerfdataWriter::ValidateFormatTemplates);
 
-REGISTER_STATSFUNCTION(PerfdataWriterStats, &PerfdataWriter::StatsFunc);
+REGISTER_STATSFUNCTION(PerfdataWriter, &PerfdataWriter::StatsFunc);
 
 void PerfdataWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const PerfdataWriter::Ptr& perfdatawriter, DynamicType::GetObjectsByType<PerfdataWriter>()) {
+	BOOST_FOREACH(const PerfdataWriter::Ptr& perfdatawriter, ConfigType::GetObjectsByType<PerfdataWriter>()) {
 		nodes->Set(perfdatawriter->GetName(), 1); //add more stats
 	}
 
 	status->Set("perfdatawriter", nodes);
 }
 
-void PerfdataWriter::Start(void)
+void PerfdataWriter::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<PerfdataWriter>::Start(runtimeCreated);
 
 	Checkable::OnNewCheckResult.connect(boost::bind(&PerfdataWriter::CheckResultHandler, this, _1, _2));
 
@@ -140,15 +140,18 @@ void PerfdataWriter::RotationTimerHandler(void)
 	RotateFile(m_HostOutputFile, GetHostTempPath(), GetHostPerfdataPath());
 }
 
-void PerfdataWriter::ValidateFormatTemplates(const String& location, const PerfdataWriter::Ptr& object)
+void PerfdataWriter::ValidateHostFormatTemplate(const String& value, const ValidationUtils& utils)
 {
-	if (!MacroProcessor::ValidateMacroString(object->GetHostFormatTemplate())) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": Closing $ not found in macro format string '" + object->GetHostFormatTemplate() + "'.", object->GetDebugInfo()));
-	}
+	ObjectImpl<PerfdataWriter>::ValidateHostFormatTemplate(value, utils);
 
-	if (!MacroProcessor::ValidateMacroString(object->GetServiceFormatTemplate())) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": Closing $ not found in macro format string '" + object->GetHostFormatTemplate() + "'.", object->GetDebugInfo()));
-	}
+	if (!MacroProcessor::ValidateMacroString(value))
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("host_format_template"), "Closing $ not found in macro format string '" + value + "'."));
+}
+
+void PerfdataWriter::ValidateServiceFormatTemplate(const String& value, const ValidationUtils& utils)
+{
+	ObjectImpl<PerfdataWriter>::ValidateServiceFormatTemplate(value, utils);
+
+	if (!MacroProcessor::ValidateMacroString(value))
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("service_format_template"), "Closing $ not found in macro format string '" + value + "'."));
 }

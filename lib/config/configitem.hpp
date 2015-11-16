@@ -22,7 +22,7 @@
 
 #include "config/i2-config.hpp"
 #include "config/expression.hpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "base/workqueue.hpp"
 
 namespace icinga
@@ -41,33 +41,36 @@ public:
 	ConfigItem(const String& type, const String& name, bool abstract,
 	    const boost::shared_ptr<Expression>& exprl,
 	    const boost::shared_ptr<Expression>& filter,
-	    const DebugInfo& debuginfo,
-	    const Dictionary::Ptr& scope, const String& zone);
+	    bool ignoreOnError, const DebugInfo& debuginfo,
+	    const Dictionary::Ptr& scope, const String& zone,
+	    const String& package);
 
 	String GetType(void) const;
 	String GetName(void) const;
 	bool IsAbstract(void) const;
+	bool GetIgnoreOnError(void) const;
 
 	std::vector<ConfigItem::Ptr> GetParents(void) const;
 
 	boost::shared_ptr<Expression> GetExpression(void) const;
 	boost::shared_ptr<Expression> GetFilter(void) const;
 
-	DynamicObject::Ptr Commit(bool discard = true);
+	ConfigObject::Ptr Commit(bool discard = true);
 	void Register(void);
+	void Unregister(void);
 
 	DebugInfo GetDebugInfo(void) const;
 	Dictionary::Ptr GetScope(void) const;
 
-	String GetZone(void) const;
-
-	static ConfigItem::Ptr GetObject(const String& type,
+	ConfigObject::Ptr GetObject(void) const;
+	
+	static ConfigItem::Ptr GetByTypeAndName(const String& type,
 	    const String& name);
 
-	static bool CommitItems(void);
-	static bool ActivateItems(void);
+	static bool CommitItems(WorkQueue& upq);
+	static bool ActivateItems(WorkQueue& upq, bool restoreState, bool runtimeCreated = false);
 
-	static bool ScriptCommit(void);
+	static bool CommitAndActivate(void);
 
 	static std::vector<ConfigItem::Ptr> GetItems(const String& type);
 
@@ -78,11 +81,13 @@ private:
 
 	boost::shared_ptr<Expression> m_Expression;
 	boost::shared_ptr<Expression> m_Filter;
+	bool m_IgnoreOnError;
 	DebugInfo m_DebugInfo; /**< Debug information. */
 	Dictionary::Ptr m_Scope; /**< variable scope. */
 	String m_Zone; /**< The zone. */
+	String m_Package;
 
-	DynamicObject::Ptr m_Object;
+	ConfigObject::Ptr m_Object;
 
 	static boost::mutex m_Mutex;
 
@@ -97,7 +102,9 @@ private:
 	static ConfigItem::Ptr GetObjectUnlocked(const String& type,
 	    const String& name);
 
-	static bool CommitNewItems(WorkQueue& upq);
+	static bool CommitNewItems(WorkQueue& upq, std::vector<ConfigItem::Ptr>& newItems);
+
+	void OnAllConfigLoadedWrapper(void);
 };
 
 }

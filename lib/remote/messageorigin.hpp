@@ -21,7 +21,7 @@
 #define MESSAGEORIGIN_H
 
 #include "remote/zone.hpp"
-#include "remote/apiclient.hpp"
+#include "remote/jsonrpcconnection.hpp"
 
 namespace icinga
 {
@@ -29,10 +29,13 @@ namespace icinga
 /**
  * @ingroup remote
  */
-struct I2_REMOTE_API MessageOrigin
+class I2_REMOTE_API MessageOrigin : public Object
 {
+public:
+	DECLARE_PTR_TYPEDEFS(MessageOrigin);
+
 	Zone::Ptr FromZone;
-	ApiClient::Ptr FromClient;
+	JsonRpcConnection::Ptr FromClient;
 
 	bool IsLocal(void) const;
 };

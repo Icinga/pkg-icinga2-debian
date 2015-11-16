@@ -22,9 +22,12 @@
 
 using namespace icinga;
 
+Type::Ptr Type::TypeInstance;
+
 static void RegisterTypeType(void)
 {
 	Type::Ptr type = new TypeType();
+	type->SetPrototype(TypeType::GetPrototype());
 	Type::TypeInstance = type;
 	Type::Register(type);
 }
@@ -53,12 +56,23 @@ Type::Ptr Type::GetByName(const String& name)
 	return ptype;
 }
 
+String Type::GetPluralName(void) const
+{
+	String name = GetName();
+
+	if (name.GetLength() >= 2 && name[name.GetLength() - 1] == 'y' &&
+	    name.SubStr(name.GetLength() - 2, 1).FindFirstOf("aeiou") == String::NPos)
+		return name.SubStr(0, name.GetLength() - 1) + "ies";
+	else
+		return name + "s";
+}
+
 Object::Ptr Type::Instantiate(void) const
 {
 	ObjectFactory factory = GetFactory();
 
 	if (!factory)
-		return Object::Ptr();
+		BOOST_THROW_EXCEPTION(std::runtime_error("Type does not have a factory function."));
 
 	return factory();
 }
@@ -88,27 +102,40 @@ void Type::SetPrototype(const Object::Ptr& object)
 	m_Prototype = object;
 }
 
-void Type::SetField(int id, const Value& value)
+void Type::SetField(int id, const Value& value, bool suppress_events, const Value& cookie)
 {
-	if (id == 0) {
+	if (id == 1) {
 		SetPrototype(value);
 		return;
 	}
 
-	Object::SetField(id, value);
+	Object::SetField(id, value, suppress_events, cookie);
 }
 
 Value Type::GetField(int id) const
 {
-	if (id == 0)
-		return GetPrototype();
+	int real_id = id - Object::TypeInstance->GetFieldCount();
+	if (real_id < 0)
+		return Object::GetField(id);
 
-	return Object::GetField(id);
+	if (real_id == 0)
+		return GetName();
+	else if (real_id == 1)
+		return GetPrototype();
+	else if (real_id == 2)
+		return GetBaseType();
+
+	BOOST_THROW_EXCEPTION(std::runtime_error("Invalid field ID."));
 }
 
 std::vector<String> Type::GetLoadDependencies(void) const
 {
 	return std::vector<String>();
+}
+
+void Type::RegisterAttributeHandler(int fieldId, const AttributeHandler& callback)
+{
+	throw std::runtime_error("Invalid field ID.");
 }
 
 String TypeType::GetName(void) const
@@ -118,7 +145,7 @@ String TypeType::GetName(void) const
 
 Type::Ptr TypeType::GetBaseType(void) const
 {
-	return Type::Ptr();
+	return Object::TypeInstance;
 }
 
 int TypeType::GetAttributes(void) const
@@ -128,23 +155,37 @@ int TypeType::GetAttributes(void) const
 
 int TypeType::GetFieldId(const String& name) const
 {
-	if (name == "prototype")
-		return 0;
+	int base_field_count = GetBaseType()->GetFieldCount();
 
-	return -1;
+	if (name == "name")
+		return base_field_count + 0;
+	else if (name == "prototype")
+		return base_field_count + 1;
+	else if (name == "base")
+		return base_field_count + 2;
+
+	return GetBaseType()->GetFieldId(name);
 }
 
 Field TypeType::GetFieldInfo(int id) const
 {
-	if (id == 0)
-		return Field(0, "Object", "prototype", 0);
+	int real_id = id - GetBaseType()->GetFieldCount();
+	if (real_id < 0)
+		return GetBaseType()->GetFieldInfo(id);
+
+	if (real_id == 0)
+		return Field(0, "String", "name", "", NULL, 0, 0);
+	else if (real_id == 1)
+		return Field(1, "Object", "prototype", "", NULL, 0, 0);
+	else if (real_id == 2)
+		return Field(2, "Type", "base", "", NULL, 0, 0);
 
 	throw std::runtime_error("Invalid field ID.");
 }
 
 int TypeType::GetFieldCount(void) const
 {
-	return 1;
+	return GetBaseType()->GetFieldCount() + 3;
 }
 
 ObjectFactory TypeType::GetFactory(void) const

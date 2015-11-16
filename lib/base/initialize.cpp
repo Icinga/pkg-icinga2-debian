@@ -18,13 +18,13 @@
  ******************************************************************************/
 
 #include "base/initialize.hpp"
-#include "base/utility.hpp"
+#include "base/loader.hpp"
 
 using namespace icinga;
 
-bool icinga::InitializeOnceHelper(void (*func)(void))
+bool icinga::InitializeOnceHelper(void (*func)(void), int priority)
 {
-	Utility::AddDeferredInitializer(func);
+	Loader::AddDeferredInitializer(func, priority);
 	return true;
 }
 

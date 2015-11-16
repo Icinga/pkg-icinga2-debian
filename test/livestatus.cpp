@@ -18,19 +18,15 @@
  ******************************************************************************/
 
 #include "livestatus/livestatusquery.hpp"
-#include "config/configtype.hpp"
 #include "config/configcompiler.hpp"
+#include "config/configitem.hpp"
 #include "base/application.hpp"
-#include "base/debug.hpp"
-#include "base/objectlock.hpp"
-#include "base/console.hpp"
-#include "base/serializer.hpp"
 #include "base/stdiostream.hpp"
 #include "base/json.hpp"
+#include "base/loader.hpp"
 #include "cli/daemonutility.hpp"
 #include <boost/test/unit_test.hpp>
 #include <fstream>
-
 
 using namespace icinga;
 
@@ -79,21 +75,20 @@ struct GlobalConfigFixture {
 		BOOST_TEST_MESSAGE( "Preparing config objects...");
 
 		/* start the Icinga application and load the configuration */
-		Application::DeclareApplicationType("icinga/IcingaApplication");
-
 		Application::DeclareSysconfDir("etc");
 		Application::DeclareLocalStateDir("var");
 
-		Utility::LoadExtensionLibrary("icinga");
-		Utility::LoadExtensionLibrary("methods"); //loaded by ITL
+		Loader::LoadExtensionLibrary("icinga");
+		Loader::LoadExtensionLibrary("methods"); //loaded by ITL
 
 		std::vector<std::string> configs;
 		configs.push_back(TestConfig);
 
-		DaemonUtility::LoadConfigFiles(configs, "IcingaApplication", "icinga2.debug", "icinga2.vars");
+		DaemonUtility::LoadConfigFiles(configs, "icinga2.debug", "icinga2.vars");
 
 		/* ignore config errors */
-		ConfigItem::ActivateItems();
+		WorkQueue upq;
+		ConfigItem::ActivateItems(upq, false);
 	}
 
 	~GlobalConfigFixture()

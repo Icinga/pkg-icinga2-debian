@@ -20,10 +20,12 @@
 #include "icinga/customvarobject.hpp"
 #include "base/application.hpp"
 
+library icinga;
+
 namespace icinga
 {
 
-class IcingaStatusWriter : DynamicObject
+class IcingaStatusWriter : ConfigObject
 {
 	[config] String status_path {
 		default {{{ return Application::GetLocalStateDir() + "/cache/icinga2/status.json"; }}}
