@@ -1,4 +1,4 @@
-icinga2 (2.4-1~debmon80+1) debmon-jessie; urgency=medium
+icinga2 (2.4.0-1~debmon80+1) debmon-jessie; urgency=medium
 
   * Rebuild for debmon-jessie.
 
