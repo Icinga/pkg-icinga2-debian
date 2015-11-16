@@ -1,3 +1,21 @@
+icinga2 (2.4.0-1) unstable; urgency=medium
+
+  [ Gunnar Beutner ]
+  * Add Build-Depends for libedit and add Recommends for libreadline6
+  * Revert "Run 'api setup' in post install task for icinga2-bin"
+
+  [ Michael Friedrich ]
+  * Run 'api setup' in post install task for icinga2-bin
+
+  [ Markus Frosch ]
+  * Add icinga2-studio package for Icinga 2.4
+
+  [ Alexander Wirt ]
+  * change application name for icinga studio
+  * Imported Upstream version 2.4.0
+
+ -- Alexander Wirt <formorer@debian.org>  Mon, 16 Nov 2015 11:25:14 +0100
+
 icinga2 (2.3.11-1) unstable; urgency=medium
 
   * [b9e26af] Change ido database name/user to icinga2 for new installations
