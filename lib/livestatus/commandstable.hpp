@@ -40,19 +40,17 @@ public:
 	static void AddColumns(Table *table, const String& prefix = String(),
 	    const Column::ObjectAccessor& objectAccessor = Column::ObjectAccessor());
 
-	virtual String GetName(void) const;
-	virtual String GetPrefix(void) const;
+	virtual String GetName(void) const override;
+	virtual String GetPrefix(void) const override;
 
 protected:
-	virtual void FetchRows(const AddRowFunction& addRowFn);
+	virtual void FetchRows(const AddRowFunction& addRowFn) override;
 
 	static Value NameAccessor(const Value& row);
 	static Value LineAccessor(const Value& row);
 	static Value CustomVariableNamesAccessor(const Value& row);
 	static Value CustomVariableValuesAccessor(const Value& row);
 	static Value CustomVariablesAccessor(const Value& row);
-	static Value ModifiedAttributesAccessor(const Value& row);
-	static Value ModifiedAttributesListAccessor(const Value& row);
 };
 
 }

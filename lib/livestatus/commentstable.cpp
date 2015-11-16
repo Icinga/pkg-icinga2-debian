@@ -21,7 +21,7 @@
 #include "livestatus/hoststable.hpp"
 #include "livestatus/servicestable.hpp"
 #include "icinga/service.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include <boost/tuple/tuple.hpp>
 #include <boost/foreach.hpp>
@@ -65,34 +65,9 @@ String CommentsTable::GetPrefix(void) const
 
 void CommentsTable::FetchRows(const AddRowFunction& addRowFn)
 {
-	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
-		Dictionary::Ptr comments = host->GetComments();
-
-		ObjectLock olock(comments);
-
-		String id;
-		Comment::Ptr comment;
-		BOOST_FOREACH(tie(id, comment), comments) {
-			if (Host::GetOwnerByCommentID(id) == host) {
-				if (!addRowFn(comment, LivestatusGroupByNone, Empty))
-					return;
-			}
-		}
-	}
-
-	BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjectsByType<Service>()) {
-		Dictionary::Ptr comments = service->GetComments();
-
-		ObjectLock olock(comments);
-
-		String id;
-		Comment::Ptr comment;
-		BOOST_FOREACH(tie(id, comment), comments) {
-			if (Service::GetOwnerByCommentID(id) == service) {
-				if (!addRowFn(comment, LivestatusGroupByNone, Empty))
-					return;
-			}
-		}
+	BOOST_FOREACH(const Comment::Ptr& comment, ConfigType::GetObjectsByType<Comment>()) {
+		if (!addRowFn(comment, LivestatusGroupByNone, Empty))
+			return;
 	}
 }
 
@@ -100,7 +75,7 @@ Object::Ptr CommentsTable::HostAccessor(const Value& row, const Column::ObjectAc
 {
 	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
 
-	Checkable::Ptr checkable = Checkable::GetOwnerByCommentID(comment->GetId());
+	Checkable::Ptr checkable = comment->GetCheckable();
 
 	Host::Ptr host;
 	Service::Ptr service;
@@ -113,7 +88,7 @@ Object::Ptr CommentsTable::ServiceAccessor(const Value& row, const Column::Objec
 {
 	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
 
-	Checkable::Ptr checkable = Checkable::GetOwnerByCommentID(comment->GetId());
+	Checkable::Ptr checkable = comment->GetCheckable();
 
 	Host::Ptr host;
 	Service::Ptr service;
@@ -165,7 +140,7 @@ Value CommentsTable::EntryTimeAccessor(const Value& row)
 Value CommentsTable::TypeAccessor(const Value& row)
 {
 	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
-	Checkable::Ptr checkable = Checkable::GetOwnerByCommentID(comment->GetId());
+	Checkable::Ptr checkable = comment->GetCheckable();
 
 	if (!checkable)
 		return Empty;
@@ -179,7 +154,7 @@ Value CommentsTable::TypeAccessor(const Value& row)
 Value CommentsTable::IsServiceAccessor(const Value& row)
 {
 	Comment::Ptr comment = static_cast<Comment::Ptr>(row);
-	Checkable::Ptr checkable = Checkable::GetOwnerByCommentID(comment->GetId());
+	Checkable::Ptr checkable = comment->GetCheckable();
 
 	if (!checkable)
 		return Empty;

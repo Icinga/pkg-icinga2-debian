@@ -21,7 +21,7 @@
 #include "config/configitembuilder.hpp"
 #include "config/applyrule.hpp"
 #include "base/initialize.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/logger.hpp"
 #include "base/context.hpp"
 #include "base/workqueue.hpp"
@@ -53,15 +53,18 @@ bool Service::EvaluateApplyRuleInstance(const Host::Ptr& host, const String& nam
 	builder->SetType("Service");
 	builder->SetName(name);
 	builder->SetScope(frame.Locals->ShallowClone());
+	builder->SetIgnoreOnError(rule.GetIgnoreOnError());
 
-	builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
 
-	builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "name"), OpSetLiteral, MakeLiteral(name), di));
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "name"), OpSetLiteral, MakeLiteral(name), di));
 
 	String zone = host->GetZoneName();
 
 	if (!zone.IsEmpty())
-		builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "zone"), OpSetLiteral, MakeLiteral(zone), di));
+		builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "zone"), OpSetLiteral, MakeLiteral(zone), di));
+
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "package"), OpSetLiteral, MakeLiteral(rule.GetPackage()), di));
 
 	builder->AddExpression(new OwnedExpression(rule.GetExpression()));
 

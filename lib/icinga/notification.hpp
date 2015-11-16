@@ -22,6 +22,7 @@
 
 #include "icinga/i2-icinga.hpp"
 #include "icinga/notification.thpp"
+#include "icinga/checkable.thpp"
 #include "icinga/user.hpp"
 #include "icinga/usergroup.hpp"
 #include "icinga/timeperiod.hpp"
@@ -66,7 +67,6 @@ enum NotificationType
 };
 
 class NotificationCommand;
-class Checkable;
 class ApplyRule;
 struct ScriptFrame;
 class Host;
@@ -91,9 +91,6 @@ public:
 	std::set<User::Ptr> GetUsers(void) const;
 	std::set<UserGroup::Ptr> GetUserGroups(void) const;
 
-	double GetNextNotification(void) const;
-	void SetNextNotification(double time, const MessageOrigin& origin = MessageOrigin());
-
 	void UpdateNotificationNumber(void);
 	void ResetNotificationNumber(void);
 
@@ -106,23 +103,27 @@ public:
 	static String NotificationTypeToString(NotificationType type);
 	static String NotificationFilterToString(int filter);
 
-	static boost::signals2::signal<void (const Notification::Ptr&, double, const MessageOrigin&)> OnNextNotificationChanged;
+	static boost::signals2::signal<void (const Notification::Ptr&, const MessageOrigin::Ptr&)> OnNextNotificationChanged;
 
 	static void RegisterApplyRuleHandler(void);
 
-	static void ValidateUsers(const String& location, const Notification::Ptr& object);
-	static void ValidateFilters(const String& location, const Notification::Ptr& object);
+	virtual void Validate(int types, const ValidationUtils& utils) override;
+
+	virtual void ValidateStates(const Array::Ptr& value, const ValidationUtils& utils) override;
+	virtual void ValidateTypes(const Array::Ptr& value, const ValidationUtils& utils) override;
 
 	static void EvaluateApplyRules(const intrusive_ptr<Host>& host);
 	static void EvaluateApplyRules(const intrusive_ptr<Service>& service);
 
 protected:
-	virtual void OnConfigLoaded(void);
-	virtual void OnAllConfigLoaded(void);
-	virtual void Start(void);
-	virtual void Stop(void);
+	virtual void OnConfigLoaded(void) override;
+	virtual void OnAllConfigLoaded(void) override;
+	virtual void Start(bool runtimeCreated) override;
+	virtual void Stop(bool runtimeRemoved) override;
 
 private:
+	ObjectImpl<Checkable>::Ptr m_Checkable;
+
 	void ExecuteNotificationHelper(NotificationType type, const User::Ptr& user, const CheckResult::Ptr& cr, bool force, const String& author = "", const String& text = "");
 
 	static bool EvaluateApplyRuleInstance(const intrusive_ptr<Checkable>& checkable, const String& name, ScriptFrame& frame, const ApplyRule& rule);

@@ -45,18 +45,29 @@ using namespace icinga;
 %union {
 	char *text;
 	int num;
+	FieldType *type;
 	Field *field;
 	std::vector<Field> *fields;
 	Klass *klass;
 	FieldAccessor *fieldaccessor;
 	std::vector<FieldAccessor> *fieldaccessors;
+	Rule *rule;
+	std::vector<Rule> *rules;
+	Validator *validator;
 }
 
-%token T_INCLUDE "include (T_INCLUDE)"
+%token T_INCLUDE "#include (T_INCLUDE)"
+%token T_IMPL_INCLUDE "#impl_include (T_IMPL_INCLUDE)"
 %token T_CLASS "class (T_CLASS)"
 %token T_CODE "code (T_CODE)"
 %token T_LOAD_AFTER "load_after (T_LOAD_AFTER)"
+%token T_LIBRARY "library (T_LIBRARY)"
 %token T_NAMESPACE "namespace (T_NAMESPACE)"
+%token T_VALIDATOR "validator (T_VALIDATOR)"
+%token T_REQUIRED "required (T_REQUIRED)"
+%token T_NAVIGATION "navigation (T_NAVIGATION)"
+%token T_NAME "name (T_NAME)"
+%token T_ARRAY "array (T_ARRAY)"
 %token T_STRING "string (T_STRING)"
 %token T_ANGLE_STRING "angle_string (T_ANGLE_STRING)"
 %token T_FIELD_ATTRIBUTE "field_attribute (T_FIELD_ATTRIBUTE)"
@@ -75,19 +86,26 @@ using namespace icinga;
 %type <text> type_base_specifier
 %type <text> include
 %type <text> angle_include
+%type <text> impl_include
+%type <text> angle_impl_include
 %type <text> code
 %type <num> T_FIELD_ATTRIBUTE
-%type <num> field_attributes
-%type <num> field_attribute_list
+%type <field> field_attribute
+%type <field> field_attributes
+%type <field> field_attribute_list
 %type <num> T_FIELD_ACCESSOR_TYPE
 %type <num> T_CLASS_ATTRIBUTE
 %type <num> class_attribute_list
+%type <type> field_type
 %type <field> class_field
 %type <fields> class_fields
 %type <klass> class
 %type <fieldaccessors> field_accessor_list
 %type <fieldaccessors> field_accessors
 %type <fieldaccessor> field_accessor
+%type <rule> validator_rule
+%type <rules> validator_rules
+%type <validator> validator
 
 %{
 
@@ -110,6 +128,8 @@ void ClassCompiler::Compile(void)
 	} catch (const std::exception& ex) {
 		std::cerr << "Exception: " << ex.what();
 	}
+
+	HandleMissingValidators();
 }
 
 #define scanner (context->GetScanner())
@@ -132,9 +152,24 @@ statement: include
 		context->HandleAngleInclude($1, yylloc);
 		std::free($1);
 	}
+	| impl_include
+	{
+		context->HandleImplInclude($1, yylloc);
+		std::free($1);
+	}
+	| angle_impl_include
+	{
+		context->HandleAngleImplInclude($1, yylloc);
+		std::free($1);
+	}
 	| class
 	{
 		context->HandleClass(*$1, yylloc);
+		delete $1;
+	}
+	| validator
+	{
+		context->HandleValidator(*$1, yylloc);
 		delete $1;
 	}
 	| namespace
@@ -143,6 +178,7 @@ statement: include
 		context->HandleCode($1, yylloc);
 		std::free($1);
 	}
+	| library
 	;
 
 include: T_INCLUDE T_STRING
@@ -152,6 +188,18 @@ include: T_INCLUDE T_STRING
 	;
 
 angle_include: T_INCLUDE T_ANGLE_STRING
+	{
+		$$ = $2;
+	}
+	;
+
+impl_include: T_IMPL_INCLUDE T_STRING
+	{
+		$$ = $2;
+	}
+	;
+
+angle_impl_include: T_IMPL_INCLUDE T_ANGLE_STRING
 	{
 		$$ = $2;
 	}
@@ -171,6 +219,13 @@ namespace: T_NAMESPACE identifier '{'
 code: T_CODE T_STRING
 	{
 		$$ = $2;
+	}
+	;
+
+library: T_LIBRARY T_IDENTIFIER ';'
+	{
+		context->HandleLibrary($2, yylloc);
+		free($2);
 	}
 	;
 
@@ -250,14 +305,37 @@ class_fields: /* empty */
 	}
 	;
 
-class_field: field_attribute_list identifier identifier alternative_name_specifier field_accessor_list ';'
+field_type: identifier
 	{
-		Field *field = new Field();
+		$$ = new FieldType();
+		$$->IsName = false;
+		$$->TypeName = $1;
+		free($1);
+	}
+	| T_NAME '(' identifier ')'
+	{
+		$$ = new FieldType();
+		$$->IsName = true;
+		$$->TypeName = $3;
+		$$->ArrayRank = 0;
+		free($3);
+	}
+	| T_ARRAY '(' field_type ')'
+	{
+		$$ = $3;
+		$$->ArrayRank++;
+	}
+	;
 
-		field->Attributes = $1;
+class_field: field_attribute_list field_type identifier alternative_name_specifier field_accessor_list ';'
+	{
+		Field *field = $1;
 
-		field->Type = $2;
-		std::free($2);
+		if ((field->Attributes & (FAConfig | FAState)) == 0)
+			field->Attributes |= FAEphemeral;
+
+		field->Type = *$2;
+		delete $2;
 
 		field->Name = $3;
 		std::free($3);
@@ -281,7 +359,14 @@ class_field: field_attribute_list identifier identifier alternative_name_specifi
 				case FTDefault:
 					field->DefaultAccessor = it->Accessor;
 					break;
-				}
+				case FTTrack:
+					field->TrackAccessor = it->Accessor;
+					break;
+				case FTNavigate:
+					field->NavigateAccessor = it->Accessor;
+					field->PureNavigateAccessor = it->Pure;
+					break;
+			}
 		}
 
 		delete $5;
@@ -310,7 +395,7 @@ alternative_name_specifier: /* empty */
 
 field_attribute_list: /* empty */
 	{
-		$$ = 0;
+		$$ = new Field();
 	}
 	| '[' field_attributes ']'
 	{
@@ -318,15 +403,43 @@ field_attribute_list: /* empty */
 	}
 	;
 
+field_attribute: T_FIELD_ATTRIBUTE
+	{
+		$$ = new Field();
+		$$->Attributes = $1;
+	}
+	| T_REQUIRED
+	{
+		$$ = new Field();
+		$$->Attributes = FARequired;
+	}
+	| T_NAVIGATION '(' identifier ')'
+	{
+		$$ = new Field();
+		$$->Attributes = FANavigation;
+		$$->NavigationName = $3;
+		std::free($3);
+	}
+	| T_NAVIGATION
+	{
+		$$ = new Field();
+		$$->Attributes = FANavigation;
+	}
+	;
+
 field_attributes: /* empty */
 	{
-		$$ = 0;
+		$$ = new Field();
 	}
-	| field_attributes ',' T_FIELD_ATTRIBUTE
+	| field_attributes ',' field_attribute
 	{
-		$$ = $1 | $3;
+		$$ = $1;
+		$$->Attributes |= $3->Attributes;
+		if (!$3->NavigationName.empty())
+			$$->NavigationName = $3->NavigationName;
+		delete $3;
 	}
-	| T_FIELD_ATTRIBUTE
+	| field_attribute
 	{
 		$$ = $1;
 	}
@@ -362,6 +475,84 @@ field_accessor: T_FIELD_ACCESSOR_TYPE T_STRING
 	| T_FIELD_ACCESSOR_TYPE ';'
 	{
 		$$ = new FieldAccessor(static_cast<FieldAccessorType>($1), "", true);
+	}
+	;
+
+validator_rules: /* empty */
+	{
+		$$ = new std::vector<Rule>();
+	}
+	| validator_rules validator_rule
+	{
+		$$->push_back(*$2);
+		delete $2;
+	}
+	;
+
+validator_rule: T_NAME '(' T_IDENTIFIER ')' identifier ';'
+	{
+		$$ = new Rule();
+		$$->Attributes = 0;
+		$$->IsName = true;
+		$$->Type = $3;
+		std::free($3);
+		$$->Pattern = $5;
+		std::free($5);
+	}
+	| T_IDENTIFIER identifier ';'
+	{
+		$$ = new Rule();
+		$$->Attributes = 0;
+		$$->IsName = false;
+		$$->Type = $1;
+		std::free($1);
+		$$->Pattern = $2;
+		std::free($2);
+	}
+	| T_NAME '(' T_IDENTIFIER ')' identifier '{' validator_rules '}' ';'
+	{
+		$$ = new Rule();
+		$$->Attributes = 0;
+		$$->IsName = true;
+		$$->Type = $3;
+		std::free($3);
+		$$->Pattern = $5;
+		std::free($5);
+		$$->Rules = *$7;
+		delete $7;
+	}
+	| T_IDENTIFIER identifier '{' validator_rules '}' ';'
+	{
+		$$ = new Rule();
+		$$->Attributes = 0;
+		$$->IsName = false;
+		$$->Type = $1;
+		std::free($1);
+		$$->Pattern = $2;
+		std::free($2);
+		$$->Rules = *$4;
+		delete $4;
+	}
+	| T_REQUIRED identifier ';'
+	{
+		$$ = new Rule();
+		$$->Attributes = RARequired;
+		$$->IsName = false;
+		$$->Type = "";
+		$$->Pattern = $2;
+		std::free($2);
+	}
+	;
+
+validator: T_VALIDATOR T_IDENTIFIER '{' validator_rules '}' ';'
+	{
+		$$ = new Validator();
+
+		$$->Name = $2;
+		std::free($2);
+
+		$$->Rules = *$4;
+		delete $4;
 	}
 	;
 

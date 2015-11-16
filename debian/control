@@ -21,6 +21,8 @@ Build-Depends: bison,
                libpq-dev,
                libssl-dev,
                libyajl-dev,
+               libedit-dev,
+               libwxgtk3.0-dev,
                make (>= 3.81),
                po-debconf
 Standards-Version: 3.9.6
@@ -33,7 +35,8 @@ Architecture: any
 Depends: icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
-Recommends: icinga2-doc, monitoring-plugins-basic | nagios-plugins-basic
+Recommends: icinga2-doc, monitoring-plugins-basic | nagios-plugins-basic, libreadline6
+Suggests: icinga2-studio
 Description: host and network monitoring system
  Icinga 2 is a general-purpose monitoring application to fit the needs of
  any size of network. Icinga 1.x was a Nagios fork; this new generation
@@ -86,6 +89,7 @@ Package: icinga2-bin
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: icinga2-common (= ${source:Version}),
+         libicinga2 (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Description: host and network monitoring system - daemon
@@ -223,7 +227,9 @@ Description: host and network monitoring system - PostgreSQL support
 Package: icinga2-dbg
 Architecture: any
 Section: debug
-Depends: icinga2-bin (= ${binary:Version}), ${misc:Depends}
+Depends: icinga2-bin (= ${binary:Version}),
+         libicinga2 (= ${binary:Version}),
+         ${misc:Depends}
 Description: host and network monitoring system - debug symbols
  Icinga 2 is a general-purpose monitoring application to fit the needs of
  any size of network. Icinga 1.x was a Nagios fork; this new generation
@@ -242,3 +248,52 @@ Description: host and network monitoring system - debug symbols
   * native support for Livestatus and Graphite.
  .
  This package provides debug symbols for Icinga 2.
+
+Package: libicinga2
+Architecture: any
+Section: libs
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Description: host and network monitoring system - internal libraries
+ Icinga 2 is a general-purpose monitoring application to fit the needs of
+ any size of network. Icinga 1.x was a Nagios fork; this new generation
+ has been rewritten from scratch in C++, with multi-threading and cluster
+ support.
+ .
+ Features:
+  * all standard features of Icinga and Nagios;
+  * much faster and more scalable than Icinga 1 and Nagios;
+  * new, more intuitive, template-based configuration format;
+  * monitoring services on ICMP (ping) or TCP ports (HTTP, NNTP, POP3,
+    SMTP, etc.) by executing checks (see monitoring-plugins*);
+  * any small script following the Nagios plugin API can be used as a
+    check plugin;
+  * notifications about alerts for any custom script (with examples);
+  * native support for Livestatus and Graphite.
+ .
+ This package provides internal libraries for the daemon or studio.
+
+Package: icinga2-studio
+Architecture: any
+Pre-Depends: ${misc:Pre-Depends}
+Depends: libicinga2 (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: host and network monitoring system - studio API GUI
+ Icinga 2 is a general-purpose monitoring application to fit the needs of
+ any size of network. Icinga 1.x was a Nagios fork; this new generation
+ has been rewritten from scratch in C++, with multi-threading and cluster
+ support.
+ .
+ Features:
+  * all standard features of Icinga and Nagios;
+  * much faster and more scalable than Icinga 1 and Nagios;
+  * new, more intuitive, template-based configuration format;
+  * monitoring services on ICMP (ping) or TCP ports (HTTP, NNTP, POP3,
+    SMTP, etc.) by executing checks (see monitoring-plugins*);
+  * any small script following the Nagios plugin API can be used as a
+    check plugin;
+  * notifications about alerts for any custom script (with examples);
+  * native support for Livestatus and Graphite.
+ .
+ This package provides a GUI for the Icinga 2 API.

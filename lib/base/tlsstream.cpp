@@ -42,7 +42,7 @@ bool I2_EXPORT TlsStream::m_SSLIndexInitialized = false;
 TlsStream::TlsStream(const Socket::Ptr& socket, const String& hostname, ConnectionRole role, const boost::shared_ptr<SSL_CTX>& sslContext)
 	: SocketEvents(socket, this), m_Eof(false), m_HandshakeOK(false), m_VerifyOK(true), m_ErrorCode(0),
 	  m_ErrorOccurred(false),  m_Socket(socket), m_Role(role), m_SendQ(new FIFO()), m_RecvQ(new FIFO()),
-	  m_CurrentAction(TlsActionNone), m_Retry(false)
+	  m_CurrentAction(TlsActionNone), m_Retry(false), m_Shutdown(false)
 {
 	std::ostringstream msgbuf;
 	char errbuf[120];
@@ -65,7 +65,7 @@ TlsStream::TlsStream(const Socket::Ptr& socket, const String& hostname, Connecti
 
 	SSL_set_ex_data(m_SSL.get(), m_SSLIndex, this);
 
-	SSL_set_verify(m_SSL.get(), SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, &TlsStream::ValidateCertificate);
+	SSL_set_verify(m_SSL.get(), SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, &TlsStream::ValidateCertificate);
 
 	socket->MakeNonBlocking();
 
@@ -85,7 +85,7 @@ TlsStream::TlsStream(const Socket::Ptr& socket, const String& hostname, Connecti
 
 TlsStream::~TlsStream(void)
 {
-	SocketEvents::Unregister();
+	Close();
 }
 
 int TlsStream::ValidateCertificate(int preverify_ok, X509_STORE_CTX *ctx)
@@ -160,7 +160,7 @@ void TlsStream::OnEvent(int revents)
 
 			break;
 		case TlsActionWrite:
-			count = m_SendQ->Peek(buffer, sizeof(buffer));
+			count = m_SendQ->Peek(buffer, sizeof(buffer), true);
 
 			rc = SSL_write(m_SSL.get(), buffer, count);
 
@@ -193,8 +193,11 @@ void TlsStream::OnEvent(int revents)
 
 		lock.unlock();
 
-		if (m_RecvQ->IsDataAvailable())
+		while (m_RecvQ->IsDataAvailable() && IsHandlingEvents())
 			SignalDataAvailable();
+
+		if (m_Shutdown && !m_SendQ->IsDataAvailable())
+			Close();
 
 		return;
 	}
@@ -213,28 +216,31 @@ void TlsStream::OnEvent(int revents)
 
 			break;
 		case SSL_ERROR_ZERO_RETURN:
-			SocketEvents::Unregister();
+			lock.unlock();
 
-			m_SSL.reset();
-			m_Socket->Close();
-			m_Socket.reset();
+			if (IsHandlingEvents())
+				SignalDataAvailable();
 
-			m_Eof = true;
-
-			m_CV.notify_all();
+			Close();
 
 			break;
 		default:
-			SocketEvents::Unregister();
-
-			m_SSL.reset();
-			m_Socket->Close();
-			m_Socket.reset();
-
 			m_ErrorCode = ERR_peek_error();
 			m_ErrorOccurred = true;
 
-			m_CV.notify_all();
+			if (m_ErrorCode != 0) {
+				Log(LogWarning, "TlsStream")
+					<< "OpenSSL error: " << ERR_error_string(m_ErrorCode, NULL);
+			} else {
+				Log(LogWarning, "TlsStream", "TLS stream was disconnected.");
+			}
+
+			lock.unlock();
+
+			if (IsHandlingEvents())
+				SignalDataAvailable();
+
+			Close();
 
 			break;
 	}
@@ -265,6 +271,19 @@ void TlsStream::Handshake(void)
 /**
  * Processes data for the stream.
  */
+size_t TlsStream::Peek(void *buffer, size_t count, bool allow_partial)
+{
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	if (!allow_partial)
+		while (m_RecvQ->GetAvailableBytes() < count && !m_ErrorOccurred && !m_Eof)
+			m_CV.wait(lock);
+
+	HandleError();
+
+	return m_RecvQ->Peek(buffer, count, true);
+}
+
 size_t TlsStream::Read(void *buffer, size_t count, bool allow_partial)
 {
 	boost::mutex::scoped_lock lock(m_Mutex);
@@ -287,25 +306,34 @@ void TlsStream::Write(const void *buffer, size_t count)
 	ChangeEvents(POLLIN|POLLOUT);
 }
 
+void TlsStream::Shutdown(void)
+{
+	m_Shutdown = true;
+}
+
 /**
  * Closes the stream.
  */
 void TlsStream::Close(void)
 {
+	Stream::Close();
+
 	SocketEvents::Unregister();
 
 	boost::mutex::scoped_lock lock(m_Mutex);
 
+	m_Eof = true;
+
 	if (!m_SSL)
 		return;
 
-	(void) SSL_shutdown(m_SSL.get());
+	(void)SSL_shutdown(m_SSL.get());
 	m_SSL.reset();
 
 	m_Socket->Close();
 	m_Socket.reset();
 
-	m_Eof = true;
+	m_CV.notify_all();
 }
 
 bool TlsStream::IsEof(void) const

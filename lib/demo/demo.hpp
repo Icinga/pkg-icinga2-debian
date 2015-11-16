@@ -36,9 +36,9 @@ public:
 	DECLARE_OBJECT(Demo);
 	DECLARE_OBJECTNAME(Demo);
 
-	virtual void Start(void);
+	virtual void Start(bool runtimeCreated);
 
-	static Value DemoMessageHandler(const MessageOrigin& origin, const Dictionary::Ptr& params);
+	static Value DemoMessageHandler(const MessageOrigin::Ptr& origin, const Dictionary::Ptr& params);
 
 
 private:

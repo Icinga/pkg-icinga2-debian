@@ -13,10 +13,10 @@ options.
 
     # icinga2
     icinga2 - The Icinga 2 network monitoring daemon (version: v2.1.1-299-gf695275)
-    
+
     Usage:
       icinga2 <command> [<arguments>]
-    
+
     Supported commands:
       * console (Icinga console)
       * daemon (starts Icinga 2)
@@ -60,20 +60,21 @@ options.
       * troubleshoot (collect information for troubleshooting)
       * variable get (gets a variable)
       * variable list (lists all variables)
-    
+
     Global options:
       -h [ --help ]          show this help message
       -V [ --version ]       show version information
       --color                use VT100 color codes even when stdout is not a
                              terminal
       -D [ --define ] arg    define a constant
+      -a [ --app ] arg       application library name (default: icinga)
       -l [ --library ] arg   load a library
       -I [ --include ] arg   add include search directory
       -x [ --log-level ] arg specify the log level for the console log
-    
+
     Command options:
-    
-    Report bugs at <https://dev.icinga.org/>
+
+	Report bugs at <https://dev.icinga.org/>
     Icinga home page: <https://www.icinga.org/>
 
 
@@ -104,14 +105,19 @@ Debian/Ubuntu:
 
 ## <a id="cli-commands-global-options"></a> Icinga 2 CLI Global Options
 
+### Application Type
+
+By default the `icinga2` binary loads the `icinga` library. A different application type
+can be specified with the `--app` command-line option.
+
 ### Libraries
 
-Instead of loading libraries using the [`library` config directive](19-language-reference.md#library)
+Instead of loading libraries using the [`library` config directive](18-language-reference.md#library)
 you can also use the `--library` command-line option.
 
 ### Constants
 
-[Global constants](19-language-reference.md#constants) can be set using the `--define` command-line option.
+[Global constants](18-language-reference.md#constants) can be set using the `--define` command-line option.
 
 ### <a id="config-include-path"></a> Config Include Path
 
@@ -132,10 +138,10 @@ added.
 ## <a id="cli-command-console"></a> CLI command: Console
 
 The CLI command `console` can be used to evaluate Icinga config expressions, e.g. to test
-`assign where` rules.
+[functions](18-language-reference.md#functions).
 
     $ icinga2 console
-    Icinga (version: v2.2.0-435-gc95d2f1)
+    Icinga 2 (version: v2.4.0)
     <1> => function test(name) {
     <1> ..   log("Hello " + name)
     <1> .. }
@@ -143,11 +149,85 @@ The CLI command `console` can be used to evaluate Icinga config expressions, e.g
     <2> => test("World")
     information/config: Hello World
     null
+    <3> =>
 
-The `console` command does not support line-editing or a command history. However you can
+
+On operating systems without the `libedit` library installed there is no
+support for line-editing or a command history. However you can
 use the `rlwrap` program if you require those features:
 
     $ rlwrap icinga2 console
+
+The `console` can be used to connect to a running Icinga 2 instance using
+the [REST API](9-icinga2-api.md#icinga2-api). [API permissions](9-icinga2-api.md#icinga2-api-permissions)
+are required for executing config expressions and auto-completion.
+
+> **Note**
+> The console does not currently support SSL certificate verification.
+
+You can specify the API URL using the `--connect` parameter.
+
+Although the password can be specified there process arguments on UNIX platforms are usually visible to other users (e.g. through `ps`). In order to securely specify the user credentials the console supports two environment variables:
+
+  Environment variable | Description
+  ---------------------|-------------
+  ICINGA2_API_USERNAME | The API username.
+  ICINGA2_API_PASSWORD | The API password.
+
+Here's an example:
+
+    $ ICINGA2_API_PASSWORD=icinga icinga2 console --connect 'https://root@localhost:5665/'
+    Icinga 2 (version: v2.4.0)
+    <1> =>
+
+Once connected you can inspect variables and execute other expressions by entering them at the prompt:
+
+    <1> => var h = get_host("example.localdomain")
+    null
+    <2> => h.last_check_result
+    {
+            active = true
+            check_source = "example.localdomain"
+            command = [ "/usr/local/sbin/check_ping", "-H", "127.0.0.1", "-c", "5000,100%", "-w", "3000,80%" ]
+            execution_end = 1446653527.174983
+            execution_start = 1446653523.152673
+            exit_status = 0.000000
+            output = "PING OK - Packet loss = 0%, RTA = 0.11 ms"
+            performance_data = [ "rta=0.114000ms;3000.000000;5000.000000;0.000000", "pl=0%;80;100;0" ]
+            schedule_end = 1446653527.175133
+            schedule_start = 1446653583.150000
+            state = 0.000000
+            type = "CheckResult"
+            vars_after = {
+                    attempt = 1.000000
+                    reachable = true
+                    state = 0.000000
+                    state_type = 1.000000
+            }
+            vars_before = {
+                    attempt = 1.000000
+                    reachable = true
+                    state = 0.000000
+                    state_type = 1.000000
+            }
+    }
+    <3> =>
+
+
+You can use the `--eval` parameter to evaluate a single expression in batch mode. The output format for batch mode is JSON.
+
+Here's an example that retrieves the command that was used by Icinga to check the `example.localdomain` host:
+
+    $ ICINGA2_API_PASSWORD=icinga icinga2 console --connect 'https://root@localhost:5665/' --eval 'get_host("example.localdomain").last_check_result.command' | python -m json.tool
+    [
+        "/usr/local/sbin/check_ping",
+        "-H",
+        "127.0.0.1",
+        "-c",
+        "5000,100%",
+        "-w",
+        "3000,80%"
+    ]
 
 ## <a id="cli-command-daemon"></a> CLI command: Daemon
 
@@ -168,6 +248,7 @@ Furthermore it provides the [configuration validation](8-cli-commands.md#config-
       --color                use VT100 color codes even when stdout is not a
                              terminal
       -D [ --define ] arg    define a constant
+      -a [ --app ] arg       application library name (default: icinga)
       -l [ --library ] arg   load a library
       -I [ --include ] arg   add include search directory
       -x [ --log-level ] arg specify the log level for the console log
@@ -220,8 +301,8 @@ The `feature list` command shows which features are currently enabled:
 ## <a id="cli-command-node"></a> CLI command: Node
 
 Provides the functionality to install and manage master and client
-nodes in a [remote monitoring ](10-icinga2-client.md#icinga2-client) or
-[distributed cluster](12-distributed-monitoring-ha.md#distributed-monitoring-high-availability) scenario.
+nodes in a [remote monitoring ](11-icinga2-client.md#icinga2-client) or
+[distributed cluster](13-distributed-monitoring-ha.md#distributed-monitoring-high-availability) scenario.
 
 
     # icinga2 node --help
@@ -251,6 +332,7 @@ nodes in a [remote monitoring ](10-icinga2-client.md#icinga2-client) or
       --color                use VT100 color codes even when stdout is not a
                              terminal
       -D [ --define ] arg    define a constant
+      -a [ --app ] arg       application library name (default: icinga)
       -l [ --library ] arg   load a library
       -I [ --include ] arg   add include search directory
       -x [ --log-level ] arg specify the log level for the console log
@@ -265,7 +347,7 @@ nodes in a [remote monitoring ](10-icinga2-client.md#icinga2-client) or
 
 The `object` CLI command can be used to list all configuration objects and their
 attributes. The command also shows where each of the attributes was modified.
-That way you can also identify which objects have been created from your [apply rules](19-language-reference.md#apply).
+That way you can also identify which objects have been created from your [apply rules](18-language-reference.md#apply).
 
 More information can be found in the [troubleshooting](16-troubleshooting.md#list-configuration-objects) section.
 
@@ -284,6 +366,7 @@ More information can be found in the [troubleshooting](16-troubleshooting.md#lis
       --color                use VT100 color codes even when stdout is not a
                              terminal
       -D [ --define ] arg    define a constant
+      -a [ --app ] arg       application library name (default: icinga)
       -l [ --library ] arg   load a library
       -I [ --include ] arg   add include search directory
       -x [ --log-level ] arg specify the log level for the console log
@@ -328,6 +411,7 @@ This functionality is used by the [node setup/wizard](8-cli-commands.md#cli-comm
       --color                use VT100 color codes even when stdout is not a
                              terminal
       -D [ --define ] arg    define a constant
+      -a [ --app ] arg       application library name (default: icinga)
       -l [ --library ] arg   load a library
       -I [ --include ] arg   add include search directory
       -x [ --log-level ] arg specify the log level for the console log
@@ -382,6 +466,7 @@ cleared after review.
       --color                use VT100 color codes even when stdout is not a
                              terminal
       -D [ --define ] arg    define a constant
+      -a [ --app ] arg       application library name (default: icinga)
       -l [ --library ] arg   load a library
       -I [ --include ] arg   add include search directory
       -x [ --log-level ] arg specify the log level for the console log
@@ -397,11 +482,11 @@ cleared after review.
 
 Collects basic information like version, paths, log files and crash reports for troubleshooting purposes and prints them to a file or the console. See [troubleshooting](16-troubleshooting.md#troubleshooting-information-required).
 
-Its output defaults to a file named `troubleshooting-[TIMESTAMP].log` so it won't overwrite older troubleshooting files.  
+Its output defaults to a file named `troubleshooting-[TIMESTAMP].log` so it won't overwrite older troubleshooting files.
 
-> **Note**  
+> **Note**
 > Keep in mind that this tool can not collect information from other icinga2 nodes, you will have to run it on
-> each of one of you instances.  
+> each of one of you instances.
 > This is only a tool to collect information to help others help you, it will not attempt to fix anything.
 
 
@@ -416,6 +501,7 @@ Its output defaults to a file named `troubleshooting-[TIMESTAMP].log` so it won'
       -V [ --version ]	     show version information
       --color                use VT100 color codes even when stdout is not aterminal
       -D [ --define ] arg    define a constant
+      -a [ --app ] arg       application library name (default: icinga)
       -l [ --library ] arg   load a library
       -I [ --include ] arg   add include search directory
       -x [ --log-level ] arg specify the log level for the console log
@@ -449,6 +535,7 @@ Lists all configured variables (constants) in a similar fasion like [object list
       --color                use VT100 color codes even when stdout is not a
                              terminal
       -D [ --define ] arg    define a constant
+      -a [ --app ] arg       application library name (default: icinga)
       -l [ --library ] arg   load a library
       -I [ --include ] arg   add include search directory
       -x [ --log-level ] arg specify the log level for the console log
@@ -459,7 +546,7 @@ Lists all configured variables (constants) in a similar fasion like [object list
     Icinga home page: <https://www.icinga.org/>
 
 
-## <a id="features"></a> Enabling/Disabling Features
+## <a id="enable-features"></a> Enabling/Disabling Features
 
 Icinga 2 provides configuration files for some commonly used features. These
 are installed in the `/etc/icinga2/features-available` directory and can be
@@ -552,13 +639,13 @@ Find more on troubleshooting with `object list` in [this chapter](16-troubleshoo
 Example filtered by `Service` objects with the name `ping*`:
 
     # icinga2 object list --type Service --name *ping*
-    Object 'nbmif.int.netways.de!ping4' of type 'Service':
-      * __name = 'nbmif.int.netways.de!ping4'
+    Object 'icinga.org!ping4' of type 'Service':
+      * __name = 'icinga.org!ping4'
       * check_command = 'ping4'
         % = modified in '/etc/icinga2/conf.d/services.conf', lines 17:3-17:25
       * check_interval = 60
         % = modified in '/etc/icinga2/conf.d/templates.conf', lines 28:3-28:21
-      * host_name = 'nbmif.int.netways.de'
+      * host_name = 'icinga.org'
         % = modified in '/etc/icinga2/conf.d/services.conf', lines 14:1-14:21
       * max_check_attempts = 3
         % = modified in '/etc/icinga2/conf.d/templates.conf', lines 27:3-27:24
@@ -591,5 +678,5 @@ safely reload the Icinga 2 daemon.
 > which will validate the configuration in a separate process and not stop
 > the other events like check execution, notifications, etc.
 >
-> Details can be found [here](18-migrating-from-icinga-1x.md#differences-1x-2-real-reload).
+> Details can be found [here](22-migrating-from-icinga-1x.md#differences-1x-2-real-reload).
 

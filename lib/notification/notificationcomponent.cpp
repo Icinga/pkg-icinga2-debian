@@ -18,9 +18,10 @@
  ******************************************************************************/
 
 #include "notification/notificationcomponent.hpp"
+#include "notification/notificationcomponent.tcpp"
 #include "icinga/service.hpp"
 #include "icinga/icingaapplication.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/utility.hpp"
@@ -32,13 +33,13 @@ using namespace icinga;
 
 REGISTER_TYPE(NotificationComponent);
 
-REGISTER_STATSFUNCTION(NotificationComponentStats, &NotificationComponent::StatsFunc);
+REGISTER_STATSFUNCTION(NotificationComponent, &NotificationComponent::StatsFunc);
 
 void NotificationComponent::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const NotificationComponent::Ptr& notification_component, DynamicType::GetObjectsByType<NotificationComponent>()) {
+	BOOST_FOREACH(const NotificationComponent::Ptr& notification_component, ConfigType::GetObjectsByType<NotificationComponent>()) {
 		nodes->Set(notification_component->GetName(), 1); //add more stats
 	}
 
@@ -48,9 +49,9 @@ void NotificationComponent::StatsFunc(const Dictionary::Ptr& status, const Array
 /**
  * Starts the component.
  */
-void NotificationComponent::Start(void)
+void NotificationComponent::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<NotificationComponent>::Start(runtimeCreated);
 
 	Checkable::OnNotificationsRequested.connect(boost::bind(&NotificationComponent::SendNotificationsHandler, this, _1,
 	    _2, _3, _4, _5));
@@ -70,7 +71,7 @@ void NotificationComponent::NotificationTimerHandler(void)
 {
 	double now = Utility::GetTime();
 
-	BOOST_FOREACH(const Notification::Ptr& notification, DynamicType::GetObjectsByType<Notification>()) {
+	BOOST_FOREACH(const Notification::Ptr& notification, ConfigType::GetObjectsByType<Notification>()) {
 		Checkable::Ptr checkable = notification->GetCheckable();
 
 		if (checkable->IsPaused() && GetEnableHA())

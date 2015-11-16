@@ -16,6 +16,7 @@
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
 set(cli_SOURCES
+  apisetupcommand.cpp apisetuputility.cpp
   nodeaddcommand.cpp nodeblackandwhitelistcommand.cpp nodelistcommand.cpp noderemovecommand.cpp
   nodesetcommand.cpp nodesetupcommand.cpp nodeupdateconfigcommand.cpp nodewizardcommand.cpp nodeutility.cpp
   clicommand.cpp
@@ -37,6 +38,16 @@ endif()
 add_library(cli SHARED ${cli_SOURCES})
 
 target_link_libraries(cli ${Boost_LIBRARIES} base config remote)
+
+if(EDITLINE_FOUND)
+  target_link_libraries(cli ${EDITLINE_LIBRARIES})
+  include_directories(${EDITLINE_INCLUDE_DIR})
+endif()
+
+if(TERMCAP_FOUND)
+  target_link_libraries(cli ${TERMCAP_LIBRARIES})
+  include_directories(${TERMCAP_INCLUDE_DIR})
+endif()
 
 set_target_properties (
   cli PROPERTIES

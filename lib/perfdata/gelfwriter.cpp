@@ -18,13 +18,14 @@
  ******************************************************************************/
 
 #include "perfdata/gelfwriter.hpp"
+#include "perfdata/gelfwriter.tcpp"
 #include "icinga/service.hpp"
 #include "icinga/notification.hpp"
 #include "icinga/macroprocessor.hpp"
 #include "icinga/compatutility.hpp"
 #include "icinga/perfdatavalue.hpp"
 #include "base/tcpsocket.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/utility.hpp"
@@ -37,9 +38,9 @@ using namespace icinga;
 
 REGISTER_TYPE(GelfWriter);
 
-void GelfWriter::Start(void)
+void GelfWriter::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<GelfWriter>::Start(runtimeCreated);
 
 	m_ReconnectTimer = new Timer();
 	m_ReconnectTimer->SetInterval(10);

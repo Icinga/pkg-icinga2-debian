@@ -17,13 +17,15 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "base/application.hpp"
+
+library livestatus;
 
 namespace icinga
 {
 
-class LivestatusListener : DynamicObject {
+class LivestatusListener : ConfigObject {
 	[config] String socket_type {
 		default {{{ return "unix"; }}}
 	};

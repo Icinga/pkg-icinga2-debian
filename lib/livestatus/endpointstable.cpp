@@ -22,7 +22,8 @@
 #include "icinga/service.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "remote/endpoint.hpp"
-#include "base/dynamictype.hpp"
+#include "remote/zone.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
 #include "base/utility.hpp"
@@ -46,6 +47,7 @@ void EndpointsTable::AddColumns(Table *table, const String& prefix,
 	table->AddColumn(prefix + "identity", Column(&EndpointsTable::IdentityAccessor, objectAccessor));
 	table->AddColumn(prefix + "node", Column(&EndpointsTable::NodeAccessor, objectAccessor));
 	table->AddColumn(prefix + "is_connected", Column(&EndpointsTable::IsConnectedAccessor, objectAccessor));
+	table->AddColumn(prefix + "zone", Column(&EndpointsTable::ZoneAccessor, objectAccessor));
 }
 
 String EndpointsTable::GetName(void) const
@@ -60,7 +62,7 @@ String EndpointsTable::GetPrefix(void) const
 
 void EndpointsTable::FetchRows(const AddRowFunction& addRowFn)
 {
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, DynamicType::GetObjectsByType<Endpoint>()) {
+	BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
 		if (!addRowFn(endpoint, LivestatusGroupByNone, Empty))
 			return;
 	}
@@ -103,11 +105,26 @@ Value EndpointsTable::IsConnectedAccessor(const Value& row)
 	if (!endpoint)
 		return Empty;
 
-	unsigned int is_connected = endpoint->IsConnected() ? 1 : 0;
+	unsigned int is_connected = endpoint->GetConnected() ? 1 : 0;
 
 	/* if identity is equal to node, fake is_connected */
 	if (endpoint->GetName() == IcingaApplication::GetInstance()->GetNodeName())
 		is_connected = 1;
 
 	return is_connected;
+}
+
+Value EndpointsTable::ZoneAccessor(const Value& row)
+{
+	Endpoint::Ptr endpoint = static_cast<Endpoint::Ptr>(row);
+
+	if (!endpoint)
+		return Empty;
+
+	Zone::Ptr zone = endpoint->GetZone();
+
+	if (!zone)
+		return Empty;
+
+	return zone->GetName();
 }

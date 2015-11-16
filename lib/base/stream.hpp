@@ -36,7 +36,7 @@ enum ConnectionRole
 	RoleServer
 };
 
-struct StreamReadContext
+struct I2_BASE_API StreamReadContext
 {
 	StreamReadContext(void)
 		: Buffer(NULL), Size(0), MustRead(true), Eof(false)
@@ -74,6 +74,17 @@ public:
 	DECLARE_PTR_TYPEDEFS(Stream);
 
 	/**
+	 * Reads data from the stream without removing it from the stream buffer.
+	 *
+	 * @param buffer The buffer where data should be stored. May be NULL if you're
+	 *		 not actually interested in the data.
+	 * @param count The number of bytes to read from the queue.
+	 * @param allow_partial Whether to allow partial reads.
+	 * @returns The number of bytes actually read.
+	 */
+	virtual size_t Peek(void *buffer, size_t count, bool allow_partial = false);
+
+	/**
 	 * Reads data from the stream.
 	 *
 	 * @param buffer The buffer where data should be stored. May be NULL if you're
@@ -94,9 +105,15 @@ public:
 	virtual void Write(const void *buffer, size_t count) = 0;
 
 	/**
+	 * Causes the stream to be closed (via Close()) once all pending data has been
+	 * written.
+	 */
+	virtual void Shutdown(void);
+
+	/**
 	 * Closes the stream and releases resources.
 	 */
-	virtual void Close(void) = 0;
+	virtual void Close(void);
 
 	/**
 	 * Checks whether we've reached the end-of-file condition.
@@ -108,7 +125,7 @@ public:
 	/**
 	 * Waits until data can be read from the stream.
 	 */
-	void WaitForData(void);
+	bool WaitForData(int timeout = -1);
 
 	virtual bool SupportsWaiting(void) const;
 

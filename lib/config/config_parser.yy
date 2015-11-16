@@ -21,17 +21,14 @@
  ******************************************************************************/
 
 #include "config/i2-config.hpp"
-#include "config/configitembuilder.hpp"
 #include "config/configcompiler.hpp"
-#include "config/typerule.hpp"
-#include "config/typerulelist.hpp"
 #include "config/expression.hpp"
 #include "config/applyrule.hpp"
 #include "config/objectrule.hpp"
 #include "base/value.hpp"
 #include "base/utility.hpp"
 #include "base/exception.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/exception.hpp"
 #include <sstream>
 #include <stack>
@@ -87,14 +84,12 @@ static void MakeRBinaryOp(Expression** result, Expression *left, Expression *rig
 %lex-param { void *scanner }
 
 %union {
-	char *text;
+	String *text;
 	double num;
 	bool boolean;
 	icinga::Expression *expr;
 	icinga::DictExpression *dexpr;
-	icinga::Value *variant;
 	CombinedSetOp csop;
-	icinga::TypeSpecifier type;
 	std::vector<String> *slist;
 	std::vector<std::pair<Expression *, EItemInfo> > *llist;
 	std::vector<Expression *> *elist;
@@ -148,23 +143,16 @@ static void MakeRBinaryOp(Expression** result, Expression *left, Expression *rig
 %token T_GLOBALS "globals (T_GLOBALS)"
 %token T_LOCALS "locals (T_LOCALS)"
 %token T_CONST "const (T_CONST)"
+%token T_IGNORE_ON_ERROR "ignore_on_error (T_IGNORE_ON_ERROR)"
+%token T_CURRENT_FILENAME "current_filename (T_CURRENT_FILENAME)"
+%token T_CURRENT_LINE "current_line (T_CURRENT_LINE)"
+%token T_DEBUGGER "debugger (T_DEBUGGER)"
 %token T_USE "use (T_USE)"
-%token <type> T_TYPE_DICTIONARY "dictionary (T_TYPE_DICTIONARY)"
-%token <type> T_TYPE_ARRAY "array (T_TYPE_ARRAY)"
-%token <type> T_TYPE_NUMBER "number (T_TYPE_NUMBER)"
-%token <type> T_TYPE_STRING "string (T_TYPE_STRING)"
-%token <type> T_TYPE_SCALAR "scalar (T_TYPE_SCALAR)"
-%token <type> T_TYPE_ANY "any (T_TYPE_ANY)"
-%token <type> T_TYPE_FUNCTION "function (T_TYPE_FUNCTION)"
-%token <type> T_TYPE_NAME "name (T_TYPE_NAME)"
-%token T_VALIDATOR "%validator (T_VALIDATOR)"
-%token T_REQUIRE "%require (T_REQUIRE)"
-%token T_ATTRIBUTE "%attribute (T_ATTRIBUTE)"
-%token T_TYPE "type (T_TYPE)"
 %token T_OBJECT "object (T_OBJECT)"
 %token T_TEMPLATE "template (T_TEMPLATE)"
 %token T_INCLUDE "include (T_INCLUDE)"
 %token T_INCLUDE_RECURSIVE "include_recursive (T_INCLUDE_RECURSIVE)"
+%token T_INCLUDE_ZONES "include_zones (T_INCLUDE_ZONES)"
 %token T_LIBRARY "library (T_LIBRARY)"
 %token T_INHERITS "inherits (T_INHERITS)"
 %token T_APPLY "apply (T_APPLY)"
@@ -191,9 +179,7 @@ static void MakeRBinaryOp(Expression** result, Expression *left, Expression *rig
 %type <elist> rterm_items_inner
 %type <slist> identifier_items
 %type <slist> identifier_items_inner
-%type <variant> typerulelist
 %type <csop> combined_set_op
-%type <type> type
 %type <llist> statements
 %type <llist> lterm_items
 %type <llist> lterm_items_inner
@@ -210,13 +196,14 @@ static void MakeRBinaryOp(Expression** result, Expression *left, Expression *rig
 %type <expr> apply
 %type <expr> optional_rterm
 %type <text> target_type_specifier
+%type <boolean> ignore_specifier
 %type <cvlist> use_specifier
 %type <cvlist> use_specifier_items
 %type <cvitem> use_specifier_item
 %type <num> object_declaration
 
 %right T_FOLLOWS
-%right T_INCLUDE T_INCLUDE_RECURSIVE T_OBJECT T_TEMPLATE T_APPLY T_IMPORT T_ASSIGN T_IGNORE T_WHERE
+%right T_INCLUDE T_INCLUDE_RECURSIVE T_INCLUDE_ZONES T_OBJECT T_TEMPLATE T_APPLY T_IMPORT T_ASSIGN T_IGNORE T_WHERE
 %right T_FUNCTION T_FOR
 %left T_SET T_SET_ADD T_SET_SUBTRACT T_SET_MULTIPLY T_SET_DIVIDE T_SET_MODULO T_SET_XOR T_SET_BINARY_AND T_SET_BINARY_OR
 %left T_LOGICAL_OR
@@ -346,115 +333,8 @@ lterm_items_inner: lterm %dprec 2
 	}
 	;
 
-library: T_LIBRARY T_STRING
-	{
-		context->HandleLibrary($2);
-		free($2);
-	}
-	;
-
 identifier: T_IDENTIFIER
 	| T_STRING
-	;
-
-type: T_TYPE identifier
-	{
-		String name = String($2);
-		free($2);
-
-		context->m_Type = ConfigType::GetByName(name);
-
-		if (!context->m_Type) {
-			context->m_Type = new ConfigType(name, @$);
-			context->m_Type->Register();
-		}
-	}
-	type_inherits_specifier typerulelist
-	{
-		TypeRuleList::Ptr ruleList = *$5;
-		delete $5;
-
-		context->m_Type->GetRuleList()->AddRules(ruleList);
-		context->m_Type->GetRuleList()->AddRequires(ruleList);
-
-		BOOST_FOREACH(const String& validator, ruleList->GetValidators()) {
-			context->m_Type->GetRuleList()->AddValidator(validator);
-		}
-	}
-	;
-
-typerulelist: '{'
-	{
-		context->m_OpenBraces++;
-		context->m_RuleLists.push(new TypeRuleList());
-	}
-	typerules
-	'}'
-	{
-		context->m_OpenBraces--;
-		$$ = new Value(context->m_RuleLists.top());
-		context->m_RuleLists.pop();
-	}
-	;
-
-typerules: typerules_inner
-	| typerules_inner sep
-
-typerules_inner: /* empty */
-	| typerule
-	| typerules_inner sep typerule
-	;
-
-typerule: T_REQUIRE T_STRING
-	{
-		context->m_RuleLists.top()->AddRequire($2);
-		free($2);
-	}
-	| T_VALIDATOR T_STRING
-	{
-		context->m_RuleLists.top()->AddValidator($2);
-		free($2);
-	}
-	| T_ATTRIBUTE type T_STRING
-	{
-		TypeRule rule($2, String(), $3, TypeRuleList::Ptr(), @$);
-		free($3);
-
-		context->m_RuleLists.top()->AddRule(rule);
-	}
-	| T_ATTRIBUTE T_TYPE_NAME '(' identifier ')' T_STRING
-	{
-		TypeRule rule($2, $4, $6, TypeRuleList::Ptr(), @$);
-		free($4);
-		free($6);
-
-		context->m_RuleLists.top()->AddRule(rule);
-	}
-	| T_ATTRIBUTE type T_STRING typerulelist
-	{
-		TypeRule rule($2, String(), $3, *$4, @$);
-		free($3);
-		delete $4;
-		context->m_RuleLists.top()->AddRule(rule);
-	}
-	;
-
-type_inherits_specifier: /* empty */
-	| T_INHERITS identifier
-	{
-		context->m_Type->SetParent($2);
-		free($2);
-	}
-	;
-
-type: T_TYPE_DICTIONARY
-	| T_TYPE_ARRAY
-	| T_TYPE_NUMBER
-	| T_TYPE_STRING
-	| T_TYPE_SCALAR
-	| T_TYPE_ANY
-	| T_TYPE_FUNCTION
-	| T_TYPE_NAME
 	;
 
 object:
@@ -465,16 +345,16 @@ object:
 		context->m_Assign.push(NULL);
 		context->m_Ignore.push(NULL);
 	}
-	object_declaration identifier optional_rterm use_specifier rterm_scope_require_side_effect
+	object_declaration identifier optional_rterm use_specifier ignore_specifier rterm_scope_require_side_effect
 	{
 		context->m_ObjectAssign.pop();
 
 		bool abstract = $2;
 
-		String type = $3;
-		free($3);
+		String type = *$3;
+		delete $3;
 
-		$6->MakeInline();
+		$7->MakeInline();
 
 		bool seen_assign = context->m_SeenAssign.top();
 		context->m_SeenAssign.pop();
@@ -492,7 +372,7 @@ object:
 
 		if (seen_assign) {
 			if (!ObjectRule::IsValidSourceType(type))
-				BOOST_THROW_EXCEPTION(ScriptError("object rule 'assign' cannot be used for type '" + type + "'", DebugInfoRange(@2, @3)));
+				BOOST_THROW_EXCEPTION(ScriptError("object rule 'assign' cannot be used for type '" + type + "'", DebugInfoRange(@2, @4)));
 
 			if (ignore) {
 				Expression *rex = new LogicalNegateExpression(ignore, DebugInfoRange(@2, @5));
@@ -507,7 +387,7 @@ object:
 				BOOST_THROW_EXCEPTION(ScriptError("object rule 'ignore' is missing 'assign' for type '" + type + "'", DebugInfoRange(@2, @4)));
 		}
 
-		$$ = new ObjectExpression(abstract, type, $4, filter, context->GetZone(), $5, $6, DebugInfoRange(@2, @5));
+		$$ = new ObjectExpression(abstract, type, $4, filter, context->GetZone(), context->GetPackage(), $5, $6, $7, DebugInfoRange(@2, @6));
 	}
 	;
 
@@ -532,8 +412,8 @@ identifier_items: /* empty */
 identifier_items_inner: identifier
 	{
 		$$ = new std::vector<String>();
-		$$->push_back($1);
-		free($1);
+		$$->push_back(*$1);
+		delete $1;
 	}
 	| identifier_items_inner ',' identifier
 	{
@@ -542,8 +422,8 @@ identifier_items_inner: identifier
 		else
 			$$ = new std::vector<String>();
 
-		$$->push_back($3);
-		free($3);
+		$$->push_back(*$3);
+		delete $3;
 	}
 	;
 
@@ -558,38 +438,38 @@ combined_set_op: T_SET
 	| T_SET_BINARY_OR
 	;
 
-lterm: type
+lterm: T_LIBRARY rterm
 	{
-		$$ = MakeLiteral(); // ASTify this
-	}
-	| library
-	{
-		$$ = MakeLiteral(); // ASTify this
+		$$ = new LibraryExpression($2, @$);
 	}
 	| rterm combined_set_op rterm
 	{
 		$$ = new SetExpression($1, $2, $3, @$);
 	}
-	| T_INCLUDE T_STRING
+	| T_INCLUDE rterm
 	{
-		$$ = context->HandleInclude($2, false, @$);
-		free($2);
+		$$ = new IncludeExpression(Utility::DirName(context->GetPath()), $2, NULL, NULL, IncludeRegular, false, context->GetZone(), context->GetPackage(), @$);
 	}
 	| T_INCLUDE T_STRING_ANGLE
 	{
-		$$ = context->HandleInclude($2, true, @$);
-		free($2);
+		$$ = new IncludeExpression(Utility::DirName(context->GetPath()), MakeLiteral(*$2), NULL, NULL, IncludeRegular, true, context->GetZone(), context->GetPackage(), @$);
+		delete $2;
 	}
-	| T_INCLUDE_RECURSIVE T_STRING
+	| T_INCLUDE_RECURSIVE rterm
 	{
-		$$ = context->HandleIncludeRecursive($2, "*.conf", @$);
-		free($2);
+		$$ = new IncludeExpression(Utility::DirName(context->GetPath()), $2, MakeLiteral("*.conf"), NULL, IncludeRecursive, false, context->GetZone(), context->GetPackage(), @$);
 	}
-	| T_INCLUDE_RECURSIVE T_STRING ',' T_STRING
+	| T_INCLUDE_RECURSIVE rterm ',' rterm
 	{
-		$$ = context->HandleIncludeRecursive($2, $4, @$);
-		free($2);
-		free($4);
+		$$ = new IncludeExpression(Utility::DirName(context->GetPath()), $2, $4, NULL, IncludeRecursive, false, context->GetZone(), context->GetPackage(), @$);
+	}
+	| T_INCLUDE_ZONES rterm ',' rterm
+	{
+		$$ = new IncludeExpression(Utility::DirName(context->GetPath()), $4, MakeLiteral("*.conf"), $2, IncludeZones, false, context->GetZone(), context->GetPackage(), @$);
+	}
+	| T_INCLUDE_ZONES rterm ',' rterm ',' rterm
+	{
+		$$ = new IncludeExpression(Utility::DirName(context->GetPath()), $4, $6, $2, IncludeZones, false, context->GetZone(), context->GetPackage(), @$);
 	}
 	| T_IMPORT rterm
 	{
@@ -635,22 +515,26 @@ lterm: type
 	{
 		$$ = new ContinueExpression(@$);
 	}
+	| T_DEBUGGER
+	{
+		$$ = new BreakpointExpression(@$);
+	}
 	| apply
 	| object
 	| T_FOR '(' identifier T_FOLLOWS identifier T_IN rterm ')' rterm_scope_require_side_effect
 	{
 		$9->MakeInline();
 
-		$$ = new ForExpression($3, $5, $7, $9, @$);
-		free($3);
-		free($5);
+		$$ = new ForExpression(*$3, *$5, $7, $9, @$);
+		delete $3;
+		delete $5;
 	}
 	| T_FOR '(' identifier T_IN rterm ')' rterm_scope_require_side_effect
 	{
 		$7->MakeInline();
 
-		$$ = new ForExpression($3, "", $5, $7, @$);
-		free($3);
+		$$ = new ForExpression(*$3, "", $5, $7, @$);
+		delete $3;
 	}
 	| T_FUNCTION identifier '(' identifier_items ')' use_specifier rterm_scope
 	{
@@ -659,13 +543,13 @@ lterm: type
 		FunctionExpression *fexpr = new FunctionExpression(*$4, $6, $7, @$);
 		delete $4;
 
-		$$ = new SetExpression(MakeIndexer(ScopeCurrent, $2), OpSetLiteral, fexpr, @$);
-		free($2);
+		$$ = new SetExpression(MakeIndexer(ScopeThis, *$2), OpSetLiteral, fexpr, @$);
+		delete $2;
 	}
 	| T_CONST T_IDENTIFIER T_SET rterm
 	{
-		$$ = new SetExpression(MakeIndexer(ScopeGlobal, $2), OpSetLiteral, $4);
-		free($2);
+		$$ = new SetExpression(MakeIndexer(ScopeGlobal, *$2), OpSetLiteral, $4);
+		delete $2;
 	}
 	| T_VAR rterm
 	{
@@ -687,7 +571,7 @@ lterm: type
 	}
 	| T_THROW rterm
 	{
-		$$ = new ThrowExpression($2, @$);
+		$$ = new ThrowExpression($2, false, @$);
 	}
 	| rterm_side_effect
 	;
@@ -813,8 +697,8 @@ rterm_side_effect: rterm '(' rterm_items ')'
 			aexpr->MakeInline();
 
 		std::vector<String> args;
-		args.push_back($1);
-		free($1);
+		args.push_back(*$1);
+		delete $1;
 
 		$$ = new FunctionExpression(args, new std::map<String, Expression *>(), $3, @$);
 	}
@@ -865,8 +749,8 @@ rterm_side_effect: rterm '(' rterm_items ')'
 
 rterm_no_side_effect: T_STRING
 	{
-		$$ = MakeLiteral($1);
-		free($1);
+		$$ = MakeLiteral(*$1);
+		delete $1;
 	}
 	| T_NUMBER
 	{
@@ -882,8 +766,8 @@ rterm_no_side_effect: T_STRING
 	}
 	| rterm '.' T_IDENTIFIER %dprec 2
 	{
-		$$ = new IndexerExpression($1, MakeLiteral($3), @$);
-		free($3);
+		$$ = new IndexerExpression($1, MakeLiteral(*$3), @$);
+		delete $3;
 	}
 	| rterm '[' rterm ']'
 	{
@@ -891,8 +775,8 @@ rterm_no_side_effect: T_STRING
 	}
 	| T_IDENTIFIER
 	{
-		$$ = new VariableExpression($1, @1);
-		free($1);
+		$$ = new VariableExpression(*$1, @1);
+		delete $1;
 	}
 	| '!' rterm
 	{
@@ -922,11 +806,19 @@ rterm_no_side_effect: T_STRING
 	{
 		$$ = new GetScopeExpression(ScopeLocal);
 	}
+	| T_CURRENT_FILENAME
+	{
+		$$ = MakeLiteral(@$.Path);
+	}
+	| T_CURRENT_LINE
+	{
+		$$ = MakeLiteral(@$.FirstLine);
+	}
 	| rterm_array
 	| rterm_scope_require_side_effect
 	{
 		Expression *expr = $1;
-		BindToScope(expr, ScopeCurrent);
+		BindToScope(expr, ScopeThis);
 		$$ = expr;
 	}
 	| '('
@@ -990,11 +882,21 @@ rterm: rterm_side_effect
 
 target_type_specifier: /* empty */
 	{
-		$$ = strdup("");
+		$$ = new String();
 	}
 	| T_TO identifier
 	{
 		$$ = $2;
+	}
+	;
+
+ignore_specifier: /* empty */
+	{
+		$$ = false;
+	}
+	| T_IGNORE_ON_ERROR
+	{
+		$$ = true;
 	}
 	;
 
@@ -1024,29 +926,31 @@ use_specifier_items: use_specifier_item
 
 use_specifier_item: identifier
 	{
-		$$ = new std::pair<String, Expression *>($1, new VariableExpression($1, @1));
+		$$ = new std::pair<String, Expression *>(*$1, new VariableExpression(*$1, @1));
+		delete $1;
 	}
 	| identifier T_SET rterm
 	{
-		$$ = new std::pair<String, Expression *>($1, $3);
+		$$ = new std::pair<String, Expression *>(*$1, $3);
+		delete $1;
 	}
 	;
 
 apply_for_specifier: /* empty */
 	| T_FOR '(' identifier T_FOLLOWS identifier T_IN rterm ')'
 	{
-		context->m_FKVar.top() = $3;
-		free($3);
+		context->m_FKVar.top() = *$3;
+		delete $3;
 
-		context->m_FVVar.top() = $5;
-		free($5);
+		context->m_FVVar.top() = *$5;
+		delete $5;
 
 		context->m_FTerm.top() = $7;
 	}
 	| T_FOR '(' identifier T_IN rterm ')'
 	{
-		context->m_FKVar.top() = $3;
-		free($3);
+		context->m_FKVar.top() = *$3;
+		delete $3;
 
 		context->m_FVVar.top() = "";
 
@@ -1072,14 +976,14 @@ apply:
 		context->m_FVVar.push("");
 		context->m_FTerm.push(NULL);
 	}
-	T_APPLY identifier optional_rterm apply_for_specifier target_type_specifier use_specifier rterm_scope_require_side_effect
+	T_APPLY identifier optional_rterm apply_for_specifier target_type_specifier use_specifier ignore_specifier rterm_scope_require_side_effect
 	{
 		context->m_Apply.pop();
 
-		String type = $3;
-		free($3);
-		String target = $6;
-		free($6);
+		String type = *$3;
+		delete $3;
+		String target = *$6;
+		delete $6;
 
 		if (!ApplyRule::IsValidSourceType(type))
 			BOOST_THROW_EXCEPTION(ScriptError("'apply' cannot be used with type '" + type + "'", DebugInfoRange(@2, @3)));
@@ -1105,7 +1009,7 @@ apply:
 				BOOST_THROW_EXCEPTION(ScriptError("'apply' target type '" + target + "' is invalid", DebugInfoRange(@2, @5)));
 		}
 
-		$8->MakeInline();
+		$9->MakeInline();
 
 		bool seen_assign = context->m_SeenAssign.top();
 		context->m_SeenAssign.pop();
@@ -1144,7 +1048,7 @@ apply:
 		Expression *fterm = context->m_FTerm.top();
 		context->m_FTerm.pop();
 
-		$$ = new ApplyExpression(type, target, $4, filter, fkvar, fvvar, fterm, $7, $8, DebugInfoRange(@2, @7));
+		$$ = new ApplyExpression(type, target, $4, filter, context->GetPackage(), fkvar, fvvar, fterm, $7, $8, $9, DebugInfoRange(@2, @8));
 	}
 	;
 

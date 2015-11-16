@@ -148,7 +148,7 @@ bool TroubleshootCommand::GeneralInfo(InfoLog& log, const boost::program_options
 
 	//Application::DisplayInfoMessage() but formatted
 	InfoLogLine(log)
-	    << "\tApplication version: " << Application::GetVersion() << '\n'
+	    << "\tApplication version: " << Application::GetAppVersion() << '\n'
 	    << "\tInstallation root: " << Application::GetPrefixDir() << '\n'
 	    << "\tSysconf directory: " << Application::GetSysconfDir() << '\n'
 	    << "\tRun directory: " << Application::GetRunDir() << '\n'
@@ -157,8 +157,7 @@ bool TroubleshootCommand::GeneralInfo(InfoLog& log, const boost::program_options
 	    << "\tState path: " << Application::GetStatePath() << '\n'
 	    << "\tObjects path: " << Application::GetObjectsPath() << '\n'
 	    << "\tVars path: " << Application::GetVarsPath() << '\n'
-	    << "\tPID path: " << Application::GetPidPath() << '\n'
-	    << "\tApplication type: " << Application::GetApplicationType() << "\n";
+	    << "\tPID path: " << Application::GetPidPath() << '\n';
 
 	InfoLogLine(log)
 	    << '\n';
@@ -254,14 +253,14 @@ bool TroubleshootCommand::ConfigInfo(InfoLog& log, const boost::program_options:
 	InfoLogLine(log)
 	    << "A collection of important configuration files follows, please make sure to remove any sensitive data such as credentials, internal company names, etc\n";
 
-	if (!PrintConf(log, Application::GetSysconfDir() + "/icinga2/icinga2.conf")) {
+	if (!PrintFile(log, Application::GetSysconfDir() + "/icinga2/icinga2.conf")) {
 		InfoLogLine(log, 0, LogWarning)
 		    << "icinga2.conf not found, therefore skipping validation.\n"
 		    << "If you are using an icinga2.conf somewhere but the default path please validate it via 'icinga2 daemon -C -c \"path\to/icinga2.conf\"'\n"
 		    << "and provide it with your support request.\n";
 	}
 
-	if (!PrintConf(log, Application::GetSysconfDir() + "/icinga2/zones.conf")) {
+	if (!PrintFile(log, Application::GetSysconfDir() + "/icinga2/zones.conf")) {
 		InfoLogLine(log, 0, LogWarning)
 		    << "zones.conf not found.\n"
 		    << "If you are using a zones.conf somewhere but the default path please provide it with your support request\n";
@@ -411,7 +410,7 @@ bool TroubleshootCommand::PrintCrashReports(InfoLog& log)
 		InfoLogLine(log)
 		    << "Latest crash report is from " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S", Utility::GetTime()) << '\n'
 		    << "File: " << bestFilename << "\n\n";
-		PrintConf(log, bestFilename);
+		PrintFile(log, bestFilename);
 		InfoLogLine(log)
 		    << '\n';
 	}
@@ -419,7 +418,7 @@ bool TroubleshootCommand::PrintCrashReports(InfoLog& log)
 	return true;
 }
 
-bool TroubleshootCommand::PrintConf(InfoLog& log, const String& path)
+bool TroubleshootCommand::PrintFile(InfoLog& log, const String& path)
 {
 	std::ifstream text;
 	text.open(path.CStr(), std::ifstream::in);
@@ -446,10 +445,6 @@ bool TroubleshootCommand::PrintConf(InfoLog& log, const String& path)
 
 bool TroubleshootCommand::CheckConfig(void)
 {
-	/* Not loading the icinga library would make config validation fail.
-	 * (Depending on the configuration and the speed of your machine.)
-	 */
-	Utility::LoadExtensionLibrary("icinga");
 	std::vector<std::string> configs;
 	configs.push_back(Application::GetSysconfDir() + "/icinga2/icinga2.conf");
 

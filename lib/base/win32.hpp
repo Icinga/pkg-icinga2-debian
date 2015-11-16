@@ -21,10 +21,12 @@
 #define WIN32_H
 
 #define WIN32_LEAN_AND_MEAN
+#ifndef _WIN32_WINNT
 #define _WIN32_WINNT _WIN32_WINNT_VISTA
+#endif /* _WIN32_WINNT */
 #define NOMINMAX
-#include <windows.h>
 #include <winsock2.h>
+#include <windows.h>
 #include <ws2tcpip.h>
 #include <imagehlp.h>
 #include <shlwapi.h>

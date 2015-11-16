@@ -106,6 +106,9 @@ public:
 	static String GetStatePath(void);
 	static void DeclareStatePath(const String& path);
 
+	static String GetModAttrPath(void);
+	static void DeclareModAttrPath(const String& path);
+
 	static String GetObjectsPath(void);
 	static void DeclareObjectsPath(const String& path);
 
@@ -114,9 +117,6 @@ public:
 
 	static String GetPidPath(void);
 	static void DeclarePidPath(const String& path);
-
-	static String GetApplicationType(void);
-	static void DeclareApplicationType(const String& type);
 
 	static String GetRunAsUser(void);
 	static void DeclareRunAsUser(const String& user);
@@ -129,22 +129,27 @@ public:
 
 	static ThreadPool& GetTP(void);
 
-	static String GetVersion(void);
+	static String GetAppVersion(void);
 
 	static double GetStartTime(void);
 	static void SetStartTime(double ts);
 
+	static bool GetScriptDebuggerEnabled(void);
+	static void SetScriptDebuggerEnabled(bool enabled);
+
 	static void DisplayInfoMessage(std::ostream& os, bool skipVersion = false);
 
 protected:
-	virtual void OnConfigLoaded(void);
-	virtual void Stop(void);
+	virtual void OnConfigLoaded(void) override;
+	virtual void Stop(bool runtimeRemoved) override;
 
 	void RunEventLoop(void);
 
 	pid_t StartReloadProcess(void);
 
 	virtual void OnShutdown(void);
+
+	virtual void ValidateName(const String& value, const ValidationUtils& utils) override;
 
 private:
 	static Application::Ptr m_Instance; /**< The application instance. */
@@ -162,6 +167,7 @@ private:
 	static bool m_Debugging; /**< Whether debugging is enabled. */
 	static LogSeverity m_DebuggingSeverity; /**< Whether debugging severity is set. */
 	static double m_StartTime;
+	static bool m_ScriptDebuggerEnabled;
 
 #ifndef _WIN32
 	static void SigIntTermHandler(int signum);
@@ -178,9 +184,7 @@ private:
 
 	static String GetCrashReportFilename(void);
 
-#ifndef _WIN32
-	static void GetDebuggerBacktrace(const String& filename);
-#endif /* _WIN32 */
+	static void AttachDebugger(const String& filename, bool interactive);
 };
 
 }

@@ -41,11 +41,11 @@ class I2_REMOTE_API ApiFunction : public Object
 public:
 	DECLARE_PTR_TYPEDEFS(ApiFunction);
 
-	typedef boost::function<Value(const MessageOrigin& origin, const Dictionary::Ptr&)> Callback;
+	typedef boost::function<Value(const MessageOrigin::Ptr& origin, const Dictionary::Ptr&)> Callback;
 
 	ApiFunction(const Callback& function);
 
-	Value Invoke(const MessageOrigin& origin, const Dictionary::Ptr& arguments);
+	Value Invoke(const MessageOrigin::Ptr& origin, const Dictionary::Ptr& arguments);
 
 	static ApiFunction::Ptr GetByName(const String& name);
 	static void Register(const String& name, const ApiFunction::Ptr& function);
@@ -64,17 +64,6 @@ class I2_REMOTE_API ApiFunctionRegistry : public Registry<ApiFunctionRegistry, A
 {
 public:
 	static ApiFunctionRegistry *GetInstance(void);
-};
-
-/**
- * Helper class for registering ApiFunction implementation classes.
- *
- * @ingroup base
- */
-class I2_REMOTE_API RegisterApiFunctionHelper
-{
-public:
-	RegisterApiFunctionHelper(const String& name, const ApiFunction::Callback& function);
 };
 
 #define REGISTER_APIFUNCTION(name, ns, callback) \

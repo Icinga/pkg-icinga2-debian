@@ -19,6 +19,8 @@
 
 #include "icinga/customvarobject.hpp"
 
+library icinga;
+
 namespace icinga
 {
 
@@ -33,7 +35,7 @@ class HostGroup : CustomVarObject
 		}}}
 	};
 
-	[config] Array::Ptr groups;
+	[config, no_user_modify] array(name(HostGroup)) groups;
 	[config] String notes;
 	[config] String notes_url;
 	[config] String action_url;

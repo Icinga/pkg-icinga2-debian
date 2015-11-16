@@ -15,16 +15,22 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(apilistener.ti apilistener.thpp)
-mkclass_target(endpoint.ti endpoint.thpp)
-mkclass_target(zone.ti zone.thpp)
-
-mkembedconfig_target(remote-type.conf remote-type.cpp)
+mkclass_target(apilistener.ti apilistener.tcpp apilistener.thpp)
+mkclass_target(apiuser.ti apiuser.tcpp apiuser.thpp)
+mkclass_target(endpoint.ti endpoint.tcpp endpoint.thpp)
+mkclass_target(zone.ti zone.tcpp zone.thpp)
 
 set(remote_SOURCES
-  apiclient.cpp apiclient-heartbeat.cpp apifunction.cpp apilistener.cpp apilistener-sync.cpp
-  apilistener.thpp authority.cpp endpoint.cpp endpoint.thpp jsonrpc.cpp
-  messageorigin.cpp remote-type.cpp zone.cpp zone.thpp
+  actionshandler.cpp apiaction.cpp apiclient.cpp
+  apifunction.cpp apilistener.cpp apilistener.thpp apilistener-configsync.cpp
+  apilistener-filesync.cpp apiuser.cpp apiuser.thpp authority.cpp base64.cpp
+  consolehandler.cpp configfileshandler.cpp configpackageshandler.cpp configpackageutility.cpp configobjectutility.cpp
+  configstageshandler.cpp createobjecthandler.cpp deleteobjecthandler.cpp
+  endpoint.cpp endpoint.thpp eventshandler.cpp eventqueue.cpp filterutility.cpp
+  httpchunkedencoding.cpp httpclientconnection.cpp httpserverconnection.cpp httphandler.cpp httprequest.cpp httpresponse.cpp
+  httputility.cpp infohandler.cpp jsonrpc.cpp jsonrpcconnection.cpp jsonrpcconnection-heartbeat.cpp
+  messageorigin.cpp modifyobjecthandler.cpp statushandler.cpp objectqueryhandler.cpp typequeryhandler.cpp
+  url.cpp zone.cpp zone.thpp
 )
 
 if(ICINGA2_UNITY_BUILD)
@@ -48,6 +54,13 @@ install(
   RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/icinga2
 )
+
+if(APPLE)
+  install(
+    TARGETS remote
+    LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}/icinga-studio.app/Contents
+  )
+endif()
 
 #install(CODE "file(MAKE_DIRECTORY \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/icinga2/api\")")
 install(CODE "file(MAKE_DIRECTORY \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/lib/icinga2/api/log\")")
