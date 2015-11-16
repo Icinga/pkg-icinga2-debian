@@ -19,1894 +19,326 @@
 
 #include "icinga/apievents.hpp"
 #include "icinga/service.hpp"
-#include "icinga/perfdatavalue.hpp"
-#include "remote/apilistener.hpp"
-#include "remote/endpoint.hpp"
-#include "remote/messageorigin.hpp"
-#include "remote/zone.hpp"
-#include "remote/apifunction.hpp"
-#include "base/application.hpp"
-#include "base/dynamictype.hpp"
-#include "base/utility.hpp"
-#include "base/exception.hpp"
+#include "remote/eventqueue.hpp"
 #include "base/initialize.hpp"
 #include "base/serializer.hpp"
-#include "base/json.hpp"
-#include <fstream>
+#include "base/logger.hpp"
 
 using namespace icinga;
 
 INITIALIZE_ONCE(&ApiEvents::StaticInitialize);
 
-REGISTER_APIFUNCTION(CheckResult, event, &ApiEvents::CheckResultAPIHandler);
-REGISTER_APIFUNCTION(SetNextCheck, event, &ApiEvents::NextCheckChangedAPIHandler);
-REGISTER_APIFUNCTION(SetNextNotification, event, &ApiEvents::NextNotificationChangedAPIHandler);
-REGISTER_APIFUNCTION(SetForceNextCheck, event, &ApiEvents::ForceNextCheckChangedAPIHandler);
-REGISTER_APIFUNCTION(SetForceNextNotification, event, &ApiEvents::ForceNextNotificationChangedAPIHandler);
-REGISTER_APIFUNCTION(SetEnableActiveChecks, event, &ApiEvents::EnableActiveChecksChangedAPIHandler);
-REGISTER_APIFUNCTION(SetEnablePassiveChecks, event, &ApiEvents::EnablePassiveChecksChangedAPIHandler);
-REGISTER_APIFUNCTION(SetEnableNotifications, event, &ApiEvents::EnableNotificationsChangedAPIHandler);
-REGISTER_APIFUNCTION(SetEnableFlapping, event, &ApiEvents::EnableFlappingChangedAPIHandler);
-REGISTER_APIFUNCTION(SetEnableEventHandler, event, &ApiEvents::EnableEventHandlerChangedAPIHandler);
-REGISTER_APIFUNCTION(SetEnablePerfdata, event, &ApiEvents::EnablePerfdataChangedAPIHandler);
-REGISTER_APIFUNCTION(SetCheckInterval, event, &ApiEvents::CheckIntervalChangedAPIHandler);
-REGISTER_APIFUNCTION(SetRetryInterval, event, &ApiEvents::RetryIntervalChangedAPIHandler);
-REGISTER_APIFUNCTION(SetMaxCheckAttempts, event, &ApiEvents::MaxCheckAttemptsChangedAPIHandler);
-REGISTER_APIFUNCTION(SetEventCommand, event, &ApiEvents::EventCommandChangedAPIHandler);
-REGISTER_APIFUNCTION(SetCheckCommand, event, &ApiEvents::CheckCommandChangedAPIHandler);
-REGISTER_APIFUNCTION(SetCheckPeriod, event, &ApiEvents::CheckPeriodChangedAPIHandler);
-REGISTER_APIFUNCTION(SetVars, event, &ApiEvents::VarsChangedAPIHandler);
-REGISTER_APIFUNCTION(AddComment, event, &ApiEvents::CommentAddedAPIHandler);
-REGISTER_APIFUNCTION(RemoveComment, event, &ApiEvents::CommentRemovedAPIHandler);
-REGISTER_APIFUNCTION(AddDowntime, event, &ApiEvents::DowntimeAddedAPIHandler);
-REGISTER_APIFUNCTION(RemoveDowntime, event, &ApiEvents::DowntimeRemovedAPIHandler);
-REGISTER_APIFUNCTION(SetAcknowledgement, event, &ApiEvents::AcknowledgementSetAPIHandler);
-REGISTER_APIFUNCTION(ClearAcknowledgement, event, &ApiEvents::AcknowledgementClearedAPIHandler);
-REGISTER_APIFUNCTION(UpdateRepository, event, &ApiEvents::UpdateRepositoryAPIHandler);
-REGISTER_APIFUNCTION(ExecuteCommand, event, &ApiEvents::ExecuteCommandAPIHandler);
-
-static Timer::Ptr l_RepositoryTimer;
-
 void ApiEvents::StaticInitialize(void)
 {
 	Checkable::OnNewCheckResult.connect(&ApiEvents::CheckResultHandler);
-	Checkable::OnNextCheckChanged.connect(&ApiEvents::NextCheckChangedHandler);
-	Notification::OnNextNotificationChanged.connect(&ApiEvents::NextNotificationChangedHandler);
-	Checkable::OnForceNextCheckChanged.connect(&ApiEvents::ForceNextCheckChangedHandler);
-	Checkable::OnForceNextNotificationChanged.connect(&ApiEvents::ForceNextNotificationChangedHandler);
-	Checkable::OnEnableActiveChecksChanged.connect(&ApiEvents::EnableActiveChecksChangedHandler);
-	Checkable::OnEnablePassiveChecksChanged.connect(&ApiEvents::EnablePassiveChecksChangedHandler);
-	Checkable::OnEnableNotificationsChanged.connect(&ApiEvents::EnableNotificationsChangedHandler);
-	Checkable::OnEnableFlappingChanged.connect(&ApiEvents::EnableFlappingChangedHandler);
-	Checkable::OnEnableEventHandlerChanged.connect(&ApiEvents::EnableEventHandlerChangedHandler);
-	Checkable::OnEnablePerfdataChanged.connect(&ApiEvents::EnablePerfdataChangedHandler);
-	Checkable::OnCheckIntervalChanged.connect(&ApiEvents::CheckIntervalChangedHandler);
-	Checkable::OnRetryIntervalChanged.connect(&ApiEvents::RetryIntervalChangedHandler);
-	Checkable::OnMaxCheckAttemptsChanged.connect(&ApiEvents::MaxCheckAttemptsChangedHandler);
-	Checkable::OnEventCommandChanged.connect(&ApiEvents::EventCommandChangedHandler);
-	Checkable::OnCheckCommandChanged.connect(&ApiEvents::CheckCommandChangedHandler);
-	Checkable::OnCheckPeriodChanged.connect(&ApiEvents::CheckPeriodChangedHandler);
-	Checkable::OnVarsChanged.connect(&ApiEvents::VarsChangedHandler);
-	Checkable::OnCommentAdded.connect(&ApiEvents::CommentAddedHandler);
-	Checkable::OnCommentRemoved.connect(&ApiEvents::CommentRemovedHandler);
-	Checkable::OnDowntimeAdded.connect(&ApiEvents::DowntimeAddedHandler);
-	Checkable::OnDowntimeRemoved.connect(&ApiEvents::DowntimeRemovedHandler);
+	Checkable::OnStateChange.connect(&ApiEvents::StateChangeHandler);
+	Checkable::OnNotificationSentToAllUsers.connect(&ApiEvents::NotificationSentToAllUsersHandler);
+
+	Checkable::OnFlappingChanged.connect(&ApiEvents::FlappingChangedHandler);
+
 	Checkable::OnAcknowledgementSet.connect(&ApiEvents::AcknowledgementSetHandler);
 	Checkable::OnAcknowledgementCleared.connect(&ApiEvents::AcknowledgementClearedHandler);
 
-	l_RepositoryTimer = new Timer();
-	l_RepositoryTimer->SetInterval(30);
-	l_RepositoryTimer->OnTimerExpired.connect(boost::bind(&ApiEvents::RepositoryTimerHandler));
-	l_RepositoryTimer->Start();
-	l_RepositoryTimer->Reschedule(0);
+	Comment::OnCommentAdded.connect(&ApiEvents::CommentAddedHandler);
+	Comment::OnCommentRemoved.connect(&ApiEvents::CommentRemovedHandler);
+
+	Downtime::OnDowntimeAdded.connect(&ApiEvents::DowntimeAddedHandler);
+	Downtime::OnDowntimeRemoved.connect(&ApiEvents::DowntimeRemovedHandler);
+	Downtime::OnDowntimeTriggered.connect(&ApiEvents::DowntimeTriggeredHandler);
 }
 
-Dictionary::Ptr ApiEvents::MakeCheckResultMessage(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr)
+void ApiEvents::CheckResultHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, const MessageOrigin::Ptr& origin)
 {
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::CheckResult");
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("CheckResult");
+
+	if (queues.empty())
+		return;
+
+	Log(LogDebug, "ApiEvents", "Processing event type 'CheckResult'.");
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "CheckResult");
+	result->Set("timestamp", Utility::GetTime());
 
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
+	result->Set("host", host->GetName());
 	if (service)
-		params->Set("service", service->GetShortName());
-	else {
-		Value agent_service_name = checkable->GetExtension("agent_service_name");
+		result->Set("service", service->GetShortName());
 
-		if (!agent_service_name.IsEmpty())
-			params->Set("service", agent_service_name);
+	result->Set("check_result", Serialize(cr));
+
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
 	}
-	params->Set("cr", Serialize(cr));
-
-	message->Set("params", params);
-
-	return message;
 }
 
-void ApiEvents::CheckResultHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, const MessageOrigin& origin)
+void ApiEvents::StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type, const MessageOrigin::Ptr& origin)
 {
-	ApiListener::Ptr listener = ApiListener::GetInstance();
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("StateChange");
 
-	if (!listener)
+	if (queues.empty())
 		return;
 
-	Dictionary::Ptr message = MakeCheckResultMessage(checkable, cr);
-	listener->RelayMessage(origin, checkable, message, true);
-}
+	Log(LogDebug, "ApiEvents", "Processing event type 'StateChange'.");
 
-Value ApiEvents::CheckResultAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'check result' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	CheckResult::Ptr cr = new CheckResult();
-
-	Dictionary::Ptr vcr = params->Get("cr");
-	Array::Ptr vperf = vcr->Get("performance_data");
-	vcr->Remove("performance_data");
-
-	Deserialize(cr, params->Get("cr"), true);
-
-	Array::Ptr rperf = new Array();
-
-	if (vperf) {
-		ObjectLock olock(vperf);
-		BOOST_FOREACH(const Value& vp, vperf) {
-			Value p;
-
-			if (vp.IsObjectType<Dictionary>()) {
-				PerfdataValue::Ptr val = new PerfdataValue();
-				Deserialize(val, vp, true);
-				rperf->Add(val);
-			} else
-				rperf->Add(vp);
-		}
-	}
-
-	cr->SetPerformanceData(rperf);
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable) && endpoint != checkable->GetCommandEndpoint()) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'check result' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	if (endpoint == checkable->GetCommandEndpoint())
-		checkable->ProcessCheckResult(cr);
-	else
-		checkable->ProcessCheckResult(cr, origin);
-
-	return Empty;
-}
-
-void ApiEvents::NextCheckChangedHandler(const Checkable::Ptr& checkable, double nextCheck, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "StateChange");
+	result->Set("timestamp", Utility::GetTime());
 
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
+	result->Set("host", host->GetName());
 	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("next_check", nextCheck);
+		result->Set("service", service->GetShortName());
 
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetNextCheck");
-	message->Set("params", params);
+	result->Set("state", service ? static_cast<int>(service->GetState()) : static_cast<int>(host->GetState()));
+	result->Set("state_type", checkable->GetStateType());
+	result->Set("check_result", Serialize(cr));
 
-	listener->RelayMessage(origin, checkable, message, true);
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
+	}
 }
 
-Value ApiEvents::NextCheckChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
+void ApiEvents::NotificationSentToAllUsersHandler(const Notification::Ptr& notification,
+    const Checkable::Ptr& checkable, const std::set<User::Ptr>& users, NotificationType type,
+    const CheckResult::Ptr& cr, const String& author, const String& text)
 {
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("Notification");
 
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'next check changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'next check changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetNextCheck(params->Get("next_check"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::NextNotificationChangedHandler(const Notification::Ptr& notification, double nextNotification, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
+	if (queues.empty())
 		return;
 
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("notification", notification->GetName());
-	params->Set("next_notification", nextNotification);
+	Log(LogDebug, "ApiEvents", "Processing event type 'Notification'.");
 
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetNextNotification");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, notification, message, true);
-}
-
-Value ApiEvents::NextNotificationChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'next notification changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Notification::Ptr notification = Notification::GetByName(params->Get("notification"));
-
-	if (!notification)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(notification)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'next notification changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	notification->SetNextNotification(params->Get("next_notification"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::ForceNextCheckChangedHandler(const Checkable::Ptr& checkable, bool forced, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "Notification");
+	result->Set("timestamp", Utility::GetTime());
 
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
+	result->Set("host", host->GetName());
 	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("forced", forced);
+		result->Set("service", service->GetShortName());
 
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetForceNextCheck");
-	message->Set("params", params);
+	Array::Ptr userNames = new Array();
 
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::ForceNextCheckChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'force next check changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
+	BOOST_FOREACH(const User::Ptr& user, users) {
+		userNames->Add(user->GetName());
 	}
 
-	if (!params)
-		return Empty;
+	result->Set("users", userNames);
+	result->Set("notification_type", Notification::NotificationTypeToString(type));
+	result->Set("author", author);
+	result->Set("text", text);
+	result->Set("check_result", Serialize(cr));
 
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'force next check' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
 	}
-
-	checkable->SetForceNextCheck(params->Get("forced"), origin);
-
-	return Empty;
 }
 
-void ApiEvents::ForceNextNotificationChangedHandler(const Checkable::Ptr& checkable, bool forced, const MessageOrigin& origin)
+void ApiEvents::FlappingChangedHandler(const Checkable::Ptr& checkable, const MessageOrigin::Ptr& origin)
 {
-	ApiListener::Ptr listener = ApiListener::GetInstance();
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("Flapping");
 
-	if (!listener)
+	if (queues.empty())
 		return;
+
+	Log(LogDebug, "ApiEvents", "Processing event type 'Flapping'.");
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "Flapping");
+	result->Set("timestamp", Utility::GetTime());
 
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
+	result->Set("host", host->GetName());
 	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("forced", forced);
+		result->Set("service", service->GetShortName());
 
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetForceNextNotification");
-	message->Set("params", params);
+	result->Set("state", service ? static_cast<int>(service->GetState()) : static_cast<int>(host->GetState()));
+	result->Set("state_type", checkable->GetStateType());
+	result->Set("is_flapping", checkable->IsFlapping());
 
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::ForceNextNotificationChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'force next notification changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
 	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'force next notification' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetForceNextNotification(params->Get("forced"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::EnableActiveChecksChangedHandler(const Checkable::Ptr& checkable, bool enabled, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("enabled", enabled);
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetEnableActiveChecks");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::EnableActiveChecksChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable active checks changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable active checks' changed message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetEnableActiveChecks(params->Get("enabled"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::EnablePassiveChecksChangedHandler(const Checkable::Ptr& checkable, bool enabled, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("enabled", enabled);
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetEnablePassiveChecks");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::EnablePassiveChecksChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable passive checks changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable passive checks changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetEnablePassiveChecks(params->Get("enabled"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::EnableNotificationsChangedHandler(const Checkable::Ptr& checkable, bool enabled, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("enabled", enabled);
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetEnableNotifications");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::EnableNotificationsChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable notifications changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable notifications changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetEnableNotifications(params->Get("enabled"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::EnableFlappingChangedHandler(const Checkable::Ptr& checkable, bool enabled, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("enabled", enabled);
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetEnableFlapping");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::EnableFlappingChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable flapping changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable flapping changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetEnableFlapping(params->Get("enabled"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::EnableEventHandlerChangedHandler(const Checkable::Ptr& checkable, bool enabled, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("enabled", enabled);
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetEnableEventHandler");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::EnableEventHandlerChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable event handler changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable event handler' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetEnableEventHandler(params->Get("enabled"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::EnablePerfdataChangedHandler(const Checkable::Ptr& checkable, bool enabled, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("enabled", enabled);
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetEnablePerfdata");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::EnablePerfdataChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable perfdata changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'enable perfdata changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetEnablePerfdata(params->Get("enabled"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::CheckIntervalChangedHandler(const Checkable::Ptr& checkable, double interval, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("interval", interval);
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetCheckInterval");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::CheckIntervalChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'check interval changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'check interval' changed message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetCheckInterval(params->Get("interval"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::RetryIntervalChangedHandler(const Checkable::Ptr& checkable, double interval, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("interval", interval);
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetRetryInterval");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::RetryIntervalChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'retry interval changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'retry interval' changed message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetRetryInterval(params->Get("interval"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::MaxCheckAttemptsChangedHandler(const Checkable::Ptr& checkable, int attempts, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("attempts", attempts);
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetMaxCheckAttempts");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::MaxCheckAttemptsChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'max checkt attempts changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'max check attempts changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetMaxCheckAttempts(params->Get("attempts"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::EventCommandChangedHandler(const Checkable::Ptr& checkable, const EventCommand::Ptr& command, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("command", command->GetName());
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetEventCommand");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::EventCommandChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'event command changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	EventCommand::Ptr command = EventCommand::GetByName(params->Get("command"));
-
-	if (!command)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'event command changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->SetEventCommand(command, origin);
-
-	return Empty;
-}
-
-void ApiEvents::CheckCommandChangedHandler(const Checkable::Ptr& checkable, const CheckCommand::Ptr& command, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("command", command->GetName());
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetCheckCommand");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::CheckCommandChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'check command changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'check command changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	CheckCommand::Ptr command = CheckCommand::GetByName(params->Get("command"));
-
-	if (!command)
-		return Empty;
-
-	checkable->SetCheckCommand(command, origin);
-
-	return Empty;
-}
-
-void ApiEvents::CheckPeriodChangedHandler(const Checkable::Ptr& checkable, const TimePeriod::Ptr& timeperiod, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("timeperiod", timeperiod->GetName());
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetCheckPeriod");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::CheckPeriodChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'check period changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'check period changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	TimePeriod::Ptr timeperiod = TimePeriod::GetByName(params->Get("timeperiod"));
-
-	if (!timeperiod)
-		return Empty;
-
-	checkable->SetCheckPeriod(timeperiod, origin);
-
-	return Empty;
-}
-
-void ApiEvents::VarsChangedHandler(const CustomVarObject::Ptr& object, const Dictionary::Ptr& vars, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("object", object->GetName());
-	params->Set("vars", Serialize(vars));
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetVars");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, object, message, true);
-}
-
-Value ApiEvents::VarsChangedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'vars changed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	String objectName = params->Get("object");
-
-	if (objectName.IsEmpty())
-		return Empty;
-
-	/* ugly, but there is no other way currently */
-	CustomVarObject::Ptr object = Host::GetByName(objectName);
-	if (!object)
-		object = Service::GetByName(objectName);
-	if (!object)
-		object = User::GetByName(objectName);
-	if (!object)
-		object = Service::GetByName(objectName);
-	if (!object)
-		object = EventCommand::GetByName(objectName);
-	if (!object)
-		object = CheckCommand::GetByName(objectName);
-	if (!object)
-		object = NotificationCommand::GetByName(objectName);
-	if (!object)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(object)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'vars changed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	Dictionary::Ptr vars = params->Get("vars");
-
-	if (!vars)
-		return Empty;
-
-	object->SetVars(vars, origin);
-
-	return Empty;
-}
-
-void ApiEvents::CommentAddedHandler(const Checkable::Ptr& checkable, const Comment::Ptr& comment, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("comment", Serialize(comment));
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::AddComment");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::CommentAddedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'comment added' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'comment added' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	Comment::Ptr comment = new Comment();
-	Deserialize(comment, params->Get("comment"), true);
-
-	checkable->AddComment(comment->GetEntryType(), comment->GetAuthor(),
-	    comment->GetText(), comment->GetExpireTime(), comment->GetId(), origin);
-
-	return Empty;
-}
-
-void ApiEvents::CommentRemovedHandler(const Checkable::Ptr& checkable, const Comment::Ptr& comment, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("id", comment->GetId());
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::RemoveComment");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::CommentRemovedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'comment removed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'comment removed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->RemoveComment(params->Get("id"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::DowntimeAddedHandler(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("downtime", Serialize(downtime));
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::AddDowntime");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::DowntimeAddedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'downtime added' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'downtime added' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	Downtime::Ptr downtime = new Downtime();
-	Deserialize(downtime, params->Get("downtime"), true);
-
-	checkable->AddDowntime(downtime->GetAuthor(), downtime->GetComment(),
-	    downtime->GetStartTime(), downtime->GetEndTime(),
-	    downtime->GetFixed(), downtime->GetTriggeredBy(),
-	    downtime->GetDuration(), downtime->GetScheduledBy(),
-	    downtime->GetId(), origin);
-
-	return Empty;
-}
-
-void ApiEvents::DowntimeRemovedHandler(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return;
-
-	Host::Ptr host;
-	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
-
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
-	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("id", downtime->GetId());
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::RemoveDowntime");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, checkable, message, true);
-}
-
-Value ApiEvents::DowntimeRemovedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
-
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'downtime removed' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'downtime removed' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->RemoveDowntime(params->Get("id"), false, origin);
-
-	return Empty;
 }
 
 void ApiEvents::AcknowledgementSetHandler(const Checkable::Ptr& checkable,
     const String& author, const String& comment, AcknowledgementType type,
-    bool notify, double expiry, const MessageOrigin& origin)
+    bool notify, double expiry, const MessageOrigin::Ptr& origin)
 {
-	ApiListener::Ptr listener = ApiListener::GetInstance();
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("AcknowledgementSet");
 
-	if (!listener)
+	if (queues.empty())
 		return;
+
+	Log(LogDebug, "ApiEvents", "Processing event type 'AcknowledgementSet'.");
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "AcknowledgementSet");
+	result->Set("timestamp", Utility::GetTime());
 
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
+	result->Set("host", host->GetName());
 	if (service)
-		params->Set("service", service->GetShortName());
-	params->Set("author", author);
-	params->Set("comment", comment);
-	params->Set("acktype", type);
-	params->Set("notify", notify);
-	params->Set("expiry", expiry);
+		result->Set("service", service->GetShortName());
 
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::SetAcknowledgement");
-	message->Set("params", params);
+	result->Set("state", service ? static_cast<int>(service->GetState()) : static_cast<int>(host->GetState()));
+	result->Set("state_type", checkable->GetStateType());
 
-	listener->RelayMessage(origin, checkable, message, true);
+	result->Set("author", author);
+	result->Set("comment", comment);
+	result->Set("acknowledgement_type", type);
+	result->Set("notify", notify);
+	result->Set("expiry", expiry);
+
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
+	}
 }
 
-Value ApiEvents::AcknowledgementSetAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
+void ApiEvents::AcknowledgementClearedHandler(const Checkable::Ptr& checkable, const MessageOrigin::Ptr& origin)
 {
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("AcknowledgementCleared");
 
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'acknowledgement set' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'acknowledgement set' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->AcknowledgeProblem(params->Get("author"), params->Get("comment"),
-	    static_cast<AcknowledgementType>(static_cast<int>(params->Get("acktype"))),
-	    params->Get("notify"), params->Get("expiry"), origin);
-
-	return Empty;
-}
-
-void ApiEvents::AcknowledgementClearedHandler(const Checkable::Ptr& checkable, const MessageOrigin& origin)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
+	if (queues.empty())
 		return;
+
+	Log(LogDebug, "ApiEvents", "Processing event type 'AcknowledgementCleared'.");
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "AcknowledgementCleared");
+	result->Set("timestamp", Utility::GetTime());
 
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("host", host->GetName());
+	result->Set("host", host->GetName());
 	if (service)
-		params->Set("service", service->GetShortName());
+		result->Set("service", service->GetShortName());
 
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::ClearAcknowledgement");
-	message->Set("params", params);
+	result->Set("state", service ? static_cast<int>(service->GetState()) : static_cast<int>(host->GetState()));
+	result->Set("state_type", checkable->GetStateType());
 
-	listener->RelayMessage(origin, checkable, message, true);
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
+	}
+
+	result->Set("acknowledgement_type", AcknowledgementNone);
 }
 
-Value ApiEvents::AcknowledgementClearedAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
+void ApiEvents::CommentAddedHandler(const Comment::Ptr& comment)
 {
-	Endpoint::Ptr endpoint = origin.FromClient->GetEndpoint();
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("CommentAdded");
 
-	if (!endpoint) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'acknowledgement cleared' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	if (!params)
-		return Empty;
-
-	Host::Ptr host = Host::GetByName(params->Get("host"));
-
-	if (!host)
-		return Empty;
-
-	Checkable::Ptr checkable;
-
-	if (params->Contains("service"))
-		checkable = host->GetServiceByShortName(params->Get("service"));
-	else
-		checkable = host;
-
-	if (!checkable)
-		return Empty;
-
-	if (origin.FromZone && !origin.FromZone->CanAccessObject(checkable)) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'acknowledgement cleared' message from '" << origin.FromClient->GetIdentity() << "': Unauthorized access.";
-		return Empty;
-	}
-
-	checkable->ClearAcknowledgement(origin);
-
-	return Empty;
-}
-
-Value ApiEvents::ExecuteCommandAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	Endpoint::Ptr sourceEndpoint = origin.FromClient->GetEndpoint();
-
-	if (!sourceEndpoint || (origin.FromZone && !Zone::GetLocalZone()->IsChildOf(origin.FromZone))) {
-		Log(LogNotice, "ApiEvents")
-		    << "Discarding 'execute command' message from '" << origin.FromClient->GetIdentity() << "': Invalid endpoint origin (client not allowed).";
-		return Empty;
-	}
-
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener) {
-		Log(LogCritical, "ApiListener", "No instance available.");
-		return Empty;
-	}
-
-	if (!listener->GetAcceptCommands()) {
-		Log(LogWarning, "ApiListener")
-		    << "Ignoring command. '" << listener->GetName() << "' does not accept commands.";
-
-		Host::Ptr host = new Host();
-		Dictionary::Ptr attrs = new Dictionary();
-
-		attrs->Set("__name", params->Get("host"));
-		attrs->Set("type", "Host");
-
-		Deserialize(host, attrs, false, FAConfig);
-
-		if (params->Contains("service"))
-			host->SetExtension("agent_service_name", params->Get("service"));
-
-		CheckResult::Ptr cr = new CheckResult();
-		cr->SetState(ServiceUnknown);
-		cr->SetOutput("Endpoint '" + Endpoint::GetLocalEndpoint()->GetName() + "' does not accept commands.");
-		Dictionary::Ptr message = MakeCheckResultMessage(host, cr);
-		listener->SyncSendMessage(sourceEndpoint, message);
-
-		return Empty;
-	}
-
-	/* use a virtual host object for executing the command */
-	Host::Ptr host = new Host();
-	Dictionary::Ptr attrs = new Dictionary();
-
-	attrs->Set("__name", params->Get("host"));
-	attrs->Set("type", "Host");
-
-	Deserialize(host, attrs, false, FAConfig);
-
-	if (params->Contains("service"))
-		host->SetExtension("agent_service_name", params->Get("service"));
-
-	String command = params->Get("command");
-	String command_type = params->Get("command_type");
-
-	if (command_type == "check_command") {
-		if (!CheckCommand::GetByName(command)) {
-			CheckResult::Ptr cr = new CheckResult();
-			cr->SetState(ServiceUnknown);
-			cr->SetOutput("Check command '" + command + "' does not exist.");
-			Dictionary::Ptr message = MakeCheckResultMessage(host, cr);
-			listener->SyncSendMessage(sourceEndpoint, message);
-			return Empty;
-		}
-	} else if (command_type == "event_command") {
-		if (!EventCommand::GetByName(command)) {
-			Log(LogWarning, "ApiEvents")
-			    << "Event command '" << command << "' does not exist.";
-			return Empty;
-		}
-	} else
-		return Empty;
-
-	attrs->Set(command_type, params->Get("command"));
-	attrs->Set("command_endpoint", sourceEndpoint->GetName());
-
-	Deserialize(host, attrs, false, FAConfig);
-
-	host->SetExtension("agent_check", true);
-
-	Dictionary::Ptr macros = params->Get("macros");
-
-	if (command_type == "check_command") {
-		try {
-			host->ExecuteRemoteCheck(macros);
-		} catch (const std::exception& ex) {
-			CheckResult::Ptr cr = new CheckResult();
-			cr->SetState(ServiceUnknown);
-
-			String output = "Exception occured while checking '" + host->GetName() + "': " + DiagnosticInformation(ex);
-			cr->SetOutput(output);
-
-			double now = Utility::GetTime();
-			cr->SetScheduleStart(now);
-			cr->SetScheduleEnd(now);
-			cr->SetExecutionStart(now);
-			cr->SetExecutionEnd(now);
-
-			Dictionary::Ptr message = MakeCheckResultMessage(host, cr);
-			listener->SyncSendMessage(sourceEndpoint, message);
-
-			Log(LogCritical, "checker", output);
-		}
-	} else if (command_type == "event_command") {
-		host->ExecuteEventHandler(macros, true);
-	}
-
-	return Empty;
-}
-
-void ApiEvents::RepositoryTimerHandler(void)
-{
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
+	if (queues.empty())
 		return;
 
-	Dictionary::Ptr repository = new Dictionary();
+	Log(LogDebug, "ApiEvents", "Processing event type 'CommentAdded'.");
 
-	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
-		Array::Ptr services = new Array();
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "CommentAdded");
+	result->Set("timestamp", Utility::GetTime());
 
-		BOOST_FOREACH(const Service::Ptr& service, host->GetServices()) {
-			services->Add(service->GetShortName());
-		}
+	result->Set("comment", Serialize(comment, FAConfig | FAState));
 
-		repository->Set(host->GetName(), services);
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
 	}
+}
 
-	Endpoint::Ptr my_endpoint = Endpoint::GetLocalEndpoint();
+void ApiEvents::CommentRemovedHandler(const Comment::Ptr& comment)
+{
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("CommentRemoved");
 
-	if (!my_endpoint) {
-		Log(LogWarning, "ApiEvents", "No local endpoint defined. Bailing out.");
-		return;
-	}
-
-	Zone::Ptr my_zone = my_endpoint->GetZone();
-
-	if (!my_zone)
+	if (queues.empty())
 		return;
 
-	Dictionary::Ptr params = new Dictionary();
-	params->Set("seen", Utility::GetTime());
-	params->Set("endpoint", my_endpoint->GetName());
+	Log(LogDebug, "ApiEvents", "Processing event type 'CommentRemoved'.");
 
-	Zone::Ptr parent_zone = my_zone->GetParent();
-	if (parent_zone)
-		params->Set("parent_zone", parent_zone->GetName());
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "CommentRemoved");
+	result->Set("timestamp", Utility::GetTime());
 
-	params->Set("zone", my_zone->GetName());
-	params->Set("repository", repository);
+	result->Set("comment", Serialize(comment, FAConfig | FAState));
 
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::UpdateRepository");
-	message->Set("params", params);
-
-	listener->RelayMessage(MessageOrigin(), my_zone, message, false);
-}
-
-String ApiEvents::GetRepositoryDir(void)
-{
-	return Application::GetLocalStateDir() + "/lib/icinga2/api/repository/";
-}
-
-Value ApiEvents::UpdateRepositoryAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params)
-{
-	if (!params)
-		return Empty;
-
-	Value vrepository = params->Get("repository");
-	if (vrepository.IsEmpty() || !vrepository.IsObjectType<Dictionary>())
-		return Empty;
-
-	String repositoryFile = GetRepositoryDir() + SHA256(params->Get("endpoint")) + ".repo";
-	String repositoryTempFile = repositoryFile + ".tmp";
-
-	std::ofstream fp(repositoryTempFile.CStr(), std::ofstream::out | std::ostream::trunc);
-	fp << JsonEncode(params);
-	fp.close();
-
-#ifdef _WIN32
-	_unlink(repositoryFile.CStr());
-#endif /* _WIN32 */
-
-	if (rename(repositoryTempFile.CStr(), repositoryFile.CStr()) < 0) {
-		BOOST_THROW_EXCEPTION(posix_error()
-		    << boost::errinfo_api_function("rename")
-		    << boost::errinfo_errno(errno)
-		    << boost::errinfo_file_name(repositoryTempFile));
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
 	}
-
-	ApiListener::Ptr listener = ApiListener::GetInstance();
-
-	if (!listener)
-		return Empty;
-
-	Dictionary::Ptr message = new Dictionary();
-	message->Set("jsonrpc", "2.0");
-	message->Set("method", "event::UpdateRepository");
-	message->Set("params", params);
-
-	listener->RelayMessage(origin, Zone::GetLocalZone(), message, true);
-
-	return Empty;
 }
 
+void ApiEvents::DowntimeAddedHandler(const Downtime::Ptr& downtime)
+{
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("DowntimeAdded");
+
+	if (queues.empty())
+		return;
+
+	Log(LogDebug, "ApiEvents", "Processing event type 'DowntimeAdded'.");
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "DowntimeAdded");
+	result->Set("timestamp", Utility::GetTime());
+
+	result->Set("downtime", Serialize(downtime, FAConfig | FAState));
+
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
+	}
+}
+
+void ApiEvents::DowntimeRemovedHandler(const Downtime::Ptr& downtime)
+{
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("DowntimeRemoved");
+
+	if (queues.empty())
+		return;
+
+	Log(LogDebug, "ApiEvents", "Processing event type 'DowntimeRemoved'.");
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "DowntimeRemoved");
+	result->Set("timestamp", Utility::GetTime());
+
+	result->Set("downtime", Serialize(downtime, FAConfig | FAState));
+
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
+	}
+}
+
+void ApiEvents::DowntimeTriggeredHandler(const Downtime::Ptr& downtime)
+{
+	std::vector<EventQueue::Ptr> queues = EventQueue::GetQueuesForType("DowntimeTriggered");
+
+	if (queues.empty())
+		return;
+
+	Log(LogDebug, "ApiEvents", "Processing event type 'DowntimeTriggered'.");
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("type", "DowntimeTriggered");
+	result->Set("timestamp", Utility::GetTime());
+
+	result->Set("downtime", Serialize(downtime));
+
+	BOOST_FOREACH(const EventQueue::Ptr& queue, queues) {
+		queue->ProcessEvent(result);
+	}
+}

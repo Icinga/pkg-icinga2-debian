@@ -18,10 +18,10 @@
  ******************************************************************************/
 
 #include "icinga/user.hpp"
+#include "icinga/user.tcpp"
 #include "icinga/usergroup.hpp"
 #include "icinga/notification.hpp"
 #include "icinga/usergroup.hpp"
-#include "base/function.hpp"
 #include "base/objectlock.hpp"
 #include "base/exception.hpp"
 #include <boost/foreach.hpp>
@@ -29,13 +29,10 @@
 using namespace icinga;
 
 REGISTER_TYPE(User);
-REGISTER_SCRIPTFUNCTION(ValidateUserFilters, &User::ValidateFilters);
-
-boost::signals2::signal<void (const User::Ptr&, bool, const MessageOrigin&)> User::OnEnableNotificationsChanged;
 
 void User::OnConfigLoaded(void)
 {
-	DynamicObject::OnConfigLoaded();
+	ObjectImpl<User>::OnConfigLoaded();
 
 	SetTypeFilter(FilterArrayToInt(GetTypes(), ~0));
 	SetStateFilter(FilterArrayToInt(GetStates(), ~0));
@@ -43,7 +40,7 @@ void User::OnConfigLoaded(void)
 
 void User::OnAllConfigLoaded(void)
 {
-	DynamicObject::OnAllConfigLoaded();
+	ObjectImpl<User>::OnAllConfigLoaded();
 
 	UserGroup::EvaluateObjectRules(this);
 
@@ -63,9 +60,9 @@ void User::OnAllConfigLoaded(void)
 	}
 }
 
-void User::Stop(void)
+void User::Stop(bool runtimeRemoved)
 {
-	DynamicObject::Stop();
+	ObjectImpl<User>::Stop(runtimeRemoved);
 
 	Array::Ptr groups = GetGroups();
 
@@ -101,55 +98,24 @@ TimePeriod::Ptr User::GetPeriod(void) const
 	return TimePeriod::GetByName(GetPeriodRaw());
 }
 
-void User::ValidateFilters(const String& location, const User::Ptr& object)
+void User::ValidateStates(const Array::Ptr& value, const ValidationUtils& utils)
 {
-	int sfilter = FilterArrayToInt(object->GetStates(), 0);
+	ObjectImpl<User>::ValidateStates(value, utils);
+
+	int sfilter = FilterArrayToInt(value, 0);
 
 	if ((sfilter & ~(StateFilterUp | StateFilterDown | StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": State filter is invalid.", object->GetDebugInfo()));
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("states"), "State filter is invalid."));
 	}
+}
 
-	int tfilter = FilterArrayToInt(object->GetTypes(), 0);
+void User::ValidateTypes(const Array::Ptr& value, const ValidationUtils& utils)
+{
+	int tfilter = FilterArrayToInt(value, 0);
 
 	if ((tfilter & ~(1 << NotificationDowntimeStart | 1 << NotificationDowntimeEnd | 1 << NotificationDowntimeRemoved |
 	    1 << NotificationCustom | 1 << NotificationAcknowledgement | 1 << NotificationProblem | 1 << NotificationRecovery |
 	    1 << NotificationFlappingStart | 1 << NotificationFlappingEnd)) != 0) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": Type filter is invalid.", object->GetDebugInfo()));
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("types"), "Type filter is invalid."));
 	}
 }
-
-int User::GetModifiedAttributes(void) const
-{
-	int attrs = 0;
-
-	if (GetOverrideVars())
-		attrs |= ModAttrCustomVariable;
-
-	return attrs;
-}
-
-void User::SetModifiedAttributes(int flags, const MessageOrigin& origin)
-{
-	if ((flags & ModAttrCustomVariable) == 0) {
-		SetOverrideVars(Empty);
-		OnVarsChanged(this, GetVars(), origin);
-	}
-}
-
-bool User::GetEnableNotifications(void) const
-{
-	if (!GetOverrideEnableNotifications().IsEmpty())
-		return GetOverrideEnableNotifications();
-	else
-		return GetEnableNotificationsRaw();
-}
-
-void User::SetEnableNotifications(bool enabled, const MessageOrigin& origin)
-{
-	SetOverrideEnableNotifications(enabled);
-
-	OnEnableNotificationsChanged(this, enabled, origin);
-}
-

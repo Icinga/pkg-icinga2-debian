@@ -18,11 +18,12 @@
  ******************************************************************************/
 
 #include "checker/checkercomponent.hpp"
+#include "checker/checkercomponent.tcpp"
 #include "icinga/icingaapplication.hpp"
 #include "icinga/cib.hpp"
 #include "icinga/perfdatavalue.hpp"
 #include "remote/apilistener.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
 #include "base/logger.hpp"
@@ -35,13 +36,13 @@ using namespace icinga;
 
 REGISTER_TYPE(CheckerComponent);
 
-REGISTER_STATSFUNCTION(CheckerComponentStats, &CheckerComponent::StatsFunc);
+REGISTER_STATSFUNCTION(CheckerComponent, &CheckerComponent::StatsFunc);
 
 void CheckerComponent::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const CheckerComponent::Ptr& checker, DynamicType::GetObjectsByType<CheckerComponent>()) {
+	BOOST_FOREACH(const CheckerComponent::Ptr& checker, ConfigType::GetObjectsByType<CheckerComponent>()) {
 		unsigned long idle = checker->GetIdleCheckables();
 		unsigned long pending = checker->GetPendingCheckables();
 
@@ -65,17 +66,15 @@ CheckerComponent::CheckerComponent(void)
 
 void CheckerComponent::OnConfigLoaded(void)
 {
-	DynamicObject::OnStarted.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
-	DynamicObject::OnStopped.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
-	DynamicObject::OnPaused.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
-	DynamicObject::OnResumed.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
+	ConfigObject::OnActiveChanged.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
+	ConfigObject::OnPausedChanged.connect(bind(&CheckerComponent::ObjectHandler, this, _1));
 
 	Checkable::OnNextCheckChanged.connect(bind(&CheckerComponent::NextCheckChangedHandler, this, _1));
 }
 
-void CheckerComponent::Start(void)
+void CheckerComponent::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<CheckerComponent>::Start(runtimeCreated);
 
 	m_Thread = boost::thread(boost::bind(&CheckerComponent::CheckThreadProc, this));
 
@@ -85,7 +84,7 @@ void CheckerComponent::Start(void)
 	m_ResultTimer->Start();
 }
 
-void CheckerComponent::Stop(void)
+void CheckerComponent::Stop(bool runtimeRemoved)
 {
 	Log(LogInformation, "CheckerComponent", "Checker stopped.");
 
@@ -98,7 +97,7 @@ void CheckerComponent::Stop(void)
 	m_ResultTimer->Stop();
 	m_Thread.join();
 
-	DynamicObject::Stop();
+	ObjectImpl<CheckerComponent>::Stop(runtimeRemoved);
 }
 
 void CheckerComponent::CheckThreadProc(void)
@@ -253,12 +252,12 @@ void CheckerComponent::ResultTimerHandler(void)
 	Log(LogNotice, "CheckerComponent", msgbuf.str());
 }
 
-void CheckerComponent::ObjectHandler(const DynamicObject::Ptr& object)
+void CheckerComponent::ObjectHandler(const ConfigObject::Ptr& object)
 {
-	if (!Type::GetByName("Checkable")->IsAssignableFrom(object->GetReflectionType()))
-		return;
+	Checkable::Ptr checkable = dynamic_pointer_cast<Checkable>(object);
 
-	Checkable::Ptr checkable = static_pointer_cast<Checkable>(object);
+	if (!checkable)
+		return;
 
 	Zone::Ptr zone = Zone::GetByName(checkable->GetZoneName());
 	bool same_zone = (!zone || Zone::GetLocalZone() == zone);

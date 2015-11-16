@@ -22,15 +22,8 @@
 
 #include "base/i2-base.hpp"
 #include "base/debug.hpp"
-#include "base/thinmutex.hpp"
-#include <boost/thread/thread.hpp>
-
-#ifndef I2_DEBUG
-#include <boost/thread/mutex.hpp>
-#else /* I2_DEBUG */
 #include <boost/thread/recursive_mutex.hpp>
-#endif /* I2_DEBUG */
-
+#include <boost/thread/condition_variable.hpp>
 #include <boost/smart_ptr/intrusive_ptr.hpp>
 
 using boost::intrusive_ptr;
@@ -47,15 +40,20 @@ class Value;
 class Object;
 class Type;
 class String;
+class ValidationUtils;
+
+extern I2_BASE_API Value Empty;
 
 #define DECLARE_PTR_TYPEDEFS(klass) \
 	typedef intrusive_ptr<klass> Ptr
 
-#define IMPL_TYPE_LOOKUP() 						\
-	static intrusive_ptr<Type> TypeInstance;			\
-	virtual intrusive_ptr<Type> GetReflectionType(void) const	\
-	{								\
-		return TypeInstance;					\
+#define IMPL_TYPE_LOOKUP_SUPER() 					\
+
+#define IMPL_TYPE_LOOKUP() 							\
+	static intrusive_ptr<Type> TypeInstance;				\
+	virtual intrusive_ptr<Type> GetReflectionType(void) const override	\
+	{									\
+		return TypeInstance;						\
 	}
 
 #define DECLARE_OBJECT(klass) \
@@ -88,30 +86,39 @@ struct TypeHelper
 class I2_BASE_API Object
 {
 public:
-	DECLARE_OBJECT(Object);
+	DECLARE_PTR_TYPEDEFS(Object);
 
 	Object(void);
 	virtual ~Object(void);
 
 	virtual String ToString(void) const;
 
-	virtual void SetField(int id, const Value& value);
+	virtual intrusive_ptr<Type> GetReflectionType(void) const;
+
+	virtual void Validate(int types, const ValidationUtils& utils);
+
+	virtual void SetField(int id, const Value& value, bool suppress_events = false, const Value& cookie = Empty);
 	virtual Value GetField(int id) const;
+	virtual void ValidateField(int id, const Value& value, const ValidationUtils& utils);
+	virtual void NotifyField(int id, const Value& cookie = Empty);
+	virtual Object::Ptr NavigateField(int id) const;
 
 #ifdef I2_DEBUG
 	bool OwnsLock(void) const;
 #endif /* I2_DEBUG */
 
-	void InflateMutex(void);
-
 	static Object::Ptr GetPrototype(void);
+	
+	virtual Object::Ptr Clone(void) const;
+
+	static intrusive_ptr<Type> TypeInstance;
 
 private:
 	Object(const Object& other);
 	Object& operator=(const Object& rhs);
 
 	uintptr_t m_References;
-	mutable ThinMutex m_Mutex;
+	mutable boost::recursive_mutex m_Mutex;
 
 #ifdef I2_DEBUG
 #	ifndef _WIN32

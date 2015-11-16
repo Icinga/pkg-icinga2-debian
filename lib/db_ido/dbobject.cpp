@@ -24,8 +24,8 @@
 #include "icinga/service.hpp"
 #include "icinga/compatutility.hpp"
 #include "remote/endpoint.hpp"
-#include "base/dynamicobject.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configobject.hpp"
+#include "base/configtype.hpp"
 #include "base/json.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
@@ -47,16 +47,19 @@ DbObject::DbObject(const intrusive_ptr<DbType>& type, const String& name1, const
 void DbObject::StaticInitialize(void)
 {
 	/* triggered in ProcessCheckResult(), requires UpdateNextCheck() to be called before */
-	DynamicObject::OnStateChanged.connect(boost::bind(&DbObject::StateChangedHandler, _1));
+	ConfigObject::OnStateChanged.connect(boost::bind(&DbObject::StateChangedHandler, _1));
 	CustomVarObject::OnVarsChanged.connect(boost::bind(&DbObject::VarsChangedHandler, _1));
+
+	/* triggered on create, update and delete objects */
+	ConfigObject::OnVersionChanged.connect(boost::bind(&DbObject::VersionChangedHandler, _1));
 }
 
-void DbObject::SetObject(const DynamicObject::Ptr& object)
+void DbObject::SetObject(const ConfigObject::Ptr& object)
 {
 	m_Object = object;
 }
 
-DynamicObject::Ptr DbObject::GetObject(void) const
+ConfigObject::Ptr DbObject::GetObject(void) const
 {
 	return m_Object;
 }
@@ -122,8 +125,8 @@ void DbObject::SendStatusUpdate(void)
 	query.Fields = fields;
 	query.Fields->Set(GetType()->GetIDColumn(), GetObject());
 
-	/* do not override our own endpoint dbobject id */
-	if (GetType()->GetTable() != "endpoint") {
+	/* do not override endpoint_object_id for endpoints & zones */
+	if (query.Table != "endpointstatus" && query.Table != "zonestatus") {
 		String node = IcingaApplication::GetInstance()->GetNodeName();
 
 		Log(LogDebug, "DbObject")
@@ -150,7 +153,7 @@ void DbObject::SendStatusUpdate(void)
 
 void DbObject::SendVarsConfigUpdate(void)
 {
-	DynamicObject::Ptr obj = GetObject();
+	ConfigObject::Ptr obj = GetObject();
 
 	CustomVarObject::Ptr custom_var_object = dynamic_pointer_cast<CustomVarObject>(obj);
 
@@ -178,18 +181,12 @@ void DbObject::SendVarsConfigUpdate(void)
 			} else
 				value = kv.second;
 
-			int overridden = custom_var_object->IsVarOverridden(kv.first) ? 1 : 0;
-
-			Log(LogDebug, "DbObject")
-			    << "object customvar key: '" << kv.first << "' value: '" << kv.second
-			    << "' overridden: " << overridden;
-
 			Dictionary::Ptr fields = new Dictionary();
 			fields->Set("varname", kv.first);
 			fields->Set("varvalue", value);
 			fields->Set("is_json", is_json);
 			fields->Set("config_type", 1);
-			fields->Set("has_been_modified", overridden);
+			fields->Set("session_token", 0); /* DbConnection class fills in real ID */
 			fields->Set("object_id", obj);
 			fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
@@ -211,7 +208,7 @@ void DbObject::SendVarsConfigUpdate(void)
 
 void DbObject::SendVarsStatusUpdate(void)
 {
-	DynamicObject::Ptr obj = GetObject();
+	ConfigObject::Ptr obj = GetObject();
 
 	CustomVarObject::Ptr custom_var_object = dynamic_pointer_cast<CustomVarObject>(obj);
 
@@ -239,18 +236,12 @@ void DbObject::SendVarsStatusUpdate(void)
 			} else
 				value = kv.second;
 
-			int overridden = custom_var_object->IsVarOverridden(kv.first) ? 1 : 0;
-
-			Log(LogDebug, "DbObject")
-			    << "object customvar key: '" << kv.first << "' value: '" << kv.second
-			    << "' overridden: " << overridden;
-
 			Dictionary::Ptr fields = new Dictionary();
 			fields->Set("varname", kv.first);
 			fields->Set("varvalue", value);
 			fields->Set("is_json", is_json);
-			fields->Set("has_been_modified", overridden);
 			fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
+			fields->Set("session_token", 0); /* DbConnection class fills in real ID */
 			fields->Set("object_id", obj);
 			fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
@@ -295,7 +286,7 @@ void DbObject::OnStatusUpdate(void)
 	/* Default handler does nothing. */
 }
 
-DbObject::Ptr DbObject::GetOrCreateByObject(const DynamicObject::Ptr& object)
+DbObject::Ptr DbObject::GetOrCreateByObject(const ConfigObject::Ptr& object)
 {
 	boost::mutex::scoped_lock lock(GetStaticMutex());
 
@@ -320,9 +311,9 @@ DbObject::Ptr DbObject::GetOrCreateByObject(const DynamicObject::Ptr& object)
 		name1 = service->GetHost()->GetName();
 		name2 = service->GetShortName();
 	} else {
-		if (object->GetType() == DynamicType::GetByName("CheckCommand") ||
-		    object->GetType() == DynamicType::GetByName("EventCommand") ||
-		    object->GetType() == DynamicType::GetByName("NotificationCommand")) {
+		if (object->GetType() == ConfigType::GetByName("CheckCommand") ||
+		    object->GetType() == ConfigType::GetByName("EventCommand") ||
+		    object->GetType() == ConfigType::GetByName("NotificationCommand")) {
 			Command::Ptr command = dynamic_pointer_cast<Command>(object);
 			name1 = CompatUtility::GetCommandName(command);
 		}
@@ -338,7 +329,7 @@ DbObject::Ptr DbObject::GetOrCreateByObject(const DynamicObject::Ptr& object)
 	return dbobj;
 }
 
-void DbObject::StateChangedHandler(const DynamicObject::Ptr& object)
+void DbObject::StateChangedHandler(const ConfigObject::Ptr& object)
 {
 	DbObject::Ptr dbobj = GetOrCreateByObject(object);
 
@@ -359,6 +350,16 @@ void DbObject::VarsChangedHandler(const CustomVarObject::Ptr& object)
 		return;
 
 	dbobj->SendVarsStatusUpdate();
+}
+
+void DbObject::VersionChangedHandler(const ConfigObject::Ptr& object)
+{
+	DbObject::Ptr dbobj = DbObject::GetOrCreateByObject(object);
+
+	if (dbobj) {
+		dbobj->SendConfigUpdate();
+		dbobj->SendStatusUpdate();
+	}
 }
 
 boost::mutex& DbObject::GetStaticMutex(void)

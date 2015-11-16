@@ -22,7 +22,7 @@
 #include "config/configitembuilder.hpp"
 #include "config/applyrule.hpp"
 #include "base/initialize.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/logger.hpp"
 #include "base/context.hpp"
 #include "base/workqueue.hpp"
@@ -55,22 +55,25 @@ bool Dependency::EvaluateApplyRuleInstance(const Checkable::Ptr& checkable, cons
 	builder->SetType("Dependency");
 	builder->SetName(name);
 	builder->SetScope(frame.Locals->ShallowClone());
+	builder->SetIgnoreOnError(rule.GetIgnoreOnError());
 
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "parent_host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
-	builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "child_host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "parent_host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "child_host_name"), OpSetLiteral, MakeLiteral(host->GetName()), di));
 
 	if (service)
-		builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "child_service_name"), OpSetLiteral, MakeLiteral(service->GetShortName()), di));
+		builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "child_service_name"), OpSetLiteral, MakeLiteral(service->GetShortName()), di));
 
 	String zone = checkable->GetZoneName();
 
 	if (!zone.IsEmpty())
-		builder->AddExpression(new SetExpression(MakeIndexer(ScopeCurrent, "zone"), OpSetLiteral, MakeLiteral(zone), di));
+		builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "zone"), OpSetLiteral, MakeLiteral(zone), di));
 
+	builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "package"), OpSetLiteral, MakeLiteral(rule.GetPackage()), di));
+	
 	builder->AddExpression(new OwnedExpression(rule.GetExpression()));
 
 	ConfigItem::Ptr dependencyItem = builder->Compile();

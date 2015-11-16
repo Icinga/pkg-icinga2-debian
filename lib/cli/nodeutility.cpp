@@ -271,23 +271,20 @@ int NodeUtility::GenerateNodeIcingaConfig(const std::vector<std::string>& endpoi
 		Dictionary::Ptr my_master_endpoint = new Dictionary();
 
 		if (tokens.size() > 1) {
-			String host = tokens[1];
-			host.Trim();
+			String host = tokens[1].Trim();
 
 			if (!host.IsEmpty())
 				my_master_endpoint->Set("host", host);
 		}
 
 		if (tokens.size() > 2) {
-			String port = tokens[2];
-			port.Trim();
+			String port = tokens[2].Trim();
 
 			if (!port.IsEmpty())
 				my_master_endpoint->Set("port", port);
 		}
 
-		String cn = tokens[0];
-		cn.Trim();
+		String cn = tokens[0].Trim();
 		my_master_endpoint->Set("__name", cn);
 		my_master_endpoint->Set("__type", "Endpoint");
 
@@ -317,7 +314,7 @@ int NodeUtility::GenerateNodeIcingaConfig(const std::vector<std::string>& endpoi
 	my_zone->Set("__name", zonename);
 	my_zone->Set("__type", "Zone");
 	my_zone->Set("parent", master_zone_name); //set the master zone as parent
-	my_zone->Set("//this is the local node", nodename);
+	my_zone->Set("// This is the local node", nodename);
 	my_zone->Set("endpoints", my_zone_members);
 
 	/* store the local config */
@@ -348,7 +345,7 @@ int NodeUtility::GenerateNodeMasterIcingaConfig(const String& nodename)
 
 	my_master_zone->Set("__name", "master");
 	my_master_zone->Set("__type", "Zone");
-	my_master_zone->Set("//this is the local node master named ", "master");
+	my_master_zone->Set("// This is the local master zone", "master");
 	my_master_zone->Set("endpoints", my_master_zone_members);
 
 	/* store the local config */

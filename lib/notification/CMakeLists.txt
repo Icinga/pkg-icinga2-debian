@@ -15,12 +15,10 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(notificationcomponent.ti notificationcomponent.thpp)
-
-mkembedconfig_target(notification-type.conf notification-type.cpp)
+mkclass_target(notificationcomponent.ti notificationcomponent.tcpp notificationcomponent.thpp)
 
 set(notification_SOURCES
-  notificationcomponent.cpp notificationcomponent.thpp notification-type.cpp
+  notificationcomponent.cpp notificationcomponent.thpp
 )
 
 if(ICINGA2_UNITY_BUILD)
@@ -34,6 +32,7 @@ target_link_libraries(notification ${Boost_LIBRARIES} base config icinga)
 set_target_properties (
   notification PROPERTIES
   INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
+  DEFINE_SYMBOL I2_NOTIFICATION_BUILD
   FOLDER Components
 )
 

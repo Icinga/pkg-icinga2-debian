@@ -24,7 +24,7 @@
 
 using namespace icinga;
 
-Value Empty;
+Value icinga::Empty;
 
 bool Value::ToBool(void) const
 {
@@ -71,7 +71,7 @@ String Value::GetTypeName(void) const
 		case ValueString:
 			return "String";
 		case ValueObject:
-			t = static_cast<Object::Ptr>(*this)->GetReflectionType();
+			t = boost::get<Object::Ptr>(m_Value)->GetReflectionType();
 			if (!t) {
 				if (IsObjectType<Array>())
 					return "Array";
@@ -90,7 +90,7 @@ Type::Ptr Value::GetReflectionType(void) const
 {
 	switch (GetType()) {
 		case ValueEmpty:
-			return Type::GetByName("Object");
+			return Object::TypeInstance;
 		case ValueNumber:
 			return Type::GetByName("Number");
 		case ValueBoolean:
@@ -98,9 +98,17 @@ Type::Ptr Value::GetReflectionType(void) const
 		case ValueString:
 			return Type::GetByName("String");
 		case ValueObject:
-			return static_cast<Object::Ptr>(*this)->GetReflectionType();
+			return boost::get<Object::Ptr>(m_Value)->GetReflectionType();
 		default:
 			return Type::Ptr();
 	}
+}
+
+Value Value::Clone(void) const
+{
+	if (IsObject())
+		return static_cast<Object::Ptr>(*this)->Clone();
+	else
+		return *this;
 }
 

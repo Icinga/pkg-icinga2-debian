@@ -18,6 +18,7 @@
  ******************************************************************************/
 
 #include "compat/statusdatawriter.hpp"
+#include "compat/statusdatawriter.tcpp"
 #include "icinga/icingaapplication.hpp"
 #include "icinga/cib.hpp"
 #include "icinga/hostgroup.hpp"
@@ -28,7 +29,7 @@
 #include "icinga/notificationcommand.hpp"
 #include "icinga/compatutility.hpp"
 #include "icinga/dependency.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/json.hpp"
 #include "base/convert.hpp"
@@ -47,13 +48,13 @@ using namespace icinga;
 
 REGISTER_TYPE(StatusDataWriter);
 
-REGISTER_STATSFUNCTION(StatusDataWriterStats, &StatusDataWriter::StatsFunc);
+REGISTER_STATSFUNCTION(StatusDataWriter, &StatusDataWriter::StatsFunc);
 
 void StatusDataWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const StatusDataWriter::Ptr& statusdatawriter, DynamicType::GetObjectsByType<StatusDataWriter>()) {
+	BOOST_FOREACH(const StatusDataWriter::Ptr& statusdatawriter, ConfigType::GetObjectsByType<StatusDataWriter>()) {
 		nodes->Set(statusdatawriter->GetName(), 1); //add more stats
 	}
 
@@ -69,9 +70,11 @@ void StatusDataWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr
 /**
  * Starts the component.
  */
-void StatusDataWriter::Start(void)
+void StatusDataWriter::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<StatusDataWriter>::Start(runtimeCreated);
+
+	m_ObjectsCacheOutdated = true;
 
 	m_StatusTimer = new Timer();
 	m_StatusTimer->SetInterval(GetUpdateInterval());
@@ -79,22 +82,17 @@ void StatusDataWriter::Start(void)
 	m_StatusTimer->Start();
 	m_StatusTimer->Reschedule(0);
 
-	Utility::QueueAsyncCallback(boost::bind(&StatusDataWriter::UpdateObjectsCache, this));
+	ConfigObject::OnVersionChanged.connect(boost::bind(&StatusDataWriter::ObjectHandler, this));
+	ConfigObject::OnActiveChanged.connect(boost::bind(&StatusDataWriter::ObjectHandler, this));
 }
 
 void StatusDataWriter::DumpComments(std::ostream& fp, const Checkable::Ptr& checkable)
 {
-	Dictionary::Ptr comments = checkable->GetComments();
-
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	ObjectLock olock(comments);
-
-	BOOST_FOREACH(const Dictionary::Pair& kv, comments) {
-		Comment::Ptr comment = kv.second;
-
+	BOOST_FOREACH(const Comment::Ptr& comment, checkable->GetComments()) {
 		if (comment->IsExpired())
 			continue;
 
@@ -156,17 +154,11 @@ void StatusDataWriter::DumpCommand(std::ostream& fp, const Command::Ptr& command
 
 void StatusDataWriter::DumpDowntimes(std::ostream& fp, const Checkable::Ptr& checkable)
 {
-	Dictionary::Ptr downtimes = checkable->GetDowntimes();
-
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
 
-	ObjectLock olock(downtimes);
-
-	BOOST_FOREACH(const Dictionary::Pair& kv, downtimes) {
-		Downtime::Ptr downtime = kv.second;
-
+	BOOST_FOREACH(const Downtime::Ptr& downtime, checkable->GetDowntimes()) {
 		if (downtime->IsExpired())
 			continue;
 
@@ -176,7 +168,7 @@ void StatusDataWriter::DumpDowntimes(std::ostream& fp, const Checkable::Ptr& che
 		else
 			fp << "hostdowntime {" "\n";
 
-		Downtime::Ptr triggeredByObj = Service::GetDowntimeByID(downtime->GetTriggeredBy());
+		Downtime::Ptr triggeredByObj = Downtime::GetByName(downtime->GetTriggeredBy());
 		int triggeredByLegacy = 0;
 		if (triggeredByObj)
 			triggeredByLegacy = triggeredByObj->GetLegacyId();
@@ -352,11 +344,17 @@ void StatusDataWriter::DumpCheckableStatusAttrs(std::ostream& fp, const Checkabl
 	tie(host, service) = GetHostService(checkable);
 
 	if (service) {
-		fp << "\t" << "current_state=" << service->GetState() << "\n"
-		   << "\t" << "last_hard_state=" << service->GetLastHardState() << "\n";
+		fp << "\t" "current_state=" << service->GetState() << "\n"
+		      "\t" "last_hard_state=" << service->GetLastHardState() << "\n"
+		      "\t" "last_time_ok=" << static_cast<int>(service->GetLastStateOK()) << "\n"
+		      "\t" "last_time_warn=" << static_cast<int>(service->GetLastStateWarning()) << "\n"
+		      "\t" "last_time_critical=" << static_cast<int>(service->GetLastStateCritical()) << "\n"
+		      "\t" "last_time_unknown=" << static_cast<int>(service->GetLastStateUnknown()) << "\n";
 	} else {
-		fp << "\t" << "current_state=" << CompatUtility::GetHostCurrentState(host) << "\n"
-		   << "\t" << "last_hard_state=" << host->GetLastHardState() << "\n";
+		fp << "\t" "current_state=" << CompatUtility::GetHostCurrentState(host) << "\n"
+		      "\t" "last_hard_state=" << host->GetLastHardState() << "\n"
+		      "\t" "last_time_up=" << static_cast<int>(host->GetLastStateUp()) << "\n"
+		      "\t" "last_time_down=" << static_cast<int>(host->GetLastStateDown()) << "\n";
 	}
 
 	fp << "\t" "state_type=" << checkable->GetStateType() << "\n"
@@ -374,10 +372,6 @@ void StatusDataWriter::DumpCheckableStatusAttrs(std::ostream& fp, const Checkabl
 	      "\t" "max_attempts=" << checkable->GetMaxCheckAttempts() << "\n"
 	      "\t" "last_state_change=" << static_cast<long>(checkable->GetLastStateChange()) << "\n"
 	      "\t" "last_hard_state_change=" << static_cast<long>(checkable->GetLastHardStateChange()) << "\n"
-	      "\t" "last_time_ok=" << static_cast<int>(checkable->GetLastStateOK()) << "\n"
-	      "\t" "last_time_warn=" << static_cast<int>(checkable->GetLastStateWarning()) << "\n"
-	      "\t" "last_time_critical=" << static_cast<int>(checkable->GetLastStateCritical()) << "\n"
-	      "\t" "last_time_unknown=" << static_cast<int>(checkable->GetLastStateUnknown()) << "\n"
 	      "\t" "last_update=" << static_cast<long>(time(NULL)) << "\n"
 	      "\t" "notifications_enabled=" << CompatUtility::GetCheckableNotificationsEnabled(checkable) << "\n"
 	      "\t" "active_checks_enabled=" << CompatUtility::GetCheckableActiveChecksEnabled(checkable) << "\n"
@@ -392,7 +386,6 @@ void StatusDataWriter::DumpCheckableStatusAttrs(std::ostream& fp, const Checkabl
 	      "\t" "last_notification=" << CompatUtility::GetCheckableNotificationLastNotification(checkable) << "\n"
 	      "\t" "next_notification=" << CompatUtility::GetCheckableNotificationNextNotification(checkable) << "\n"
 	      "\t" "current_notification_number=" << CompatUtility::GetCheckableNotificationNotificationNumber(checkable) << "\n"
-	      "\t" "modified_attributes=" << checkable->GetModifiedAttributes() << "\n"
 	      "\t" "is_reachable=" << CompatUtility::GetCheckableIsReachable(checkable) << "\n";
 }
 
@@ -555,7 +548,7 @@ void StatusDataWriter::UpdateObjectsCache(void)
 		    "# This file is auto-generated. Do not modify this file." "\n"
 		    "\n";
 
-	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
+	BOOST_FOREACH(const Host::Ptr& host, ConfigType::GetObjectsByType<Host>()) {
 		std::ostringstream tempobjectfp;
 		tempobjectfp << std::fixed;
 		DumpHostObject(tempobjectfp, host);
@@ -569,7 +562,7 @@ void StatusDataWriter::UpdateObjectsCache(void)
 		}
 	}
 
-	BOOST_FOREACH(const HostGroup::Ptr& hg, DynamicType::GetObjectsByType<HostGroup>()) {
+	BOOST_FOREACH(const HostGroup::Ptr& hg, ConfigType::GetObjectsByType<HostGroup>()) {
 		std::ostringstream tempobjectfp;
 		tempobjectfp << std::fixed;
 
@@ -600,7 +593,7 @@ void StatusDataWriter::UpdateObjectsCache(void)
 		objectfp << tempobjectfp.str();
 	}
 
-	BOOST_FOREACH(const ServiceGroup::Ptr& sg, DynamicType::GetObjectsByType<ServiceGroup>()) {
+	BOOST_FOREACH(const ServiceGroup::Ptr& sg, ConfigType::GetObjectsByType<ServiceGroup>()) {
 		std::ostringstream tempobjectfp;
 		tempobjectfp << std::fixed;
 
@@ -641,7 +634,7 @@ void StatusDataWriter::UpdateObjectsCache(void)
 		objectfp << tempobjectfp.str();
 	}
 
-	BOOST_FOREACH(const User::Ptr& user, DynamicType::GetObjectsByType<User>()) {
+	BOOST_FOREACH(const User::Ptr& user, ConfigType::GetObjectsByType<User>()) {
 		std::ostringstream tempobjectfp;
 		tempobjectfp << std::fixed;
 
@@ -669,7 +662,7 @@ void StatusDataWriter::UpdateObjectsCache(void)
 		objectfp << tempobjectfp.str();
 	}
 
-	BOOST_FOREACH(const UserGroup::Ptr& ug, DynamicType::GetObjectsByType<UserGroup>()) {
+	BOOST_FOREACH(const UserGroup::Ptr& ug, ConfigType::GetObjectsByType<UserGroup>()) {
 		std::ostringstream tempobjectfp;
 		tempobjectfp << std::fixed;
 
@@ -685,23 +678,23 @@ void StatusDataWriter::UpdateObjectsCache(void)
 		objectfp << tempobjectfp.str();
 	}
 
-	BOOST_FOREACH(const Command::Ptr& command, DynamicType::GetObjectsByType<CheckCommand>()) {
+	BOOST_FOREACH(const Command::Ptr& command, ConfigType::GetObjectsByType<CheckCommand>()) {
 		DumpCommand(objectfp, command);
 	}
 
-	BOOST_FOREACH(const Command::Ptr& command, DynamicType::GetObjectsByType<NotificationCommand>()) {
+	BOOST_FOREACH(const Command::Ptr& command, ConfigType::GetObjectsByType<NotificationCommand>()) {
 		DumpCommand(objectfp, command);
 	}
 
-	BOOST_FOREACH(const Command::Ptr& command, DynamicType::GetObjectsByType<EventCommand>()) {
+	BOOST_FOREACH(const Command::Ptr& command, ConfigType::GetObjectsByType<EventCommand>()) {
 		DumpCommand(objectfp, command);
 	}
 
-	BOOST_FOREACH(const TimePeriod::Ptr& tp, DynamicType::GetObjectsByType<TimePeriod>()) {
+	BOOST_FOREACH(const TimePeriod::Ptr& tp, ConfigType::GetObjectsByType<TimePeriod>()) {
 		DumpTimePeriod(objectfp, tp);
 	}
 
-	BOOST_FOREACH(const Dependency::Ptr& dep, DynamicType::GetObjectsByType<Dependency>()) {
+	BOOST_FOREACH(const Dependency::Ptr& dep, ConfigType::GetObjectsByType<Dependency>()) {
 		Checkable::Ptr parent = dep->GetParent();
 
 		if (!parent) {
@@ -783,6 +776,11 @@ void StatusDataWriter::UpdateObjectsCache(void)
  */
 void StatusDataWriter::StatusTimerHandler(void)
 {
+	if (m_ObjectsCacheOutdated) {
+		UpdateObjectsCache();
+		m_ObjectsCacheOutdated = false;
+	}
+
 	double start = Utility::GetTime();
 
 	String statuspath = GetStatusPath();
@@ -799,7 +797,7 @@ void StatusDataWriter::StatusTimerHandler(void)
 
 	statusfp << "info {" "\n"
 		    "\t" "created=" << Utility::GetTime() << "\n"
-		    "\t" "version=" << Application::GetVersion() << "\n"
+		    "\t" "version=" << Application::GetAppVersion() << "\n"
 		    "\t" "}" "\n"
 		    "\n";
 
@@ -822,13 +820,13 @@ void StatusDataWriter::StatusTimerHandler(void)
 		    "\t" "passive_host_check_stats=" << CIB::GetPassiveHostChecksStatistics(60) << "," << CIB::GetPassiveHostChecksStatistics(5 * 60) << "," << CIB::GetPassiveHostChecksStatistics(15 * 60) << "\n"
 		    "\t" "active_scheduled_service_check_stats=" << CIB::GetActiveServiceChecksStatistics(60) << "," << CIB::GetActiveServiceChecksStatistics(5 * 60) << "," << CIB::GetActiveServiceChecksStatistics(15 * 60) << "\n"
 		    "\t" "passive_service_check_stats=" << CIB::GetPassiveServiceChecksStatistics(60) << "," << CIB::GetPassiveServiceChecksStatistics(5 * 60) << "," << CIB::GetPassiveServiceChecksStatistics(15 * 60) << "\n"
-		    "\t" "next_downtime_id=" << Service::GetNextDowntimeID() << "\n"
-		    "\t" "next_comment_id=" << Service::GetNextCommentID() << "\n";
+		    "\t" "next_downtime_id=" << Downtime::GetNextDowntimeID() << "\n"
+		    "\t" "next_comment_id=" << Comment::GetNextCommentID() << "\n";
 
 	statusfp << "\t" "}" "\n"
 		    "\n";
 
-	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
+	BOOST_FOREACH(const Host::Ptr& host, ConfigType::GetObjectsByType<Host>()) {
 		std::ostringstream tempstatusfp;
 		tempstatusfp << std::fixed;
 		DumpHostStatus(tempstatusfp, host);
@@ -857,4 +855,9 @@ void StatusDataWriter::StatusTimerHandler(void)
 
 	Log(LogNotice, "StatusDataWriter")
 	    << "Writing status.dat file took " << Utility::FormatDuration(Utility::GetTime() - start);
+}
+
+void StatusDataWriter::ObjectHandler(void)
+{
+	m_ObjectsCacheOutdated = true;
 }

@@ -23,7 +23,7 @@
 #include "icinga/icingaapplication.hpp"
 #include "base/objectlock.hpp"
 #include "base/initialize.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/utility.hpp"
 #include "base/convert.hpp"
 #include "base/logger.hpp"
@@ -53,6 +53,7 @@ Dictionary::Ptr EndpointDbObject::GetConfigFields(void) const
 
 	fields->Set("identity", endpoint->GetName());
 	fields->Set("node", IcingaApplication::GetInstance()->GetNodeName());
+	fields->Set("zone_object_id", endpoint->GetZone());
 
 	return fields;
 }
@@ -67,6 +68,7 @@ Dictionary::Ptr EndpointDbObject::GetStatusFields(void) const
 
 	fields->Set("identity", endpoint->GetName());
 	fields->Set("node", IcingaApplication::GetInstance()->GetNodeName());
+	fields->Set("zone_object_id", endpoint->GetZone());
 	fields->Set("is_connected", EndpointIsConnected(endpoint));
 
 	return fields;
@@ -98,7 +100,7 @@ void EndpointDbObject::UpdateConnectedStatus(const Endpoint::Ptr& endpoint)
 
 int EndpointDbObject::EndpointIsConnected(const Endpoint::Ptr& endpoint)
 {
-	unsigned int is_connected = endpoint->IsConnected() ? 1 : 0;
+	unsigned int is_connected = endpoint->GetConnected() ? 1 : 0;
 
 	/* if identity is equal to node, fake is_connected */
 	if (endpoint->GetName() == IcingaApplication::GetInstance()->GetNodeName())

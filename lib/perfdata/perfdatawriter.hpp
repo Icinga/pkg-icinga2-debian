@@ -22,7 +22,7 @@
 
 #include "perfdata/perfdatawriter.thpp"
 #include "icinga/service.hpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "base/timer.hpp"
 #include <fstream>
 
@@ -42,10 +42,11 @@ public:
 
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
-	static void ValidateFormatTemplates(const String& location, const PerfdataWriter::Ptr& object);
+	virtual void ValidateHostFormatTemplate(const String& value, const ValidationUtils& utils) override;
+	virtual void ValidateServiceFormatTemplate(const String& value, const ValidationUtils& utils) override;
 
 protected:
-	virtual void Start(void);
+	virtual void Start(bool runtimeCreated) override;
 
 private:
 	void CheckResultHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr);

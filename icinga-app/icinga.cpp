@@ -25,6 +25,7 @@
 #include "base/logger.hpp"
 #include "base/timer.hpp"
 #include "base/utility.hpp"
+#include "base/loader.hpp"
 #include "base/exception.hpp"
 #include "base/convert.hpp"
 #include "base/scriptglobal.hpp"
@@ -162,15 +163,23 @@ int Main(void)
 #endif /* _WIN32 */
 
 	Application::DeclareZonesDir(Application::GetSysconfDir() + "/icinga2/zones.d");
-	Application::DeclareApplicationType("icinga/IcingaApplication");
 	Application::DeclareRunAsUser(ICINGA_USER);
 	Application::DeclareRunAsGroup(ICINGA_GROUP);
 	Application::DeclareConcurrency(boost::thread::hardware_concurrency());
 
+	if (!ScriptGlobal::Exists("UseVfork"))
+#ifdef __APPLE__
+		ScriptGlobal::Set("UseVfork", false);
+#else /* __APPLE__ */
+		ScriptGlobal::Set("UseVfork", true);
+#endif /* __APPLE__ */
+
+	ScriptGlobal::Set("AttachDebugger", false);
+
 	LogSeverity logLevel = Logger::GetConsoleLogSeverity();
 	Logger::SetConsoleLogSeverity(LogWarning);
 
-	Utility::LoadExtensionLibrary("cli");
+	Loader::LoadExtensionLibrary("cli");
 
 	po::options_description visibleDesc("Global options");
 
@@ -181,9 +190,12 @@ int Main(void)
 		("color", "use VT100 color codes even when stdout is not a terminal")
 #endif /* _WIN32 */
 		("define,D", po::value<std::vector<std::string> >(), "define a constant")
+		("app,a", po::value<std::string>(), "application library name (default: icinga)")
 		("library,l", po::value<std::vector<std::string> >(), "load a library")
 		("include,I", po::value<std::vector<std::string> >(), "add include search directory")
-		("log-level,x", po::value<std::string>(), "specify the log level for the console log");
+		("log-level,x", po::value<std::string>(), "specify the log level for the console log.\n"
+		    "The valid value is either debug, notice, information (default), warning, or critical")
+		("script-debugger,X", "whether to enable the script debugger");
 
 	po::options_description hiddenDesc("Hidden options");
 
@@ -252,7 +264,11 @@ int Main(void)
 		}
 	}
 
+	if (vm.count("script-debugger"))
+		Application::SetScriptDebuggerEnabled(true);
+
 	Application::DeclareStatePath(Application::GetLocalStateDir() + "/lib/icinga2/icinga2.state");
+	Application::DeclareModAttrPath(Application::GetLocalStateDir() + "/lib/icinga2/modified-attributes.conf");
 	Application::DeclareObjectsPath(Application::GetLocalStateDir() + "/cache/icinga2/icinga2.debug");
 	Application::DeclareVarsPath(Application::GetLocalStateDir() + "/cache/icinga2/icinga2.vars");
 	Application::DeclarePidPath(Application::GetRunDir() + "/icinga2/icinga2.pid");
@@ -286,7 +302,7 @@ int Main(void)
 		if (vm.count("library")) {
 			BOOST_FOREACH(const String& libraryName, vm["library"].as<std::vector<std::string> >()) {
 				try {
-					(void) Utility::LoadExtensionLibrary(libraryName);
+					(void) Loader::LoadExtensionLibrary(libraryName);
 				} catch (const std::exception& ex) {
 					Log(LogCritical, "icinga-app")
 					    <<  "Could not load library \"" << libraryName << "\": " << DiagnosticInformation(ex);
@@ -310,7 +326,7 @@ int Main(void)
 
 			std::cout << appName << " " << "- The Icinga 2 network monitoring daemon (version: "
 			    << ConsoleColorTag(vm.count("version") ? Console_ForegroundRed : Console_Normal)
-			    << Application::GetVersion()
+			    << Application::GetAppVersion()
 #ifdef I2_DEBUG
 			    << "; debug"
 #endif /* I2_DEBUG */
@@ -465,6 +481,16 @@ int Main(void)
 			    << " argument" << (command->GetMaxArguments() != 1 ? "s" : "") << " may be specified.";
 			return EXIT_FAILURE;
 		}
+
+		LogSeverity logLevel = Logger::GetConsoleLogSeverity();
+		Logger::SetConsoleLogSeverity(LogWarning);
+
+		if (vm.count("app"))
+			Loader::LoadExtensionLibrary(vm["app"].as<std::string>());
+		else
+			Loader::LoadExtensionLibrary("icinga");
+
+		Logger::SetConsoleLogSeverity(logLevel);
 
 		rc = command->Run(vm, args);
 	}

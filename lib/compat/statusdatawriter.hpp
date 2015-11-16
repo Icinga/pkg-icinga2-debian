@@ -47,10 +47,11 @@ public:
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
 protected:
-	virtual void Start(void);
+	virtual void Start(bool runtimeCreated) override;
 
 private:
 	Timer::Ptr m_StatusTimer;
+	bool m_ObjectsCacheOutdated;
 
 	void DumpCommand(std::ostream& fp, const Command::Ptr& command);
 	void DumpTimePeriod(std::ostream& fp, const TimePeriod::Ptr& tp);
@@ -99,6 +100,7 @@ private:
 
 	void UpdateObjectsCache(void);
 	void StatusTimerHandler(void);
+	void ObjectHandler(void);
 };
 
 }

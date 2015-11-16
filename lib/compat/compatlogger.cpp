@@ -18,6 +18,7 @@
  ******************************************************************************/
 
 #include "compat/compatlogger.hpp"
+#include "compat/compatlogger.tcpp"
 #include "icinga/service.hpp"
 #include "icinga/checkcommand.hpp"
 #include "icinga/eventcommand.hpp"
@@ -25,14 +26,13 @@
 #include "icinga/macroprocessor.hpp"
 #include "icinga/externalcommandprocessor.hpp"
 #include "icinga/compatutility.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
 #include "base/convert.hpp"
 #include "base/application.hpp"
 #include "base/utility.hpp"
-#include "base/function.hpp"
 #include "base/statsfunction.hpp"
 #include <boost/foreach.hpp>
 #include <boost/algorithm/string.hpp>
@@ -40,15 +40,14 @@
 using namespace icinga;
 
 REGISTER_TYPE(CompatLogger);
-REGISTER_SCRIPTFUNCTION(ValidateRotationMethod, &CompatLogger::ValidateRotationMethod);
 
-REGISTER_STATSFUNCTION(CompatLoggerStats, &CompatLogger::StatsFunc);
+REGISTER_STATSFUNCTION(CompatLogger, &CompatLogger::StatsFunc);
 
 void CompatLogger::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const CompatLogger::Ptr& compat_logger, DynamicType::GetObjectsByType<CompatLogger>()) {
+	BOOST_FOREACH(const CompatLogger::Ptr& compat_logger, ConfigType::GetObjectsByType<CompatLogger>()) {
 		nodes->Set(compat_logger->GetName(), 1); //add more stats
 	}
 
@@ -58,16 +57,19 @@ void CompatLogger::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 /**
  * @threadsafety Always.
  */
-void CompatLogger::Start(void)
+void CompatLogger::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<CompatLogger>::Start(runtimeCreated);
 
 	Checkable::OnNewCheckResult.connect(bind(&CompatLogger::CheckResultHandler, this, _1, _2));
 	Checkable::OnNotificationSentToUser.connect(bind(&CompatLogger::NotificationSentHandler, this, _1, _2, _3, _4, _5, _6, _7, _8));
-	Checkable::OnFlappingChanged.connect(bind(&CompatLogger::FlappingHandler, this, _1, _2));
-	Checkable::OnDowntimeTriggered.connect(boost::bind(&CompatLogger::TriggerDowntimeHandler, this, _1, _2));
-	Checkable::OnDowntimeRemoved.connect(boost::bind(&CompatLogger::RemoveDowntimeHandler, this, _1, _2));
+	Downtime::OnDowntimeTriggered.connect(boost::bind(&CompatLogger::TriggerDowntimeHandler, this, _1));
+	Downtime::OnDowntimeRemoved.connect(boost::bind(&CompatLogger::RemoveDowntimeHandler, this, _1));
 	Checkable::OnEventCommandExecuted.connect(bind(&CompatLogger::EventCommandHandler, this, _1));
+	
+	Checkable::OnFlappingChanged.connect(boost::bind(&CompatLogger::FlappingChangedHandler, this, _1));
+	Checkable::OnEnableFlappingChanged.connect(boost::bind(&CompatLogger::EnableFlappingChangedHandler, this, _1));
+	
 	ExternalCommandProcessor::OnNewExternalCommand.connect(boost::bind(&CompatLogger::ExternalCommandHandler, this, _2, _3));
 
 	m_RotationTimer = new Timer();
@@ -145,11 +147,11 @@ void CompatLogger::CheckResultHandler(const Checkable::Ptr& checkable, const Che
 /**
  * @threadsafety Always.
  */
-void CompatLogger::TriggerDowntimeHandler(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime)
+void CompatLogger::TriggerDowntimeHandler(const Downtime::Ptr& downtime)
 {
 	Host::Ptr host;
 	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
+	tie(host, service) = GetHostService(downtime->GetCheckable());
 
 	if (!downtime)
 		return;
@@ -181,11 +183,11 @@ void CompatLogger::TriggerDowntimeHandler(const Checkable::Ptr& checkable, const
 /**
  * @threadsafety Always.
  */
-void CompatLogger::RemoveDowntimeHandler(const Checkable::Ptr& checkable, const Downtime::Ptr& downtime)
+void CompatLogger::RemoveDowntimeHandler(const Downtime::Ptr& downtime)
 {
 	Host::Ptr host;
 	Service::Ptr service;
-	tie(host, service) = GetHostService(checkable);
+	tie(host, service) = GetHostService(downtime->GetCheckable());
 
 	if (!downtime)
 		return;
@@ -292,7 +294,7 @@ void CompatLogger::NotificationSentHandler(const Notification::Ptr& notification
 /**
  * @threadsafety Always.
  */
-void CompatLogger::FlappingHandler(const Checkable::Ptr& checkable, FlappingState flapping_state)
+void CompatLogger::FlappingChangedHandler(const Checkable::Ptr& checkable)
 {
 	Host::Ptr host;
 	Service::Ptr service;
@@ -300,25 +302,50 @@ void CompatLogger::FlappingHandler(const Checkable::Ptr& checkable, FlappingStat
 
 	String flapping_state_str;
 	String flapping_output;
-
-	switch (flapping_state) {
-		case FlappingStarted:
-			flapping_output = "Checkable appears to have started flapping (" + Convert::ToString(checkable->GetFlappingCurrent()) + "% change >= " + Convert::ToString(checkable->GetFlappingThreshold()) + "% threshold)";
-			flapping_state_str = "STARTED";
-			break;
-		case FlappingStopped:
-			flapping_output = "Checkable appears to have stopped flapping (" + Convert::ToString(checkable->GetFlappingCurrent()) + "% change < " + Convert::ToString(checkable->GetFlappingThreshold()) + "% threshold)";
-			flapping_state_str = "STOPPED";
-			break;
-		case FlappingDisabled:
-			flapping_output = "Flap detection has been disabled";
-			flapping_state_str = "DISABLED";
-			break;
-		default:
-			Log(LogCritical, "CompatLogger")
-			    << "Unknown flapping state: " << flapping_state;
-			return;
+	
+	if (checkable->IsFlapping()) {
+		flapping_output = "Checkable appears to have started flapping (" + Convert::ToString(checkable->GetFlappingCurrent()) + "% change >= " + Convert::ToString(checkable->GetFlappingThreshold()) + "% threshold)";
+		flapping_state_str = "STARTED";
+	} else {
+		flapping_output = "Checkable appears to have stopped flapping (" + Convert::ToString(checkable->GetFlappingCurrent()) + "% change < " + Convert::ToString(checkable->GetFlappingThreshold()) + "% threshold)";
+		flapping_state_str = "STOPPED";
 	}
+
+	std::ostringstream msgbuf;
+
+	if (service) {
+		msgbuf << "SERVICE FLAPPING ALERT: "
+			<< host->GetName() << ";"
+			<< service->GetShortName() << ";"
+			<< flapping_state_str << "; "
+			<< flapping_output
+			<< "";
+	} else {
+		msgbuf << "HOST FLAPPING ALERT: "
+			<< host->GetName() << ";"
+			<< flapping_state_str << "; "
+			<< flapping_output
+			<< "";
+	}
+
+	{
+		ObjectLock oLock(this);
+		WriteLine(msgbuf.str());
+		Flush();
+	}
+}
+
+void CompatLogger::EnableFlappingChangedHandler(const Checkable::Ptr& checkable)
+{
+	Host::Ptr host;
+	Service::Ptr service;
+	tie(host, service) = GetHostService(checkable);
+
+	if (checkable->GetEnableFlapping())
+		return;
+		
+	String flapping_output = "Flap detection has been disabled";
+	String flapping_state_str = "DISABLED";
 
 	std::ostringstream msgbuf;
 
@@ -449,7 +476,7 @@ void CompatLogger::ReopenFile(bool rotate)
 	WriteLine("LOG ROTATION: " + GetRotationMethod());
 	WriteLine("LOG VERSION: 2.0");
 
-	BOOST_FOREACH(const Host::Ptr& host, DynamicType::GetObjectsByType<Host>()) {
+	BOOST_FOREACH(const Host::Ptr& host, ConfigType::GetObjectsByType<Host>()) {
 		String output;
 		CheckResult::Ptr cr = host->GetLastCheckResult();
 
@@ -467,7 +494,7 @@ void CompatLogger::ReopenFile(bool rotate)
 		WriteLine(msgbuf.str());
 	}
 
-	BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjectsByType<Service>()) {
+	BOOST_FOREACH(const Service::Ptr& service, ConfigType::GetObjectsByType<Service>()) {
 		Host::Ptr host = service->GetHost();
 
 		String output;
@@ -558,14 +585,12 @@ void CompatLogger::RotationTimerHandler(void)
 	ScheduleNextRotation();
 }
 
-void CompatLogger::ValidateRotationMethod(const String& location, const CompatLogger::Ptr& object)
+void CompatLogger::ValidateRotationMethod(const String& value, const ValidationUtils& utils)
 {
-	String rotation_method = object->GetRotationMethod();
+	ObjectImpl<CompatLogger>::ValidateRotationMethod(value, utils);
 
-	if (rotation_method != "HOURLY" && rotation_method != "DAILY" &&
-	    rotation_method != "WEEKLY" && rotation_method != "MONTHLY" && rotation_method != "NONE") {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": Rotation method '" + rotation_method + "' is invalid.", object->GetDebugInfo()));
+	if (value != "HOURLY" && value != "DAILY" &&
+	    value != "WEEKLY" && value != "MONTHLY" && value != "NONE") {
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("rotation_method"), "Rotation method '" + value + "' is invalid."));
 	}
 }
-

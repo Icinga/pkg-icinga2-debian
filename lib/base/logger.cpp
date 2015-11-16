@@ -17,10 +17,11 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
+#include "base/logger.hpp"
+#include "base/logger.tcpp"
 #include "base/application.hpp"
 #include "base/streamlogger.hpp"
-#include "base/logger.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/utility.hpp"
 #include "base/objectlock.hpp"
 #include "base/context.hpp"
@@ -51,22 +52,22 @@ void Logger::StaticInitialize(void)
 /**
  * Constructor for the Logger class.
  */
-void Logger::Start(void)
+void Logger::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<Logger>::Start(runtimeCreated);
 
 	boost::mutex::scoped_lock lock(m_Mutex);
 	m_Loggers.insert(this);
 }
 
-void Logger::Stop(void)
+void Logger::Stop(bool runtimeRemoved)
 {
 	{
 		boost::mutex::scoped_lock lock(m_Mutex);
 		m_Loggers.erase(this);
 	}
 
-	DynamicObject::Stop();
+	ObjectImpl<Logger>::Stop(runtimeRemoved);
 }
 
 std::set<Logger::Ptr> Logger::GetLoggers(void)

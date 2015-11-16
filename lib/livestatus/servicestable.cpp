@@ -31,7 +31,7 @@
 #include "icinga/macroprocessor.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "icinga/compatutility.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/json.hpp"
 #include "base/convert.hpp"
@@ -108,8 +108,8 @@ void ServicesTable::AddColumns(Table *table, const String& prefix,
 	table->AddColumn(prefix + "flap_detection_enabled", Column(&ServicesTable::FlapDetectionEnabledAccessor, objectAccessor));
 	table->AddColumn(prefix + "check_freshness", Column(&ServicesTable::CheckFreshnessAccessor, objectAccessor));
 	table->AddColumn(prefix + "obsess_over_service", Column(&Table::ZeroAccessor, objectAccessor));
-	table->AddColumn(prefix + "modified_attributes", Column(&ServicesTable::ModifiedAttributesAccessor, objectAccessor));
-	table->AddColumn(prefix + "modified_attributes_list", Column(&ServicesTable::ModifiedAttributesListAccessor, objectAccessor));
+	table->AddColumn(prefix + "modified_attributes", Column(&Table::ZeroAccessor, objectAccessor));
+	table->AddColumn(prefix + "modified_attributes_list", Column(&Table::ZeroAccessor, objectAccessor));
 	table->AddColumn(prefix + "pnpgraph_present", Column(&Table::ZeroAccessor, objectAccessor));
 	table->AddColumn(prefix + "staleness", Column(&ServicesTable::StalenessAccessor, objectAccessor));
 	table->AddColumn(prefix + "check_interval", Column(&ServicesTable::CheckIntervalAccessor, objectAccessor));
@@ -137,6 +137,7 @@ void ServicesTable::AddColumns(Table *table, const String& prefix,
 	table->AddColumn(prefix + "check_source", Column(&ServicesTable::CheckSourceAccessor, objectAccessor));
 	table->AddColumn(prefix + "is_reachable", Column(&ServicesTable::IsReachableAccessor, objectAccessor));
 	table->AddColumn(prefix + "cv_is_json", Column(&ServicesTable::CVIsJsonAccessor, objectAccessor));
+	table->AddColumn(prefix + "original_attributes", Column(&ServicesTable::OriginalAttributesAccessor, objectAccessor));
 
 	HostsTable::AddColumns(table, "host_", boost::bind(&ServicesTable::HostAccessor, _1, objectAccessor));
 
@@ -167,7 +168,7 @@ String ServicesTable::GetPrefix(void) const
 void ServicesTable::FetchRows(const AddRowFunction& addRowFn)
 {
 	if (GetGroupByType() == LivestatusGroupByServiceGroup) {
-		BOOST_FOREACH(const ServiceGroup::Ptr& sg, DynamicType::GetObjectsByType<ServiceGroup>()) {
+		BOOST_FOREACH(const ServiceGroup::Ptr& sg, ConfigType::GetObjectsByType<ServiceGroup>()) {
 			BOOST_FOREACH(const Service::Ptr& service, sg->GetMembers()) {
 				/* the caller must know which groupby type and value are set for this row */
 				if (!addRowFn(service, LivestatusGroupByServiceGroup, sg))
@@ -175,7 +176,7 @@ void ServicesTable::FetchRows(const AddRowFunction& addRowFn)
 			}
 		}
 	} else if (GetGroupByType() == LivestatusGroupByHostGroup) {
-		BOOST_FOREACH(const HostGroup::Ptr& hg, DynamicType::GetObjectsByType<HostGroup>()) {
+		BOOST_FOREACH(const HostGroup::Ptr& hg, ConfigType::GetObjectsByType<HostGroup>()) {
 			ObjectLock ylock(hg);
 			BOOST_FOREACH(const Host::Ptr& host, hg->GetMembers()) {
 				ObjectLock ylock(host);
@@ -187,7 +188,7 @@ void ServicesTable::FetchRows(const AddRowFunction& addRowFn)
 			}
 		}
 	} else {
-		BOOST_FOREACH(const Service::Ptr& service, DynamicType::GetObjectsByType<Service>()) {
+		BOOST_FOREACH(const Service::Ptr& service, ConfigType::GetObjectsByType<Service>()) {
 			if (!addRowFn(service, LivestatusGroupByNone, Empty))
 				return;
 		}
@@ -806,26 +807,6 @@ Value ServicesTable::CheckFreshnessAccessor(const Value& row)
 	return CompatUtility::GetCheckableFreshnessChecksEnabled(service);
 }
 
-Value ServicesTable::ModifiedAttributesAccessor(const Value& row)
-{
-	Service::Ptr service = static_cast<Service::Ptr>(row);
-
-	if (!service)
-		return Empty;
-
-	return service->GetModifiedAttributes();
-}
-
-Value ServicesTable::ModifiedAttributesListAccessor(const Value& row)
-{
-	Service::Ptr service = static_cast<Service::Ptr>(row);
-
-	if (!service)
-		return Empty;
-
-	return CompatUtility::GetModifiedAttributesList(service);
-}
-
 Value ServicesTable::StalenessAccessor(const Value& row)
 {
 	Service::Ptr service = static_cast<Service::Ptr>(row);
@@ -959,26 +940,16 @@ Value ServicesTable::DowntimesAccessor(const Value& row)
 	if (!service)
 		return Empty;
 
-	Dictionary::Ptr downtimes = service->GetDowntimes();
+	Array::Ptr results = new Array();
 
-	Array::Ptr ids = new Array();
-
-	ObjectLock olock(downtimes);
-
-	String id;
-	Downtime::Ptr downtime;
-	BOOST_FOREACH(tie(id, downtime), downtimes) {
-
-		if (!downtime)
-			continue;
-
+	BOOST_FOREACH(const Downtime::Ptr& downtime, service->GetDowntimes()) {
 		if (downtime->IsExpired())
 			continue;
 
-		ids->Add(downtime->GetLegacyId());
+		results->Add(downtime->GetLegacyId());
 	}
 
-	return ids;
+	return results;
 }
 
 Value ServicesTable::DowntimesWithInfoAccessor(const Value& row)
@@ -988,19 +959,9 @@ Value ServicesTable::DowntimesWithInfoAccessor(const Value& row)
 	if (!service)
 		return Empty;
 
-	Dictionary::Ptr downtimes = service->GetDowntimes();
+	Array::Ptr results = new Array();
 
-	Array::Ptr ids = new Array();
-
-	ObjectLock olock(downtimes);
-
-	String id;
-	Downtime::Ptr downtime;
-	BOOST_FOREACH(tie(id, downtime), downtimes) {
-
-		if (!downtime)
-			continue;
-
+	BOOST_FOREACH(const Downtime::Ptr& downtime, service->GetDowntimes()) {
 		if (downtime->IsExpired())
 			continue;
 
@@ -1008,10 +969,10 @@ Value ServicesTable::DowntimesWithInfoAccessor(const Value& row)
 		downtime_info->Add(downtime->GetLegacyId());
 		downtime_info->Add(downtime->GetAuthor());
 		downtime_info->Add(downtime->GetComment());
-		ids->Add(downtime_info);
+		results->Add(downtime_info);
 	}
 
-	return ids;
+	return results;
 }
 
 Value ServicesTable::CommentsAccessor(const Value& row)
@@ -1021,26 +982,16 @@ Value ServicesTable::CommentsAccessor(const Value& row)
 	if (!service)
 		return Empty;
 
-	Dictionary::Ptr comments = service->GetComments();
+	Array::Ptr results = new Array();
 
-	Array::Ptr ids = new Array();
-
-	ObjectLock olock(comments);
-
-	String id;
-	Comment::Ptr comment;
-	BOOST_FOREACH(tie(id, comment), comments) {
-
-		if (!comment)
-			continue;
-
+	BOOST_FOREACH(const Comment::Ptr& comment, service->GetComments()) {
 		if (comment->IsExpired())
 			continue;
 
-		ids->Add(comment->GetLegacyId());
+		results->Add(comment->GetLegacyId());
 	}
 
-	return ids;
+	return results;
 }
 
 Value ServicesTable::CommentsWithInfoAccessor(const Value& row)
@@ -1050,19 +1001,9 @@ Value ServicesTable::CommentsWithInfoAccessor(const Value& row)
 	if (!service)
 		return Empty;
 
-	Dictionary::Ptr comments = service->GetComments();
+	Array::Ptr results = new Array();
 
-	Array::Ptr ids = new Array();
-
-	ObjectLock olock(comments);
-
-	String id;
-	Comment::Ptr comment;
-	BOOST_FOREACH(tie(id, comment), comments) {
-
-		if (!comment)
-			continue;
-
+	BOOST_FOREACH(const Comment::Ptr& comment, service->GetComments()) {
 		if (comment->IsExpired())
 			continue;
 
@@ -1070,10 +1011,10 @@ Value ServicesTable::CommentsWithInfoAccessor(const Value& row)
 		comment_info->Add(comment->GetLegacyId());
 		comment_info->Add(comment->GetAuthor());
 		comment_info->Add(comment->GetText());
-		ids->Add(comment_info);
+		results->Add(comment_info);
 	}
 
-	return ids;
+	return results;
 }
 
 Value ServicesTable::CommentsWithExtraInfoAccessor(const Value& row)
@@ -1083,19 +1024,9 @@ Value ServicesTable::CommentsWithExtraInfoAccessor(const Value& row)
 	if (!service)
 		return Empty;
 
-	Dictionary::Ptr comments = service->GetComments();
+	Array::Ptr results = new Array();
 
-	Array::Ptr ids = new Array();
-
-	ObjectLock olock(comments);
-
-	String id;
-	Comment::Ptr comment;
-	BOOST_FOREACH(tie(id, comment), comments) {
-
-		if (!comment)
-			continue;
-
+	BOOST_FOREACH(const Comment::Ptr& comment, service->GetComments()) {
 		if (comment->IsExpired())
 			continue;
 
@@ -1105,10 +1036,10 @@ Value ServicesTable::CommentsWithExtraInfoAccessor(const Value& row)
 		comment_info->Add(comment->GetText());
 		comment_info->Add(comment->GetEntryType());
 		comment_info->Add(static_cast<int>(comment->GetEntryTime()));
-		ids->Add(comment_info);
+		results->Add(comment_info);
 	}
 
-	return ids;
+	return results;
 }
 
 Value ServicesTable::CustomVariableNamesAccessor(const Value& row)
@@ -1285,4 +1216,14 @@ Value ServicesTable::IsReachableAccessor(const Value& row)
 		return Empty;
 
 	return service->IsReachable();
+}
+
+Value ServicesTable::OriginalAttributesAccessor(const Value& row)
+{
+	Service::Ptr service = static_cast<Service::Ptr>(row);
+
+	if (!service)
+		return Empty;
+
+	return JsonEncode(service->GetOriginalAttributes());
 }

@@ -234,6 +234,8 @@ public:
 	String GetTypeName(void) const;
 
 	Type::Ptr GetReflectionType(void) const;
+	
+	Value Clone(void) const;
 
 private:
 	boost::variant<boost::blank, double, bool, String, Object::Ptr> m_Value;
@@ -245,7 +247,7 @@ private:
 	}
 };
 
-static Value Empty;
+extern I2_BASE_API Value Empty;
 
 I2_BASE_API Value operator+(const Value& lhs, const char *rhs);
 I2_BASE_API Value operator+(const char *lhs, const Value& rhs);

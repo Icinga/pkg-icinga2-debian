@@ -18,21 +18,23 @@
  ******************************************************************************/
 
 #include "base/sysloglogger.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/statsfunction.hpp"
 
 #ifndef _WIN32
+#include "base/sysloglogger.tcpp"
+
 using namespace icinga;
 
 REGISTER_TYPE(SyslogLogger);
 
-REGISTER_STATSFUNCTION(SyslogLoggerStats, &SyslogLogger::StatsFunc);
+REGISTER_STATSFUNCTION(SyslogLogger, &SyslogLogger::StatsFunc);
 
 void SyslogLogger::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const SyslogLogger::Ptr& sysloglogger, DynamicType::GetObjectsByType<SyslogLogger>()) {
+	BOOST_FOREACH(const SyslogLogger::Ptr& sysloglogger, ConfigType::GetObjectsByType<SyslogLogger>()) {
 		nodes->Set(sysloglogger->GetName(), 1); //add more stats
 	}
 

@@ -43,7 +43,7 @@ public:
 
 	intrusive_ptr<Service> GetServiceByShortName(const Value& name);
 
-	std::set<intrusive_ptr<Service> > GetServices(void) const;
+	std::vector<intrusive_ptr<Service> > GetServices(void) const;
 	void AddService(const intrusive_ptr<Service>& service);
 	void RemoveService(const intrusive_ptr<Service>& service);
 
@@ -51,11 +51,11 @@ public:
 
 	static HostState CalculateState(ServiceState state);
 
-	virtual HostState GetState(void) const;
-	virtual HostState GetLastState(void) const;
-	virtual HostState GetLastHardState(void) const;
-	double GetLastStateUp(void) const;
-	double GetLastStateDown(void) const;
+	virtual HostState GetState(void) const override;
+	virtual HostState GetLastState(void) const override;
+	virtual HostState GetLastHardState(void) const override;
+
+	virtual void SaveLastState(ServiceState state, double timestamp) override;
 
 	static HostState StateFromString(const String& state);
 	static String StateToString(HostState state);
@@ -63,13 +63,13 @@ public:
 	static StateType StateTypeFromString(const String& state);
 	static String StateTypeToString(StateType state);
 
-	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Value *result) const;
+	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Value *result) const override;
 
 protected:
-	virtual void Stop(void);
+	virtual void Stop(bool runtimeRemoved) override;
 
-	virtual void OnAllConfigLoaded(void);
-	virtual void CreateChildObjects(const Type::Ptr& childType);
+	virtual void OnAllConfigLoaded(void) override;
+	virtual void CreateChildObjects(const Type::Ptr& childType) override;
 
 private:
 	mutable boost::mutex m_ServicesMutex;

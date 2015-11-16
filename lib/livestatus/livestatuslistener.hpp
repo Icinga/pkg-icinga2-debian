@@ -45,11 +45,11 @@ public:
 	static int GetClientsConnected(void);
 	static int GetConnections(void);
 
-	static void ValidateSocketType(const String& location, const LivestatusListener::Ptr& object);
+	virtual void ValidateSocketType(const String& value, const ValidationUtils& utils) override;
 
 protected:
-	virtual void Start(void);
-	virtual void Stop(void);
+	virtual void Start(bool runtimeCreated) override;
+	virtual void Stop(bool runtimeRemoved) override;
 
 private:
 	void ServerThreadProc(void);

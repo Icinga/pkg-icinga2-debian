@@ -17,12 +17,14 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
+
+library perfdata;
 
 namespace icinga
 {
 
-class GraphiteWriter : DynamicObject
+class GraphiteWriter : ConfigObject
 {
 	[config] String host {
 		default {{{ return "127.0.0.1"; }}}
@@ -31,11 +33,15 @@ class GraphiteWriter : DynamicObject
 		default {{{ return "2003"; }}}
 	};
 	[config] String host_name_template {
-		default {{{ return "icinga.$host.name$"; }}}
+		default {{{ return "icinga2.$host.name$.host.$host.check_command$"; }}}
 	};
 	[config] String service_name_template {
-		default {{{ return "icinga.$host.name$.$service.name$"; }}}
+		default {{{ return "icinga2.$host.name$.services.$service.name$.$service.check_command$"; }}}
 	};
+        [config] bool enable_send_thresholds;
+        [config] bool enable_send_metadata;
+        [config] bool enable_legacy_mode;
+
 };
 
 }

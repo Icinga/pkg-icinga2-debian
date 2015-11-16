@@ -22,7 +22,7 @@
 
 #include "notification/notificationcomponent.thpp"
 #include "icinga/service.hpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "base/timer.hpp"
 
 namespace icinga
@@ -39,7 +39,7 @@ public:
 
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
-	virtual void Start(void);
+	virtual void Start(bool runtimeCreated) override;
 
 private:
 	Timer::Ptr m_NotificationTimer;

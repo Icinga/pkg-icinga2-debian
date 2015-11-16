@@ -23,10 +23,10 @@
 
 using namespace icinga;
 
-REGISTER_PRIMITIVE_TYPE(Function, Function::GetPrototype());
+REGISTER_PRIMITIVE_TYPE_NOINST(Function, Object, Function::GetPrototype());
 
-Function::Function(const Callback& function)
-	: m_Callback(function)
+Function::Function(const Callback& function, bool side_effect_free)
+	: m_Callback(function), m_SideEffectFree(side_effect_free)
 { }
 
 Value Function::Invoke(const std::vector<Value>& arguments)
@@ -34,3 +34,12 @@ Value Function::Invoke(const std::vector<Value>& arguments)
 	return m_Callback(arguments);
 }
 
+bool Function::IsSideEffectFree(void) const
+{
+	return m_SideEffectFree;
+}
+
+Object::Ptr Function::Clone(void) const
+{
+	return const_cast<Function *>(this);
+}

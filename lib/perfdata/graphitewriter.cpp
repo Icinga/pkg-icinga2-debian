@@ -18,13 +18,14 @@
  ******************************************************************************/
 
 #include "perfdata/graphitewriter.hpp"
+#include "perfdata/graphitewriter.tcpp"
 #include "icinga/service.hpp"
 #include "icinga/macroprocessor.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "icinga/compatutility.hpp"
 #include "icinga/perfdatavalue.hpp"
 #include "base/tcpsocket.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/convert.hpp"
@@ -43,24 +44,23 @@
 using namespace icinga;
 
 REGISTER_TYPE(GraphiteWriter);
-REGISTER_SCRIPTFUNCTION(ValidateNameTemplates, &GraphiteWriter::ValidateNameTemplates);
 
-REGISTER_STATSFUNCTION(GraphiteWriterStats, &GraphiteWriter::StatsFunc);
+REGISTER_STATSFUNCTION(GraphiteWriter, &GraphiteWriter::StatsFunc);
 
 void GraphiteWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const GraphiteWriter::Ptr& graphitewriter, DynamicType::GetObjectsByType<GraphiteWriter>()) {
+	BOOST_FOREACH(const GraphiteWriter::Ptr& graphitewriter, ConfigType::GetObjectsByType<GraphiteWriter>()) {
 		nodes->Set(graphitewriter->GetName(), 1); //add more stats
 	}
 
 	status->Set("graphitewriter", nodes);
 }
 
-void GraphiteWriter::Start(void)
+void GraphiteWriter::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<GraphiteWriter>::Start(runtimeCreated);
 
 	m_ReconnectTimer = new Timer();
 	m_ReconnectTimer->SetInterval(10);
@@ -117,24 +117,53 @@ void GraphiteWriter::CheckResultHandler(const Checkable::Ptr& checkable, const C
 
 	double ts = cr->GetExecutionEnd();
 
-	if (service) {
-		prefix = MacroProcessor::ResolveMacros(GetServiceNameTemplate(), resolvers, cr, NULL, &GraphiteWriter::EscapeMacroMetric);
+	/* new mode below. old mode in else tree with 2.4, deprecate it in 2.6 */
+	if (!GetEnableLegacyMode()) {
+		if (service) {
+			prefix = MacroProcessor::ResolveMacros(GetServiceNameTemplate(), resolvers, cr, NULL, boost::bind(&GraphiteWriter::EscapeMacroMetric, _1, false));
+		} else {
+			prefix = MacroProcessor::ResolveMacros(GetHostNameTemplate(), resolvers, cr, NULL, boost::bind(&GraphiteWriter::EscapeMacroMetric, _1, false));
+		}
 
-		SendMetric(prefix, "state", service->GetState(), ts);
+		String prefix_perfdata = prefix + ".perfdata";
+		String prefix_metadata = prefix + ".metadata";
+
+		if (GetEnableSendMetadata()) {
+
+			if (service) {
+				SendMetric(prefix_metadata, "state", service->GetState(), ts);
+			} else {
+				SendMetric(prefix_metadata, "state", host->GetState(), ts);
+			}
+
+			SendMetric(prefix_metadata, "current_attempt", checkable->GetCheckAttempt(), ts);
+			SendMetric(prefix_metadata, "max_check_attempts", checkable->GetMaxCheckAttempts(), ts);
+			SendMetric(prefix_metadata, "state_type", checkable->GetStateType(), ts);
+			SendMetric(prefix_metadata, "reachable", checkable->IsReachable(), ts);
+			SendMetric(prefix_metadata, "downtime_depth", checkable->GetDowntimeDepth(), ts);
+			SendMetric(prefix_metadata, "latency", Service::CalculateLatency(cr), ts);
+			SendMetric(prefix_metadata, "execution_time", Service::CalculateExecutionTime(cr), ts);
+		}
+
+		SendPerfdata(prefix_perfdata, cr, ts);
 	} else {
-		prefix = MacroProcessor::ResolveMacros(GetHostNameTemplate(), resolvers, cr, NULL, &GraphiteWriter::EscapeMacroMetric);
+		if (service) {
+			prefix = MacroProcessor::ResolveMacros(GetServiceNameTemplate(), resolvers, cr, NULL, boost::bind(&GraphiteWriter::EscapeMacroMetric, _1, true));
+			SendMetric(prefix, "state", service->GetState(), ts);
+		} else {
+			prefix = MacroProcessor::ResolveMacros(GetHostNameTemplate(), resolvers, cr, NULL, boost::bind(&GraphiteWriter::EscapeMacroMetric, _1, true));
+			SendMetric(prefix, "state", host->GetState(), ts);
+		}
 
-		SendMetric(prefix, "state", host->GetState(), ts);
+		SendMetric(prefix, "current_attempt", checkable->GetCheckAttempt(), ts);
+		SendMetric(prefix, "max_check_attempts", checkable->GetMaxCheckAttempts(), ts);
+		SendMetric(prefix, "state_type", checkable->GetStateType(), ts);
+		SendMetric(prefix, "reachable", checkable->IsReachable(), ts);
+		SendMetric(prefix, "downtime_depth", checkable->GetDowntimeDepth(), ts);
+		SendMetric(prefix, "latency", Service::CalculateLatency(cr), ts);
+		SendMetric(prefix, "execution_time", Service::CalculateExecutionTime(cr), ts);
+		SendPerfdata(prefix, cr, ts);
 	}
-
-	SendMetric(prefix, "current_attempt", checkable->GetCheckAttempt(), ts);
-	SendMetric(prefix, "max_check_attempts", checkable->GetMaxCheckAttempts(), ts);
-	SendMetric(prefix, "state_type", checkable->GetStateType(), ts);
-	SendMetric(prefix, "reachable", checkable->IsReachable(), ts);
-	SendMetric(prefix, "downtime_depth", checkable->GetDowntimeDepth(), ts);
-	SendMetric(prefix, "latency", Service::CalculateLatency(cr), ts);
-	SendMetric(prefix, "execution_time", Service::CalculateExecutionTime(cr), ts);
-	SendPerfdata(prefix, cr, ts);
 }
 
 void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& cr, double ts)
@@ -160,19 +189,36 @@ void GraphiteWriter::SendPerfdata(const String& prefix, const CheckResult::Ptr& 
 			}
 		}
 
-		String escaped_key = EscapeMetric(pdv->GetLabel());
-		boost::algorithm::replace_all(escaped_key, "::", ".");
+		/* new mode below. old mode in else tree with 2.4, deprecate it in 2.6 */
+		if (!GetEnableLegacyMode()) {
+			String escaped_key = EscapeMetricLabel(pdv->GetLabel());
 
-		SendMetric(prefix, escaped_key, pdv->GetValue(), ts);
+			SendMetric(prefix, escaped_key + ".value", pdv->GetValue(), ts);
 
-		if (pdv->GetCrit())
-			SendMetric(prefix, escaped_key + "_crit", pdv->GetCrit(), ts);
-		if (pdv->GetWarn())
-			SendMetric(prefix, escaped_key + "_warn", pdv->GetWarn(), ts);
-		if (pdv->GetMin())
-			SendMetric(prefix, escaped_key + "_min", pdv->GetMin(), ts);
-		if (pdv->GetMax())
-			SendMetric(prefix, escaped_key + "_max", pdv->GetMax(), ts);
+			if (GetEnableSendThresholds()) {
+				if (pdv->GetCrit())
+					SendMetric(prefix, escaped_key + ".crit", pdv->GetCrit(), ts);
+				if (pdv->GetWarn())
+					SendMetric(prefix, escaped_key + ".warn", pdv->GetWarn(), ts);
+				if (pdv->GetMin())
+					SendMetric(prefix, escaped_key + ".min", pdv->GetMin(), ts);
+				if (pdv->GetMax())
+					SendMetric(prefix, escaped_key + ".max", pdv->GetMax(), ts);
+			}
+		} else {
+			String escaped_key = EscapeMetric(pdv->GetLabel());
+			boost::algorithm::replace_all(escaped_key, "::", ".");
+			SendMetric(prefix, escaped_key, pdv->GetValue(), ts);
+
+			if (pdv->GetCrit())
+				SendMetric(prefix, escaped_key + "_crit", pdv->GetCrit(), ts);
+			if (pdv->GetWarn())
+				SendMetric(prefix, escaped_key + "_warn", pdv->GetWarn(), ts);
+			if (pdv->GetMin())
+				SendMetric(prefix, escaped_key + "_min", pdv->GetMin(), ts);
+			if (pdv->GetMax())
+				SendMetric(prefix, escaped_key + "_max", pdv->GetMax(), ts);
+		}
 	}
 }
 
@@ -203,20 +249,36 @@ void GraphiteWriter::SendMetric(const String& prefix, const String& name, double
 	}
 }
 
-String GraphiteWriter::EscapeMetric(const String& str)
+String GraphiteWriter::EscapeMetric(const String& str, bool legacyMode)
 {
 	String result = str;
 
+	//don't allow '.' in metric prefixes
 	boost::replace_all(result, " ", "_");
 	boost::replace_all(result, ".", "_");
-	boost::replace_all(result, "-", "_");
 	boost::replace_all(result, "\\", "_");
 	boost::replace_all(result, "/", "_");
+
+	if (legacyMode)
+		boost::replace_all(result, "-", "_");
 
 	return result;
 }
 
-Value GraphiteWriter::EscapeMacroMetric(const Value& value)
+String GraphiteWriter::EscapeMetricLabel(const String& str)
+{
+	String result = str;
+
+	//allow to pass '.' in perfdata labels
+	boost::replace_all(result, " ", "_");
+	boost::replace_all(result, "\\", "_");
+	boost::replace_all(result, "/", "_");
+	boost::replace_all(result, "::", ".");
+
+	return result;
+}
+
+Value GraphiteWriter::EscapeMacroMetric(const Value& value, bool legacyMode)
 {
 	if (value.IsObjectType<Array>()) {
 		Array::Ptr arr = value;
@@ -224,23 +286,26 @@ Value GraphiteWriter::EscapeMacroMetric(const Value& value)
 
 		ObjectLock olock(arr);
 		BOOST_FOREACH(const Value& arg, arr) {
-			result->Add(EscapeMetric(arg));
+			result->Add(EscapeMetric(arg, legacyMode));
 		}
 
 		return Utility::Join(result, '.');
 	} else
-		return EscapeMetric(value);
+		return EscapeMetric(value, legacyMode);
 }
 
-void GraphiteWriter::ValidateNameTemplates(const String& location, const GraphiteWriter::Ptr& object)
+void GraphiteWriter::ValidateHostNameTemplate(const String& value, const ValidationUtils& utils)
 {
-	if (!MacroProcessor::ValidateMacroString(object->GetHostNameTemplate())) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": Closing $ not found in macro format string '" + object->GetHostNameTemplate() + "'.", object->GetDebugInfo()));
-	}
+	ObjectImpl<GraphiteWriter>::ValidateHostNameTemplate(value, utils);
 
-	if (!MacroProcessor::ValidateMacroString(object->GetServiceNameTemplate())) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": Closing $ not found in macro format string '" + object->GetServiceNameTemplate() + "'.", object->GetDebugInfo()));
-	}
+	if (!MacroProcessor::ValidateMacroString(value))
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("host_name_template"), "Closing $ not found in macro format string '" + value + "'."));
+}
+
+void GraphiteWriter::ValidateServiceNameTemplate(const String& value, const ValidationUtils& utils)
+{
+	ObjectImpl<GraphiteWriter>::ValidateServiceNameTemplate(value, utils);
+
+	if (!MacroProcessor::ValidateMacroString(value))
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("service_name_template"), "Closing $ not found in macro format string '" + value + "'."));
 }

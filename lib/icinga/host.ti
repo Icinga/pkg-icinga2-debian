@@ -20,11 +20,17 @@
 #include "icinga/checkable.hpp"
 #include "icinga/customvarobject.hpp"
 
+library icinga;
+
 namespace icinga
 {
 
 class Host : Checkable
 {
+	[config, no_user_modify] array(name(HostGroup)) groups {
+		default {{{ return new Array(); }}}
+	};
+
 	[config] String display_name {
 		get {{{
 			if (m_DisplayName.IsEmpty())
@@ -46,7 +52,8 @@ class Host : Checkable
 	[enum, no_storage] HostState last_hard_state {
 		get;
 	};
-
+	[state] double last_state_up;
+	[state] double last_state_down;
 };
 
 }
