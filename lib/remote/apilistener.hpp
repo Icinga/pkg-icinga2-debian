@@ -21,10 +21,11 @@
 #define APILISTENER_H
 
 #include "remote/apilistener.thpp"
-#include "remote/apiclient.hpp"
+#include "remote/jsonrpcconnection.hpp"
+#include "remote/httpserverconnection.hpp"
 #include "remote/endpoint.hpp"
 #include "remote/messageorigin.hpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "base/timer.hpp"
 #include "base/workqueue.hpp"
 #include "base/tcpsocket.hpp"
@@ -34,7 +35,7 @@
 namespace icinga
 {
 
-class ApiClient;
+class JsonRpcConnection;
 
 /**
 * @ingroup remote
@@ -45,6 +46,8 @@ public:
 	DECLARE_OBJECT(ApiListener);
 	DECLARE_OBJECTNAME(ApiListener);
 
+	static void StaticInitialize(void);
+	
 	static boost::signals2::signal<void(bool)> OnMasterChanged;
 
 	ApiListener(void);
@@ -59,30 +62,40 @@ public:
 	static String GetApiDir(void);
 
 	void SyncSendMessage(const Endpoint::Ptr& endpoint, const Dictionary::Ptr& message);
-	void RelayMessage(const MessageOrigin& origin, const DynamicObject::Ptr& secobj, const Dictionary::Ptr& message, bool log);
+	void RelayMessage(const MessageOrigin::Ptr& origin, const ConfigObject::Ptr& secobj, const Dictionary::Ptr& message, bool log);
 
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 	std::pair<Dictionary::Ptr, Dictionary::Ptr> GetStatus(void);
 
-	void AddAnonymousClient(const ApiClient::Ptr& aclient);
-	void RemoveAnonymousClient(const ApiClient::Ptr& aclient);
-	std::set<ApiClient::Ptr> GetAnonymousClients(void) const;
+	void AddAnonymousClient(const JsonRpcConnection::Ptr& aclient);
+	void RemoveAnonymousClient(const JsonRpcConnection::Ptr& aclient);
+	std::set<JsonRpcConnection::Ptr> GetAnonymousClients(void) const;
+
+	void AddHttpClient(const HttpServerConnection::Ptr& aclient);
+	void RemoveHttpClient(const HttpServerConnection::Ptr& aclient);
+	std::set<HttpServerConnection::Ptr> GetHttpClients(void) const;
 
 	static double CalculateZoneLag(const Endpoint::Ptr& endpoint);
 
-	static Value ConfigUpdateHandler(const MessageOrigin& origin, const Dictionary::Ptr& params);
-
-	static Value HelloAPIHandler(const MessageOrigin& origin, const Dictionary::Ptr& params);
-
+	/* filesync */
+	static Value ConfigUpdateHandler(const MessageOrigin::Ptr& origin, const Dictionary::Ptr& params);
+	
+	/* configsync */
+	static void ConfigUpdateObjectHandler(const ConfigObject::Ptr& object, const Value& cookie);
+	static Value ConfigUpdateObjectAPIHandler(const MessageOrigin::Ptr& origin, const Dictionary::Ptr& params);
+	static Value ConfigDeleteObjectAPIHandler(const MessageOrigin::Ptr& origin, const Dictionary::Ptr& params);
+	
+	static Value HelloAPIHandler(const MessageOrigin::Ptr& origin, const Dictionary::Ptr& params);
 protected:
-	virtual void OnConfigLoaded(void);
-	virtual void OnAllConfigLoaded(void);
-	virtual void Start(void);
+	virtual void OnConfigLoaded(void) override;
+	virtual void OnAllConfigLoaded(void) override;
+	virtual void Start(bool runtimeCreated) override;
 
 private:
 	boost::shared_ptr<SSL_CTX> m_SSLContext;
 	std::set<TcpSocket::Ptr> m_Servers;
-	std::set<ApiClient::Ptr> m_AnonymousClients;
+	std::set<JsonRpcConnection::Ptr> m_AnonymousClients;
+	std::set<HttpServerConnection::Ptr> m_HttpClients;
 	Timer::Ptr m_Timer;
 
 	void ApiTimerHandler(void);
@@ -91,6 +104,7 @@ private:
 	void AddConnection(const Endpoint::Ptr& endpoint);
 
 	void NewClientHandler(const Socket::Ptr& client, const String& hostname, ConnectionRole role);
+	void NewClientHandlerInternal(const Socket::Ptr& client, const String& hostname, ConnectionRole role);
 	void ListenerThreadProc(const Socket::Ptr& server);
 
 	WorkQueue m_RelayQueue;
@@ -99,15 +113,16 @@ private:
 	Stream::Ptr m_LogFile;
 	size_t m_LogMessageCount;
 
-	void SyncRelayMessage(const MessageOrigin& origin, const DynamicObject::Ptr& secobj, const Dictionary::Ptr& message, bool log);
-	void PersistMessage(const Dictionary::Ptr& message, const DynamicObject::Ptr& secobj);
+	void SyncRelayMessage(const MessageOrigin::Ptr& origin, const ConfigObject::Ptr& secobj, const Dictionary::Ptr& message, bool log);
+	void PersistMessage(const Dictionary::Ptr& message, const ConfigObject::Ptr& secobj);
 
 	void OpenLogFile(void);
 	void RotateLogFile(void);
 	void CloseLogFile(void);
 	static void LogGlobHandler(std::vector<int>& files, const String& file);
-	void ReplayLog(const ApiClient::Ptr& client);
+	void ReplayLog(const JsonRpcConnection::Ptr& client);
 
+	/* filesync */
 	static Dictionary::Ptr LoadConfigDir(const String& dir);
 	static bool UpdateConfigDir(const Dictionary::Ptr& oldConfig, const Dictionary::Ptr& newConfig, const String& configDir, bool authoritative);
 
@@ -116,7 +131,14 @@ private:
 
 	static bool IsConfigMaster(const Zone::Ptr& zone);
 	static void ConfigGlobHandler(Dictionary::Ptr& config, const String& path, const String& file);
-	void SendConfigUpdate(const ApiClient::Ptr& aclient);
+	void SendConfigUpdate(const JsonRpcConnection::Ptr& aclient);
+
+	/* configsync */
+	void UpdateConfigObject(const ConfigObject::Ptr& object, const MessageOrigin::Ptr& origin,
+	    const JsonRpcConnection::Ptr& client = JsonRpcConnection::Ptr());
+	void DeleteConfigObject(const ConfigObject::Ptr& object, const MessageOrigin::Ptr& origin,
+	    const JsonRpcConnection::Ptr& client = JsonRpcConnection::Ptr());
+	void SendRuntimeConfigObjects(const JsonRpcConnection::Ptr& aclient);
 };
 
 }

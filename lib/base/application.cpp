@@ -18,12 +18,14 @@
  ******************************************************************************/
 
 #include "base/application.hpp"
+#include "base/application.tcpp"
 #include "base/stacktrace.hpp"
 #include "base/timer.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
+#include "base/loader.hpp"
 #include "base/debug.hpp"
 #include "base/type.hpp"
 #include "base/convert.hpp"
@@ -61,6 +63,7 @@ static bool l_InExceptionHandler = false;
 int Application::m_ArgC;
 char **Application::m_ArgV;
 double Application::m_StartTime;
+bool Application::m_ScriptDebuggerEnabled = false;
 
 /**
  * Constructor for the Application class.
@@ -76,7 +79,7 @@ void Application::OnConfigLoaded(void)
 /**
  * Destructor for the application class.
  */
-void Application::Stop(void)
+void Application::Stop(bool runtimeRemoved)
 {
 	m_ShuttingDown = true;
 
@@ -100,7 +103,7 @@ void Application::Stop(void)
 	} else
 		ClosePidFile(true);
 
-	DynamicObject::Stop();
+	ObjectImpl<Application>::Stop(runtimeRemoved);
 }
 
 Application::~Application(void)
@@ -139,10 +142,10 @@ void Application::InitializeBase(void)
 	}
 #endif /* _WIN32 */
 
-	Utility::ExecuteDeferredInitializers();
+	Loader::ExecuteDeferredInitializers();
 
 	/* make sure the thread pool gets initialized */
-	GetTP();
+	GetTP().Start();
 
 	Timer::Initialize();
 }
@@ -316,7 +319,7 @@ mainloop:
 
 	Log(LogInformation, "Application", "Shutting down...");
 
-	DynamicObject::StopObjects();
+	ConfigObject::StopObjects();
 	Application::GetInstance()->OnShutdown();
 
 	UninitializeBase();
@@ -500,9 +503,8 @@ static String UnameHelper(char type)
 	pclose(fp);
 
 	String result = msgbuf.str();
-	result.Trim();
 
-	return result;
+	return result.Trim();
 }
 
 int ReleaseHelper(std::string &result)
@@ -590,7 +592,7 @@ void Application::DisplayInfoMessage(std::ostream& os, bool skipVersion)
 	os << "Application information:" << "\n";
 
 	if (!skipVersion)
-		os << "  Application version: " << GetVersion() << "\n";
+		os << "  Application version: " << GetAppVersion() << "\n";
 
 	os << "  Installation root: " << GetPrefixDir() << "\n"
 	   << "  Sysconf directory: " << GetSysconfDir() << "\n"
@@ -598,10 +600,10 @@ void Application::DisplayInfoMessage(std::ostream& os, bool skipVersion)
 	   << "  Local state directory: " << GetLocalStateDir() << "\n"
 	   << "  Package data directory: " << GetPkgDataDir() << "\n"
 	   << "  State path: " << GetStatePath() << "\n"
+	   << "  Modified attributes path: " << GetModAttrPath() << "\n"
 	   << "  Objects path: " << GetObjectsPath() << "\n"
 	   << "  Vars path: " << GetVarsPath() << "\n"
-	   << "  PID path: " << GetPidPath() << "\n"
-	   << "  Application type: " << GetApplicationType() << "\n";
+	   << "  PID path: " << GetPidPath() << "\n";
 
 #ifndef _WIN32
 	os << "\n"
@@ -641,9 +643,9 @@ String Application::GetCrashReportFilename(void)
 }
 
 
-#ifndef _WIN32
-void Application::GetDebuggerBacktrace(const String& filename)
+void Application::AttachDebugger(const String& filename, bool interactive)
 {
+#ifndef _WIN32
 #ifdef __linux__
 	prctl(PR_SET_DUMPABLE, 1);
 #endif /* __linux __ */
@@ -659,42 +661,58 @@ void Application::GetDebuggerBacktrace(const String& filename)
 	}
 
 	if (pid == 0) {
-		int fd = open(filename.CStr(), O_CREAT | O_RDWR | O_APPEND, 0600);
+		if (!interactive) {
+			int fd = open(filename.CStr(), O_CREAT | O_RDWR | O_APPEND, 0600);
 
-		if (fd < 0) {
-			BOOST_THROW_EXCEPTION(posix_error()
-			    << boost::errinfo_api_function("open")
-			    << boost::errinfo_errno(errno)
-			    << boost::errinfo_file_name(filename));
+			if (fd < 0) {
+				BOOST_THROW_EXCEPTION(posix_error()
+				    << boost::errinfo_api_function("open")
+				    << boost::errinfo_errno(errno)
+				    << boost::errinfo_file_name(filename));
+			}
+
+			if (fd != 1) {
+				/* redirect stdout to the file */
+				dup2(fd, 1);
+				close(fd);
+			}
+
+			/* redirect stderr to stdout */
+			if (fd != 2)
+				close(2);
+
+			dup2(1, 2);
 		}
 
-		if (fd != 1) {
-			/* redirect stdout to the file */
-			dup2(fd, 1);
-			close(fd);
-		}
-
-		/* redirect stderr to stdout */
-		if (fd != 2)
-			close(2);
-
-		dup2(1, 2);
-
+		char **argv;
 		char *my_pid_str = strdup(my_pid.CStr());
-		const char *argv[] = {
-			"gdb",
-			"--batch",
-			"-p",
-			my_pid_str,
-			"-ex",
-			"thread apply all bt full",
-			"-ex",
-			"detach",
-			"-ex",
-			"quit",
-			NULL
-		};
-		(void)execvp(argv[0], const_cast<char **>(argv));
+
+		if (interactive) {
+			const char *uargv[] = {
+				"gdb",
+				"-p",
+				my_pid_str,
+				NULL
+			};
+			argv = const_cast<char **>(uargv);
+		} else {
+			const char *uargv[] = {
+				"gdb",
+				"--batch",
+				"-p",
+				my_pid_str,
+				"-ex",
+				"thread apply all bt full",
+				"-ex",
+				"detach",
+				"-ex",
+				"quit",
+				NULL
+			};
+			argv = const_cast<char **>(uargv);
+		}
+
+		(void)execvp(argv[0], argv);
 		perror("Failed to launch GDB");
 		free(my_pid_str);
 		_exit(0);
@@ -710,8 +728,12 @@ void Application::GetDebuggerBacktrace(const String& filename)
 #ifdef __linux__
 	prctl(PR_SET_DUMPABLE, 0);
 #endif /* __linux __ */
+#else /* _WIN32 */
+	DebugBreak();
+#endif /* _WIN32 */
 }
 
+#ifndef _WIN32
 /**
  * Signal handler for SIGINT and SIGTERM. Prepares the application for cleanly
  * shutting down during the next execution of the event loop.
@@ -732,6 +754,7 @@ void Application::SigIntTermHandler(int signum)
 
 	instance->RequestShutdown();
 }
+#endif /* _WIN32 */
 
 /**
  * Signal handler for SIGUSR1. This signal causes Icinga to re-open
@@ -765,30 +788,33 @@ void Application::SigAbrtHandler(int)
 	String fname = GetCrashReportFilename();
 	Utility::MkDir(Utility::DirName(fname), 0750);
 
-	std::ofstream ofs;
-	ofs.open(fname.CStr());
+	bool interactive_debugger = Convert::ToBool(ScriptGlobal::Get("AttachDebugger"));
 
-	Log(LogCritical, "Application")
-	    << "Icinga 2 has terminated unexpectedly. Additional information can be found in '" << fname << "'" << "\n";
+	if (!interactive_debugger) {
+		std::ofstream ofs;
+		ofs.open(fname.CStr());
 
-	DisplayInfoMessage(ofs);
+		Log(LogCritical, "Application")
+		    << "Icinga 2 has terminated unexpectedly. Additional information can be found in '" << fname << "'" << "\n";
 
-	StackTrace trace;
-	ofs << "Stacktrace:" << "\n";
-	trace.Print(ofs, 1);
+		DisplayInfoMessage(ofs);
 
-	DisplayBugMessage(ofs);
+		StackTrace trace;
+		ofs << "Stacktrace:" << "\n";
+		trace.Print(ofs, 1);
 
-#ifndef _WIN32
-	ofs << "\n";
-	ofs.close();
+		DisplayBugMessage(ofs);
 
-	GetDebuggerBacktrace(fname);
-#else /* _WIN32 */
-	ofs.close();
-#endif /* _WIN32 */
+		ofs << "\n";
+		ofs.close();
+	} else {
+		Log(LogCritical, "Application", "Icinga 2 has terminated unexpeectedly. Attaching debugger...");
+	}
+
+	AttachDebugger(fname, interactive_debugger);
 }
-#else /* _WIN32 */
+
+#ifdef _WIN32
 /**
  * Console control handler. Prepares the application for cleanly
  * shutting down during the next execution of the event loop.
@@ -828,35 +854,37 @@ void Application::ExceptionHandler(void)
 	String fname = GetCrashReportFilename();
 	Utility::MkDir(Utility::DirName(fname), 0750);
 
-	std::ofstream ofs;
-	ofs.open(fname.CStr());
+	bool interactive_debugger = Convert::ToBool(ScriptGlobal::Get("AttachDebugger"));
 
-	ofs << "Caught unhandled exception." << "\n"
-	    << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << "\n"
-	    << "\n";
+	if (interactive_debugger) {
+		std::ofstream ofs;
+		ofs.open(fname.CStr());
 
-	DisplayInfoMessage(ofs);
-
-	try {
-		RethrowUncaughtException();
-	} catch (const std::exception& ex) {
-		Log(LogCritical, "Application")
-		    << DiagnosticInformation(ex, false) << "\n"
-		    << "\n"
-		    << "Additional information is available in '" << fname << "'" << "\n";
-
-		ofs << "\n"
-		    << DiagnosticInformation(ex)
+		ofs << "Caught unhandled exception." << "\n"
+		    << "Current time: " << Utility::FormatDateTime("%Y-%m-%d %H:%M:%S %z", Utility::GetTime()) << "\n"
 		    << "\n";
+
+		DisplayInfoMessage(ofs);
+
+		try {
+			RethrowUncaughtException();
+		} catch (const std::exception& ex) {
+			Log(LogCritical, "Application")
+			    << DiagnosticInformation(ex, false) << "\n"
+			    << "\n"
+			    << "Additional information is available in '" << fname << "'" << "\n";
+
+			ofs << "\n"
+			    << DiagnosticInformation(ex)
+			    << "\n";
+		}
+
+		DisplayBugMessage(ofs);
+
+		ofs.close();
 	}
 
-	DisplayBugMessage(ofs);
-
-	ofs.close();
-
-#ifndef _WIN32
-	GetDebuggerBacktrace(fname);
-#endif /* _WIN32 */
+	AttachDebugger(fname, interactive_debugger);
 
 	abort();
 }
@@ -954,7 +982,6 @@ int Application::Run(void)
  */
 void Application::UpdatePidFile(const String& filename, pid_t pid)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	if (m_PidFile != NULL)
@@ -1010,7 +1037,6 @@ void Application::UpdatePidFile(const String& filename, pid_t pid)
  */
 void Application::ClosePidFile(bool unlink)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	if (m_PidFile != NULL)
@@ -1255,6 +1281,27 @@ void Application::DeclareStatePath(const String& path)
 }
 
 /**
+ * Retrieves the path for the modified attributes file.
+ *
+ * @returns The path.
+ */
+String Application::GetModAttrPath(void)
+{
+	return ScriptGlobal::Get("ModAttrPath", &Empty);
+}
+
+/**
+ * Sets the path for the modified attributes file.
+ *
+ * @param path The new path.
+ */
+void Application::DeclareModAttrPath(const String& path)
+{
+	if (!ScriptGlobal::Exists("ModAttrPath"))
+		ScriptGlobal::Set("ModAttrPath", path);
+}
+
+/**
  * Retrieves the path for the objects file.
  *
  * @returns The path.
@@ -1315,27 +1362,6 @@ void Application::DeclarePidPath(const String& path)
 {
 	if (!ScriptGlobal::Exists("PidPath"))
 		ScriptGlobal::Set("PidPath", path);
-}
-
-/**
- * Retrieves the name of the Application type.
- *
- * @returns The name.
- */
-String Application::GetApplicationType(void)
-{
-	return ScriptGlobal::Get("ApplicationType");
-}
-
-/**
- * Sets the name of the Application type.
- *
- * @param path The new type name.
- */
-void Application::DeclareApplicationType(const String& type)
-{
-	if (!ScriptGlobal::Exists("ApplicationType"))
-		ScriptGlobal::Set("ApplicationType", type);
 }
 
 /**
@@ -1421,4 +1447,22 @@ double Application::GetStartTime(void)
 void Application::SetStartTime(double ts)
 {
 	m_StartTime = ts;
+}
+
+bool Application::GetScriptDebuggerEnabled(void)
+{
+	return m_ScriptDebuggerEnabled;
+}
+
+void Application::SetScriptDebuggerEnabled(bool enabled)
+{
+	m_ScriptDebuggerEnabled = enabled;
+}
+
+void Application::ValidateName(const String& value, const ValidationUtils& utils)
+{
+	ObjectImpl<Application>::ValidateName(value, utils);
+
+	if (value != "app")
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("name"), "Application object must be named 'app'."));
 }

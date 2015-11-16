@@ -22,6 +22,8 @@
 #include "icinga/icingaapplication.hpp"
 #include "icinga/customvarobject.hpp"
 
+library icinga;
+
 namespace icinga
 {
 
@@ -30,12 +32,17 @@ class I2_ICINGA_API ServiceNameComposer : public NameComposer
 {
 public:
 	virtual String MakeName(const String& shortName, const Object::Ptr& context) const;
+	virtual Dictionary::Ptr ParseName(const String& name) const;
 };
 }}}
 
 class Service : Checkable < ServiceNameComposer
 {
 	load_after Host;
+
+	[config, no_user_modify] array(name(ServiceGroup)) groups {
+		default {{{ return new Array(); }}}
+	};
 
 	[config] String display_name {
 		get {{{
@@ -45,7 +52,13 @@ class Service : Checkable < ServiceNameComposer
 				return m_DisplayName;
 		}}}
 	};
-	[config] String host_name;
+	[config, required] name(Host) host_name;
+	[no_storage, navigation] Host::Ptr host {
+		get;
+		navigate {{{
+			return GetHost();
+		}}}
+	};
 	[enum, no_storage] ServiceState "state" {
 		get {{{
 			return GetStateRaw();
@@ -61,6 +74,10 @@ class Service : Checkable < ServiceNameComposer
 			return GetLastHardStateRaw();
 		}}}
 	};
+	[state] double last_state_ok (LastStateOK);
+	[state] double last_state_warning;
+	[state] double last_state_critical;
+	[state] double last_state_unknown;
 };
 
 }

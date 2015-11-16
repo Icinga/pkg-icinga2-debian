@@ -33,19 +33,6 @@ namespace icinga
 {
 
 /**
- * The state of service flapping.
- *
- * @ingroup icinga
- */
-enum FlappingState
-{
-	FlappingStarted = 0,
-	FlappingDisabled = 1,
-	FlappingStopped = 2,
-	FlappingEnabled = 3
-};
-
-/**
  * @ingroup icinga
  */
 enum DependencyType
@@ -88,59 +75,32 @@ public:
 
 	void AddGroup(const String& name);
 
-	//bool IsHostCheck(void) const;
-
 	bool IsReachable(DependencyType dt = DependencyState, intrusive_ptr<Dependency> *failedDependency = NULL, int rstack = 0) const;
 
 	AcknowledgementType GetAcknowledgement(void);
 
-	void AcknowledgeProblem(const String& author, const String& comment, AcknowledgementType type, bool notify = true, double expiry = 0, const MessageOrigin& origin = MessageOrigin());
-	void ClearAcknowledgement(const MessageOrigin& origin = MessageOrigin());
+	void AcknowledgeProblem(const String& author, const String& comment, AcknowledgementType type, bool notify = true, double expiry = 0, const MessageOrigin::Ptr& origin = MessageOrigin::Ptr());
+	void ClearAcknowledgement(const MessageOrigin::Ptr& origin = MessageOrigin::Ptr());
 
 	/* Checks */
 	intrusive_ptr<CheckCommand> GetCheckCommand(void) const;
-	void SetCheckCommand(const intrusive_ptr<CheckCommand>& command, const MessageOrigin& origin = MessageOrigin());
-
 	TimePeriod::Ptr GetCheckPeriod(void) const;
-	void SetCheckPeriod(const TimePeriod::Ptr& tp, const MessageOrigin& origin = MessageOrigin());
-
-	double GetCheckInterval(void) const;
-	void SetCheckInterval(double interval, const MessageOrigin& origin = MessageOrigin());
-
-	double GetRetryInterval(void) const;
-	void SetRetryInterval(double interval, const MessageOrigin& origin = MessageOrigin());
-
-	int GetMaxCheckAttempts(void) const;
-	void SetMaxCheckAttempts(int attempts, const MessageOrigin& origin = MessageOrigin());
 
 	long GetSchedulingOffset(void);
 	void SetSchedulingOffset(long offset);
 
-	void SetNextCheck(double nextCheck, const MessageOrigin& origin = MessageOrigin());
-	double GetNextCheck(void);
 	void UpdateNextCheck(void);
 
 	bool HasBeenChecked(void) const;
+	virtual double GetLastCheck(void) const override;
 
-	double GetLastCheck(void) const;
-
-	bool GetEnableActiveChecks(void) const;
-	void SetEnableActiveChecks(bool enabled, const MessageOrigin& origin = MessageOrigin());
-
-	bool GetEnablePassiveChecks(void) const;
-	void SetEnablePassiveChecks(bool enabled, const MessageOrigin& origin = MessageOrigin());
-
-	bool GetForceNextCheck(void) const;
-	void SetForceNextCheck(bool forced, const MessageOrigin& origin = MessageOrigin());
+	virtual void SaveLastState(ServiceState state, double timestamp) = 0;
 
 	static void UpdateStatistics(const CheckResult::Ptr& cr, CheckableType type);
 
 	void ExecuteRemoteCheck(const Dictionary::Ptr& resolvedMacros = Dictionary::Ptr());
 	void ExecuteCheck();
-	void ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrigin& origin = MessageOrigin());
-
-	int GetModifiedAttributes(void) const;
-	void SetModifiedAttributes(int flags, const MessageOrigin& origin = MessageOrigin());
+	void ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrigin::Ptr& origin = MessageOrigin::Ptr());
 
 	Endpoint::Ptr GetCommandEndpoint(void) const;
 
@@ -149,26 +109,9 @@ public:
 	static double CalculateExecutionTime(const CheckResult::Ptr& cr);
 	static double CalculateLatency(const CheckResult::Ptr& cr);
 
-	static boost::signals2::signal<void (const Checkable::Ptr&, double, const MessageOrigin&)> OnNextCheckChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> OnForceNextCheckChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> OnForceNextNotificationChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> OnEnableActiveChecksChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> OnEnablePassiveChecksChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> OnEnableNotificationsChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> OnEnableFlappingChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> OnEnablePerfdataChanged;
-
-	static boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> OnEnableEventHandlerChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, double, const MessageOrigin&)> OnCheckIntervalChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, double, const MessageOrigin&)> OnRetryIntervalChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, int, const MessageOrigin&)> OnMaxCheckAttemptsChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const intrusive_ptr<EventCommand>&, const MessageOrigin&)> OnEventCommandChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const intrusive_ptr<CheckCommand>&, const MessageOrigin&)> OnCheckCommandChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const TimePeriod::Ptr&, const MessageOrigin&)> OnCheckPeriodChanged;
-
-	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, const MessageOrigin&)> OnNewCheckResult;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, StateType, const MessageOrigin&)> OnStateChange;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, std::set<Checkable::Ptr>, const MessageOrigin&)> OnReachabilityChanged;
+	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, const MessageOrigin::Ptr&)> OnNewCheckResult;
+	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, StateType, const MessageOrigin::Ptr&)> OnStateChange;
+	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, std::set<Checkable::Ptr>, const MessageOrigin::Ptr&)> OnReachabilityChanged;
 	static boost::signals2::signal<void (const Checkable::Ptr&, NotificationType, const CheckResult::Ptr&,
 	    const String&, const String&)> OnNotificationsRequested;
 	static boost::signals2::signal<void (const Notification::Ptr&, const Checkable::Ptr&, const std::set<User::Ptr>&,
@@ -180,68 +123,37 @@ public:
 	static boost::signals2::signal<void (const Notification::Ptr&, const Checkable::Ptr&, const std::set<User::Ptr>&,
 	    const NotificationType&, const CheckResult::Ptr&, const String&,
 	    const String&)> OnNotificationSentToAllUsers;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const Comment::Ptr&, const MessageOrigin&)> OnCommentAdded;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const Comment::Ptr&, const MessageOrigin&)> OnCommentRemoved;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const Downtime::Ptr&, const MessageOrigin&)> OnDowntimeAdded;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const Downtime::Ptr&, const MessageOrigin&)> OnDowntimeRemoved;
-	static boost::signals2::signal<void (const Checkable::Ptr&, FlappingState)> OnFlappingChanged;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const Downtime::Ptr&)> OnDowntimeTriggered;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const String&, const String&, AcknowledgementType,
-					     bool, double, const MessageOrigin&)> OnAcknowledgementSet;
-	static boost::signals2::signal<void (const Checkable::Ptr&, const MessageOrigin&)> OnAcknowledgementCleared;
+					     bool, double, const MessageOrigin::Ptr&)> OnAcknowledgementSet;
+	static boost::signals2::signal<void (const Checkable::Ptr&, const MessageOrigin::Ptr&)> OnAcknowledgementCleared;
 	static boost::signals2::signal<void (const Checkable::Ptr&)> OnEventCommandExecuted;
 
 	/* Downtimes */
-	static int GetNextDowntimeID(void);
-
 	int GetDowntimeDepth(void) const;
 
-	String AddDowntime(const String& author, const String& comment,
-	    double startTime, double endTime, bool fixed,
-	    const String& triggeredBy, double duration,
-	    const String& scheduledBy = String(), const String& id = String(),
-	    const MessageOrigin& origin = MessageOrigin());
-
-	static void RemoveDowntime(const String& id, bool cancelled, const MessageOrigin& origin = MessageOrigin());
-
+	void RemoveAllDowntimes(void);
 	void TriggerDowntimes(void);
-	static void TriggerDowntime(const String& id);
-
-	static String GetDowntimeIDFromLegacyID(int id);
-	static Checkable::Ptr GetOwnerByDowntimeID(const String& id);
-	static Downtime::Ptr GetDowntimeByID(const String& id);
-
-	static void StartDowntimesExpiredTimer(void);
-
 	bool IsInDowntime(void) const;
 	bool IsAcknowledged(void);
 
+	std::set<Downtime::Ptr> GetDowntimes(void) const;
+	void RegisterDowntime(const Downtime::Ptr& downtime);
+	void UnregisterDowntime(const Downtime::Ptr& downtime);
+
 	/* Comments */
-	static int GetNextCommentID(void);
-
-	String AddComment(CommentType entryType, const String& author,
-	    const String& text, double expireTime, const String& id = String(), const MessageOrigin& origin = MessageOrigin());
-
 	void RemoveAllComments(void);
 	void RemoveCommentsByType(int type);
-	static void RemoveComment(const String& id, const MessageOrigin& origin = MessageOrigin());
 
-	static String GetCommentIDFromLegacyID(int id);
-	static Checkable::Ptr GetOwnerByCommentID(const String& id);
-	static Comment::Ptr GetCommentByID(const String& id);
+	std::set<Comment::Ptr> GetComments(void) const;
+	void RegisterComment(const Comment::Ptr& comment);
+	void UnregisterComment(const Comment::Ptr& comment);
 
 	/* Notifications */
-	bool GetEnableNotifications(void) const;
-	void SetEnableNotifications(bool enabled, const MessageOrigin& origin = MessageOrigin());
-
 	void SendNotifications(NotificationType type, const CheckResult::Ptr& cr, const String& author = "", const String& text = "");
 
 	std::set<Notification::Ptr> GetNotifications(void) const;
-	void AddNotification(const Notification::Ptr& notification);
-	void RemoveNotification(const Notification::Ptr& notification);
-
-	void SetForceNextNotification(bool force, const MessageOrigin& origin = MessageOrigin());
-	bool GetForceNextNotification(void) const;
+	void RegisterNotification(const Notification::Ptr& notification);
+	void UnregisterNotification(const Notification::Ptr& notification);
 
 	void ResetNotificationNumbers(void);
 
@@ -250,23 +162,12 @@ public:
 	    bool useResolvedMacros = false);
 
 	intrusive_ptr<EventCommand> GetEventCommand(void) const;
-	void SetEventCommand(const intrusive_ptr<EventCommand>& command, const MessageOrigin& origin = MessageOrigin());
-
-	bool GetEnableEventHandler(void) const;
-	void SetEnableEventHandler(bool enabled, const MessageOrigin& origin = MessageOrigin());
 
 	/* Flapping Detection */
 	double GetFlappingCurrent(void) const;
 
-	bool GetEnableFlapping(void) const;
-	void SetEnableFlapping(bool enabled, const MessageOrigin& origin = MessageOrigin());
-
 	bool IsFlapping(void) const;
 	void UpdateFlappingStatus(bool stateChange);
-
-	/* Performance data */
-	bool GetEnablePerfdata(void) const;
-	void SetEnablePerfdata(bool enabled, const MessageOrigin& origin = MessageOrigin());
 
 	/* Dependencies */
 	void AddDependency(const intrusive_ptr<Dependency>& dep);
@@ -277,12 +178,10 @@ public:
 	void RemoveReverseDependency(const intrusive_ptr<Dependency>& dep);
 	std::set<intrusive_ptr<Dependency> > GetReverseDependencies(void) const;
 
-	static void ValidateCheckInterval(const String& location, const Checkable::Ptr& object);
+	virtual void ValidateCheckInterval(double value, const ValidationUtils& utils) override;
 
 protected:
-	virtual void Start(void);
-
-	virtual void OnStateLoaded(void);
+	virtual void Start(bool runtimeCreated) override;
 
 private:
 	mutable boost::mutex m_CheckableMutex;
@@ -290,14 +189,12 @@ private:
 	long m_SchedulingOffset;
 
 	/* Downtimes */
-	static void DowntimesExpireTimerHandler(void);
-	void RemoveExpiredDowntimes(void);
-	void AddDowntimesToCache(void);
+	std::set<Downtime::Ptr> m_Downtimes;
+	mutable boost::mutex m_DowntimeMutex;
 
 	/* Comments */
-	static void CommentsExpireTimerHandler(void);
-	void RemoveExpiredComments(void);
-	void AddCommentsToCache(void);
+	std::set<Comment::Ptr> m_Comments;
+	mutable boost::mutex m_CommentMutex;
 
 	/* Notifications */
 	std::set<Notification::Ptr> m_Notifications;

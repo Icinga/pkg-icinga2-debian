@@ -40,45 +40,25 @@ public:
 
 	static void StaticInitialize(void);
 
-	int Main(void);
+	virtual int Main(void) override;
 
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
 	static IcingaApplication::Ptr GetInstance(void);
 
 	String GetPidPath(void) const;
-	Dictionary::Ptr GetVars(void) const;
+
+	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Value *result) const override;
+
 	String GetNodeName(void) const;
 
-	virtual bool ResolveMacro(const String& macro, const CheckResult::Ptr& cr, Value *result) const;
-
-	bool GetEnableNotifications(void) const;
-	void SetEnableNotifications(bool enabled);
-	void ClearEnableNotifications(void);
-
-	bool GetEnableEventHandlers(void) const;
-	void SetEnableEventHandlers(bool enabled);
-	void ClearEnableEventHandlers(void);
-
-	bool GetEnableFlapping(void) const;
-	void SetEnableFlapping(bool enabled);
-	void ClearEnableFlapping(void);
-
-	bool GetEnableHostChecks(void) const;
-	void SetEnableHostChecks(bool enabled);
-	void ClearEnableHostChecks(void);
-	bool GetEnableServiceChecks(void) const;
-	void SetEnableServiceChecks(bool enabled);
-	void ClearEnableServiceChecks(void);
-
-	bool GetEnablePerfdata(void) const;
-	void SetEnablePerfdata(bool enabled);
-	void ClearEnablePerfdata(void);
+	virtual void ValidateVars(const Dictionary::Ptr& value, const ValidationUtils& utils) override;
 
 private:
 	void DumpProgramState(void);
+	void DumpModifiedAttributes(void);
 
-	virtual void OnShutdown(void);
+	virtual void OnShutdown(void) override;
 };
 
 }

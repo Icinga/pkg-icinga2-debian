@@ -18,11 +18,12 @@
  ******************************************************************************/
 
 #include "icinga/scheduleddowntime.hpp"
+#include "icinga/scheduleddowntime.tcpp"
 #include "icinga/legacytimeperiod.hpp"
 #include "icinga/downtime.hpp"
 #include "icinga/service.hpp"
 #include "base/timer.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/initialize.hpp"
 #include "base/utility.hpp"
 #include "base/objectlock.hpp"
@@ -30,11 +31,12 @@
 #include "base/logger.hpp"
 #include "base/exception.hpp"
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(ScheduledDowntime);
-REGISTER_SCRIPTFUNCTION(ValidateScheduledDowntimeRanges, &ScheduledDowntime::ValidateRanges);
 
 INITIALIZE_ONCE(&ScheduledDowntime::StaticInitialize);
 
@@ -57,6 +59,27 @@ String ScheduledDowntimeNameComposer::MakeName(const String& shortName, const Ob
 	return name;
 }
 
+Dictionary::Ptr ScheduledDowntimeNameComposer::ParseName(const String& name) const
+{
+	std::vector<String> tokens;
+	boost::algorithm::split(tokens, name, boost::is_any_of("!"));
+
+	if (tokens.size() < 2)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid ScheduledDowntime name."));
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("host_name", tokens[0]);
+
+	if (tokens.size() > 2) {
+		result->Set("service_name", tokens[1]);
+		result->Set("name", tokens[2]);
+	} else {
+		result->Set("name", tokens[1]);
+	}
+
+	return result;
+}
+
 void ScheduledDowntime::StaticInitialize(void)
 {
 	l_Timer = new Timer();
@@ -67,22 +90,22 @@ void ScheduledDowntime::StaticInitialize(void)
 
 void ScheduledDowntime::OnAllConfigLoaded(void)
 {
-	CustomVarObject::OnAllConfigLoaded();
+	ObjectImpl<ScheduledDowntime>::OnAllConfigLoaded();
 
 	if (!GetCheckable())
 		BOOST_THROW_EXCEPTION(ScriptError("ScheduledDowntime '" + GetName() + "' references a host/service which doesn't exist.", GetDebugInfo()));
 }
 
-void ScheduledDowntime::Start(void)
+void ScheduledDowntime::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<ScheduledDowntime>::Start(runtimeCreated);
 
-	CreateNextDowntime();
+	Utility::QueueAsyncCallback(boost::bind(&ScheduledDowntime::CreateNextDowntime, this));
 }
 
 void ScheduledDowntime::TimerProc(void)
 {
-	BOOST_FOREACH(const ScheduledDowntime::Ptr& sd, DynamicType::GetObjectsByType<ScheduledDowntime>()) {
+	BOOST_FOREACH(const ScheduledDowntime::Ptr& sd, ConfigType::GetObjectsByType<ScheduledDowntime>()) {
 		sd->CreateNextDowntime();
 	}
 }
@@ -145,20 +168,13 @@ std::pair<double, double> ScheduledDowntime::FindNextSegment(void)
 
 void ScheduledDowntime::CreateNextDowntime(void)
 {
-	Dictionary::Ptr downtimes = GetCheckable()->GetDowntimes();
+	BOOST_FOREACH(const Downtime::Ptr& downtime, GetCheckable()->GetDowntimes()) {
+		if (downtime->GetScheduledBy() != GetName() ||
+		    downtime->GetStartTime() < Utility::GetTime())
+			continue;
 
-	{
-		ObjectLock dlock(downtimes);
-		BOOST_FOREACH(const Dictionary::Pair& kv, downtimes) {
-			Downtime::Ptr downtime = kv.second;
-
-			if (downtime->GetScheduledBy() != GetName() ||
-			    downtime->GetStartTime() < Utility::GetTime())
-				continue;
-
-			/* We've found a downtime that is owned by us and that hasn't started yet - we're done. */
-			return;
-		}
+		/* We've found a downtime that is owned by us and that hasn't started yet - we're done. */
+		return;
 	}
 
 	std::pair<double, double> segment = FindNextSegment();
@@ -173,19 +189,14 @@ void ScheduledDowntime::CreateNextDowntime(void)
 		return;
 	}
 
-	String uid = GetCheckable()->AddDowntime(GetAuthor(), GetComment(),
+	Downtime::AddDowntime(GetCheckable(), GetAuthor(), GetComment(),
 	    segment.first, segment.second,
-	    GetFixed(), String(), GetDuration(), GetName());
-
-	Downtime::Ptr downtime = Checkable::GetDowntimeByID(uid);
-	downtime->SetConfigOwner(GetName());
+	    GetFixed(), String(), GetDuration(), GetName(), GetName());
 }
 
-void ScheduledDowntime::ValidateRanges(const String& location, const ScheduledDowntime::Ptr& object)
+void ScheduledDowntime::ValidateRanges(const Dictionary::Ptr& value, const ValidationUtils& utils)
 {
-	Dictionary::Ptr ranges = object->GetRanges();
-
-	if (!ranges)
+	if (!value)
 		return;
 
 	/* create a fake time environment to validate the definitions */
@@ -193,22 +204,21 @@ void ScheduledDowntime::ValidateRanges(const String& location, const ScheduledDo
 	tm reference = Utility::LocalTime(refts);
 	Array::Ptr segments = new Array();
 
-	ObjectLock olock(ranges);
-	BOOST_FOREACH(const Dictionary::Pair& kv, ranges) {
+	ObjectLock olock(value);
+	BOOST_FOREACH(const Dictionary::Pair& kv, value) {
 		try {
 			tm begin_tm, end_tm;
 			int stride;
 			LegacyTimePeriod::ParseTimeRange(kv.first, &begin_tm, &end_tm, &stride, &reference);
 		} catch (const std::exception& ex) {
-			BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-			    location + ": Invalid time specification '" + kv.first + "': " + ex.what(), object->GetDebugInfo()));
+			BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("ranges"), "Invalid time specification '" + kv.first + "': " + ex.what()));
 		}
 
 		try {
 			LegacyTimePeriod::ProcessTimeRanges(kv.second, &reference, segments);
 		} catch (const std::exception& ex) {
-			BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-			    location + ": Invalid time range definition '" + kv.second + "': " + ex.what(), object->GetDebugInfo()));
+			BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("ranges"), "Invalid time range definition '" + kv.second + "': " + ex.what()));
 		}
 	}
 }
+

@@ -18,10 +18,11 @@
  ******************************************************************************/
 
 #include "remote/endpoint.hpp"
+#include "remote/endpoint.tcpp"
 #include "remote/apilistener.hpp"
-#include "remote/apiclient.hpp"
+#include "remote/jsonrpcconnection.hpp"
 #include "remote/zone.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/utility.hpp"
 #include "base/exception.hpp"
 #include "base/convert.hpp"
@@ -31,14 +32,14 @@ using namespace icinga;
 
 REGISTER_TYPE(Endpoint);
 
-boost::signals2::signal<void(const Endpoint::Ptr&, const ApiClient::Ptr&)> Endpoint::OnConnected;
-boost::signals2::signal<void(const Endpoint::Ptr&, const ApiClient::Ptr&)> Endpoint::OnDisconnected;
+boost::signals2::signal<void(const Endpoint::Ptr&, const JsonRpcConnection::Ptr&)> Endpoint::OnConnected;
+boost::signals2::signal<void(const Endpoint::Ptr&, const JsonRpcConnection::Ptr&)> Endpoint::OnDisconnected;
 
 void Endpoint::OnAllConfigLoaded(void)
 {
-	DynamicObject::OnConfigLoaded();
+	ConfigObject::OnConfigLoaded();
 
-	BOOST_FOREACH(const Zone::Ptr& zone, DynamicType::GetObjectsByType<Zone>()) {
+	BOOST_FOREACH(const Zone::Ptr& zone, ConfigType::GetObjectsByType<Zone>()) {
 		const std::set<Endpoint::Ptr> members = zone->GetEndpoints();
 
 		if (members.empty())
@@ -46,17 +47,19 @@ void Endpoint::OnAllConfigLoaded(void)
 
 		if (members.find(this) != members.end()) {
 			if (m_Zone)
-				BOOST_THROW_EXCEPTION(ScriptError("Endpoint '" + GetName() + "' is in more than one zone.", GetDebugInfo()));
+				BOOST_THROW_EXCEPTION(ScriptError("Endpoint '" + GetName()
+				    + "' is in more than one zone.", GetDebugInfo()));
 
 			m_Zone = zone;
 		}
 	}
 
 	if (!m_Zone)
-		BOOST_THROW_EXCEPTION(ScriptError("Endpoint '" + GetName() + "' does not belong to a zone.", GetDebugInfo()));
+		BOOST_THROW_EXCEPTION(ScriptError("Endpoint '" + GetName() +
+		    "' does not belong to a zone.", GetDebugInfo()));
 }
 
-void Endpoint::AddClient(const ApiClient::Ptr& client)
+void Endpoint::AddClient(const JsonRpcConnection::Ptr& client)
 {
 	bool was_master = ApiListener::GetInstance()->IsMaster();
 
@@ -73,7 +76,7 @@ void Endpoint::AddClient(const ApiClient::Ptr& client)
 	OnConnected(this, client);
 }
 
-void Endpoint::RemoveClient(const ApiClient::Ptr& client)
+void Endpoint::RemoveClient(const JsonRpcConnection::Ptr& client)
 {
 	bool was_master = ApiListener::GetInstance()->IsMaster();
 
@@ -95,7 +98,7 @@ void Endpoint::RemoveClient(const ApiClient::Ptr& client)
 	OnDisconnected(this, client);
 }
 
-std::set<ApiClient::Ptr> Endpoint::GetClients(void) const
+std::set<JsonRpcConnection::Ptr> Endpoint::GetClients(void) const
 {
 	boost::mutex::scoped_lock lock(m_ClientsLock);
 	return m_Clients;
@@ -106,7 +109,7 @@ Zone::Ptr Endpoint::GetZone(void) const
 	return m_Zone;
 }
 
-bool Endpoint::IsConnected(void) const
+bool Endpoint::GetConnected(void) const
 {
 	boost::mutex::scoped_lock lock(m_ClientsLock);
 	return !m_Clients.empty();

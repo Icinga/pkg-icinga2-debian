@@ -22,8 +22,8 @@
 
 #include "config/i2-config.hpp"
 #include "base/dictionary.hpp"
-#include "base/scriptglobal.hpp"
 #include <boost/thread/tss.hpp>
+#include <stack>
 
 namespace icinga
 {
@@ -32,7 +32,7 @@ struct I2_BASE_API ScriptFrame
 {
 	Dictionary::Ptr Locals;
 	Value Self;
-	ScriptFrame *NextFrame;
+	bool Sandboxed;
 
 	ScriptFrame(void);
 	ScriptFrame(const Value& self);
@@ -41,9 +41,10 @@ struct I2_BASE_API ScriptFrame
 	static ScriptFrame *GetCurrentFrame(void);
 
 private:
-	static boost::thread_specific_ptr<ScriptFrame *> m_CurrentFrame;
+	static boost::thread_specific_ptr<std::stack<ScriptFrame *> > m_ScriptFrames;
 
-	static void SetCurrentFrame(ScriptFrame *frame);
+	inline static void PushFrame(ScriptFrame *frame);
+	inline static ScriptFrame *PopFrame(void);
 };
 
 }

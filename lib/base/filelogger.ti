@@ -19,12 +19,14 @@
 
 #include "base/streamlogger.hpp"
 
+library base;
+
 namespace icinga
 {
 
 class FileLogger : StreamLogger
 {
-	[config] String path;
+	[config, required] String path;
 };
 
 }

@@ -257,12 +257,6 @@ void ExternalCommandProcessor::StaticInitialize(void)
 	RegisterCommand("STOP_EXECUTING_SVC_CHECKS", &ExternalCommandProcessor::StopExecutingSvcChecks);
 	RegisterCommand("START_EXECUTING_HOST_CHECKS", &ExternalCommandProcessor::StartExecutingHostChecks);
 	RegisterCommand("STOP_EXECUTING_HOST_CHECKS", &ExternalCommandProcessor::StopExecutingHostChecks);
-	RegisterCommand("CHANGE_SVC_MODATTR", &ExternalCommandProcessor::ChangeSvcModattr, 3);
-	RegisterCommand("CHANGE_HOST_MODATTR", &ExternalCommandProcessor::ChangeHostModattr, 2);
-	RegisterCommand("CHANGE_USER_MODATTR", &ExternalCommandProcessor::ChangeUserModattr, 2);
-	RegisterCommand("CHANGE_CHECKCOMMAND_MODATTR", &ExternalCommandProcessor::ChangeCheckcommandModattr, 2);
-	RegisterCommand("CHANGE_EVENTCOMMAND_MODATTR", &ExternalCommandProcessor::ChangeEventcommandModattr, 2);
-	RegisterCommand("CHANGE_NOTIFICATIONCOMMAND_MODATTR", &ExternalCommandProcessor::ChangeNotificationcommandModattr, 2);
 	RegisterCommand("CHANGE_NORMAL_SVC_CHECK_INTERVAL", &ExternalCommandProcessor::ChangeNormalSvcCheckInterval, 3);
 	RegisterCommand("CHANGE_NORMAL_HOST_CHECK_INTERVAL", &ExternalCommandProcessor::ChangeNormalHostCheckInterval, 2);
 	RegisterCommand("CHANGE_RETRY_SVC_CHECK_INTERVAL", &ExternalCommandProcessor::ChangeRetrySvcCheckInterval, 3);
@@ -334,14 +328,10 @@ void ExternalCommandProcessor::ProcessHostCheckResult(double time, const std::ve
 
 	host->ProcessCheckResult(result);
 
-	{
-		ObjectLock olock(host);
-
-		/* Reschedule the next check. The side effect of this is that for as long
-		 * as we receive passive results for a service we won't execute any
-		 * active checks. */
-		host->SetNextCheck(Utility::GetTime() + host->GetCheckInterval());
-	}
+	/* Reschedule the next check. The side effect of this is that for as long
+	 * as we receive passive results for a service we won't execute any
+	 * active checks. */
+	host->SetNextCheck(Utility::GetTime() + host->GetCheckInterval());
 }
 
 void ExternalCommandProcessor::ProcessServiceCheckResult(double time, const std::vector<String>& arguments)
@@ -373,14 +363,10 @@ void ExternalCommandProcessor::ProcessServiceCheckResult(double time, const std:
 
 	service->ProcessCheckResult(result);
 
-	{
-		ObjectLock olock(service);
-
-		/* Reschedule the next check. The side effect of this is that for as long
-		 * as we receive passive results for a service we won't execute any
-		 * active checks. */
-		service->SetNextCheck(Utility::GetTime() + service->GetCheckInterval());
-	}
+	/* Reschedule the next check. The side effect of this is that for as long
+	 * as we receive passive results for a service we won't execute any
+	 * active checks. */
+	service->SetNextCheck(Utility::GetTime() + service->GetCheckInterval());
 }
 
 void ExternalCommandProcessor::ScheduleHostCheck(double, const std::vector<String>& arguments)
@@ -405,11 +391,7 @@ void ExternalCommandProcessor::ScheduleHostCheck(double, const std::vector<Strin
 	if (planned_check < Utility::GetTime())
 		planned_check = Utility::GetTime();
 
-	{
-		ObjectLock olock(host);
-
-		host->SetNextCheck(planned_check);
-	}
+	host->SetNextCheck(planned_check);
 }
 
 void ExternalCommandProcessor::ScheduleForcedHostCheck(double, const std::vector<String>& arguments)
@@ -422,12 +404,8 @@ void ExternalCommandProcessor::ScheduleForcedHostCheck(double, const std::vector
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Rescheduling next check for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetForceNextCheck(true);
-		host->SetNextCheck(Convert::ToDouble(arguments[1]));
-	}
+	host->SetForceNextCheck(true);
+	host->SetNextCheck(Convert::ToDouble(arguments[1]));
 }
 
 void ExternalCommandProcessor::ScheduleSvcCheck(double, const std::vector<String>& arguments)
@@ -452,11 +430,7 @@ void ExternalCommandProcessor::ScheduleSvcCheck(double, const std::vector<String
 	if (planned_check < Utility::GetTime())
 		planned_check = Utility::GetTime();
 
-	{
-		ObjectLock olock(service);
-
-		service->SetNextCheck(planned_check);
-	}
+	service->SetNextCheck(planned_check);
 }
 
 void ExternalCommandProcessor::ScheduleForcedSvcCheck(double, const std::vector<String>& arguments)
@@ -469,12 +443,8 @@ void ExternalCommandProcessor::ScheduleForcedSvcCheck(double, const std::vector<
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Rescheduling next check for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetForceNextCheck(true);
-		service->SetNextCheck(Convert::ToDouble(arguments[2]));
-	}
+	service->SetForceNextCheck(true);
+	service->SetNextCheck(Convert::ToDouble(arguments[2]));
 }
 
 void ExternalCommandProcessor::EnableHostCheck(double, const std::vector<String>& arguments)
@@ -487,11 +457,7 @@ void ExternalCommandProcessor::EnableHostCheck(double, const std::vector<String>
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling active checks for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnableActiveChecks(true);
-	}
+	host->ModifyAttribute("enable_active_checks", true);
 }
 
 void ExternalCommandProcessor::DisableHostCheck(double, const std::vector<String>& arguments)
@@ -504,11 +470,7 @@ void ExternalCommandProcessor::DisableHostCheck(double, const std::vector<String
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling active checks for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnableActiveChecks(false);
-	}
+	host->ModifyAttribute("enable_active_checks", false);
 }
 
 void ExternalCommandProcessor::EnableSvcCheck(double, const std::vector<String>& arguments)
@@ -521,11 +483,7 @@ void ExternalCommandProcessor::EnableSvcCheck(double, const std::vector<String>&
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling active checks for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnableActiveChecks(true);
-	}
+	service->ModifyAttribute("enable_active_checks", true);
 }
 
 void ExternalCommandProcessor::DisableSvcCheck(double, const std::vector<String>& arguments)
@@ -538,11 +496,7 @@ void ExternalCommandProcessor::DisableSvcCheck(double, const std::vector<String>
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling active checks for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnableActiveChecks(false);
-	}
+	service->ModifyAttribute("enable_active_checks", false);
 }
 
 void ExternalCommandProcessor::ShutdownProcess(double, const std::vector<String>&)
@@ -570,12 +524,8 @@ void ExternalCommandProcessor::ScheduleForcedHostSvcChecks(double, const std::ve
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Rescheduling next check for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetNextCheck(planned_check);
-			service->SetForceNextCheck(true);
-		}
+		service->SetNextCheck(planned_check);
+		service->SetForceNextCheck(true);
 	}
 }
 
@@ -602,11 +552,7 @@ void ExternalCommandProcessor::ScheduleHostSvcChecks(double, const std::vector<S
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Rescheduling next check for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetNextCheck(planned_check);
-		}
+		service->SetNextCheck(planned_check);
 	}
 }
 
@@ -620,7 +566,8 @@ void ExternalCommandProcessor::EnableHostSvcChecks(double, const std::vector<Str
 	BOOST_FOREACH(const Service::Ptr& service, host->GetServices()) {
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling active checks for service '" << service->GetName() << "'";
-		service->SetEnableActiveChecks(true);
+
+		service->ModifyAttribute("enable_active_checks", true);
 	}
 }
 
@@ -635,11 +582,7 @@ void ExternalCommandProcessor::DisableHostSvcChecks(double, const std::vector<St
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling active checks for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEnableActiveChecks(false);
-		}
+		service->ModifyAttribute("enable_active_checks", false);
 	}
 }
 
@@ -659,7 +602,7 @@ void ExternalCommandProcessor::AcknowledgeSvcProblem(double, const std::vector<S
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Setting acknowledgement for service '" << service->GetName() << "'" << (notify ? "" : ". Disabled notification");
 
-	service->AddComment(CommentAcknowledgement, arguments[5], arguments[6], 0);
+	Comment::AddComment(service, CommentAcknowledgement, arguments[5], arguments[6], 0);
 	service->AcknowledgeProblem(arguments[5], arguments[6], sticky ? AcknowledgementSticky : AcknowledgementNormal, notify);
 }
 
@@ -680,7 +623,7 @@ void ExternalCommandProcessor::AcknowledgeSvcProblemExpire(double, const std::ve
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Setting timed acknowledgement for service '" << service->GetName() << "'" << (notify ? "" : ". Disabled notification");
 
-	service->AddComment(CommentAcknowledgement, arguments[6], arguments[7], timestamp);
+	Comment::AddComment(service, CommentAcknowledgement, arguments[6], arguments[7], timestamp);
 	service->AcknowledgeProblem(arguments[6], arguments[7], sticky ? AcknowledgementSticky : AcknowledgementNormal, notify, timestamp);
 }
 
@@ -718,7 +661,7 @@ void ExternalCommandProcessor::AcknowledgeHostProblem(double, const std::vector<
 	if (host->GetState() == HostUp)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("The host '" + arguments[0] + "' is OK."));
 
-	host->AddComment(CommentAcknowledgement, arguments[4], arguments[5], 0);
+	Comment::AddComment(host, CommentAcknowledgement, arguments[4], arguments[5], 0);
 	host->AcknowledgeProblem(arguments[4], arguments[5], sticky ? AcknowledgementSticky : AcknowledgementNormal, notify);
 }
 
@@ -739,7 +682,7 @@ void ExternalCommandProcessor::AcknowledgeHostProblemExpire(double, const std::v
 	if (host->GetState() == HostUp)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("The host '" + arguments[0] + "' is OK."));
 
-	host->AddComment(CommentAcknowledgement, arguments[5], arguments[6], timestamp);
+	Comment::AddComment(host, CommentAcknowledgement, arguments[5], arguments[6], timestamp);
 	host->AcknowledgeProblem(arguments[5], arguments[6], sticky ? AcknowledgementSticky : AcknowledgementNormal, notify, timestamp);
 }
 
@@ -772,11 +715,7 @@ void ExternalCommandProcessor::EnableHostgroupSvcChecks(double, const std::vecto
 			Log(LogNotice, "ExternalCommandProcessor")
 			    << "Enabling active checks for service '" << service->GetName() << "'";
 
-			{
-				ObjectLock olock(service);
-
-				service->SetEnableActiveChecks(true);
-			}
+			service->ModifyAttribute("enable_active_checks", true);
 		}
 	}
 }
@@ -793,11 +732,7 @@ void ExternalCommandProcessor::DisableHostgroupSvcChecks(double, const std::vect
 			Log(LogNotice, "ExternalCommandProcessor")
 			    << "Disabling active checks for service '" << service->GetName() << "'";
 
-			{
-				ObjectLock olock(service);
-
-				service->SetEnableActiveChecks(false);
-			}
+			service->ModifyAttribute("enable_active_checks", false);
 		}
 	}
 }
@@ -813,11 +748,7 @@ void ExternalCommandProcessor::EnableServicegroupSvcChecks(double, const std::ve
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling active checks for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEnableActiveChecks(true);
-		}
+		service->ModifyAttribute("enable_active_checks", true);
 	}
 }
 
@@ -832,11 +763,7 @@ void ExternalCommandProcessor::DisableServicegroupSvcChecks(double, const std::v
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling active checks for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEnableActiveChecks(false);
-		}
+		service->ModifyAttribute("enable_active_checks", false);
 	}
 }
 
@@ -850,11 +777,7 @@ void ExternalCommandProcessor::EnablePassiveHostChecks(double, const std::vector
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling passive checks for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnablePassiveChecks(true);
-	}
+	host->ModifyAttribute("enable_passive_checks", true);
 }
 
 void ExternalCommandProcessor::DisablePassiveHostChecks(double, const std::vector<String>& arguments)
@@ -867,11 +790,7 @@ void ExternalCommandProcessor::DisablePassiveHostChecks(double, const std::vecto
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling passive checks for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnablePassiveChecks(false);
-	}
+	host->ModifyAttribute("enable_passive_checks", false);
 }
 
 void ExternalCommandProcessor::EnablePassiveSvcChecks(double, const std::vector<String>& arguments)
@@ -884,11 +803,7 @@ void ExternalCommandProcessor::EnablePassiveSvcChecks(double, const std::vector<
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling passive checks for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnablePassiveChecks(true);
-	}
+	service->ModifyAttribute("enable_passive_checks", true);
 }
 
 void ExternalCommandProcessor::DisablePassiveSvcChecks(double, const std::vector<String>& arguments)
@@ -901,11 +816,7 @@ void ExternalCommandProcessor::DisablePassiveSvcChecks(double, const std::vector
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling passive checks for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnablePassiveChecks(false);
-	}
+	service->ModifyAttribute("enable_passive_checks", false);
 }
 
 void ExternalCommandProcessor::EnableServicegroupPassiveSvcChecks(double, const std::vector<String>& arguments)
@@ -919,11 +830,7 @@ void ExternalCommandProcessor::EnableServicegroupPassiveSvcChecks(double, const 
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling passive checks for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEnablePassiveChecks(true);
-		}
+		service->ModifyAttribute("enable_passive_checks", true);
 	}
 }
 
@@ -938,11 +845,7 @@ void ExternalCommandProcessor::DisableServicegroupPassiveSvcChecks(double, const
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling passive checks for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEnablePassiveChecks(false);
-		}
+		service->ModifyAttribute("enable_passive_checks", false);
 	}
 }
 
@@ -958,11 +861,7 @@ void ExternalCommandProcessor::EnableHostgroupPassiveSvcChecks(double, const std
 			Log(LogNotice, "ExternalCommandProcessor")
 			    << "Enabling passive checks for service '" << service->GetName() << "'";
 
-			{
-				ObjectLock olock(service);
-
-				service->SetEnablePassiveChecks(true);
-			}
+			service->ModifyAttribute("enable_passive_checks", true);
 		}
 	}
 }
@@ -979,11 +878,7 @@ void ExternalCommandProcessor::DisableHostgroupPassiveSvcChecks(double, const st
 			Log(LogNotice, "ExternalCommandProcessor")
 			    << "Disabling passive checks for service '" << service->GetName() << "'";
 
-			{
-				ObjectLock olock(service);
-
-				service->SetEnablePassiveChecks(false);
-			}
+			service->ModifyAttribute("enable_passive_checks", false);
 		}
 	}
 }
@@ -1030,11 +925,11 @@ void ExternalCommandProcessor::ScheduleSvcDowntime(double, const std::vector<Str
 	int triggeredByLegacy = Convert::ToLong(arguments[5]);
 	int is_fixed = Convert::ToLong(arguments[4]);
 	if (triggeredByLegacy != 0)
-		triggeredBy = Service::GetDowntimeIDFromLegacyID(triggeredByLegacy);
+		triggeredBy = Downtime::GetDowntimeIDFromLegacyID(triggeredByLegacy);
 
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Creating downtime for service " << service->GetName();
-	(void) service->AddDowntime(arguments[7], arguments[8],
+	(void) Downtime::AddDowntime(service, arguments[7], arguments[8],
 	    Convert::ToDouble(arguments[2]), Convert::ToDouble(arguments[3]),
 	    Convert::ToBool(is_fixed), triggeredBy, Convert::ToDouble(arguments[6]));
 }
@@ -1044,8 +939,8 @@ void ExternalCommandProcessor::DelSvcDowntime(double, const std::vector<String>&
 	int id = Convert::ToLong(arguments[0]);
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Removing downtime ID " << arguments[0];
-	String rid = Service::GetDowntimeIDFromLegacyID(id);
-	Service::RemoveDowntime(rid, true);
+	String rid = Downtime::GetDowntimeIDFromLegacyID(id);
+	Downtime::RemoveDowntime(rid, true);
 }
 
 void ExternalCommandProcessor::ScheduleHostDowntime(double, const std::vector<String>& arguments)
@@ -1059,12 +954,12 @@ void ExternalCommandProcessor::ScheduleHostDowntime(double, const std::vector<St
 	int triggeredByLegacy = Convert::ToLong(arguments[4]);
 	int is_fixed = Convert::ToLong(arguments[3]);
 	if (triggeredByLegacy != 0)
-		triggeredBy = Service::GetDowntimeIDFromLegacyID(triggeredByLegacy);
+		triggeredBy = Downtime::GetDowntimeIDFromLegacyID(triggeredByLegacy);
 
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Creating downtime for host " << host->GetName();
 
-	(void) host->AddDowntime(arguments[6], arguments[7],
+	(void) Downtime::AddDowntime(host, arguments[6], arguments[7],
 	    Convert::ToDouble(arguments[1]), Convert::ToDouble(arguments[2]),
 	    Convert::ToBool(is_fixed), triggeredBy, Convert::ToDouble(arguments[5]));
 }
@@ -1074,8 +969,8 @@ void ExternalCommandProcessor::DelHostDowntime(double, const std::vector<String>
 	int id = Convert::ToLong(arguments[0]);
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Removing downtime ID " << arguments[0];
-	String rid = Service::GetDowntimeIDFromLegacyID(id);
-	Service::RemoveDowntime(rid, true);
+	String rid = Downtime::GetDowntimeIDFromLegacyID(id);
+	Downtime::RemoveDowntime(rid, true);
 }
 
 void ExternalCommandProcessor::DelDowntimeByHostName(double, const std::vector<String>& arguments)
@@ -1101,41 +996,29 @@ void ExternalCommandProcessor::DelDowntimeByHostName(double, const std::vector<S
 		Log(LogWarning, "ExternalCommandProcessor")
 		    << ("Ignoring additional parameters for host '" + arguments[0] + "' downtime deletion.");
 
-	std::vector<String> ids;
+	BOOST_FOREACH(const Downtime::Ptr& downtime, host->GetDowntimes()) {
+		Log(LogNotice, "ExternalCommandProcessor")
+		    << "Removing downtime '" << downtime->GetName() << "'.";
 
-	Dictionary::Ptr hostDowntimes = host->GetDowntimes();
-	{
-		ObjectLock dhlock(hostDowntimes);
-		BOOST_FOREACH(const Dictionary::Pair& kv, hostDowntimes) {
-			ids.push_back(kv.first);
-		}
+		Downtime::RemoveDowntime(downtime->GetName(), true);
 	}
 
 	BOOST_FOREACH(const Service::Ptr& service, host->GetServices()) {
 		if (!serviceName.IsEmpty() && serviceName != service->GetName())
 			continue;
 
-		Dictionary::Ptr serviceDowntimes = service->GetDowntimes();
-		{
-			ObjectLock dslock(serviceDowntimes);
-			BOOST_FOREACH(const Dictionary::Pair& kv, serviceDowntimes) {
-				ids.push_back(kv.first);
-			}
+		BOOST_FOREACH(const Downtime::Ptr& downtime, service->GetDowntimes()) {
+			if (!startTime.IsEmpty() && downtime->GetStartTime() != Convert::ToDouble(startTime))
+				continue;
+
+			if (!commentString.IsEmpty() && downtime->GetComment() != commentString)
+				continue;
+
+			Log(LogNotice, "ExternalCommandProcessor")
+			    << "Removing downtime '" << downtime->GetName() << "'.";
+
+			Downtime::RemoveDowntime(downtime->GetName(), true);
 		}
-	}
-
-	BOOST_FOREACH(const String& id, ids) {
-		Downtime::Ptr downtime = Service::GetDowntimeByID(id);
-
-		if (!startTime.IsEmpty() && downtime->GetStartTime() != Convert::ToDouble(startTime))
-			continue;
-
-		if (!commentString.IsEmpty() && downtime->GetComment() != commentString)
-			continue;
-
-		Log(LogNotice, "ExternalCommandProcessor")
-		    << "Removing downtime ID " << id;
-		Service::RemoveDowntime(id, true);
 	}
 }
 
@@ -1150,19 +1033,19 @@ void ExternalCommandProcessor::ScheduleHostSvcDowntime(double, const std::vector
 	int triggeredByLegacy = Convert::ToLong(arguments[4]);
 	int is_fixed = Convert::ToLong(arguments[3]);
 	if (triggeredByLegacy != 0)
-		triggeredBy = Service::GetDowntimeIDFromLegacyID(triggeredByLegacy);
+		triggeredBy = Downtime::GetDowntimeIDFromLegacyID(triggeredByLegacy);
 
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Creating downtime for host " << host->GetName();
 
-	(void) host->AddDowntime(arguments[6], arguments[7],
+	(void) Downtime::AddDowntime(host, arguments[6], arguments[7],
 	    Convert::ToDouble(arguments[1]), Convert::ToDouble(arguments[2]),
 	    Convert::ToBool(is_fixed), triggeredBy, Convert::ToDouble(arguments[5]));
 
 	BOOST_FOREACH(const Service::Ptr& service, host->GetServices()) {
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Creating downtime for service " << service->GetName();
-		(void) service->AddDowntime(arguments[6], arguments[7],
+		(void) Downtime::AddDowntime(service, arguments[6], arguments[7],
 		    Convert::ToDouble(arguments[1]), Convert::ToDouble(arguments[2]),
 		    Convert::ToBool(is_fixed), triggeredBy, Convert::ToDouble(arguments[5]));
 	}
@@ -1179,13 +1062,13 @@ void ExternalCommandProcessor::ScheduleHostgroupHostDowntime(double, const std::
 	int triggeredByLegacy = Convert::ToLong(arguments[4]);
 	int is_fixed = Convert::ToLong(arguments[3]);
 	if (triggeredByLegacy != 0)
-		triggeredBy = Service::GetDowntimeIDFromLegacyID(triggeredByLegacy);
+		triggeredBy = Downtime::GetDowntimeIDFromLegacyID(triggeredByLegacy);
 
 	BOOST_FOREACH(const Host::Ptr& host, hg->GetMembers()) {
 		Log(LogNotice, "ExternalCommandProcessor")
 		    <<  "Creating downtime for host " << host->GetName();
 
-		(void) host->AddDowntime(arguments[6], arguments[7],
+		(void) Downtime::AddDowntime(host, arguments[6], arguments[7],
 		    Convert::ToDouble(arguments[1]), Convert::ToDouble(arguments[2]),
 		    Convert::ToBool(is_fixed), triggeredBy, Convert::ToDouble(arguments[5]));
 	}
@@ -1202,7 +1085,7 @@ void ExternalCommandProcessor::ScheduleHostgroupSvcDowntime(double, const std::v
 	int triggeredByLegacy = Convert::ToLong(arguments[4]);
 	int is_fixed = Convert::ToLong(arguments[3]);
 	if (triggeredByLegacy != 0)
-		triggeredBy = Service::GetDowntimeIDFromLegacyID(triggeredByLegacy);
+		triggeredBy = Downtime::GetDowntimeIDFromLegacyID(triggeredByLegacy);
 
 	/* Note: we can't just directly create downtimes for all the services by iterating
 	 * over all hosts in the host group - otherwise we might end up creating multiple
@@ -1219,7 +1102,7 @@ void ExternalCommandProcessor::ScheduleHostgroupSvcDowntime(double, const std::v
 	BOOST_FOREACH(const Service::Ptr& service, services) {
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Creating downtime for service " << service->GetName();
-		(void) service->AddDowntime(arguments[6], arguments[7],
+		(void) Downtime::AddDowntime(service, arguments[6], arguments[7],
 		    Convert::ToDouble(arguments[1]), Convert::ToDouble(arguments[2]),
 		    Convert::ToBool(is_fixed), triggeredBy, Convert::ToDouble(arguments[5]));
 	}
@@ -1236,7 +1119,7 @@ void ExternalCommandProcessor::ScheduleServicegroupHostDowntime(double, const st
 	int triggeredByLegacy = Convert::ToLong(arguments[4]);
 	int is_fixed = Convert::ToLong(arguments[3]);
 	if (triggeredByLegacy != 0)
-		triggeredBy = Service::GetDowntimeIDFromLegacyID(triggeredByLegacy);
+		triggeredBy = Downtime::GetDowntimeIDFromLegacyID(triggeredByLegacy);
 
 	/* Note: we can't just directly create downtimes for all the hosts by iterating
 	 * over all services in the service group - otherwise we might end up creating multiple
@@ -1252,7 +1135,7 @@ void ExternalCommandProcessor::ScheduleServicegroupHostDowntime(double, const st
 	BOOST_FOREACH(const Host::Ptr& host, hosts) {
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Creating downtime for host " << host->GetName();
-		(void) host->AddDowntime(arguments[6], arguments[7],
+		(void) Downtime::AddDowntime(host, arguments[6], arguments[7],
 		    Convert::ToDouble(arguments[1]), Convert::ToDouble(arguments[2]),
 		    Convert::ToBool(is_fixed), triggeredBy, Convert::ToDouble(arguments[5]));
 	}
@@ -1269,12 +1152,12 @@ void ExternalCommandProcessor::ScheduleServicegroupSvcDowntime(double, const std
 	int triggeredByLegacy = Convert::ToLong(arguments[4]);
 	int is_fixed = Convert::ToLong(arguments[3]);
 	if (triggeredByLegacy != 0)
-		triggeredBy = Service::GetDowntimeIDFromLegacyID(triggeredByLegacy);
+		triggeredBy = Downtime::GetDowntimeIDFromLegacyID(triggeredByLegacy);
 
 	BOOST_FOREACH(const Service::Ptr& service, sg->GetMembers()) {
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Creating downtime for service " << service->GetName();
-		(void) service->AddDowntime(arguments[6], arguments[7],
+		(void) Downtime::AddDowntime(service, arguments[6], arguments[7],
 		    Convert::ToDouble(arguments[1]), Convert::ToDouble(arguments[2]),
 		    Convert::ToBool(is_fixed), triggeredBy, Convert::ToDouble(arguments[5]));
 	}
@@ -1289,7 +1172,7 @@ void ExternalCommandProcessor::AddHostComment(double, const std::vector<String>&
 
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Creating comment for host " << host->GetName();
-	(void) host->AddComment(CommentUser, arguments[2], arguments[3], 0);
+	(void) Comment::AddComment(host, CommentUser, arguments[2], arguments[3], 0);
 }
 
 void ExternalCommandProcessor::DelHostComment(double, const std::vector<String>& arguments)
@@ -1297,8 +1180,8 @@ void ExternalCommandProcessor::DelHostComment(double, const std::vector<String>&
 	int id = Convert::ToLong(arguments[0]);
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Removing comment ID " << arguments[0];
-	String rid = Service::GetCommentIDFromLegacyID(id);
-	Service::RemoveComment(rid);
+	String rid = Comment::GetCommentIDFromLegacyID(id);
+	Comment::RemoveComment(rid);
 }
 
 void ExternalCommandProcessor::AddSvcComment(double, const std::vector<String>& arguments)
@@ -1310,7 +1193,7 @@ void ExternalCommandProcessor::AddSvcComment(double, const std::vector<String>& 
 
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Creating comment for service " << service->GetName();
-	(void) service->AddComment(CommentUser, arguments[3], arguments[4], 0);
+	(void) Comment::AddComment(service, CommentUser, arguments[3], arguments[4], 0);
 }
 
 void ExternalCommandProcessor::DelSvcComment(double, const std::vector<String>& arguments)
@@ -1319,8 +1202,8 @@ void ExternalCommandProcessor::DelSvcComment(double, const std::vector<String>& 
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Removing comment ID " << arguments[0];
 
-	String rid = Service::GetCommentIDFromLegacyID(id);
-	Service::RemoveComment(rid);
+	String rid = Comment::GetCommentIDFromLegacyID(id);
+	Comment::RemoveComment(rid);
 }
 
 void ExternalCommandProcessor::DelAllHostComments(double, const std::vector<String>& arguments)
@@ -1359,7 +1242,6 @@ void ExternalCommandProcessor::SendCustomHostNotification(double, const std::vec
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Sending custom notification for host " << host->GetName();
 	if (options & 2) {
-		ObjectLock olock(host);
 		host->SetForceNextNotification(true);
 	}
 
@@ -1379,7 +1261,6 @@ void ExternalCommandProcessor::SendCustomSvcNotification(double, const std::vect
 	    << "Sending custom notification for service " << service->GetName();
 
 	if (options & 2) {
-		ObjectLock olock(service);
 		service->SetForceNextNotification(true);
 	}
 
@@ -1397,8 +1278,6 @@ void ExternalCommandProcessor::DelayHostNotification(double, const std::vector<S
 	    << "Delaying notifications for host '" << host->GetName() << "'";
 
 	BOOST_FOREACH(const Notification::Ptr& notification, host->GetNotifications()) {
-		ObjectLock olock(notification);
-
 		notification->SetNextNotification(Convert::ToDouble(arguments[1]));
 	}
 }
@@ -1414,8 +1293,6 @@ void ExternalCommandProcessor::DelaySvcNotification(double, const std::vector<St
 	    << "Delaying notifications for service " << service->GetName();
 
 	BOOST_FOREACH(const Notification::Ptr& notification, service->GetNotifications()) {
-		ObjectLock olock(notification);
-
 		notification->SetNextNotification(Convert::ToDouble(arguments[2]));
 	}
 }
@@ -1430,11 +1307,7 @@ void ExternalCommandProcessor::EnableHostNotifications(double, const std::vector
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling notifications for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnableNotifications(true);
-	}
+	host->ModifyAttribute("enable_notifications", true);
 }
 
 void ExternalCommandProcessor::DisableHostNotifications(double, const std::vector<String>& arguments)
@@ -1447,11 +1320,7 @@ void ExternalCommandProcessor::DisableHostNotifications(double, const std::vecto
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling notifications for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnableNotifications(false);
-	}
+	host->ModifyAttribute("enable_notifications", false);
 }
 
 void ExternalCommandProcessor::EnableSvcNotifications(double, const std::vector<String>& arguments)
@@ -1464,11 +1333,7 @@ void ExternalCommandProcessor::EnableSvcNotifications(double, const std::vector<
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling notifications for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnableNotifications(true);
-	}
+	service->ModifyAttribute("enable_notifications", true);
 }
 
 void ExternalCommandProcessor::DisableSvcNotifications(double, const std::vector<String>& arguments)
@@ -1481,11 +1346,7 @@ void ExternalCommandProcessor::DisableSvcNotifications(double, const std::vector
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling notifications for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnableNotifications(false);
-	}
+	service->ModifyAttribute("enable_notifications", false);
 }
 
 void ExternalCommandProcessor::EnableHostSvcNotifications(double, const std::vector<String>& arguments)
@@ -1502,11 +1363,7 @@ void ExternalCommandProcessor::EnableHostSvcNotifications(double, const std::vec
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling notifications for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEnableNotifications(true);
-		}
+		service->ModifyAttribute("enable_notifications", true);
 	}
 }
 
@@ -1524,11 +1381,7 @@ void ExternalCommandProcessor::DisableHostSvcNotifications(double, const std::ve
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling notifications for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEnableNotifications(false);
-		}
+		service->ModifyAttribute("enable_notifications", false);
 	}
 }
 
@@ -1543,11 +1396,7 @@ void ExternalCommandProcessor::DisableHostgroupHostChecks(double, const std::vec
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling active checks for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnableActiveChecks(false);
-		}
+		host->ModifyAttribute("enable_active_checks", false);
 	}
 }
 
@@ -1562,11 +1411,7 @@ void ExternalCommandProcessor::DisableHostgroupPassiveHostChecks(double, const s
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling passive checks for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnablePassiveChecks(false);
-		}
+		host->ModifyAttribute("enable_passive_checks", false);
 	}
 }
 
@@ -1583,11 +1428,7 @@ void ExternalCommandProcessor::DisableServicegroupHostChecks(double, const std::
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling active checks for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnableActiveChecks(false);
-		}
+		host->ModifyAttribute("enable_active_checks", false);
 	}
 }
 
@@ -1604,11 +1445,7 @@ void ExternalCommandProcessor::DisableServicegroupPassiveHostChecks(double, cons
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling passive checks for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnablePassiveChecks(false);
-		}
+		host->ModifyAttribute("enable_passive_checks", false);
 	}
 }
 
@@ -1623,11 +1460,7 @@ void ExternalCommandProcessor::EnableHostgroupHostChecks(double, const std::vect
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling active checks for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnableActiveChecks(true);
-		}
+		host->ModifyAttribute("enable_active_checks", true);
 	}
 }
 
@@ -1642,11 +1475,7 @@ void ExternalCommandProcessor::EnableHostgroupPassiveHostChecks(double, const st
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling passive checks for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnablePassiveChecks(true);
-		}
+		host->ModifyAttribute("enable_passive_checks", true);
 	}
 }
 
@@ -1663,11 +1492,7 @@ void ExternalCommandProcessor::EnableServicegroupHostChecks(double, const std::v
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling active checks for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnableActiveChecks(true);
-		}
+		host->ModifyAttribute("enable_active_checks", true);
 	}
 }
 
@@ -1684,11 +1509,7 @@ void ExternalCommandProcessor::EnableServicegroupPassiveHostChecks(double, const
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling passive checks for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnablePassiveChecks(true);
-		}
+		host->ModifyAttribute("enable_passive_checks", true);
 	}
 }
 
@@ -1702,11 +1523,7 @@ void ExternalCommandProcessor::EnableHostFlapping(double, const std::vector<Stri
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling flapping detection for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnableFlapping(true);
-	}
+	host->ModifyAttribute("enable_flapping", true);
 }
 
 void ExternalCommandProcessor::DisableHostFlapping(double, const std::vector<String>& arguments)
@@ -1719,11 +1536,7 @@ void ExternalCommandProcessor::DisableHostFlapping(double, const std::vector<Str
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling flapping detection for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnableFlapping(false);
-	}
+	host->ModifyAttribute("enable_flapping", false);
 }
 
 void ExternalCommandProcessor::EnableSvcFlapping(double, const std::vector<String>& arguments)
@@ -1736,11 +1549,7 @@ void ExternalCommandProcessor::EnableSvcFlapping(double, const std::vector<Strin
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling flapping detection for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnableFlapping(true);
-	}
+	service->ModifyAttribute("enable_flapping", true);
 }
 
 void ExternalCommandProcessor::DisableSvcFlapping(double, const std::vector<String>& arguments)
@@ -1753,11 +1562,7 @@ void ExternalCommandProcessor::DisableSvcFlapping(double, const std::vector<Stri
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling flapping detection for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnableFlapping(false);
-	}
+	service->ModifyAttribute("enable_flapping", false);
 }
 
 void ExternalCommandProcessor::EnableNotifications(double, const std::vector<String>&)
@@ -1844,105 +1649,6 @@ void ExternalCommandProcessor::StopExecutingHostChecks(double, const std::vector
 	IcingaApplication::GetInstance()->SetEnableHostChecks(false);
 }
 
-void ExternalCommandProcessor::ChangeSvcModattr(double, const std::vector<String>& arguments)
-{
-	Service::Ptr service = Service::GetByNamePair(arguments[0], arguments[1]);
-
-	if (!service)
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot update modified attributes for non-existent service '" + arguments[1] + "' on host '" + arguments[0] + "'"));
-
-	int modifiedAttributes = Convert::ToLong(arguments[2]);
-
-	Log(LogNotice, "ExternalCommandProcessor")
-	    << "Updating modified attributes for service '" << arguments[1] << "'";
-
-	{
-		ObjectLock olock(service);
-
-		service->SetModifiedAttributes(modifiedAttributes);
-	}
-}
-
-void ExternalCommandProcessor::ChangeHostModattr(double, const std::vector<String>& arguments)
-{
-	Host::Ptr host = Host::GetByName(arguments[0]);
-
-	if (!host)
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot update modified attributes for non-existent host '" + arguments[0] + "'"));
-
-	Log(LogNotice, "ExternalCommandProcessor")
-	    << "Updating modified attributes for host '" << arguments[0] << "'";
-
-	int modifiedAttributes = Convert::ToLong(arguments[1]);
-
-	{
-		ObjectLock olock(host);
-
-		host->SetModifiedAttributes(modifiedAttributes);
-	}
-}
-
-void ExternalCommandProcessor::ChangeUserModattr(double, const std::vector<String>& arguments)
-{
-	User::Ptr user = User::GetByName(arguments[0]);
-
-	if (!user)
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot update modified attributes for non-existent user '" + arguments[0] + "'"));
-
-	Log(LogNotice, "ExternalCommandProcessor")
-	    << "Updating modified attributes for user '" << arguments[0] << "'";
-
-	int modifiedAttributes = Convert::ToLong(arguments[1]);
-
-	{
-		ObjectLock olock(user);
-
-		user->SetModifiedAttributes(modifiedAttributes);
-	}
-}
-
-void ExternalCommandProcessor::ChangeCheckcommandModattr(double, const std::vector<String>& arguments)
-{
-	CheckCommand::Ptr command = CheckCommand::GetByName(arguments[0]);
-
-	if (!command)
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot update modified attributes for non-existent command '" + arguments[0] + "'"));
-
-	ChangeCommandModattrInternal(command, Convert::ToLong(arguments[1]));
-}
-
-void ExternalCommandProcessor::ChangeEventcommandModattr(double, const std::vector<String>& arguments)
-{
-	EventCommand::Ptr command = EventCommand::GetByName(arguments[0]);
-
-	if (!command)
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot update modified attributes for non-existent command '" + arguments[0] + "'"));
-
-	ChangeCommandModattrInternal(command, Convert::ToLong(arguments[1]));
-}
-
-void ExternalCommandProcessor::ChangeNotificationcommandModattr(double, const std::vector<String>& arguments)
-{
-	NotificationCommand::Ptr command = NotificationCommand::GetByName(arguments[0]);
-
-	if (!command)
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot update modified attributes for non-existent command '" + arguments[0] + "'"));
-
-	ChangeCommandModattrInternal(command, Convert::ToLong(arguments[1]));
-}
-
-void ExternalCommandProcessor::ChangeCommandModattrInternal(const Command::Ptr& command, int mod_attr)
-{
-	Log(LogNotice, "ExternalCommandProcessor")
-	    << "Updating modified attributes for command '" << command->GetName() << "'";
-
-	{
-		ObjectLock olock(command);
-
-		command->SetModifiedAttributes(mod_attr);
-	}
-}
-
 void ExternalCommandProcessor::ChangeNormalSvcCheckInterval(double, const std::vector<String>& arguments)
 {
 	Service::Ptr service = Service::GetByNamePair(arguments[0], arguments[1]);
@@ -1955,11 +1661,7 @@ void ExternalCommandProcessor::ChangeNormalSvcCheckInterval(double, const std::v
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Updating check interval for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetCheckInterval(interval * 60);
-	}
+	service->ModifyAttribute("check_interval", interval * 60);
 }
 
 void ExternalCommandProcessor::ChangeNormalHostCheckInterval(double, const std::vector<String>& arguments)
@@ -1974,11 +1676,7 @@ void ExternalCommandProcessor::ChangeNormalHostCheckInterval(double, const std::
 
 	double interval = Convert::ToDouble(arguments[1]);
 
-	{
-		ObjectLock olock(host);
-
-		host->SetCheckInterval(interval * 60);
-	}
+	host->ModifyAttribute("check_interval", interval * 60);
 }
 
 void ExternalCommandProcessor::ChangeRetrySvcCheckInterval(double, const std::vector<String>& arguments)
@@ -1993,11 +1691,7 @@ void ExternalCommandProcessor::ChangeRetrySvcCheckInterval(double, const std::ve
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Updating retry interval for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetRetryInterval(interval * 60);
-	}
+	service->ModifyAttribute("retry_interval", interval * 60);
 }
 
 void ExternalCommandProcessor::ChangeRetryHostCheckInterval(double, const std::vector<String>& arguments)
@@ -2012,11 +1706,7 @@ void ExternalCommandProcessor::ChangeRetryHostCheckInterval(double, const std::v
 
 	double interval = Convert::ToDouble(arguments[1]);
 
-	{
-		ObjectLock olock(host);
-
-		host->SetRetryInterval(interval * 60);
-	}
+	host->ModifyAttribute("retry_interval", interval * 60);
 }
 
 void ExternalCommandProcessor::EnableHostEventHandler(double, const std::vector<String>& arguments)
@@ -2029,11 +1719,7 @@ void ExternalCommandProcessor::EnableHostEventHandler(double, const std::vector<
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling event handler for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnableEventHandler(true);
-	}
+	host->ModifyAttribute("enable_event_handler", true);
 }
 
 void ExternalCommandProcessor::DisableHostEventHandler(double, const std::vector<String>& arguments)
@@ -2046,11 +1732,7 @@ void ExternalCommandProcessor::DisableHostEventHandler(double, const std::vector
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling event handler for host '" << arguments[0] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetEnableEventHandler(false);
-	}
+	host->ModifyAttribute("enable_event_handler", false);
 }
 
 void ExternalCommandProcessor::EnableSvcEventHandler(double, const std::vector<String>& arguments)
@@ -2063,11 +1745,7 @@ void ExternalCommandProcessor::EnableSvcEventHandler(double, const std::vector<S
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Enabling event handler for service '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnableEventHandler(true);
-	}
+	service->ModifyAttribute("enable_event_handler", true);
 }
 
 void ExternalCommandProcessor::DisableSvcEventHandler(double, const std::vector<String>& arguments)
@@ -2080,11 +1758,7 @@ void ExternalCommandProcessor::DisableSvcEventHandler(double, const std::vector<
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Disabling event handler for service '" << arguments[1] + "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetEnableEventHandler(false);
-	}
+	service->ModifyAttribute("enable_event_handler", false);
 }
 
 void ExternalCommandProcessor::ChangeHostEventHandler(double, const std::vector<String>& arguments)
@@ -2094,9 +1768,11 @@ void ExternalCommandProcessor::ChangeHostEventHandler(double, const std::vector<
 	if (!host)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot change event handler for non-existent host '" + arguments[0] + "'"));
 
-	/* empty command string implicitely disables event handler */
 	if (arguments[1].IsEmpty()) {
-		host->SetEnableEventHandler(false);
+		Log(LogNotice, "ExternalCommandProcessor")
+		    << "Unsetting event handler for host '" << arguments[0] << "'";
+
+		host->ModifyAttribute("event_command", "");
 	} else {
 		EventCommand::Ptr command = EventCommand::GetByName(arguments[1]);
 
@@ -2106,11 +1782,7 @@ void ExternalCommandProcessor::ChangeHostEventHandler(double, const std::vector<
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Changing event handler for host '" << arguments[0] << "' to '" << arguments[1] << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEventCommand(command);
-		}
+		host->ModifyAttribute("event_command", command->GetName());
 	}
 }
 
@@ -2121,9 +1793,11 @@ void ExternalCommandProcessor::ChangeSvcEventHandler(double, const std::vector<S
 	if (!service)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot change event handler for non-existent service '" + arguments[1] + "' on host '" + arguments[0] + "'"));
 
-	/* empty command string implicitely disables event handler */
 	if (arguments[2].IsEmpty()) {
-		service->SetEnableEventHandler(false);
+		Log(LogNotice, "ExternalCommandProcessor")
+		    << "Unsetting event handler for service '" << arguments[1] << "'";
+
+		service->ModifyAttribute("event_command", "");
 	} else {
 		EventCommand::Ptr command = EventCommand::GetByName(arguments[2]);
 
@@ -2133,11 +1807,7 @@ void ExternalCommandProcessor::ChangeSvcEventHandler(double, const std::vector<S
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Changing event handler for service '" << arguments[1] << "' to '" << arguments[2] << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEventCommand(command);
-		}
+		service->ModifyAttribute("event_command", command->GetName());
 	}
 }
 
@@ -2156,11 +1826,7 @@ void ExternalCommandProcessor::ChangeHostCheckCommand(double, const std::vector<
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing check command for host '" << arguments[0] << "' to '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetCheckCommand(command);
-	}
+	host->ModifyAttribute("check_command", command->GetName());
 }
 
 void ExternalCommandProcessor::ChangeSvcCheckCommand(double, const std::vector<String>& arguments)
@@ -2178,11 +1844,7 @@ void ExternalCommandProcessor::ChangeSvcCheckCommand(double, const std::vector<S
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing check command for service '" << arguments[1] << "' to '" << arguments[2] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetCheckCommand(command);
-	}
+	service->ModifyAttribute("check_command", command->GetName());
 }
 
 void ExternalCommandProcessor::ChangeMaxHostCheckAttempts(double, const std::vector<String>& arguments)
@@ -2197,11 +1859,7 @@ void ExternalCommandProcessor::ChangeMaxHostCheckAttempts(double, const std::vec
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing max check attempts for host '" << arguments[0] << "' to '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetMaxCheckAttempts(attempts);
-	}
+	host->ModifyAttribute("max_check_attempts", attempts);
 }
 
 void ExternalCommandProcessor::ChangeMaxSvcCheckAttempts(double, const std::vector<String>& arguments)
@@ -2216,11 +1874,7 @@ void ExternalCommandProcessor::ChangeMaxSvcCheckAttempts(double, const std::vect
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing max check attempts for service '" << arguments[1] << "' to '" << arguments[2] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetMaxCheckAttempts(attempts);
-	}
+	service->ModifyAttribute("max_check_attempts", attempts);
 }
 
 void ExternalCommandProcessor::ChangeHostCheckTimeperiod(double, const std::vector<String>& arguments)
@@ -2238,11 +1892,7 @@ void ExternalCommandProcessor::ChangeHostCheckTimeperiod(double, const std::vect
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing check period for host '" << arguments[0] << "' to '" << arguments[1] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetCheckPeriod(tp);
-	}
+	host->ModifyAttribute("check_period", tp->GetName());
 }
 
 void ExternalCommandProcessor::ChangeSvcCheckTimeperiod(double, const std::vector<String>& arguments)
@@ -2260,11 +1910,7 @@ void ExternalCommandProcessor::ChangeSvcCheckTimeperiod(double, const std::vecto
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing check period for service '" << arguments[1] << "' to '" << arguments[2] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetCheckPeriod(tp);
-	}
+	service->ModifyAttribute("check_period", tp->GetName());
 }
 
 void ExternalCommandProcessor::ChangeCustomHostVar(double, const std::vector<String>& arguments)
@@ -2274,23 +1920,10 @@ void ExternalCommandProcessor::ChangeCustomHostVar(double, const std::vector<Str
 	if (!host)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot change custom var for non-existent host '" + arguments[0] + "'"));
 
-	Dictionary::Ptr vars = host->GetVars();
-
-	if (!vars || !vars->Contains(arguments[1]))
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Custom var '" + arguments[1] + "' for host '" + arguments[0] + "' does not exist."));
-
-	Dictionary::Ptr override_vars = vars->ShallowClone();
-
-	override_vars->Set(arguments[1], arguments[2]);
-
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing custom var '" << arguments[1] << "' for host '" << arguments[0] << "' to value '" << arguments[2] << "'";
 
-	{
-		ObjectLock olock(host);
-
-		host->SetVars(override_vars);
-	}
+	host->ModifyAttribute("vars." + arguments[1], arguments[2]);
 }
 
 void ExternalCommandProcessor::ChangeCustomSvcVar(double, const std::vector<String>& arguments)
@@ -2300,25 +1933,11 @@ void ExternalCommandProcessor::ChangeCustomSvcVar(double, const std::vector<Stri
 	if (!service)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot change custom var for non-existent service '" + arguments[1] + "' on host '" + arguments[0] + "'"));
 
-	Dictionary::Ptr vars = service->GetVars();
-
-	if (!vars || !vars->Contains(arguments[2]))
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Custom var '" + arguments[2] + "' for service '" + arguments[1] +
-		    "' on host '" + arguments[0] + "' does not exist."));
-
-	Dictionary::Ptr override_vars = vars->ShallowClone();
-
-	override_vars->Set(arguments[2], arguments[3]);
-
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing custom var '" << arguments[2] << "' for service '" << arguments[1] << "' on host '"
 	    << arguments[0] << "' to value '" << arguments[3] << "'";
 
-	{
-		ObjectLock olock(service);
-
-		service->SetVars(override_vars);
-	}
+	service->ModifyAttribute("vars." + arguments[2], arguments[3]);
 }
 
 void ExternalCommandProcessor::ChangeCustomUserVar(double, const std::vector<String>& arguments)
@@ -2328,23 +1947,10 @@ void ExternalCommandProcessor::ChangeCustomUserVar(double, const std::vector<Str
 	if (!user)
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot change custom var for non-existent user '" + arguments[0] + "'"));
 
-	Dictionary::Ptr vars = user->GetVars();
-
-	if (!vars || !vars->Contains(arguments[1]))
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Custom var '" + arguments[1] + "' for user '" + arguments[0] + "' does not exist."));
-
-	Dictionary::Ptr override_vars = vars->ShallowClone();
-
-	override_vars->Set(arguments[1], arguments[2]);
-
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing custom var '" << arguments[1] << "' for user '" << arguments[0] << "' to value '" << arguments[2] << "'";
 
-	{
-		ObjectLock olock(user);
-
-		user->SetVars(override_vars);
-	}
+	user->ModifyAttribute("vars." + arguments[1], arguments[2]);
 }
 
 void ExternalCommandProcessor::ChangeCustomCheckcommandVar(double, const std::vector<String>& arguments)
@@ -2379,23 +1985,10 @@ void ExternalCommandProcessor::ChangeCustomNotificationcommandVar(double, const 
 
 void ExternalCommandProcessor::ChangeCustomCommandVarInternal(const Command::Ptr& command, const String& name, const Value& value)
 {
-	Dictionary::Ptr vars = command->GetVars();
-
-	if (!vars || !vars->Contains(name))
-		BOOST_THROW_EXCEPTION(std::invalid_argument("Custom var '" + name + "' for command '" + command->GetName() + "' does not exist."));
-
-	Dictionary::Ptr override_vars = vars->ShallowClone();
-
-	override_vars->Set(name, value);
-
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Changing custom var '" << name << "' for command '" << command->GetName() << "' to value '" << value << "'";
 
-	{
-		ObjectLock olock(command);
-
-		command->SetVars(override_vars);
-	}
+	command->ModifyAttribute("vars." + name, value);
 }
 
 void ExternalCommandProcessor::EnableHostgroupHostNotifications(double, const std::vector<String>& arguments)
@@ -2409,11 +2002,7 @@ void ExternalCommandProcessor::EnableHostgroupHostNotifications(double, const st
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling notifications for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnableNotifications(true);
-		}
+		host->ModifyAttribute("enable_notifications", true);
 	}
 }
 
@@ -2429,11 +2018,7 @@ void ExternalCommandProcessor::EnableHostgroupSvcNotifications(double, const std
 			Log(LogNotice, "ExternalCommandProcessor")
 			    << "Enabling notifications for service '" << service->GetName() << "'";
 
-			{
-				ObjectLock olock(service);
-
-				service->SetEnableNotifications(true);
-			}
+			service->ModifyAttribute("enable_notifications", true);
 		}
 	}
 }
@@ -2449,11 +2034,7 @@ void ExternalCommandProcessor::DisableHostgroupHostNotifications(double, const s
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling notifications for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnableNotifications(false);
-		}
+		host->ModifyAttribute("enable_notifications", false);
 	}
 }
 
@@ -2469,11 +2050,7 @@ void ExternalCommandProcessor::DisableHostgroupSvcNotifications(double, const st
 			Log(LogNotice, "ExternalCommandProcessor")
 			    << "Disabling notifications for service '" << service->GetName() << "'";
 
-			{
-				ObjectLock olock(service);
-
-				service->SetEnableNotifications(false);
-			}
+			service->ModifyAttribute("enable_notifications", false);
 		}
 	}
 }
@@ -2491,11 +2068,7 @@ void ExternalCommandProcessor::EnableServicegroupHostNotifications(double, const
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling notifications for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnableNotifications(true);
-		}
+		host->ModifyAttribute("enable_notifications", true);
 	}
 }
 
@@ -2510,11 +2083,7 @@ void ExternalCommandProcessor::EnableServicegroupSvcNotifications(double, const 
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Enabling notifications for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEnableNotifications(true);
-		}
+		service->ModifyAttribute("enable_notifications", true);
 	}
 }
 
@@ -2531,11 +2100,7 @@ void ExternalCommandProcessor::DisableServicegroupHostNotifications(double, cons
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling notifications for host '" << host->GetName() << "'";
 
-		{
-			ObjectLock olock(host);
-
-			host->SetEnableNotifications(false);
-		}
+		host->ModifyAttribute("enable_notifications", false);
 	}
 }
 
@@ -2550,10 +2115,6 @@ void ExternalCommandProcessor::DisableServicegroupSvcNotifications(double, const
 		Log(LogNotice, "ExternalCommandProcessor")
 		    << "Disabling notifications for service '" << service->GetName() << "'";
 
-		{
-			ObjectLock olock(service);
-
-			service->SetEnableNotifications(false);
-		}
+		service->ModifyAttribute("enable_notifications", false);
 	}
 }

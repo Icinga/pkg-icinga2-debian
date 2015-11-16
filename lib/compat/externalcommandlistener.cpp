@@ -18,8 +18,9 @@
  ******************************************************************************/
 
 #include "compat/externalcommandlistener.hpp"
+#include "compat/externalcommandlistener.tcpp"
 #include "icinga/externalcommandprocessor.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
 #include "base/application.hpp"
@@ -29,13 +30,13 @@ using namespace icinga;
 
 REGISTER_TYPE(ExternalCommandListener);
 
-REGISTER_STATSFUNCTION(ExternalCommandListenerStats, &ExternalCommandListener::StatsFunc);
+REGISTER_STATSFUNCTION(ExternalCommandListener, &ExternalCommandListener::StatsFunc);
 
 void ExternalCommandListener::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const ExternalCommandListener::Ptr& externalcommandlistener, DynamicType::GetObjectsByType<ExternalCommandListener>()) {
+	BOOST_FOREACH(const ExternalCommandListener::Ptr& externalcommandlistener, ConfigType::GetObjectsByType<ExternalCommandListener>()) {
 		nodes->Set(externalcommandlistener->GetName(), 1); //add more stats
 	}
 
@@ -45,9 +46,9 @@ void ExternalCommandListener::StatsFunc(const Dictionary::Ptr& status, const Arr
 /**
  * Starts the component.
  */
-void ExternalCommandListener::Start(void)
+void ExternalCommandListener::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<ExternalCommandListener>::Start(runtimeCreated);
 
 #ifndef _WIN32
 	m_CommandThread = boost::thread(boost::bind(&ExternalCommandListener::CommandPipeThread, this, GetCommandPath()));
@@ -93,11 +94,7 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 	}
 
 	for (;;) {
-		int fd;
-
-		do {
-			fd = open(commandPath.CStr(), O_RDONLY);
-		} while (fd < 0 && errno == EINTR);
+		int fd = open(commandPath.CStr(), O_RDONLY | O_NONBLOCK);
 
 		if (fd < 0) {
 			Log(LogCritical, "ExternalCommandListener")
@@ -105,38 +102,38 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 			return;
 		}
 
-		FILE *fp = fdopen(fd, "r");
+		FIFO::Ptr fifo = new FIFO();
+		Socket::Ptr sock = new Socket(fd);
+		StreamReadContext src;
 
-		if (fp == NULL) {
-			Log(LogCritical, "ExternalCommandListener")
-			    << "fdopen() for fifo path '" << commandPath << "' failed with error code " << errno << ", \"" << Utility::FormatErrorNumber(errno) << "\"";
-			return;
-		}
+		for (;;) {
+			sock->Poll(true, false);
 
-		const int linesize = 128 * 1024;
-		char *line = new char[linesize];
+			char buffer[8192];
+			size_t rc = sock->Read(buffer, sizeof(buffer));
+			if (rc <= 0)
+				break;
 
-		while (fgets(line, linesize, fp) != NULL) {
-			// remove trailing new-line
-			while (strlen(line) > 0 &&
-			    (line[strlen(line) - 1] == '\r' || line[strlen(line) - 1] == '\n'))
-				line[strlen(line) - 1] = '\0';
+			fifo->Write(buffer, rc);
 
-			String command = line;
+			for (;;) {
+				String command;
+				StreamReadStatus srs = fifo->ReadLine(&command, src);
 
-			try {
-				Log(LogInformation, "ExternalCommandListener")
-				    << "Executing external command: " << command;
+				if (srs != StatusNewItem)
+					break;
 
-				ExternalCommandProcessor::Execute(command);
-			} catch (const std::exception& ex) {
-				Log(LogWarning, "ExternalCommandListener")
-				    << "External command failed." << DiagnosticInformation(ex);
+				try {
+					Log(LogInformation, "ExternalCommandListener")
+					    << "Executing external command: " << command;
+
+					ExternalCommandProcessor::Execute(command);
+				} catch (const std::exception& ex) {
+					Log(LogWarning, "ExternalCommandListener")
+					    << "External command failed." << DiagnosticInformation(ex);
+				}
 			}
 		}
-
-		delete [] line;
-		fclose(fp);
 	}
 }
 #endif /* _WIN32 */

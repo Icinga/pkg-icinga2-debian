@@ -21,7 +21,7 @@
 #include "icinga/user.hpp"
 #include "icinga/timeperiod.hpp"
 #include "icinga/compatutility.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/json.hpp"
 #include "base/utility.hpp"
@@ -52,8 +52,8 @@ void ContactsTable::AddColumns(Table *table, const String& prefix,
 	table->AddColumn(prefix + "vars_variable_names", Column(&ContactsTable::CustomVariableNamesAccessor, objectAccessor));
 	table->AddColumn(prefix + "vars_variable_values", Column(&ContactsTable::CustomVariableValuesAccessor, objectAccessor));
 	table->AddColumn(prefix + "vars_variables", Column(&ContactsTable::CustomVariablesAccessor, objectAccessor));
-	table->AddColumn(prefix + "modified_attributes", Column(&ContactsTable::ModifiedAttributesAccessor, objectAccessor));
-	table->AddColumn(prefix + "modified_attributes_list", Column(&ContactsTable::ModifiedAttributesListAccessor, objectAccessor));
+	table->AddColumn(prefix + "modified_attributes", Column(&Table::ZeroAccessor, objectAccessor));
+	table->AddColumn(prefix + "modified_attributes_list", Column(&Table::ZeroAccessor, objectAccessor));
 	table->AddColumn(prefix + "cv_is_json", Column(&ContactsTable::CVIsJsonAccessor, objectAccessor));
 
 }
@@ -70,7 +70,7 @@ String ContactsTable::GetPrefix(void) const
 
 void ContactsTable::FetchRows(const AddRowFunction& addRowFn)
 {
-	BOOST_FOREACH(const User::Ptr& user, DynamicType::GetObjectsByType<User>()) {
+	BOOST_FOREACH(const User::Ptr& user, ConfigType::GetObjectsByType<User>()) {
 		if (!addRowFn(user, LivestatusGroupByNone, Empty))
 			return;
 	}
@@ -315,25 +315,4 @@ Value ContactsTable::CVIsJsonAccessor(const Value& row)
 	}
 
 	return cv_is_json;
-}
-
-Value ContactsTable::ModifiedAttributesAccessor(const Value& row)
-{
-	User::Ptr user = static_cast<User::Ptr>(row);
-
-	if (!user)
-		return Empty;
-
-	/* not supported */
-	return user->GetModifiedAttributes();
-}
-
-Value ContactsTable::ModifiedAttributesListAccessor(const Value& row)
-{
-	User::Ptr user = static_cast<User::Ptr>(row);
-
-	if (!user)
-		return Empty;
-
-	return CompatUtility::GetModifiedAttributesList(user);
 }

@@ -19,8 +19,8 @@
  ******************************************************************************/
 
 #include "config/configcompiler.hpp"
-#include "config/typerule.hpp"
 #include "config/expression.hpp"
+#include "base/exception.hpp"
 
 using namespace icinga;
 
@@ -71,8 +71,7 @@ do {							\
 	yylloc->FirstLine = yyextra->m_LocationBegin.FirstLine;
 	yylloc->FirstColumn = yyextra->m_LocationBegin.FirstColumn;
 
-	std::string str = yyextra->m_LexBuffer.str();
-	yylval->text = strdup(str.c_str());
+	yylval->text = new String(yyextra->m_LexBuffer.str());
 
 	return T_STRING;
 				}
@@ -139,8 +138,7 @@ do {							\
 	yylloc->FirstLine = yyextra->m_LocationBegin.FirstLine;
 	yylloc->FirstColumn = yyextra->m_LocationBegin.FirstColumn;
 
-	std::string str = yyextra->m_LexBuffer.str();
-	yylval->text = strdup(str.c_str());
+	yylval->text = new String(yyextra->m_LexBuffer.str());
 
 	return T_STRING;
 				}
@@ -167,23 +165,11 @@ do {							\
 [ \t]				/* ignore whitespace */
 
 <INITIAL>{
-%type				return T_TYPE;
-%dictionary			{ yylval->type = TypeDictionary; return T_TYPE_DICTIONARY; }
-%array				{ yylval->type = TypeArray; return T_TYPE_ARRAY; }
-%number				{ yylval->type = TypeNumber; return T_TYPE_NUMBER; }
-%string				{ yylval->type = TypeString; return T_TYPE_STRING; }
-%scalar				{ yylval->type = TypeScalar; return T_TYPE_SCALAR; }
-%any				{ yylval->type = TypeAny; return T_TYPE_ANY; }
-%function			{ yylval->type = TypeFunction; return T_TYPE_FUNCTION; }
-%name				{ yylval->type = TypeName; return T_TYPE_NAME; }
-%validator			{ return T_VALIDATOR; }
-%require			{ return T_REQUIRE; }
-%attribute			{ return T_ATTRIBUTE; }
-%inherits			return T_INHERITS;
 object				return T_OBJECT;
 template			return T_TEMPLATE;
 include				return T_INCLUDE;
 include_recursive		return T_INCLUDE_RECURSIVE;
+include_zones			return T_INCLUDE_ZONES;
 library				return T_LIBRARY;
 null				return T_NULL;
 true				{ yylval->boolean = 1; return T_BOOLEAN; }
@@ -209,6 +195,10 @@ if				return T_IF;
 else				return T_ELSE;
 while				return T_WHILE;
 throw				return T_THROW;
+ignore_on_error			return T_IGNORE_ON_ERROR;
+current_filename		return T_CURRENT_FILENAME;
+current_line			return T_CURRENT_LINE;
+debugger			return T_DEBUGGER;
 =\>				return T_FOLLOWS;
 \<\<				return T_SHIFT_LEFT;
 \>\>				return T_SHIFT_RIGHT;
@@ -222,9 +212,9 @@ in				return T_IN;
 \|\|				return T_LOGICAL_OR;
 \{\{				return T_NULLARY_LAMBDA_BEGIN;
 \}\}				return T_NULLARY_LAMBDA_END;
-[a-zA-Z_][a-zA-Z0-9\_]*		{ yylval->text = strdup(yytext); return T_IDENTIFIER; }
-@[a-zA-Z_][a-zA-Z0-9\_]*	{ yylval->text = strdup(yytext + 1); return T_IDENTIFIER; }
-\<[^ \>]*\>			{ yytext[yyleng-1] = '\0'; yylval->text = strdup(yytext + 1); return T_STRING_ANGLE; }
+[a-zA-Z_][a-zA-Z0-9\_]*		{ yylval->text = new String(yytext); return T_IDENTIFIER; }
+@[a-zA-Z_][a-zA-Z0-9\_]*	{ yylval->text = new String(yytext + 1); return T_IDENTIFIER; }
+\<[^ \>]*\>			{ yytext[yyleng-1] = '\0'; yylval->text = new String(yytext + 1); return T_STRING_ANGLE; }
 [0-9]+(\.[0-9]+)?ms		{ yylval->num = strtod(yytext, NULL) / 1000; return T_NUMBER; }
 [0-9]+(\.[0-9]+)?d		{ yylval->num = strtod(yytext, NULL) * 60 * 60 * 24; return T_NUMBER; }
 [0-9]+(\.[0-9]+)?h		{ yylval->num = strtod(yytext, NULL) * 60 * 60; return T_NUMBER; }

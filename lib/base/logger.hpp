@@ -93,8 +93,8 @@ public:
 	static void StaticInitialize(void);
 
 protected:
-	virtual void Start(void);
-	virtual void Stop(void);
+	virtual void Start(bool runtimeCreated) override;
+	virtual void Stop(bool runtimeRemoved) override;
 
 private:
 	static boost::mutex m_Mutex;

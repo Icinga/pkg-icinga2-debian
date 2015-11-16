@@ -58,6 +58,17 @@ Name         | Description
 -------------|---------------
 cluster_zone | **Optional.** The zone name. Defaults to "$host.name$".
 
+### <a id="itl-icinga-ido"></a> ido
+
+Check command for the built-in `ido` check.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name         | Description
+-------------|---------------
+ido_type     | **Required.** The type of the IDO connection object. Can be either "IdoMysqlConnection" or "IdoPgsqlConnection".
+ido_name     | **Required.** The name of the IDO connection object.
+
 ### <a id="itl-random"></a> random
 
 Check command for the built-in `random` check. This check returns random states
@@ -66,7 +77,10 @@ and adds the check source to the check output.
 For test and demo purposes only. The `random` check command does not support
 any vars.
 
+
 # <a id="plugin-check-commands"></a> Plugin Check Commands
+
+## <a id="plugin-check-commands-monitoring-plugins"></a> Plugin Check Commands for Monitoring Plugins
 
 The Plugin Check Commands provides example configuration for plugin check commands
 provided by the Monitoring Plugins project.
@@ -79,14 +93,24 @@ file:
 The plugin check commands assume that there's a global constant named `PluginDir`
 which contains the path of the plugins from the Monitoring Plugins project.
 
-## <a id="plugin-check-command-apt"></a> apt
+### <a id="plugin-check-command-apt"></a> apt
 
-Check command for the `check_apt` plugin.
+The plugin `apt` is used to check the aptitude package management system for updates on Debian based systems.
 
-The `apt` check command does not support any vars.
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                    | Description
+------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+apt_extra_opts          | **Optional.** Read options from an ini file.
+apt_upgrade             | **Optional.** [Default] Perform an upgrade. If an optional OPTS argument is provided, apt-get will be run with these command line options instead of the default.
+apt_dist_upgrade        | **Optional.** Perform a dist-upgrade instead of normal upgrade. Like with -U OPTS can be provided to override the default options.
+apt_include             | **Optional.** Include only packages matching REGEXP. Can be specified multiple times the values will be combined together.
+apt_exclude             | **Optional.** Exclude packages matching REGEXP from the list of packages that would otherwise be included. Can be specified multiple times.
+apt_critical            | **Optional.** If the full package information of any of the upgradable packages match this REGEXP, the plugin will return CRITICAL status. Can be specified multiple times.
+apt_timeout             | **Optional.** Seconds before plugin times out (default: 10).
 
 
-## <a id="plugin-check-command-by-ssh"></a> by_ssh
+### <a id="plugin-check-command-by-ssh"></a> by_ssh
 
 Check command object for the `check_by_ssh` plugin.
 
@@ -105,8 +129,34 @@ by_ssh_warn     | **Optional.** The warning threshold.
 by_ssh_crit     | **Optional.** The critical threshold.
 by_ssh_timeout  | **Optional.** The timeout in seconds.
 
+### <a id="plugin-check-command-clamd"></a> clamd
 
-## <a id="plugin-check-command-dhcp"></a> dhcp
+Check command object for the `check_clamd` plugin.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name               | Description
+-------------------|--------------
+clamd_address        | **Required.** The host's address or unix socket (must be an absolute path).
+clamd_port           | **Optional.** Port number (default: none).
+clamd_expect         | **Optional.** String to expect in server response (may be repeated).
+clamd_all            | **Optional.** All expect strings need to occur in server response. Defaults to false.
+clamd_escape_send    | **Optional.** Enable usage of \n, \r, \t or \\\\ in send string.
+clamd_send           | **Optional.** String to send to the server.
+clamd_escape_quit    | **Optional.** Enable usage of \n, \r, \t or \\\\ in quit string.
+clamd_quit           | **Optional.** String to send server to initiate a clean close of the connection.
+clamd_refuse         | **Optional.** Accept TCP refusals with states ok, warn, crit. Defaults to crit.
+clamd_mismatch       | **Optional.** Accept expected string mismatches with states ok, warn, crit. Defaults to warn.
+clamd_jail           | **Optional.** Hide output from TCP socket.
+clamd_maxbytes       | **Optional.** Close connection once more than this number of bytes are received.
+clamd_delay          | **Optional.** Seconds to wait between sending string and polling for response.
+clamd_certificate    | **Optional.** Minimum number of days a certificate has to be valid. 1st value is number of days for warning, 2nd is critical (if not specified: 0) - seperated by comma.
+clamd_ssl            | **Optional.** Use SSL for the connection. Defaults to false.
+clamd_wtime          | **Optional.** Response time to result in warning status (seconds).
+clamd_ctime          | **Optional.** Response time to result in critical status (seconds).
+clamd_timeout        | **Optional.** Seconds before connection times out. Defaults to 10.
+
+### <a id="plugin-check-command-dhcp"></a> dhcp
 
 Check command object for the `check_dhcp` plugin.
 
@@ -122,7 +172,7 @@ dhcp_mac        | **Optional.** The MAC address to use in the DHCP request.
 dhcp_unicast    | **Optional.** Whether to use unicast requests. Defaults to false.
 
 
-## <a id="plugin-check-command-dig"></a> dig
+### <a id="plugin-check-command-dig"></a> dig
 
 Check command object for the `check_dig` plugin.
 
@@ -132,7 +182,7 @@ Name                 | Description
 ---------------------|--------------
 dig_server           | **Optional.** The DNS server to query. Defaults to "127.0.0.1".
 dig_port	     | **Optional.** Port number (default: 53).
-dig_lookup           | **Optional.** The address that should be looked up.
+dig_lookup           | **Required.** The address that should be looked up.
 dig_record_type      | **Optional.** Record type to lookup (default: A).
 dig_expected_address | **Optional.** An address expected to be in the answer section. If not set, uses whatever was in -l.
 dig_arguments        | **Optional.** Pass STRING as argument(s) to dig.
@@ -142,7 +192,7 @@ dig_critical         | **Optional.** Response time to result in critical status 
 dig_timeout          | **Optional.** Seconds before connection times out (default: 10).
 
 
-## <a id="plugin-check-command-disk"></a> disk
+### <a id="plugin-check-command-disk"></a> disk
 
 Check command object for the `check_disk` plugin.
 
@@ -181,7 +231,7 @@ disk_timeout           | **Optional.** Seconds before connection times out (defa
 disk_units             | **Optional.** Choose bytes, kB, MB, GB, TB (default: MB).
 disk_exclude_type      | **Optional.** Ignore all filesystems of indicated type (may be repeated).
 
-## <a id="plugin-check-command-disk-smb"></a> disk_smb
+### <a id="plugin-check-command-disk-smb"></a> disk_smb
 
 Check command object for the `check_disk_smb` plugin.
 
@@ -203,7 +253,7 @@ disk_smb_wused      	| **Optional.** The used space warning threshold. Defaults 
 disk_smb_cused      	| **Optional.** The used space critical threshold. Defaults to "95%". If the percent sign is omitted, use optional disk units.
 disk_smb_port		| **Optional.** Connection port, e.g. `139` or `445`. Defaults to `smbclient` default if omitted.
 
-## <a id="plugin-check-command-dns"></a> dns
+### <a id="plugin-check-command-dns"></a> dns
 
 Check command object for the `check_dns` plugin.
 
@@ -221,7 +271,7 @@ dns_ctime            | **Optional.** Return critical if elapsed time exceeds val
 dns_timeout          | **Optional.** Seconds before connection times out. Defaults to 10.
 
 
-## <a id="plugin-check-command-dummy"></a> dummy
+### <a id="plugin-check-command-dummy"></a> dummy
 
 Check command object for the `check_dummy` plugin.
 
@@ -233,7 +283,7 @@ dummy_state     | **Optional.** The state. Can be one of 0 (ok), 1 (warning), 2 
 dummy_text      | **Optional.** Plugin output. Defaults to "Check was successful.".
 
 
-## <a id="plugin-check-command-fping4"></a> fping4
+### <a id="plugin-check-command-fping4"></a> fping4
 
 Check command object for the `check_fping` plugin.
 
@@ -254,7 +304,7 @@ fping_source_ip | **Optional.** The name or ip address of the source ip.
 fping_source_interface | **Optional.** The source interface name.
 
 
-## <a id="plugin-check-command-fping6"></a> fping6
+### <a id="plugin-check-command-fping6"></a> fping6
 
 Check command object for the `check_fping` plugin.
 
@@ -275,7 +325,7 @@ fping_source_ip | **Optional.** The name or ip address of the source ip.
 fping_source_interface | **Optional.** The source interface name.
 
 
-## <a id="plugin-check-command-ftp"></a> ftp
+### <a id="plugin-check-command-ftp"></a> ftp
 
 Check command object for the `check_ftp` plugin.
 
@@ -303,7 +353,7 @@ ftp_ctime          | **Optional.** Response time to result in critical status (s
 ftp_timeout        | **Optional.** Seconds before connection times out. Defaults to 10.
 
 
-## <a id="plugin-check-command-hostalive"></a> hostalive
+### <a id="plugin-check-command-hostalive"></a> hostalive
 
 Check command object for the `check_ping` plugin with host check default values. This variant
 uses the host's `address` attribute if available and falls back to using the `address6` attribute
@@ -322,7 +372,7 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-## <a id="plugin-check-command-hostalive4"></a> hostalive4
+### <a id="plugin-check-command-hostalive4"></a> hostalive4
 
 Check command object for the `check_ping` plugin with host check default values. This variant
 uses the host's `address` attribute.
@@ -340,7 +390,7 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-## <a id="plugin-check-command-hostalive6"></a> hostalive6
+### <a id="plugin-check-command-hostalive6"></a> hostalive6
 
 Check command object for the `check_ping` plugin with host check default values. This variant
 uses the host's `address6` attribute.
@@ -358,7 +408,7 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-## <a id="plugin-check-command-hpjd"></a> hpjd
+### <a id="plugin-check-command-hpjd"></a> hpjd
 
 Check command object for the `check_hpjd` plugin.
 
@@ -371,7 +421,7 @@ hpjd_port       | **Optional.** The host's SNMP port. Defaults to 161.
 hpjd_community  | **Optional.** The SNMP community. Defaults  to "public".
 
 
-## <a id="plugin-check-command-http"></a> http
+### <a id="plugin-check-command-http"></a> http
 
 Check command object for the `check_http` plugin.
 
@@ -410,9 +460,11 @@ http_extendedperfdata    | **Optional.** Print additional perfdata. Defaults to 
 http_onredirect          | **Optional.** How to handle redirect pages. Possible values: "ok" (default), "warning", "critical", "follow", "sticky" (like follow but stick to address), "stickyport" (like sticky but also to port)
 http_pagesize            | **Optional.** Minimum page size required:Maximum page size required.
 http_timeout             | **Optional.** Seconds before connection times out.
+http_ipv4                | **Optional.** Use IPv4 only.
+http_ipv6                | **Optional.** Use IPv6 only.
 
 
-## <a id="plugin-check-command-icmp"></a> icmp
+### <a id="plugin-check-command-icmp"></a> icmp
 
 Check command object for the `check_icmp` plugin.
 
@@ -434,7 +486,7 @@ icmp_data_bytes | **Optional.** Payload size for each ICMP request. Defaults to 
 icmp_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 10 (seconds).
 
 
-## <a id="plugin-check-command-imap"></a> imap
+### <a id="plugin-check-command-imap"></a> imap
 
 Check command object for the `check_imap` plugin.
 
@@ -447,11 +499,11 @@ imap_port       | **Optional.** The port that should be checked. Defaults to 143
 imap_timeout    | **Optional.** The timeout in seconds.
 
 
-## <a id="plugin-check-command-ldap"></a> ldap
+### <a id="plugin-check-command-ldap"></a> ldap
 
 Check command object for the `check_ldap` plugin.
 
-Custom Attributes:
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -470,7 +522,7 @@ ldap_critical	| **Optional.** Response time to result in critical status (second
 ldap_timeout	| **Optional.** Seconds before connection times out (default: 10).
 ldap_verbose	| **Optional.** Show details for command-line debugging (disabled by default)
 
-## <a id="plugin-check-command-load"></a> load
+### <a id="plugin-check-command-load"></a> load
 
 Check command object for the `check_load` plugin.
 
@@ -486,8 +538,65 @@ load_cload5     | **Optional.** The 5-minute critical threshold. Defaults to 6.
 load_cload15    | **Optional.** The 15-minute critical threshold. Defaults to 4.
 load_percpu     | **Optional.** Divide the load averages by the number of CPUs (when possible). Defaults to false.
 
+### <a id="plugin-check-command-mailq"></a> mailq
 
-## <a id="plugin-check-command-nrpe"></a> nrpe
+Check command object for the `check_mailq` plugin.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                    | Description
+------------------------|--------------
+mailq_warning		| **Required.** Min. number of messages in queue to generate warning.
+mailq_critical		| **Required.** Min. number of messages in queue to generate critical alert ( w < c ).
+mailq_domain_warning	| **Optional.** Min. number of messages for same domain in queue to generate warning
+mailq_domain_critical	| **Optional.** Min. number of messages for same domain in queue to generate critical alert ( W < C ).
+mailq_timeout		| **Optional.** Plugin timeout in seconds (default = 15).
+mailq_servertype	| **Optional.** [ sendmail | qmail | postfix | exim | nullmailer ] (default = autodetect).
+
+### <a id="plugin-check-command-mysql"></a> mysql
+
+Check command object for the `check_mysql` plugin.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name			| Description
+------------------------|---------------------------------------------------------------
+mysql_hostname		| **Optional.** Host name, IP Address, or unix socket (must be an absolute path).
+mysql_port		| **Optional.** Port number (default: 3306).
+mysql_ignore_auth	| **Optional.** Ignore authentication failure and check for mysql connectivity only.
+mysql_database		| **Optional.** Check database with indicated name.
+mysql_file		| **Optional.** Read from the specified client options file.
+mysql_group		| **Optional.** Use a client options group.
+mysql_username		| **Optional.** Connect using the indicated username.
+mysql_password		| **Optional.** Use the indicated password to authenticate the connection.
+mysql_check_slave	| **Optional.** Check if the slave thread is running properly.
+mysql_warning		| **Optional.** Exit with WARNING status if slave server is more than INTEGER seconds behind master.
+mysql_critical		| **Optional.** Exit with CRITICAL status if slave server is more then INTEGER seconds behind master.
+mysql_ssl		| **Optional.** Use ssl encryptation.
+mysql_cacert		| **Optional.** Path to CA signing the cert.
+mysql_cert		| **Optional.** Path to SSL certificate.
+mysql_key		| **Optional.** Path to private SSL key.
+mysql_cadir		| **Optional.** Path to CA directory.
+mysql_ciphers		| **Optional.** List of valid SSL ciphers.
+
+### <a id="plugin-check-command-negate"></a> negate
+
+Check command object for the `negate` plugin.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name			| Description
+------------------------|---------------------------------------------------------------
+negate_timeout		| **Optional.** Seconds before plugin times out (default: 11).
+negate_timeout_result	| **Optional.** Custom result on Negate timeouts, default to UNKNOWN.
+negate_ok		| **Optional.** OK, WARNING, CRITICAL or UNKNOWN.
+negate_warning		|               Numeric values are accepted.
+negate_critical		|               If nothing is specified, permutes OK and CRITICAL.
+negate_substitute	| **Optional.** Substitute output text as well. Will only substitute text in CAPITALS.
+negate_command		| **Required.** Command to be negated.
+negate_arguments	| **Optional.** Arguments for the negated command.
+
+### <a id="plugin-check-command-nrpe"></a> nrpe
 
 Check command object for the `check_nrpe` plugin.
 
@@ -502,11 +611,11 @@ nrpe_no_ssl     | **Optional.** Whether to disable SSL or not. Defaults to `fals
 nrpe_timeout_unknown | **Optional.** Whether to set timeouts to unknown instead of critical state. Defaults to `false`.
 nrpe_timeout    | **Optional.** The timeout in seconds.
 nrpe_arguments	| **Optional.** Arguments that should be passed to the command. Multiple arguments must be defined as array.
-nrpe_ipv4	| **Optional.** Use IPv4 only.
-nrpe_ipv6	| **Optional.** Use IPv6 only.
+nrpe_ipv4       | **Optional.** Use IPv4 only.
+nrpe_ipv6       | **Optional.** Use IPv6 only.
 
 
-## <a id="plugin-check-command-nscp"></a> nscp
+### <a id="plugin-check-command-nscp"></a> nscp
 
 Check command object for the `check_nt` plugin.
 
@@ -525,7 +634,7 @@ nscp_timeout    | **Optional.** The query timeout in seconds.
 nscp_showall    | **Optional.** Use with SERVICESTATE to see working services or PROCSTATE for running processes. Defaults to false.
 
 
-## <a id="plugin-check-command-ntp-time"></a> ntp_time
+### <a id="plugin-check-command-ntp-time"></a> ntp_time
 
 Check command object for the `check_ntp_time` plugin.
 
@@ -542,7 +651,7 @@ ntp_timeoffset  | **Optional.** Expected offset of the ntp server relative to lo
 ntp_timeout     | **Optional.** Seconds before connection times out (default: 10).
 
 
-## <a id="plugin-check-command-ntp-peer"></a> ntp_peer
+### <a id="plugin-check-command-ntp-peer"></a> ntp_peer
 
 Check command object for the `check_ntp_peer` plugin.
 
@@ -563,7 +672,7 @@ ntp_csource     | **Optional.** Critical threshold for number of usable time sou
 ntp_timeout     | **Optional.** Seconds before connection times out (default: 10).
 
 
-## <a id="plugin-check-command-passive"></a> passive
+### <a id="plugin-check-command-passive"></a> passive
 
 Specialised check command object for passive checks executing the `check_dummy` plugin with appropriate default values.
 
@@ -574,8 +683,28 @@ Name            | Description
 dummy_state     | **Optional.** The state. Can be one of 0 (ok), 1 (warning), 2 (critical) and 3 (unknown). Defaults to 3.
 dummy_text      | **Optional.** Plugin output. Defaults to "No Passive Check Result Received.".
 
+### <a id="plugin-check-command-pgsql"></a> pgsql
 
-## <a id="plugin-check-command-ping"></a> ping
+Check command object for the `check_pgsql` plugin.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name			| Description
+------------------------|---------------------------------------------------------------
+pgsql_hostname		| **Optional.** Host name, IP Address, or unix socket (must be an absolute path).
+pgsql_port		| **Optional.** Port number (default: 5432).
+pgsql_database		| **Optional.** Database to check (default: template1).
+pgsql_username		| **Optional.** Login name of user.
+pgsql_password		| **Optional.** Password (BIG SECURITY ISSUE).
+pgsql_options		| **Optional.** Connection parameters (keyword = value), see below.
+pgsql_warning		| **Optional.** Response time to result in warning status (seconds).
+pgsql_critical		| **Optional.** Response time to result in critical status (seconds).
+pgsql_timeout		| **Optional.** Seconds before connection times out (default: 10).
+pgsql_query		| **Optional.** SQL query to run. Only first column in first row will be read.
+pgsql_query_warning	| **Optional.** SQL query value to result in warning status (double).
+pgsql_query_critical	| **Optional.** SQL query value to result in critical status (double).
+
+### <a id="plugin-check-command-ping"></a> ping
 
 Check command object for the `check_ping` plugin. This command uses the host's `address` attribute
 if available and falls back to using the `address6` attribute if the `address` attribute is not set.
@@ -594,7 +723,7 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-## <a id="plugin-check-command-ping4"></a> ping4
+### <a id="plugin-check-command-ping4"></a> ping4
 
 Check command object for the `check_ping` plugin.
 
@@ -610,7 +739,7 @@ ping_cpl        | **Optional.** The packet loss critical threshold in %. Default
 ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
-## <a id="plugin-check-command-ping6"></a> ping6
+### <a id="plugin-check-command-ping6"></a> ping6
 
 Check command object for the `check_ping` plugin.
 
@@ -627,7 +756,7 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-## <a id="plugin-check-command-pop"></a> pop
+### <a id="plugin-check-command-pop"></a> pop
 
 Check command object for the `check_pop` plugin.
 
@@ -640,7 +769,7 @@ pop_port        | **Optional.** The port that should be checked. Defaults to 110
 pop_timeout     | **Optional.** The timeout in seconds.
 
 
-## <a id="plugin-check-command-processes"></a> procs
+### <a id="plugin-check-command-processes"></a> procs
 
 Check command object for the `check_procs` plugin.
 
@@ -665,15 +794,7 @@ procs_command        | **Optional.** Only scan for exact matches of COMMAND (wit
 procs_nokthreads     | **Optional.** Only scan for non kernel threads. Defaults to false.
 
 
-## <a id="plugin-check-command-running-kernel"></a> running_kernel
-
-Check command object for the `check_running_kernel` plugin
-provided by the `nagios-plugins-contrib` package on Debian.
-
-The `running_kernel` check command does not support any vars.
-
-
-## <a id="plugin-check-command-simap"></a> simap
+### <a id="plugin-check-command-simap"></a> simap
 
 Check command object for the `check_simap` plugin.
 
@@ -686,7 +807,7 @@ simap_port      | **Optional.** The host's port.
 simap_timeout   | **Optional.** The timeout in seconds.
 
 
-## <a id="plugin-check-command-smtp"></a> smtp
+### <a id="plugin-check-command-smtp"></a> smtp
 
 Check command object for the `check_smtp` plugin.
 
@@ -712,7 +833,7 @@ smtp_critical         | **Optional.** Response time to result in critical status
 smtp_timeout          | **Optional.** Seconds before connection times out (default: 10).
 
 
-## <a id="plugin-check-command-snmp"></a> snmp
+### <a id="plugin-check-command-snmp"></a> snmp
 
 Check command object for the `check_snmp` plugin.
 
@@ -723,6 +844,7 @@ Name                | Description
 snmp_address        | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
 snmp_oid            | **Required.** The SNMP OID.
 snmp_community      | **Optional.** The SNMP community. Defaults to "public".
+snmp_port           | **Optional.** The SNMP port. Defaults to "161".
 snmp_warn           | **Optional.** The warning threshold.
 snmp_crit           | **Optional.** The critical threshold.
 snmp_string         | **Optional.** Return OK state if the string matches exactly with the output value
@@ -738,7 +860,7 @@ snmp_rate           | **Optional.** Boolean. Enable rate calculation.
 snmp_getnext        | **Optional.** Boolean. Use SNMP GETNEXT. Defaults to false.
 snmp_timeout        | **Optional.** The command timeout in seconds. Defaults to 10 seconds.
 
-## <a id="plugin-check-command-snmpv3"></a> snmpv3
+### <a id="plugin-check-command-snmpv3"></a> snmpv3
 
 Check command object for the `check_snmp` plugin, using SNMPv3 authentication and encryption options.
 
@@ -763,7 +885,7 @@ snmpv3_eregi         | **Optional.** Return OK state (for that OID) if case-inse
 snmpv3_invert_search | **Optional.** Invert search result and return CRITICAL if found
 snmpv3_label         | **Optional.** Prefix label for output value.
 
-## <a id="plugin-check-command-snmp-uptime"></a> snmp-uptime
+### <a id="plugin-check-command-snmp-uptime"></a> snmp-uptime
 
 Check command object for the `check_snmp` plugin.
 
@@ -776,7 +898,7 @@ snmp_oid        | **Optional.** The SNMP OID. Defaults to "1.3.6.1.2.1.1.3.0".
 snmp_community  | **Optional.** The SNMP community. Defaults to "public".
 
 
-## <a id="plugin-check-command-spop"></a> spop
+### <a id="plugin-check-command-spop"></a> spop
 
 Check command object for the `check_spop` plugin.
 
@@ -789,7 +911,7 @@ spop_port       | **Optional.** The host's port.
 spop_timeout    | **Optional.** The timeout in seconds.
 
 
-## <a id="plugin-check-command-ssh"></a> ssh
+### <a id="plugin-check-command-ssh"></a> ssh
 
 Check command object for the `check_ssh` plugin.
 
@@ -802,7 +924,7 @@ ssh_port        | **Optional.** The port that should be checked. Defaults to 22.
 ssh_timeout     | **Optional.** Seconds before connection times out. Defaults to 10.
 
 
-## <a id="plugin-check-command-ssl"></a> ssl
+### <a id="plugin-check-command-ssl"></a> ssl
 
 Check command object for the `check_tcp` plugin, using ssl-related options.
 
@@ -817,7 +939,7 @@ ssl_cert_valid_days_warn      | **Optional.** Warning threshold for days before 
 ssl_cert_valid_days_critical  | **Optional.** Critical threshold for days before the certificate will expire. When used, ssl_cert_valid_days_warn must also be set.
 
 
-## <a id="plugin-check-command-ssmtp"></a> ssmtp
+### <a id="plugin-check-command-ssmtp"></a> ssmtp
 
 Check command object for the `check_ssmtp` plugin.
 
@@ -829,7 +951,7 @@ ssmtp_address   | **Required.** The host's address. Defaults to "$address$" if t
 ssmtp_port      | **Optional.** The port that should be checked. Defaults to 465.
 
 
-## <a id="plugin-check-command-swap"></a> swap
+### <a id="plugin-check-command-swap"></a> swap
 
 Check command object for the `check_swap` plugin.
 
@@ -841,7 +963,7 @@ swap_wfree      | **Optional.** The free swap space warning threshold in %. Defa
 swap_cfree      | **Optional.** The free swap space critical threshold in %. Defaults to 25.
 
 
-## <a id="plugin-check-command-tcp"></a> tcp
+### <a id="plugin-check-command-tcp"></a> tcp
 
 Check command object for the `check_tcp` plugin.
 
@@ -867,9 +989,11 @@ tcp_ssl         | **Optional.** Use SSL for the connection. Defaults to false.
 tcp_wtime       | **Optional.** Response time to result in warning status (seconds).
 tcp_ctime       | **Optional.** Response time to result in critical status (seconds).
 tcp_timeout     | **Optional.** Seconds before connection times out. Defaults to 10.
+tcp_ipv4        | **Optional.** Use IPv4 only.
+tcp_ipv6        | **Optional.** Use IPv6 only.
 
 
-## <a id="plugin-check-command-udp"></a> udp
+### <a id="plugin-check-command-udp"></a> udp
 
 Check command object for the `check_udp` plugin.
 
@@ -882,9 +1006,11 @@ udp_port        | **Required.** The port that should be checked.
 udp_send        | **Required.** The payload to send in the UDP datagram.
 udp_expect      | **Required.** The payload to expect in the response datagram.
 udp_quit        | **Optional.** The payload to send to 'close' the session.
+udp_ipv4        | **Optional.** Use IPv4 only.
+udp_ipv6        | **Optional.** Use IPv6 only.
 
 
-## <a id="plugin-check-command-ups"></a> ups
+### <a id="plugin-check-command-ups"></a> ups
 
 Check command object for the `check_ups` plugin.
 
@@ -902,7 +1028,7 @@ ups_celsius     | **Optional.** Display the temperature in degrees Celsius inste
 ups_timeout     | **Optional.** The number of seconds before the connection times out. Defaults to 10.
 
 
-## <a id="plugin-check-command-users"></a> users
+### <a id="plugin-check-command-users"></a> users
 
 Check command object for the `check_users` plugin.
 
@@ -913,74 +1039,7 @@ Name            | Description
 users_wgreater  | **Optional.** The user count warning threshold. Defaults to 20.
 users_cgreater  | **Optional.** The user count critical threshold. Defaults to 50.
 
-
-## <a id="plugin-check-command-clamd"></a> clamd
-
-Check command object for the `check_clamd` plugin.
-
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
-
-Name               | Description
--------------------|--------------
-clamd_address        | **Required.** The host's address or unix socket (must be an absolute path).
-clamd_port           | **Optional.** Port number (default: none).
-clamd_expect         | **Optional.** String to expect in server response (may be repeated).
-clamd_all            | **Optional.** All expect strings need to occur in server response. Defaults to false.
-clamd_escape_send    | **Optional.** Enable usage of \n, \r, \t or \\\\ in send string.
-clamd_send           | **Optional.** String to send to the server.
-clamd_escape_quit    | **Optional.** Enable usage of \n, \r, \t or \\\\ in quit string.
-clamd_quit           | **Optional.** String to send server to initiate a clean close of the connection.
-clamd_refuse         | **Optional.** Accept TCP refusals with states ok, warn, crit. Defaults to crit.
-clamd_mismatch       | **Optional.** Accept expected string mismatches with states ok, warn, crit. Defaults to warn.
-clamd_jail           | **Optional.** Hide output from TCP socket.
-clamd_maxbytes       | **Optional.** Close connection once more than this number of bytes are received.
-clamd_delay          | **Optional.** Seconds to wait between sending string and polling for response.
-clamd_certificate    | **Optional.** Minimum number of days a certificate has to be valid. 1st value is number of days for warning, 2nd is critical (if not specified: 0) - seperated by comma.
-clamd_ssl            | **Optional.** Use SSL for the connection. Defaults to false.
-clamd_wtime          | **Optional.** Response time to result in warning status (seconds).
-clamd_ctime          | **Optional.** Response time to result in critical status (seconds).
-clamd_timeout        | **Optional.** Seconds before connection times out. Defaults to 10.
-
-
-## <a id="plugin-check-command-mailq"></a> mailq
-
-Check command object for the `check_mailq` plugin.
-
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
-
-Name                    | Description
-------------------------|--------------
-mailq_warning		| **Required.** Min. number of messages in queue to generate warning.
-mailq_critical		| **Required.** Min. number of messages in queue to generate critical alert ( w < c ).
-mailq_domain_warning	| **Optional.** Min. number of messages for same domain in queue to generate warning
-mailq_domain_critical	| **Optional.** Min. number of messages for same domain in queue to generate critical alert ( W < C ).
-mailq_timeout		| **Optional.** Plugin timeout in seconds (default = 15).
-mailq_servertype	| **Optional.** [ sendmail | qmail | postfix | exim | nullmailer ] (default = autodetect).
-
-
-## <a id="plugin-check-command-pgsql"></a> pgsql
-
-Check command object for the `check_pgsql` plugin.
-
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
-
-Name			| Description
-------------------------|---------------------------------------------------------------
-pgsql_hostname		| **Optional.** Host name, IP Address, or unix socket (must be an absolute path). 
-pgsql_port		| **Optional.** Port number (default: 5432).
-pgsql_database		| **Optional.** Database to check (default: template1).
-pgsql_username		| **Optional.** Login name of user.
-pgsql_password		| **Optional.** Password (BIG SECURITY ISSUE).
-pgsql_options		| **Optional.** Connection parameters (keyword = value), see below.
-pgsql_warning		| **Optional.** Response time to result in warning status (seconds).
-pgsql_critical		| **Optional.** Response time to result in critical status (seconds).
-pgsql_timeout		| **Optional.** Seconds before connection times out (default: 10).
-pgsql_query		| **Optional.** SQL query to run. Only first column in first row will be read.
-pgsql_query_warning	| **Optional.** SQL query value to result in warning status (double).
-pgsql_query_critical	| **Optional.** SQL query value to result in critical status (double).
-
-
-# <a id="windows-plugins"></a>Icinga 2 Windows plugins
+## <a id="windows-plugins"></a> Windows Plugins for Icinga 2
 
 To allow a basic monitoring of Windows clients Icinga 2 comes with a set of Windows only plugins. While trying to mirror the functionalities of their linux cousins from the monitoring-plugins package, the differences between Windows and Linux are too big to be able use the same CheckCommands for both systems.
 
@@ -991,7 +1050,7 @@ A check-commands-windows.conf comes with Icinga 2, it asumes that the Windows Pl
 One of the differences between the Windows plugins and their linux counterparts is that they consistently do not require thresholds to run, functioning like dummies without.
 
 
-## <a id="windows-plugins-thresholds"></a>Threshold syntax
+### <a id="windows-plugins-thresholds"></a> Threshold syntax
 
 So not specified differently the thresholds for the plugins all follow the same pattern
 
@@ -1003,7 +1062,7 @@ Threshold    | Meaning
 "![10-40]"   | Same as above, but the result is inverted.
 
 
-## <a id="windows-plugins-disk-windows"></a>disk-windows
+### <a id="windows-plugins-disk-windows"></a> disk-windows
 
 Check command object for the `check_disk.exe` plugin.
 Aggregates the free disk space of all volumes and mount points it can find, or the ones defined in `disk_win_path`. Ignores removable storage like fash drives and discs (CD, DVD etc.).
@@ -1018,7 +1077,7 @@ disk\_win\_path | **Optional**. Check only these paths, default checks all.
 disk\_win\_unit | **Optional**. Use this unit to display disk space, thresholds are interpreted in this unit. Defaults to "mb", possible values are: b, kb, mb, gb and tb.
 
 
-## <a id="windows-plugins-load-windows"></a>load-windows
+### <a id="windows-plugins-load-windows"></a> load-windows
 
 Check command object for the `check_load.exe` plugin.
 This plugin collects the inverse of the performance counter `\Processor(_Total)\% Idle Time` two times, with a wait time of one second between the collection. To change this wait time use [`perfmon-windows`](7-icinga-template-library.md#windows-plugins-load-windows).
@@ -1031,7 +1090,7 @@ load\_win\_warn | **Optional**. The warning threshold.
 load\_win\_crit | **Optional**. The critical threshold.
 
 
-## <a id="windows-plugins-memory-windows"></a>memory-windows
+### <a id="windows-plugins-memory-windows"></a> memory-windows
 
 Check command object for the `check_memory.exe` plugin.
 The memory collection is instant.
@@ -1051,7 +1110,7 @@ memory\_win\_crit | **Optional**. The critical threshold.
 memory\_win\_unit | **Optional**. The unit to display the received value in, thresholds are interpreted in this unit. Defaults to "mb" (megabye), possible values are: b, kb, mb, gb and tb.
 
 
-## <a id="windows-plugins-network-windows"></a>network-windows
+### <a id="windows-plugins-network-windows"></a> network-windows
 
 Check command object for the `check_network.exe` plugin.
 Collects the total Bytes inbount and outbound for all interfaces in one second, to itemise interfaces or use a different collection interval use [`perfmon-windows`](7-icinga-template-library.md#windows-plugins-load-windows).
@@ -1064,7 +1123,7 @@ network\_win\_warn | **Optional**. The warning threshold.
 network\_win\_crit | **Optional**. The critical threshold.
 
 
-## <a id="windows-plugins-permon-windows"></a>perfmon-windows
+### <a id="windows-plugins-permon-windows"></a> perfmon-windows
 
 Check command object for the `check_perfmon.exe` plugin.
 This plugins allows to collect data from a Performance Counter. After the first data collection a second one is done after `perfmon_win_wait` milliseconds. When you know `perfmon_win_counter` only requires one set of data to provide valid data you can set `perfmon_win_wait` to `0`.
@@ -1082,7 +1141,7 @@ perfmon\_win\_wait    | **Optional**. Time in milliseconds to wait between data 
 perfmon\_win\_type    | **Optional**. Format in which to expect perfomance values. Possible are: long, int64 and double (default).
 
 
-## <a id="windows-plugins-ping-windows"></a>ping-windows
+### <a id="windows-plugins-ping-windows"></a> ping-windows
 
 Check command object for the `check_ping.exe` plugin.
 ping-windows should automaticly detect whether `ping_win_address` is an IPv4 or IPv6 address, if not use ping4-windows and ping6-windows. Also note that check\_ping.exe waits at least `ping_win_timeout` milliseconds between the pings.
@@ -1098,7 +1157,7 @@ ping\_win\_packets | **Optional**. Number of packages to send. Default: 5.
 ping\_win\_timeout | **Optional**. The timeout in milliseconds. Default: 1000
 
 
-## <a id="windows-plugins-procs-windows"></a>procs-windows
+### <a id="windows-plugins-procs-windows"></a> procs-windows
 
 Check command object for `check_procs.exe` plugin.
 When useing `procs_win_user` this plugins needs adminstratice privileges to access the processes of other users, to just enumerate them no additional privileges are required.
@@ -1112,7 +1171,7 @@ procs\_win\_crit | **Optional**. The critical threshold.
 procs\_win\_user | **Optional**. Count this useres processes.
 
 
-## <a id="windows-plugins-service-windows"></a>service-windows
+### <a id="windows-plugins-service-windows"></a> service-windows
 
 Check command object for `check_service.exe` plugin.
 This checks thresholds work different since the binary decision whether a service is running or not does not allow for three states. As a default `check_service.exe` will return CRITICAL when `service_win_service` is not running, the `service_win_warn` flag changes this to WARNING.
@@ -1125,7 +1184,7 @@ service\_win\_warn    | **Optional**. Warn when service is not running.
 service\_win\_service | **Required**. The critical threshold.
 
 
-## <a id="windows-plugins-swap-windows"></a>swap-windows
+### <a id="windows-plugins-swap-windows"></a> swap-windows
 
 Check command object for `check_swap.exe` plugin.
 The data collection is instant.
@@ -1139,7 +1198,7 @@ swap\_win\_crit | **Optional**. The critical threshold.
 swap\_win\_unit | **Optional**. The unit to display the received value in, thresholds are interpreted in this unit. Defaults to "mb" (megabyte).
 
 
-## <a id="windows-plugins-update-windows"></a>update-windows
+### <a id="windows-plugins-update-windows"></a> update-windows
 
 Check command object for `check_update.exe` plugin.
 Querying Microsoft for Windows updates can take multiple seconds to minutes. An update is treated as important when it has the WSUS flag for SecurityUpdates or CriticalUpdates.
@@ -1158,7 +1217,7 @@ update\_win\_crit   | If set return critical when important updates that require
 update\_win\_reboot | Set to treat 'may need update' as 'definitely needs update'
 
 
-## <a id="windows-plugins-uptime-windows"></a>uptime-windows
+### <a id="windows-plugins-uptime-windows"></a> uptime-windows
 
 Check command opject for `check_uptime.exe` plugin.
 Uses GetTickCount64 to get the uptime, so boot time is not included.
@@ -1172,7 +1231,7 @@ uptime\_win\_crit | **Optional**. The critical threshold.
 uptime\_win\_unit | **Optional**. The unit to display the received value in, thresholds are interpreted in this unit. Defaults to "s"(seconds), possible values are ms (milliseconds), s, m (minutes), h (hours).
 
 
-## <a id="windows-plugins-users-windows"></a>users-windows
+### <a id="windows-plugins-users-windows"></a> users-windows
 
 Check command object for `check_users.exe` plugin.
 
@@ -1184,7 +1243,7 @@ users\_win\_warn | **Optional**. The warning threshold.
 users\_win\_crit | **Optional**. The critical threshold.
 
 
-# <a id="nscp-plugin-check-commands"></a> NSClient++ Check Commands
+## <a id="nscp-plugin-check-commands"></a> Plugin Check Commands for NSClient++
 
 Icinga 2 can use the `nscp client` command to run arbitrary NSClient++ checks.
 
@@ -1204,7 +1263,7 @@ not be necessary to manually set this constant.
 
 Note that it is not necessary to run NSClient++ as a Windows service for these commands to work.
 
-## <a id="nscp-check-local"></a> nscp-local
+### <a id="nscp-check-local"></a> nscp-local
 
 Check command object for NSClient++
 
@@ -1218,67 +1277,69 @@ nscp_boot       | **Optional.** Whether to use the --boot option. Defaults to tr
 nscp_query      | **Required.** The NSClient++ query. Try `nscp client -q x` for a list.
 nscp_arguments  | **Optional.** An array of query arguments.
 
-## <a id="nscp-check-local-cpu"></a> nscp-local-cpu
+### <a id="nscp-check-local-cpu"></a> nscp-local-cpu
 
 Check command object for the `check_cpu` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-## <a id="nscp-check-local-memory"></a> nscp-local-memory
+### <a id="nscp-check-local-memory"></a> nscp-local-memory
 
 Check command object for the `check_memory` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-## <a id="nscp-check-local-os-version"></a> nscp-local-os-version
+### <a id="nscp-check-local-os-version"></a> nscp-local-os-version
 
 Check command object for the `check_os_version` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-## <a id="nscp-check-local-pagefile"></a> nscp-local-pagefile
+### <a id="nscp-check-local-pagefile"></a> nscp-local-pagefile
 
 Check command object for the `check_pagefile` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-## <a id="nscp-check-local-process"></a> nscp-local-process
+### <a id="nscp-check-local-process"></a> nscp-local-process
 
 Check command object for the `check_process` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-## <a id="nscp-check-local-service"></a> nscp-local-service
+### <a id="nscp-check-local-service"></a> nscp-local-service
 
 Check command object for the `check_service` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-## <a id="nscp-check-local-uptime"></a> nscp-local-uptime
+### <a id="nscp-check-local-uptime"></a> nscp-local-uptime
 
 Check command object for the `check_uptime` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-## <a id="nscp-check-local-version"></a> nscp-local-version
+### <a id="nscp-check-local-version"></a> nscp-local-version
 
 Check command object for the `check_version` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-## <a id="nscp-check-local-disk"></a> nscp-local-disk
+### <a id="nscp-check-local-disk"></a> nscp-local-disk
 
 Check command object for the `check_drivesize` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-## <a id="nscp-check-local-counter"></a> nscp-local-counter
+### <a id="nscp-check-local-counter"></a> nscp-local-counter
 
 Check command object for the `check_pdh` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-# <a id="snmp-manubulon-plugin-check-commands"></a> SNMP Manubulon Plugin Check Commands
+
+
+## <a id="snmp-manubulon-plugin-check-commands"></a> Plugin Check Commands for Manubulon SNMP
 
 The `SNMP Manubulon Plugin Check Commands` provide example configuration for plugin check
 commands provided by the [SNMP Manubulon project](http://nagios.manubulon.com/index_snmp.html).
@@ -1291,7 +1352,7 @@ You can enable these plugin check commands by adding the following the include d
 
     include <manubulon>
 
-## Checks by Host Type
+### Checks by Host Type
 
 **N/A**      : Not available for this type.
 
@@ -1319,7 +1380,7 @@ You can enable these plugin check commands by adding the following the include d
   Cisco CSS               |   Yes      |   ??     |   Yes     | Yes |   No     | ??  | check_snmp_css.pl
 
 
-## <a id="plugin-check-command-snmp-load"></a> snmp-load
+### <a id="plugin-check-command-snmp-load"></a> snmp-load
 
 Check command object for the [check_snmp_load.pl](http://nagios.manubulon.com/snmp_load.html) plugin.
 
@@ -1345,7 +1406,7 @@ snmp_load_type          | **Optional.** Load type. Defaults to "stand". Check al
 snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
-## <a id="plugin-check-command-snmp-memory"></a> snmp-memory
+### <a id="plugin-check-command-snmp-memory"></a> snmp-memory
 
 Check command object for the [check_snmp_mem.pl](http://nagios.manubulon.com/snmp_mem.html) plugin.
 
@@ -1370,7 +1431,7 @@ snmp_is_cisco		| **Optional.** Change OIDs for Cisco switches. Defaults to false
 snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
-## <a id="plugin-check-command-snmp-storage"></a> snmp-storage
+### <a id="plugin-check-command-snmp-storage"></a> snmp-storage
 
 Check command object for the [check_snmp_storage.pl](http://nagios.manubulon.com/snmp_storage.html) plugin.
 
@@ -1395,7 +1456,7 @@ snmp_storage_name       | **Optional.** Storage name. Default to regex "^/$$". M
 snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
-## <a id="plugin-check-command-snmp-interface"></a> snmp-interface
+### <a id="plugin-check-command-snmp-interface"></a> snmp-interface
 
 Check command object for the [check_snmp_int.pl](http://nagios.manubulon.com/snmp_int.html) plugin.
 
@@ -1431,7 +1492,7 @@ snmp_warncrit_percent       | **Optional.** Make the warning and critical levels
 snmp_perf                   | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout                | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
-## <a id="plugin-check-command-snmp-process"></a> snmp-process
+### <a id="plugin-check-command-snmp-process"></a> snmp-process
 
 Check command object for the [check_snmp_process.pl](http://nagios.manubulon.com/snmp_process.html) plugin.
 
@@ -1456,18 +1517,24 @@ snmp_process_name       | **Optional.** Name of the process (regexp). No trailin
 snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
-# <a id="plugins-contrib"></a> Plugins Contrib
 
-The Plugins contrib collects various contributed command definitions.
+
+## <a id="plugins-contrib"></a> Contributed Plugin Check Commands
+
+The contributed Plugin Check Commands provides various additional command definitions
+contributed by community members.
 
 These check commands assume that the global constant named `PluginContribDir`
-is set to the path where the user installs custom plugins and can be enabled by uncommenting the corresponding line in icinga2.conf.
+is set to the path where the user installs custom plugins and can be enabled by
+uncommenting the corresponding line in [icinga2.conf](4-configuring-icinga-2.md#icinga2-conf):
 
-## <a id="plugins-contrib-databases"></a> Databases
+    include <plugins-contrib>
+
+### <a id="plugins-contrib-databases"></a> Databases
 
 All database plugins go in this category.
 
-### <a id="plugins-contrib-command-mssql_health"></a> mssql_health
+#### <a id="plugins-contrib-command-mssql_health"></a> mssql_health
 
 The plugin `mssql_health` utilises Perl DBD::Sybase based on FreeTDS to connect to MSSQL databases for monitoring.
 For release tarballs, detailed documentation especially on the different modes and scripts for creating a monitoring user see [https://labs.consol.de](https://labs.consol.de/nagios/check_mssql_health/). For development check [https://github.com](https://github.com/lausser/check_mssql_health).
@@ -1492,7 +1559,7 @@ mssql_health_units               | **Optional.** This is used for a better outpu
 mssql_health_offlineok           | **Optional.** Set this to true, if offline databases are perfectly ok for you. Defaults to false.
 mssql_health_commit              | **Optional.** Set this to true to turn on autocommit for the dbd::sybase module. Defaults to false.
 
-### <a id="plugins-contrib-command-mysql_health"></a> mysql_health
+#### <a id="plugins-contrib-command-mysql_health"></a> mysql_health
 
 The plugin `mysql_health` utilises Perl DBD::MySQL to connect to MySQL databases for monitoring.
 For release tarballs and detailed documentation especially on the different modes and required permissions see [https://labs.consol.de](https://labs.consol.de/nagios/check_mysql_health/). For development check [https://github.com](https://github.com/lausser/check_mysql_health).
@@ -1515,7 +1582,7 @@ mysql_health_name2               | **Optional.** If "mysql_health_name" is a sql
 mysql_health_units               | **Optional.** This is used for a better output of mode=sql and for specifying thresholds for mode=tablespace-free. Possible values are "%", "KB", "MB" and "GB".
 mysql_health_labelformat         | **Optional.** One of those formats pnp4nagios or groundwork. Defaults to pnp4nagios.
 
-### <a id="plugins-contrib-command-oracle_health"></a> oracle_health
+#### <a id="plugins-contrib-command-oracle_health"></a> oracle_health
 
 The plugin `oracle_health` utilises Perl DBD::Oracle based on oracle-instantclient-sdk or sqlplus to connect to Oracle databases for monitoring.
 For release tarballs and detailed documentation especially on the different modes and required permissions see [https://labs.consol.de](https://labs.consol.de/nagios/check_oracle_health/). For development check [https://github.com](https://github.com/lausser/check_oracle_health).
@@ -1545,7 +1612,7 @@ Name                | Description
 ORACLE_HOME         | **Required.** Specifies the location of the oracle instant client libraries. Defaults to "/usr/lib/oracle/11.2/client64/lib". Can be overridden by setting "oracle_home".
 TNS_ADMIN           | **Required.** Specifies the location of the tnsnames.ora including the database connection strings. Defaults to "/etc/icinga2/plugin-configs". Can be overridden by setting "oracle_tns_admin".
 
-### <a id="plugins-contrib-command-postgres"></a> postgres
+#### <a id="plugins-contrib-command-postgres"></a> postgres
 
 The plugin `postgres` utilises the psql binary to connect to PostgreSQL databases for monitoring.
 For release tarballs and detailed documentation especially the different actions and required persmissions see [https://bucardo.org/wiki/Check_postgres](https://bucardo.org/wiki/Check_postgres). For development check [https://github.com](https://github.com/bucardo/check_postgres).
@@ -1571,7 +1638,7 @@ postgres_production  | **Optional.** Assume that the server is in production mod
 postgres_action      | **Required.** Determines the test executed.
 postgres_unixsocket  | **Optional.** If "postgres_unixsocket" is set to true the unix socket is used instead of an address. Defaults to false.
 
-### <a id="plugins-contrib-command-mongodb"></a> mongodb
+#### <a id="plugins-contrib-command-mongodb"></a> mongodb
 
 The plugin `mongodb` utilises Python PyMongo.
 For development check [https://github.com](https://github.com/mzupan/nagios-plugin-mongodb).
@@ -1598,7 +1665,7 @@ mongodb_querytype                | **Optional.** The query type to check [query|
 mongodb_collection               | **Optional.** Specify the collection to check
 mongodb_sampletime               | **Optional.** Time used to sample number of pages faults
 
-### <a id="plugins-contrib-command-elasticsearch"></a> elasticsearch
+#### <a id="plugins-contrib-command-elasticsearch"></a> elasticsearch
 
 An [ElasticSearch](https://www.elastic.co/products/elasticsearch) availability
 and performance monitoring plugin available for download at [GitHub](https://github.com/anchor/nagios-plugin-elasticsearch).
@@ -1613,7 +1680,7 @@ elasticsearch_port           | **Optional.** TCP port to probe.  The ElasticSear
 elasticsearch_prefix         | **Optional.** Optional prefix (e.g. 'es') for the ElasticSearch API. Defaults to ''.
 elasticsearch_yellowcritical | **Optional.** Instead of issuing a 'warning' for a yellow cluster state, issue a 'critical' alert. Defaults to false.
 
-### <a id="plugins-contrib-command-redis"></a> redis
+#### <a id="plugins-contrib-command-redis"></a> redis
 
 The plugin `redis` can measure response time, hitrate, memory utilization, check replication sync and more. It can also test data in a specified key (if necessary doing average or sum on range).
 It is provided by `William Leibzon` at [https://github.com](https://github.com/willixix/naglio-plugins/blob/master/check_redis.pl).
@@ -1641,11 +1708,43 @@ redis_memory_utilization | **Optional.** This calculates percent of total memory
 redis_total_memory       | **Optional.** Amount of memory on a system for memory utilization calculation. Use system memory or max_memory setting of redis.
 redis_replication_delay  | **Optional.** Allows to set threshold on replication delay info.
 
-## <a id="plugins-contrib-ipmi"></a> IPMI Devices
+
+### <a id="plugins-contrib-hardware"></a> Hardware
+
+This category includes all plugins for various hardware checks.
+
+#### <a id="plugins-contrib-command-hpasm"></a> hpasm
+
+The plugin [check_hpasm](https://labs.consol.de/de/nagios/check_hpasm/index.html) is a plugin to monitor HP hardware through the HP Insight Agent via SNMP.
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                    	| Description
+--------------------------------|-----------------------------------------------------------------------
+hpasm_hostname			| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+hpasm_community			| **Optional.** SNMP community of the server (SNMP v1/2 only).
+hpasm_protocol			| **Optional.** The SNMP protocol to use (default: 2c, other possibilities: 1,3).
+hpasm_port			| **Optional.** The SNMP port to use (default: 161).
+hpasm_blacklist			| **Optional.** Blacklist some (missing/failed) components.
+hpasm_ignore-dimms		| **Optional.** Ignore "N/A"-DIMM status on misc. servers (e.g. older DL320).
+hpasm_ignore-fan-redundancy	| **Optional.** Ignore missing redundancy partners.
+hpasm_customthresholds		| **Optional.** Use custom thresholds for certain temperatures.
+hpasm_eventrange		| **Optional.** Period of time before critical IML events respecively become warnings or vanish. A range is descibed as a number and a unit (s, m, h, d), e.g. --eventrange 1h/20m.
+hpasm_perfdata			| **Optional.** Output performance data. If your performance data string becomes too long and is truncated by Nagios, then you can use --perfdata=short instead. This will output temperature tags without location information.
+hpasm_username			| **Optional.** The securityName for the USM security model (SNMPv3 only).
+hpasm_authpassword		| **Optional.** The authentication password for SNMPv3.
+hpasm_authprotocol		| **Optional.** The authentication protocol for SNMPv3 (md5|sha).
+hpasm_privpassword		| **Optional.** The password for authPriv security level.
+hpasm_privprotocol		| **Optional.** The private protocol for SNMPv3 (des|aes|aes128|3des|3desde).
+hpasm_servertype		| **Optional.** The type of the server: proliant (default) or bladesystem.
+hpasm_eval-nics			| **Optional.** Check network interfaces (and groups). Try it and report me whyt you think about it. I need to build up some know how on this subject. If get an error and you think, it is not justified for your configuration, please tell me about it. (alwasy send the output of "snmpwalk -On .... 1.3.6.1.4.1.232" and a description how you setup your nics and why it is correct opposed to the plugins error message.
+
+
+### <a id="plugins-contrib-ipmi"></a> IPMI Devices
 
 This category includes all plugins for IPMI devices.
 
-### <a id="plugins-contrib-command-ipmi-sensor"></a> ipmi-sensor
+#### <a id="plugins-contrib-command-ipmi-sensor"></a> ipmi-sensor
 
 With the plugin `ipmi-sensor` provided by <a href="https://www.thomas-krenn.com/">Thomas-Krenn.AG</a> you can monitor sensor data for IPMI devices. See https://www.thomas-krenn.com/en/wiki/IPMI_Sensor_Monitoring_Plugin for installation and configuration instructions.
 
@@ -1667,11 +1766,11 @@ ipmi_number_of_active_fans       | **Optional.** Number of fans that should be a
 ipmi_show_fru                    | **Optional.** Print the product serial number if it is available in the IPMI FRU data.
 ipmi_no_sel_checking             | **Optional.** Turn off system event log checking via ipmi-sel.
 
-## <a id="plugins-contrib-network-components"></a> Network Components
+### <a id="plugins-contrib-network-components"></a> Network Components
 
 This category includes all plugins for various network components like routers, switches and firewalls.
 
-### <a id="plugins-contrib-command-interfacetable"></a> interfacetable
+#### <a id="plugins-contrib-command-interfacetable"></a> interfacetable
 
 The plugin `interfacetable` generates a html page containing information about the monitored node and all of its interfaces. The actively developed and maintained version is `interfacetable_v3t` provided by `Yannick Charton` on [http://www.tontonitch.com](http://www.tontonitch.com/tiki/tiki-index.php?page=Nagios+plugins+-+interfacetable_v3t) or [https://github.com](https://github.com/Tontonitch/interfacetable_v3t).
 
@@ -1739,7 +1838,7 @@ interfacetable_defaulttablesorting  | **Optional.** Default table sorting can be
 interfacetable_tablesplit           | **Optional.** Generate multiple interface tables, one per interface type. Defaults to false.
 interfacetable_notype               | **Optional.** Remove the interface type for each interface. Defaults to false.
 
-### <a id="plugins-contrib-command-iftraffic"></a> iftraffic
+#### <a id="plugins-contrib-command-iftraffic"></a> iftraffic
 
 The plugin [check_iftraffic](https://exchange.icinga.org/exchange/iftraffic)
 checks the utilization of a given interface name using the SNMP protocol.
@@ -1757,7 +1856,7 @@ iftraffic_warn		| **Optional.** Percent of bandwidth usage necessary to result i
 iftraffic_crit		| **Optional.** Percent of bandwidth usage necessary to result in critical status (defaults to `98%`).
 iftraffic_max_counter	| **Optional.** Maximum counter value of net devices in kilo/mega/giga/bytes.
 
-### <a id="plugins-contrib-command-interfaces"></a> interfaces
+#### <a id="plugins-contrib-command-interfaces"></a> interfaces
 
 The plugin [check_interfaces](https://www.netways.org/projects/check-interfaces)
 Check interfaces and utilization.
@@ -1789,7 +1888,7 @@ interfaces_match_aliases  | **Optional.** Also match against aliases (Option --a
 interfaces_timeout        | **Optional.** Sets the SNMP timeout (in ms).
 interfaces_sleep          | **Optional.** Sleep between every SNMP query (in ms).
 
-### <a id="plugins-contrib-command-nwc_health"></a> nwc_health
+#### <a id="plugins-contrib-command-nwc_health"></a> nwc_health
 
 The plugin [check_nwc_health](https://labs.consol.de/de/nagios/check_nwc_health/index.html)
 Check switches, router, there interfaces and utilization.
@@ -1840,11 +1939,11 @@ nwc_health_offline		| **Optional.** The maximum number of seconds since the last
 nwc_health_multiline		| **Optional.** Multiline output
 
 
-## <a id="plugins-contrib-web"></a> Web
+### <a id="plugins-contrib-web"></a> Web
 
 This category includes all plugins for web-based checks.
 
-### <a id="plugin-check-command-webinject"></a> webinject
+#### <a id="plugin-check-command-webinject"></a> webinject
 
 Check command object for the [check_webinject](http://http://www.webinject.org/manual.html) plugin.
 
@@ -1859,7 +1958,7 @@ webinject_timeout       | **Optional.** The value [given in seconds] will be com
 webinject_report_type   | **Optional.** This setting is used to enable output formatting that is compatible for use with specific external programs. The available values you can set this to are: nagios, mrtg, external and standard.
 webinject_testcase_file | **Optional.** When you launch WebInject in console mode, you can optionally supply an argument for a testcase file to run. It will look for this file in the directory that webinject.pl resides in. If no filename is passed from the command line, it will look in config.xml for testcasefile declarations. If no files are specified, it will look for a default file named 'testcases.xml' in the current [webinject] directory. If none of these are found, the engine will stop and give you an error.
 
-### <a id="plugin-check-command-jmx4perl"></a> jmx4perl
+#### <a id="plugin-check-command-jmx4perl"></a> jmx4perl
 
 The plugin `jmx4perl` utilizes the api provided by the jolokia web application to query java message beans on an application server. It is part of the perl module provided by Roland Huß on [cpan](http://search.cpan.org/~roland/jmx4perl/) including a detailed [documentation](http://search.cpan.org/~roland/jmx4perl/scripts/check_jmx4perl) containing installation tutorial, security advices und usage examples.
 
@@ -1898,9 +1997,11 @@ jmx4perl_label               | **Optional.** Label to be used for printing out t
 jmx4perl_perfdata            | **Optional.** Whether performance data should be omitted, which are included by default. Defaults to "on" for numeric values, to "off" for strings.
 jmx4perl_unknown_is_critical | **Optional.** Map UNKNOWN errors to errors with a CRITICAL status. Defaults to false.
 jmx4perl_timeout             | **Optional.** Seconds before plugin times out. Defaults to "15".
+jmx4perl_config              | **Optional.** Path to configuration file.
+jmx4perl_server              | **Optional.** Symbolic name of server url to use, which needs to be configured in the configuration file.
+jmx4perl_check               | **Optional.** Name of a check configuration as defined in the configuration file, use array if you need arguments.
 
-
-### <a id="plugins-contrib-squid"></a> squid
+#### <a id="plugins-contrib-squid"></a> squid
 
 Plugin for monitoring [Squid](https://exchange.icinga.org/exchange/check_squid).
 
@@ -1919,11 +2020,33 @@ squid_client		| **Optional.** Path of squidclient (default: /usr/bin/squidclient
 squid_timeout		| **Optional.** Seconds before plugin times out (default: 15).
 
 
-## <a id="plugins-contrib-operating-system"></a> Operating System
+#### <a id="plugins-contrib-nginx_status"></a> nginx_status
+
+Plugin for monitoring [nginx_status](https://github.com/regilero/check_nginx_status).
+
+Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+
+Name                    | Description
+------------------------|----------------------------------------------------------------------------------
+nginx_status_host_address		| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, `address6` otherwise.
+nginx_status_port		| **Optional.** the http port.
+nginx_status_url		| **Optional.** URL to use, instead of the default (http://`nginx_status_hostname`/nginx_status).
+nginx_status_servername		| **Optional.** ServerName to use if you specified an IP to match the good Virtualhost in your target
+nginx_status_ssl		| **Optional.** set to use ssl connection
+nginx_status_disable_sslverify		| **Optional.** set to disable SSL hostname verification
+nginx_status_user		| **Optional.** Username for basic auth
+nginx_status_pass		| **Optional.** Password for basic auth
+nginx_status_realm		| **Optional.** Realm for basic auth
+nginx_status_maxreach		| **Optional.** Number of max processes reached (since last check) that should trigger an alert
+nginx_status_timeout		| **Optional.** timeout in seconds
+nginx_status_warn		| **Optional.** Warning threshold (number of active connections, ReqPerSec or ConnPerSec that will cause a WARNING) like '10000,100,200'.
+nginx_status_critical		| **Optional.** Critical threshold (number of active connections, ReqPerSec or ConnPerSec that will cause a CRITICAL) like '20000,200,300'.
+
+### <a id="plugins-contrib-operating-system"></a> Operating System
 
 In this category you can find plugins for gathering information about your operating system or the system beneath like memory usage.
 
-### <a id="plugins-contrib-command-mem"></a> mem
+#### <a id="plugins-contrib-command-mem"></a> mem
 
 The plugin `mem` is used for gathering information about memory usage on linux and unix hosts. It is able to count cache memory as free when comparing it to the thresholds. It is provided by `Justin Ellison` on [https://github.com](https://github.com/justintime/nagios-plugins). For more details see the developers blog [http://sysadminsjourney.com](http://sysadminsjourney.com/content/2009/06/04/new-and-improved-checkmempl-nagios-plugin).
 
@@ -1937,7 +2060,14 @@ mem_cache    | **Optional.** If set to true plugin will count cache as free memo
 mem_warning  | **Required.** Specifiy the warning threshold as number interpreted as percent.
 mem_critical | **Required.** Specifiy the critical threshold as number interpreted as percent.
 
-### <a id="plugin-contrib-command-yum"></a> yum
+#### <a id="plugin-contrib-command-running-kernel"></a> running_kernel
+
+Check command object for the `check_running_kernel` plugin
+provided by the `nagios-plugins-contrib` package on Debian.
+
+The `running_kernel` check command does not support any vars.
+
+#### <a id="plugin-contrib-command-yum"></a> yum
 
 The plugin `yum` is used to check the YUM package management system for package updates. To differentiate between security and normal updates it requires the YUM security plugin installed. It is provied by `Christoph Anton Mitterer` on [https://github.com](https://github.com/calestyo/check_yum).
 
@@ -1955,11 +2085,11 @@ yum_disablerepo         | **Optional.** Explicitly disables a reposity when call
 yum_installroot         | **Optional.** Specifies another installation root directory (for example a chroot).
 yum_timeout             | **Optional.** Set a timeout in seconds after which the plugin will exit (defaults to 55 seconds).
 
-## <a id="plugins-contrib-virtualization"></a> Virtualization
+### <a id="plugins-contrib-virtualization"></a> Virtualization
 
 This category includes all plugins for various virtualization technologies.
 
-### <a id="plugins-contrib-command-esxi-hardware"></a> esxi_hardware
+#### <a id="plugins-contrib-command-esxi-hardware"></a> esxi_hardware
 
 The plugin `esxi_hardware` is a plugin to monitor hardware of ESXi servers through the vmware api and cim service. It is provided by `Claudio Kuenzler` on [http://www.claudiokuenzler.com](http://www.claudiokuenzler.com/nagios-plugins/check_esxi_hardware.php). For instruction on creating the required local user and workarounds for some hardware types have a look on his homepage.
 
@@ -1980,11 +2110,11 @@ esxi_hardware_nocurrent | **Optional.** Do not collect current performance data,
 esxi_hardware_notemp    | **Optional.** Do not collect temperature performance data, when **esxi_hardware_perfdata** is set to true. Defaults to false.
 esxi_hardware_nofan     | **Optional.** Do not collect fan performance data, when **esxi_hardware_perfdata** is set to true. Defaults to false.
 
-# <a id="plugins-contrib-vmware"></a> VMware
+### <a id="plugins-contrib-vmware"></a> VMware
 
 Check commands for the [check_vmware_esx](https://github.com/BaldMansMojo/check_vmware_esx) plugin.
 
-## <a id="plugins-contrib-vmware-esx-dc-volumes"></a> vmware-esx-dc-volumes
+#### <a id="plugins-contrib-vmware-esx-dc-volumes"></a> vmware-esx-dc-volumes
 
 Check command object for the `check_vmware_esx` plugin. Shows all datastore volumes info.
 
@@ -2016,7 +2146,7 @@ vmware_warn             | **Optional.** The warning threshold for volumes. Defau
 vmware_crit             | **Optional.** The critical threshold for volumes. Defaults to "90%".
 
 
-## <a id="plugins-contrib-vmware-esx-dc-runtime-info"></a> vmware-esx-dc-runtime-info
+#### <a id="plugins-contrib-vmware-esx-dc-runtime-info"></a> vmware-esx-dc-runtime-info
 
 Check command object for the `check_vmware_esx` plugin. Shows all runtime info for the datacenter/Vcenter.
 
@@ -2038,7 +2168,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-dc-runtime-listvms"></a> vmware-esx-dc-runtime-listvms
+#### <a id="plugins-contrib-vmware-esx-dc-runtime-listvms"></a> vmware-esx-dc-runtime-listvms
 
 Check command object for the `check_vmware_esx` plugin. List of vmware machines and their power state. BEWARE!! In larger environments systems can cause trouble displaying the informations needed due to the mass of data. Use **vmware_alertonly** to avoid this.
 
@@ -2065,7 +2195,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-dc-runtime-listhost"></a> vmware-esx-dc-runtime-listhost
+#### <a id="plugins-contrib-vmware-esx-dc-runtime-listhost"></a> vmware-esx-dc-runtime-listhost
 
 Check command object for the `check_vmware_esx` plugin. List of VMware ESX hosts and their power state.
 
@@ -2092,7 +2222,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-dc-runtime-listcluster"></a> vmware-esx-dc-runtime-listcluster
+#### <a id="plugins-contrib-vmware-esx-dc-runtime-listcluster"></a> vmware-esx-dc-runtime-listcluster
 
 Check command object for the `check_vmware_esx` plugin. List of VMware clusters and their states.
 
@@ -2119,7 +2249,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-dc-runtime-issues"></a> vmware-esx-dc-runtime-issues
+#### <a id="plugins-contrib-vmware-esx-dc-runtime-issues"></a> vmware-esx-dc-runtime-issues
 
 Check command object for the `check_vmware_esx` plugin. All issues for the host.
 
@@ -2145,7 +2275,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-dc-runtime-status"></a> vmware-esx-dc-runtime-status
+#### <a id="plugins-contrib-vmware-esx-dc-runtime-status"></a> vmware-esx-dc-runtime-status
 
 Check command object for the `check_vmware_esx` plugin. Overall object status (gray/green/red/yellow).
 
@@ -2167,7 +2297,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-dc-runtime-tools"></a> vmware-esx-dc-runtime-tools
+#### <a id="plugins-contrib-vmware-esx-dc-runtime-tools"></a> vmware-esx-dc-runtime-tools
 
 Check command object for the `check_vmware_esx` plugin. Vmware Tools status.
 
@@ -2196,7 +2326,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 vmware_openvmtools	| **Optional** Prevent CRITICAL state for installed and running Open VM Tools.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-check"></a> vmware-esx-soap-host-check
+#### <a id="plugins-contrib-vmware-esx-soap-host-check"></a> vmware-esx-soap-host-check
 
 Check command object for the `check_vmware_esx` plugin. Simple check to verify a successfull connection to VMware SOAP API.
 
@@ -2218,7 +2348,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-uptime"></a> vmware-esx-soap-host-uptime
+#### <a id="plugins-contrib-vmware-esx-soap-host-uptime"></a> vmware-esx-soap-host-uptime
 
 Check command object for the `check_vmware_esx` plugin. Displays uptime of the VMware host.
 
@@ -2240,7 +2370,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-cpu"></a> vmware-esx-soap-host-cpu
+#### <a id="plugins-contrib-vmware-esx-soap-host-cpu"></a> vmware-esx-soap-host-cpu
 
 Check command object for the `check_vmware_esx` plugin. CPU usage in percentage.
 
@@ -2264,7 +2394,7 @@ vmware_warn             | **Optional.** The warning threshold in percent. Defaul
 vmware_crit             | **Optional.** The critical threshold in percent. Defaults to "90%".
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-cpu-ready"></a> vmware-esx-soap-host-cpu-ready
+#### <a id="plugins-contrib-vmware-esx-soap-host-cpu-ready"></a> vmware-esx-soap-host-cpu-ready
 
 Check command object for the `check_vmware_esx` plugin. Percentage of time that the virtual machine was ready, but could not get scheduled to run on the physical CPU. CPU ready time is dependent on the number of virtual machines on the host and their CPU loads. High or growing ready time can be a hint CPU bottlenecks.
 
@@ -2286,7 +2416,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-cpu-wait"></a> vmware-esx-soap-host-cpu-wait
+#### <a id="plugins-contrib-vmware-esx-soap-host-cpu-wait"></a> vmware-esx-soap-host-cpu-wait
 
 Check command object for the `check_vmware_esx` plugin. CPU time spent in wait state. The wait total includes time spent the CPU idle, CPU swap wait, and CPU I/O wait states. High or growing wait time can be a hint I/O bottlenecks.
 
@@ -2308,7 +2438,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-cpu-usage"></a> vmware-esx-soap-host-cpu-usage
+#### <a id="plugins-contrib-vmware-esx-soap-host-cpu-usage"></a> vmware-esx-soap-host-cpu-usage
 
 Check command object for the `check_vmware_esx` plugin. Actively used CPU of the host, as a percentage of the total available CPU. Active CPU is approximately equal to the ratio of the used CPU to the available CPU.
 
@@ -2332,7 +2462,7 @@ vmware_warn             | **Optional.** The warning threshold in percent. Defaul
 vmware_crit             | **Optional.** The critical threshold in percent. Defaults to "90%".
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-mem"></a> vmware-esx-soap-host-mem
+#### <a id="plugins-contrib-vmware-esx-soap-host-mem"></a> vmware-esx-soap-host-mem
 
 Check command object for the `check_vmware_esx` plugin. All mem info(except overall and no thresholds).
 
@@ -2354,7 +2484,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-mem-usage"></a> vmware-esx-soap-host-mem-usage
+#### <a id="plugins-contrib-vmware-esx-soap-host-mem-usage"></a> vmware-esx-soap-host-mem-usage
 
 Check command object for the `check_vmware_esx` plugin. Average mem usage in percentage.
 
@@ -2378,7 +2508,7 @@ vmware_warn             | **Optional.** The warning threshold in percent. Defaul
 vmware_crit             | **Optional.** The critical threshold in percent. Defaults to "90%".
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-mem-consumed"></a> vmware-esx-soap-host-mem-consumed
+#### <a id="plugins-contrib-vmware-esx-soap-host-mem-consumed"></a> vmware-esx-soap-host-mem-consumed
 
 Check command object for the `check_vmware_esx` plugin. Amount of machine memory used on the host. Consumed memory includes Includes memory used by the Service Console, the VMkernel vSphere services, plus the total consumed metrics for all running virtual machines in MB.
 
@@ -2402,7 +2532,7 @@ vmware_warn             | **Optional.** The warning threshold in percent. No val
 vmware_crit             | **Optional.** The critical threshold in percent. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-mem-swapused"></a> vmware-esx-soap-host-mem-swapused
+#### <a id="plugins-contrib-vmware-esx-soap-host-mem-swapused"></a> vmware-esx-soap-host-mem-swapused
 
 Check command object for the `check_vmware_esx` plugin. Amount of memory that is used by swap. Sum of memory swapped of all powered on VMs and vSphere services on the host in MB. In case of an error all VMs with their swap used will be displayed.
 
@@ -2427,7 +2557,7 @@ vmware_crit             | **Optional.** The critical threshold in percent. No va
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-mem-overhead"></a> vmware-esx-soap-host-mem-overhead
+#### <a id="plugins-contrib-vmware-esx-soap-host-mem-overhead"></a> vmware-esx-soap-host-mem-overhead
 
 Check command object for the `check_vmware_esx` plugin. Additional mem used by VM Server in MB.
 
@@ -2451,7 +2581,7 @@ vmware_warn             | **Optional.** The warning threshold in percent. No val
 vmware_crit             | **Optional.** The critical threshold in percent. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-mem-memctl"></a> vmware-esx-soap-host-mem-memctl
+#### <a id="plugins-contrib-vmware-esx-soap-host-mem-memctl"></a> vmware-esx-soap-host-mem-memctl
 
 Check command object for the `check_vmware_esx` plugin. The sum of all vmmemctl values in MB for all powered-on virtual machines, plus vSphere services on the host. If the balloon target value is greater than the balloon value, the VMkernel inflates the balloon, causing more virtual machine memory to be reclaimed. If the balloon target value is less than the balloon value, the VMkernel deflates the balloon, which allows the virtual machine to consume additional memory if needed.used by VM memory control driver. In case of an error all VMs with their vmmemctl values will be displayed.
 
@@ -2476,7 +2606,7 @@ vmware_crit             | **Optional.** The critical threshold in percent. No va
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-net"></a> vmware-esx-soap-host-net
+#### <a id="plugins-contrib-vmware-esx-soap-host-net"></a> vmware-esx-soap-host-net
 
 Check command object for the `check_vmware_esx` plugin. Shows net info.
 
@@ -2500,7 +2630,7 @@ vmware_exclude          | **Optional.** Blacklist NICs. No value defined as defa
 vmware_isregexp         | **Optional.** Treat blacklist expression as regexp.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-net-usage"></a> vmware-esx-soap-host-net-usage
+#### <a id="plugins-contrib-vmware-esx-soap-host-net-usage"></a> vmware-esx-soap-host-net-usage
 
 Check command object for the `check_vmware_esx` plugin. Overall network usage in KBps(Kilobytes per Second).
 
@@ -2524,7 +2654,7 @@ vmware_warn             | **Optional.** The warning threshold in KBps(Kilobytes 
 vmware_crit             | **Optional.** The critical threshold in KBps(Kilobytes per Second). No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-net-receive"></a> vmware-esx-soap-host-net-receive
+#### <a id="plugins-contrib-vmware-esx-soap-host-net-receive"></a> vmware-esx-soap-host-net-receive
 
 Check command object for the `check_vmware_esx` plugin. Data receive in KBps(Kilobytes per Second).
 
@@ -2548,7 +2678,7 @@ vmware_warn             | **Optional.** The warning threshold in KBps(Kilobytes 
 vmware_crit             | **Optional.** The critical threshold in KBps(Kilobytes per Second). No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-net-send"></a> vmware-esx-soap-host-net-send
+#### <a id="plugins-contrib-vmware-esx-soap-host-net-send"></a> vmware-esx-soap-host-net-send
 
 Check command object for the `check_vmware_esx` plugin. Data send in KBps(Kilobytes per Second).
 
@@ -2572,7 +2702,7 @@ vmware_warn             | **Optional.** The warning threshold in KBps(Kilobytes 
 vmware_crit             | **Optional.** The critical threshold in KBps(Kilobytes per Second). No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-net-nic"></a> vmware-esx-soap-host-net-nic
+#### <a id="plugins-contrib-vmware-esx-soap-host-net-nic"></a> vmware-esx-soap-host-net-nic
 
 Check command object for the `check_vmware_esx` plugin. Check all active NICs.
 
@@ -2596,7 +2726,7 @@ vmware_exclude          | **Optional.** Blacklist NICs. No value defined as defa
 vmware_isregexp         | **Optional.** Treat blacklist expression as regexp.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-volumes"></a> vmware-esx-soap-host-volumes
+#### <a id="plugins-contrib-vmware-esx-soap-host-volumes"></a> vmware-esx-soap-host-volumes
 
 Check command object for the `check_vmware_esx` plugin. Shows all datastore volumes info.
 
@@ -2628,7 +2758,7 @@ vmware_crit             | **Optional.** The critical threshold for volumes. Defa
 vmware_spaceleft        | **Optional.** This has to be used in conjunction with thresholds as mentioned above.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io"></a> vmware-esx-soap-host-io
+#### <a id="plugins-contrib-vmware-esx-soap-host-io"></a> vmware-esx-soap-host-io
 
 Check command object for the `check_vmware_esx` plugin. Shows all disk io info. Without subselect no thresholds can be given. All I/O values are aggregated from historical intervals over the past 24 hours with a 5 minute sample rate.
 
@@ -2650,7 +2780,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-aborted"></a> vmware-esx-soap-host-io-aborted
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-aborted"></a> vmware-esx-soap-host-io-aborted
 
 Check command object for the `check_vmware_esx` plugin. Number of aborted SCSI commands.
 
@@ -2674,7 +2804,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-resets"></a> vmware-esx-soap-host-io-resets
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-resets"></a> vmware-esx-soap-host-io-resets
 
 Check command object for the `check_vmware_esx` plugin. Number of SCSI bus resets.
 
@@ -2698,7 +2828,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-read"></a> vmware-esx-soap-host-io-read
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-read"></a> vmware-esx-soap-host-io-read
 
 Check command object for the `check_vmware_esx` plugin. Average number of kilobytes read from the disk each second.
 
@@ -2722,7 +2852,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-read-latency"></a> vmware-esx-soap-host-io-read-latency
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-read-latency"></a> vmware-esx-soap-host-io-read-latency
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) to process a SCSI read command issued from the Guest OS to the virtual machine.
 
@@ -2746,7 +2876,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-write"></a> vmware-esx-soap-host-io-write
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-write"></a> vmware-esx-soap-host-io-write
 
 Check command object for the `check_vmware_esx` plugin. Average number of kilobytes written to disk each second.
 
@@ -2770,7 +2900,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-write-latency"></a> vmware-esx-soap-host-io-write-latency
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-write-latency"></a> vmware-esx-soap-host-io-write-latency
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) taken to process a SCSI write command issued by the Guest OS to the virtual machine.
 
@@ -2794,7 +2924,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-usage"></a> vmware-esx-soap-host-io-usage
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-usage"></a> vmware-esx-soap-host-io-usage
 
 Check command object for the `check_vmware_esx` plugin. Aggregated disk I/O rate. For hosts, this metric includes the rates for all virtual machines running on the host.
 
@@ -2818,7 +2948,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-kernel-latency"></a> vmware-esx-soap-host-io-kernel-latency
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-kernel-latency"></a> vmware-esx-soap-host-io-kernel-latency
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) spent by VMkernel processing each SCSI command.
 
@@ -2842,7 +2972,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-device-latency"></a> vmware-esx-soap-host-io-device-latency
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-device-latency"></a> vmware-esx-soap-host-io-device-latency
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) to complete a SCSI command from the physical device.
 
@@ -2866,7 +2996,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-queue-latency"></a> vmware-esx-soap-host-io-queue-latency
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-queue-latency"></a> vmware-esx-soap-host-io-queue-latency
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) spent in the VMkernel queue.
 
@@ -2890,7 +3020,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-io-total-latency"></a> vmware-esx-soap-host-io-total-latency
+#### <a id="plugins-contrib-vmware-esx-soap-host-io-total-latency"></a> vmware-esx-soap-host-io-total-latency
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) taken during the collection interval to process a SCSI command issued by the guest OS to the virtual machine. The sum of kernelWriteLatency and deviceWriteLatency.
 
@@ -2914,7 +3044,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-media"></a> vmware-esx-soap-host-media
+#### <a id="plugins-contrib-vmware-esx-soap-host-media"></a> vmware-esx-soap-host-media
 
 Check command object for the `check_vmware_esx` plugin. List vm's with attached host mounted media like cd,dvd or floppy drives. This is important for monitoring because a virtual machine with a mount cd or dvd drive can not be moved to another host.
 
@@ -2940,7 +3070,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-service"></a> vmware-esx-soap-host-service
+#### <a id="plugins-contrib-vmware-esx-soap-host-service"></a> vmware-esx-soap-host-service
 
 Check command object for the `check_vmware_esx` plugin. Shows host service info.
 
@@ -2966,7 +3096,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime"></a> vmware-esx-soap-host-runtime
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime"></a> vmware-esx-soap-host-runtime
 
 Check command object for the `check_vmware_esx` plugin. Shows runtime info: VMs, overall status, connection state, health, storagehealth, temperature and sensor are represented as one value and without thresholds.
 
@@ -2988,7 +3118,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime-con"></a> vmware-esx-soap-host-runtime-con
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime-con"></a> vmware-esx-soap-host-runtime-con
 
 Check command object for the `check_vmware_esx` plugin. Shows connection state.
 
@@ -3010,7 +3140,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime-listvms"></a> vmware-esx-soap-host-runtime-listvms
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime-listvms"></a> vmware-esx-soap-host-runtime-listvms
 
 Check command object for the `check_vmware_esx` plugin. List of VMware machines and their status.
 
@@ -3036,7 +3166,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime-status"></a> vmware-esx-soap-host-runtime-status
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime-status"></a> vmware-esx-soap-host-runtime-status
 
 Check command object for the `check_vmware_esx` plugin. Overall object status (gray/green/red/yellow).
 
@@ -3058,7 +3188,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime-health"></a> vmware-esx-soap-host-runtime-health
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime-health"></a> vmware-esx-soap-host-runtime-health
 
 Check command object for the `check_vmware_esx` plugin. Checks cpu/storage/memory/sensor status.
 
@@ -3083,7 +3213,7 @@ vmware_include          | **Optional.** Whitelist status name. No value defined 
 vmware_isregexp         | **Optional.** Treat blacklist and whitelist expressions as regexp.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime-health-listsensors"></a> vmware-esx-soap-host-runtime-health-listsensors
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime-health-listsensors"></a> vmware-esx-soap-host-runtime-health-listsensors
 
 Check command object for the `check_vmware_esx` plugin. List all available sensors(use for listing purpose only).
 
@@ -3108,7 +3238,7 @@ vmware_include          | **Optional.** Whitelist status name. No value defined 
 vmware_isregexp         | **Optional.** Treat blacklist and whitelist expressions as regexp.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime-health-nostoragestatus"></a> vmware-esx-soap-host-runtime-health-nostoragestatus
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime-health-nostoragestatus"></a> vmware-esx-soap-host-runtime-health-nostoragestatus
 
 Check command object for the `check_vmware_esx` plugin. This is to avoid a double alarm if you use **vmware-esx-soap-host-runtime-health** and **vmware-esx-soap-host-runtime-storagehealth**.
 
@@ -3133,7 +3263,7 @@ vmware_include          | **Optional.** Whitelist status name. No value defined 
 vmware_isregexp         | **Optional.** Treat blacklist and whitelist expressions as regexp.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime-storagehealth"></a> vmware-esx-soap-host-runtime-storagehealth
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime-storagehealth"></a> vmware-esx-soap-host-runtime-storagehealth
 
 Check command object for the `check_vmware_esx` plugin. Local storage status check.
 
@@ -3159,7 +3289,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime-temp"></a> vmware-esx-soap-host-runtime-temp
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime-temp"></a> vmware-esx-soap-host-runtime-temp
 
 Check command object for the `check_vmware_esx` plugin. Lists all temperature sensors.
 
@@ -3185,7 +3315,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-runtime-issues"></a> vmware-esx-soap-host-runtime-issues
+#### <a id="plugins-contrib-vmware-esx-soap-host-runtime-issues"></a> vmware-esx-soap-host-runtime-issues
 
 Check command object for the `check_vmware_esx` plugin. Lists all configuration issues for the host.
 
@@ -3211,7 +3341,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-storage"></a> vmware-esx-soap-host-storage
+#### <a id="plugins-contrib-vmware-esx-soap-host-storage"></a> vmware-esx-soap-host-storage
 
 Check command object for the `check_vmware_esx` plugin. Shows Host storage info.
 
@@ -3236,7 +3366,7 @@ vmware_include          | **Optional.** Whitelist adapters, luns and paths. No v
 vmware_isregexp         | **Optional.** Treat blacklist and whitelist expressions as regexp.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-storage-adapter"></a> vmware-esx-soap-host-storage-adapter
+#### <a id="plugins-contrib-vmware-esx-soap-host-storage-adapter"></a> vmware-esx-soap-host-storage-adapter
 
 Check command object for the `check_vmware_esx` plugin. List host bus adapters.
 
@@ -3262,7 +3392,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-storage-lun"></a> vmware-esx-soap-host-storage-lun
+#### <a id="plugins-contrib-vmware-esx-soap-host-storage-lun"></a> vmware-esx-soap-host-storage-lun
 
 Check command object for the `check_vmware_esx` plugin. List SCSI logical units. The listing will include: LUN, canonical name of the disc, all of displayed name which is not part of the canonical name and status.
 
@@ -3288,7 +3418,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-host-storage-path"></a> vmware-esx-soap-host-storage-path
+#### <a id="plugins-contrib-vmware-esx-soap-host-storage-path"></a> vmware-esx-soap-host-storage-path
 
 Check command object for the `check_vmware_esx` plugin. List multipaths and the associated paths.
 
@@ -3315,7 +3445,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-cpu"></a> vmware-esx-soap-vm-cpu
+#### <a id="plugins-contrib-vmware-esx-soap-vm-cpu"></a> vmware-esx-soap-vm-cpu
 
 Check command object for the `check_vmware_esx` plugin. Shows all CPU usage info.
 
@@ -3340,7 +3470,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-cpu-ready"></a> vmware-esx-soap-vm-cpu-ready
+#### <a id="plugins-contrib-vmware-esx-soap-vm-cpu-ready"></a> vmware-esx-soap-vm-cpu-ready
 
 Check command object for the `check_vmware_esx` plugin. Percentage of time that the virtual machine was ready, but could not get scheduled to run on the physical CPU.
 
@@ -3366,7 +3496,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-cpu-wait"></a> vmware-esx-soap-vm-cpu-wait
+#### <a id="plugins-contrib-vmware-esx-soap-vm-cpu-wait"></a> vmware-esx-soap-vm-cpu-wait
 
 Check command object for the `check_vmware_esx` plugin. CPU time spent in wait state. The wait total includes time spent the CPU idle, CPU swap wait, and CPU I/O wait states. High or growing wait time can be a hint I/O bottlenecks.
 
@@ -3392,7 +3522,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-cpu-usage"></a> vmware-esx-soap-vm-cpu-usage
+#### <a id="plugins-contrib-vmware-esx-soap-vm-cpu-usage"></a> vmware-esx-soap-vm-cpu-usage
 
 Check command object for the `check_vmware_esx` plugin. Amount of actively used virtual CPU, as a percentage of total available CPU. This is the host's view of the CPU usage, not the guest operating system view. It is the average CPU utilization over all available virtual CPUs in the virtual machine.
 
@@ -3418,7 +3548,7 @@ vmware_warn             | **Optional.** Warning threshold in percent. Defaults t
 vmware_crit             | **Optional.** Critical threshold in percent. Defaults to "90%".
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-mem"></a> vmware-esx-soap-vm-mem
+#### <a id="plugins-contrib-vmware-esx-soap-vm-mem"></a> vmware-esx-soap-vm-mem
 
 Check command object for the `check_vmware_esx` plugin. Shows all memory info, except overall.
 
@@ -3442,7 +3572,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-mem-usage"></a> vmware-esx-soap-vm-mem-usage
+#### <a id="plugins-contrib-vmware-esx-soap-vm-mem-usage"></a> vmware-esx-soap-vm-mem-usage
 
 Check command object for the `check_vmware_esx` plugin. Average mem usage in percentage of configured virtual machine "physical" memory.
 
@@ -3468,7 +3598,7 @@ vmware_warn             | **Optional.** Warning threshold in percent. Defaults t
 vmware_crit             | **Optional.** Critical threshold in percent. Defaults to "90%".
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-mem-consumed"></a> vmware-esx-soap-vm-mem-consumed
+#### <a id="plugins-contrib-vmware-esx-soap-vm-mem-consumed"></a> vmware-esx-soap-vm-mem-consumed
 
 Check command object for the `check_vmware_esx` plugin. Amount of guest physical memory in MB consumed by the virtual machine for guest memory. Consumed memory does not include overhead memory. It includes shared memory and memory that might be reserved, but not actually used. Use this metric for charge-back purposes.<br>
 **vm consumed memory = memory granted - memory saved**
@@ -3495,7 +3625,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-mem-memctl"></a> vmware-esx-soap-vm-mem-memctl
+#### <a id="plugins-contrib-vmware-esx-soap-vm-mem-memctl"></a> vmware-esx-soap-vm-mem-memctl
 
 Check command object for the `check_vmware_esx` plugin. Amount of guest physical memory that is currently reclaimed from the virtual machine through ballooning. This is the amount of guest physical memory that has been allocated and pinned by the balloon driver.
 
@@ -3522,7 +3652,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-net"></a> vmware-esx-soap-vm-net
+#### <a id="plugins-contrib-vmware-esx-soap-vm-net"></a> vmware-esx-soap-vm-net
 
 Check command object for the `check_vmware_esx` plugin. Shows net info.
 
@@ -3546,7 +3676,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-net-usage"></a> vmware-esx-soap-vm-net-usage
+#### <a id="plugins-contrib-vmware-esx-soap-vm-net-usage"></a> vmware-esx-soap-vm-net-usage
 
 Check command object for the `check_vmware_esx` plugin. Overall network usage in KBps(Kilobytes per Second).
 
@@ -3572,7 +3702,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-net-receive"></a> vmware-esx-soap-vm-net-receive
+#### <a id="plugins-contrib-vmware-esx-soap-vm-net-receive"></a> vmware-esx-soap-vm-net-receive
 
 Check command object for the `check_vmware_esx` plugin. Receive in KBps(Kilobytes per Second).
 
@@ -3598,7 +3728,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-net-send"></a> vmware-esx-soap-vm-net-send
+#### <a id="plugins-contrib-vmware-esx-soap-vm-net-send"></a> vmware-esx-soap-vm-net-send
 
 Check command object for the `check_vmware_esx` plugin. Send in KBps(Kilobytes per Second).
 
@@ -3624,7 +3754,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-io"></a> vmware-esx-soap-vm-io
+#### <a id="plugins-contrib-vmware-esx-soap-vm-io"></a> vmware-esx-soap-vm-io
 
 Check command object for the `check_vmware_esx` plugin. SShows all disk io info. Without subselect no thresholds can be given. All I/O values are aggregated from historical intervals over the past 24 hours with a 5 minute sample rate.
 
@@ -3648,7 +3778,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-io-read"></a> vmware-esx-soap-vm-io-read
+#### <a id="plugins-contrib-vmware-esx-soap-vm-io-read"></a> vmware-esx-soap-vm-io-read
 
 Check command object for the `check_vmware_esx` plugin. Average number of kilobytes read from the disk each second.
 
@@ -3674,7 +3804,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-io-write"></a> vmware-esx-soap-vm-io-write
+#### <a id="plugins-contrib-vmware-esx-soap-vm-io-write"></a> vmware-esx-soap-vm-io-write
 
 Check command object for the `check_vmware_esx` plugin. Average number of kilobytes written to disk each second.
 
@@ -3700,7 +3830,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-io-usage"></a> vmware-esx-soap-vm-io-usage
+#### <a id="plugins-contrib-vmware-esx-soap-vm-io-usage"></a> vmware-esx-soap-vm-io-usage
 
 Check command object for the `check_vmware_esx` plugin. Aggregated disk I/O rate.
 
@@ -3726,7 +3856,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-runtime"></a> vmware-esx-soap-vm-runtime
+#### <a id="plugins-contrib-vmware-esx-soap-vm-runtime"></a> vmware-esx-soap-vm-runtime
 
 Check command object for the `check_vmware_esx` plugin. Shows virtual machine runtime info.
 
@@ -3750,7 +3880,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-runtime-con"></a> vmware-esx-soap-vm-runtime-con
+#### <a id="plugins-contrib-vmware-esx-soap-vm-runtime-con"></a> vmware-esx-soap-vm-runtime-con
 
 Check command object for the `check_vmware_esx` plugin. Shows the connection state.
 
@@ -3774,7 +3904,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-runtime-powerstate"></a> vmware-esx-soap-vm-runtime-powerstate
+#### <a id="plugins-contrib-vmware-esx-soap-vm-runtime-powerstate"></a> vmware-esx-soap-vm-runtime-powerstate
 
 Check command object for the `check_vmware_esx` plugin. Shows virtual machine power state: poweredOn, poweredOff or suspended.
 
@@ -3798,7 +3928,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-runtime-status"></a> vmware-esx-soap-vm-runtime-status
+#### <a id="plugins-contrib-vmware-esx-soap-vm-runtime-status"></a> vmware-esx-soap-vm-runtime-status
 
 Check command object for the `check_vmware_esx` plugin. Overall object status (gray/green/red/yellow).
 
@@ -3822,7 +3952,7 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-runtime-consoleconnections"></a> vmware-esx-soap-vm-runtime-consoleconnections
+#### <a id="plugins-contrib-vmware-esx-soap-vm-runtime-consoleconnections"></a> vmware-esx-soap-vm-runtime-consoleconnections
 
 Check command object for the `check_vmware_esx` plugin. Console connections to virtual machine.
 
@@ -3848,7 +3978,7 @@ vmware_warn             | **Optional.** The warning threshold. No value defined 
 vmware_crit             | **Optional.** The critical threshold. No value defined as default.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-runtime-gueststate"></a> vmware-esx-soap-vm-runtime-gueststate
+#### <a id="plugins-contrib-vmware-esx-soap-vm-runtime-gueststate"></a> vmware-esx-soap-vm-runtime-gueststate
 
 Check command object for the `check_vmware_esx` plugin. Guest OS status. Needs VMware Tools installed and running.
 
@@ -3871,7 +4001,7 @@ vmware_username         | **Optional.** The username to connect to Host or vCent
 vmware_password         | **Optional.** The username's password. No value defined as default.
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-runtime-tools"></a> vmware-esx-soap-vm-runtime-tools
+#### <a id="plugins-contrib-vmware-esx-soap-vm-runtime-tools"></a> vmware-esx-soap-vm-runtime-tools
 
 Check command object for the `check_vmware_esx` plugin. Guest OS status. VMware tools  status.
 
@@ -3896,7 +4026,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 vmware_openvmtools	| **Optional** Prevent CRITICAL state for installed and running Open VM Tools.
 
 
-## <a id="plugins-contrib-vmware-esx-soap-vm-runtime-issues"></a> vmware-esx-soap-vm-runtime-issues
+#### <a id="plugins-contrib-vmware-esx-soap-vm-runtime-issues"></a> vmware-esx-soap-vm-runtime-issues
 
 Check command object for the `check_vmware_esx` plugin. All issues for the virtual machine.
 
@@ -3920,33 +4050,3 @@ vmware_password         | **Optional.** The username's password. No value define
 vmware_authfile         | **Optional.** Use auth file instead username/password to session connect. No effect if **vmware_username** and **vmware_password** are defined <br> **Autentication file content:** <br>  username=vmuser <br> password=p@ssw0rd
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
-
-## <a id="plugins-contrib-hardware"></a> Hardware
-
-This category includes all plugins for various hardware checks.
-
-### <a id="plugins-contrib-command-hpasm"></a> hpasm
-
-The plugin [check_hpasm](https://labs.consol.de/de/nagios/check_hpasm/index.html) is a plugin to monitor HP hardware through the HP Insight Agent via SNMP.
-
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
-
-Name                    	| Description
---------------------------------|-----------------------------------------------------------------------
-hpasm_hostname			| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
-hpasm_community			| **Optional.** SNMP community of the server (SNMP v1/2 only).
-hpasm_protocol			| **Optional.** The SNMP protocol to use (default: 2c, other possibilities: 1,3).
-hpasm_port			| **Optional.** The SNMP port to use (default: 161).
-hpasm_blacklist			| **Optional.** Blacklist some (missing/failed) components.
-hpasm_ignore-dimms		| **Optional.** Ignore "N/A"-DIMM status on misc. servers (e.g. older DL320).
-hpasm_ignore-fan-redundancy	| **Optional.** Ignore missing redundancy partners.
-hpasm_customthresholds		| **Optional.** Use custom thresholds for certain temperatures.
-hpasm_eventrange		| **Optional.** Period of time before critical IML events respecively become warnings or vanish. A range is descibed as a number and a unit (s, m, h, d), e.g. --eventrange 1h/20m.
-hpasm_perfdata			| **Optional.** Output performance data. If your performance data string becomes too long and is truncated by Nagios, then you can use --perfdata=short instead. This will output temperature tags without location information.
-hpasm_username			| **Optional.** The securityName for the USM security model (SNMPv3 only).
-hpasm_authpassword		| **Optional.** The authentication password for SNMPv3.
-hpasm_authprotocol		| **Optional.** The authentication protocol for SNMPv3 (md5|sha).
-hpasm_privpassword		| **Optional.** The password for authPriv security level.
-hpasm_privprotocol		| **Optional.** The private protocol for SNMPv3 (des|aes|aes128|3des|3desde).
-hpasm_servertype		| **Optional.** The type of the server: proliant (default) or bladesystem.
-hpasm_eval-nics			| **Optional.** Check network interfaces (and groups). Try it and report me whyt you think about it. I need to build up some know how on this subject. If get an error and you think, it is not justified for your configuration, please tell me about it. (alwasy send the output of "snmpwalk -On .... 1.3.6.1.4.1.232" and a description how you setup your nics and why it is correct opposed to the plugins error message.

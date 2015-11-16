@@ -20,6 +20,10 @@
 #include "icinga/icingaapplication.hpp"
 #include "icinga/customvarobject.hpp"
 #include "base/array.hpp"
+#impl_include "icinga/checkcommand.hpp"
+#impl_include "icinga/eventcommand.hpp"
+
+library icinga;
 
 namespace icinga
 {
@@ -40,41 +44,50 @@ enum AcknowledgementType
 
 abstract class Checkable : CustomVarObject
 {
-	[config] Array::Ptr groups {
-		default {{{ return new Array(); }}}
+	[config, required, navigation] name(CheckCommand) check_command (CheckCommandRaw) {
+		navigate {{{
+			return CheckCommand::GetByName(GetCheckCommandRaw());
+		}}}
 	};
-	[config, protected] String check_command (CheckCommandRaw);
-	[config] int max_check_attempts (MaxCheckAttemptsRaw) {
+	[config] int max_check_attempts {
 		default {{{ return 3; }}}
 	};
-	[config, protected] String check_period (CheckPeriodRaw);
-	[config] double check_interval (CheckIntervalRaw) {
+	[config, navigation] name(TimePeriod) check_period (CheckPeriodRaw) {
+		navigate {{{
+			return TimePeriod::GetByName(GetCheckPeriodRaw());
+		}}}
+	};
+	[config] double check_interval {
 		default {{{ return 5 * 60; }}}
 	};
-	[config] double retry_interval (RetryIntervalRaw) {
+	[config] double retry_interval {
 		default {{{ return 60; }}}
 	};
-	[config] String event_command (EventCommandRaw);
+	[config, navigation] name(EventCommand) event_command (EventCommandRaw) {
+		navigate {{{
+			return EventCommand::GetByName(GetEventCommandRaw());
+		}}}
+	};
 	[config] bool volatile;
 	[config] double flapping_threshold {
 		default {{{ return 30; }}}
 	};
-	[config] bool enable_active_checks (EnableActiveChecksRaw) {
+	[config] bool enable_active_checks {
 		default {{{ return true; }}}
 	};
-	[config] bool enable_passive_checks (EnablePassiveChecksRaw) {
+	[config] bool enable_passive_checks {
 		default {{{ return true; }}}
 	};
-	[config] bool enable_event_handler (EnableEventHandlerRaw) {
+	[config] bool enable_event_handler {
 		default {{{ return true; }}}
 	};
-	[config] bool enable_notifications (EnableNotificationsRaw) {
+	[config] bool enable_notifications {
 		default {{{ return true; }}}
 	};
-	[config] bool enable_flapping (EnableFlappingRaw) {
+	[config] bool enable_flapping {
 		default {{{ return false; }}}
 	};
-	[config] bool enable_perfdata (EnablePerfdataRaw) {
+	[config] bool enable_perfdata {
 		default {{{ return true; }}}
 	};
 
@@ -84,20 +97,20 @@ abstract class Checkable : CustomVarObject
 	[config] String icon_image;
 	[config] String icon_image_alt;
 
-	[state] double next_check (NextCheckRaw);
+	[state] double next_check;
 	[state] int check_attempt {
 		default {{{ return 1; }}}
 	};
-	[state, enum] ServiceState state_raw {
+	[state, enum, no_user_view, no_user_modify] ServiceState state_raw {
 		default {{{ return ServiceUnknown; }}}
 	};
 	[state, enum] StateType state_type {
 		default {{{ return StateTypeSoft; }}}
 	};
-	[state, enum] ServiceState last_state_raw {
+	[state, enum, no_user_view, no_user_modify] ServiceState last_state_raw {
 		default {{{ return ServiceUnknown; }}}
 	};
-	[state, enum] ServiceState last_hard_state_raw {
+	[state, enum, no_user_view, no_user_modify] ServiceState last_hard_state_raw {
 		default {{{ return ServiceUnknown; }}}
 	};
 	[state, enum] StateType last_state_type {
@@ -113,41 +126,29 @@ abstract class Checkable : CustomVarObject
 	[state] double last_hard_state_change {
 		default {{{ return Application::GetStartTime(); }}}
 	};
-	[state] double last_state_ok (LastStateOK);
-	[state] double last_state_warning;
-	[state] double last_state_critical;
-	[state] double last_state_unknown;
 	[state] double last_state_unreachable;
 	[state] bool last_in_downtime;
-	[state] bool force_next_check (ForceNextCheckRaw);
+	[state] bool force_next_check;
 	[state] int acknowledgement (AcknowledgementRaw) {
 		default {{{ return AcknowledgementNone; }}}
 	};
 	[state] double acknowledgement_expiry;
-	[state] Dictionary::Ptr comments {
-		default {{{ return new Dictionary(); }}}
-	};
-	[state] Dictionary::Ptr downtimes {
-		default {{{ return new Dictionary(); }}}
-	};
-	[state] bool force_next_notification (ForceNextNotificationRaw);
+	[state] bool force_next_notification;
 	[state] int flapping_positive;
 	[state] int flapping_negative;
 	[state] double flapping_last_change;
-	[state] Value override_enable_notifications;
-	[state] Value override_enable_active_checks;
-	[state] Value override_enable_passive_checks;
-	[state] Value override_enable_flapping;
-	[state] Value override_enable_perfdata;
-	[state] Value override_check_interval;
-	[state] Value override_retry_interval;
-	[state] Value override_enable_event_handler;
-	[state] Value override_event_command;
-	[state] Value override_check_command;
-	[state] Value override_max_check_attempts;
-	[state] Value override_check_period;
+	[no_storage, protected] bool flapping {
+		get {{{ return false; }}}
+	};
+	[no_storage] double last_check {
+		get;
+	};
 
-	[config] String command_endpoint (CommandEndpointRaw);
+	[config, navigation] name(Endpoint) command_endpoint (CommandEndpointRaw) {
+		navigate {{{
+			return Endpoint::GetByName(GetCommandEndpointRaw());
+		}}}
+	};
 };
 
 }

@@ -42,27 +42,29 @@ public:
 	DECLARE_OBJECT(IdoPgsqlConnection);
 	DECLARE_OBJECTNAME(IdoPgsqlConnection);
 
-    IdoPgsqlConnection(void);
+	IdoPgsqlConnection(void);
 
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
-protected:
-	virtual void Resume(void);
-	virtual void Pause(void);
+	virtual int GetPendingQueryCount(void) const override;
 
-	virtual void ActivateObject(const DbObject::Ptr& dbobj);
-	virtual void DeactivateObject(const DbObject::Ptr& dbobj);
-	virtual void ExecuteQuery(const DbQuery& query);
-	virtual void CleanUpExecuteQuery(const String& table, const String& time_key, double time_value);
-	virtual void FillIDCache(const DbType::Ptr& type);
-	virtual void NewTransaction(void);
+protected:
+	virtual void Resume(void) override;
+	virtual void Pause(void) override;
+
+	virtual void ActivateObject(const DbObject::Ptr& dbobj) override;
+	virtual void DeactivateObject(const DbObject::Ptr& dbobj) override;
+	virtual void ExecuteQuery(const DbQuery& query) override;
+	virtual void CleanUpExecuteQuery(const String& table, const String& time_key, double time_value) override;
+	virtual void FillIDCache(const DbType::Ptr& type) override;
+	virtual void NewTransaction(void) override;
 
 private:
 	DbReference m_InstanceID;
+	int m_SessionToken;
 
 	WorkQueue m_QueryQueue;
 
-	boost::mutex m_ConnectionMutex;
 	PGconn *m_Connection;
 	int m_AffectedRows;
 
@@ -77,6 +79,7 @@ private:
 
 	bool FieldToEscapedString(const String& key, const Value& value, Value *result);
 	void InternalActivateObject(const DbObject::Ptr& dbobj);
+	void InternalDeactivateObject(const DbObject::Ptr& dbobj);
 
 	void Disconnect(void);
 	void InternalNewTransaction(void);
@@ -90,7 +93,8 @@ private:
 	void InternalExecuteQuery(const DbQuery& query, DbQueryType *typeOverride = NULL);
 	void InternalCleanUpExecuteQuery(const String& table, const String& time_key, double time_value);
 
-	virtual void ClearConfigTable(const String& table);
+	virtual void ClearConfigTable(const String& table) override;
+	void ClearCustomVarTable(const String& table);
 
 	void ExceptionHandler(boost::exception_ptr exp);
 };

@@ -18,6 +18,7 @@
  ******************************************************************************/
 
 #include "icinga/perfdatavalue.hpp"
+#include "icinga/perfdatavalue.tcpp"
 #include "base/convert.hpp"
 #include "base/exception.hpp"
 #include "base/logger.hpp"
@@ -38,14 +39,14 @@ PerfdataValue::PerfdataValue(String label, double value, bool counter,
     const String& unit, const Value& warn, const Value& crit, const Value& min,
     const Value& max)
 {
-	SetLabel(label);
-	SetValue(value);
-	SetCounter(counter);
-	SetUnit(unit);
-	SetWarn(warn);
-	SetCrit(crit);
-	SetMin(min);
-	SetMax(max);
+	SetLabel(label, true);
+	SetValue(value, true);
+	SetCounter(counter, true);
+	SetUnit(unit, true);
+	SetWarn(warn, true);
+	SetCrit(crit, true);
+	SetMin(min, true);
+	SetMax(max, true);
 }
 
 PerfdataValue::Ptr PerfdataValue::Parse(const String& perfdata)

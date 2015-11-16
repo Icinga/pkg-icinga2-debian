@@ -22,21 +22,21 @@
 #include "base/debug.hpp"
 #include "base/primitivetype.hpp"
 #include "base/dictionary.hpp"
+#include "base/configwriter.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
 
-REGISTER_PRIMITIVE_TYPE(Array, Array::GetPrototype());
+REGISTER_PRIMITIVE_TYPE(Array, Object, Array::GetPrototype());
 
 /**
  * Restrieves a value from an array.
  *
- * @param index The index..
+ * @param index The index.
  * @returns The value.
  */
 Value Array::Get(unsigned int index) const
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	return m_Data.at(index);
@@ -50,7 +50,6 @@ Value Array::Get(unsigned int index) const
  */
 void Array::Set(unsigned int index, const Value& value)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	m_Data.at(index) = value;
@@ -63,38 +62,9 @@ void Array::Set(unsigned int index, const Value& value)
  */
 void Array::Add(const Value& value)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	m_Data.push_back(value);
-}
-
-/**
- * Returns an iterator to the beginning of the array.
- *
- * Note: Caller must hold the object lock while using the iterator.
- *
- * @returns An iterator.
- */
-Array::Iterator Array::Begin(void)
-{
-	ASSERT(OwnsLock());
-
-	return m_Data.begin();
-}
-
-/**
- * Returns an iterator to the end of the array.
- *
- * Note: Caller must hold the object lock while using the iterator.
- *
- * @returns An iterator.
- */
-Array::Iterator Array::End(void)
-{
-	ASSERT(OwnsLock());
-
-	return m_Data.end();
 }
 
 /**
@@ -104,7 +74,6 @@ Array::Iterator Array::End(void)
  */
 size_t Array::GetLength(void) const
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	return m_Data.size();
@@ -118,7 +87,6 @@ size_t Array::GetLength(void) const
  */
 bool Array::Contains(const Value& value) const
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	return (std::find(m_Data.begin(), m_Data.end(), value) != m_Data.end());
@@ -132,7 +100,6 @@ bool Array::Contains(const Value& value) const
  */
 void Array::Insert(unsigned int index, const Value& value)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	ASSERT(index <= m_Data.size());
@@ -147,7 +114,6 @@ void Array::Insert(unsigned int index, const Value& value)
  */
 void Array::Remove(unsigned int index)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	m_Data.erase(m_Data.begin() + index);
@@ -167,7 +133,6 @@ void Array::Remove(Array::Iterator it)
 
 void Array::Resize(size_t new_size)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	m_Data.resize(new_size);
@@ -175,7 +140,6 @@ void Array::Resize(size_t new_size)
 
 void Array::Clear(void)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	m_Data.clear();
@@ -183,7 +147,6 @@ void Array::Clear(void)
 
 void Array::Reserve(size_t new_size)
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 
 	m_Data.reserve(new_size);
@@ -191,7 +154,6 @@ void Array::Reserve(size_t new_size)
 
 void Array::CopyTo(const Array::Ptr& dest) const
 {
-	ASSERT(!OwnsLock());
 	ObjectLock olock(this);
 	ObjectLock xlock(dest);
 
@@ -210,6 +172,24 @@ Array::Ptr Array::ShallowClone(void) const
 	return clone;
 }
 
+/**
+ * Makes a deep clone of an array
+ * and its elements.
+ * 
+ * @returns a copy of the array.
+ */
+Object::Ptr Array::Clone(void) const
+{
+	Array::Ptr arr = new Array();
+	
+	ObjectLock olock(this);
+	BOOST_FOREACH(const Value& val, m_Data) {
+		arr->Add(val.Clone());
+	}
+	
+	return arr;
+}
+
 Array::Ptr Array::Reverse(void) const
 {
 	Array::Ptr result = new Array();
@@ -220,4 +200,11 @@ Array::Ptr Array::Reverse(void) const
 	std::copy(m_Data.rbegin(), m_Data.rend(), std::back_inserter(result->m_Data));
 
 	return result;
+}
+
+String Array::ToString(void) const
+{
+	std::ostringstream msgbuf;
+	ConfigWriter::EmitArray(msgbuf, 1, const_cast<Array *>(this));
+	return msgbuf.str();
 }

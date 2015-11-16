@@ -19,6 +19,8 @@
 
 #include "icinga/customvarobject.hpp"
 
+library icinga;
+
 namespace icinga
 {
 
@@ -33,7 +35,7 @@ class UserGroup : CustomVarObject
 		}}}
 	};
 
-	[config] Array::Ptr groups;
+	[config, no_user_modify] array(name(UserGroup)) groups;
 };
 
 }

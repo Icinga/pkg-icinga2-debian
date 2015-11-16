@@ -18,12 +18,10 @@
 find_package(MySQL)
 
 if(MYSQL_FOUND)
-  mkclass_target(idomysqlconnection.ti idomysqlconnection.thpp)
-
-  mkembedconfig_target(db_ido_mysql-type.conf db_ido_mysql-type.cpp)
+  mkclass_target(idomysqlconnection.ti idomysqlconnection.tcpp idomysqlconnection.thpp)
 
   set(db_ido_mysql_SOURCES
-    idomysqlconnection.cpp idomysqlconnection.thpp db_ido_mysql-type.cpp
+    idomysqlconnection.cpp idomysqlconnection.thpp
   )
 
   if(ICINGA2_UNITY_BUILD)
@@ -38,6 +36,7 @@ if(MYSQL_FOUND)
   set_target_properties (
     db_ido_mysql PROPERTIES
     INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
+    DEFINE_SYMBOL I2_DB_IDO_MYSQL_BUILD
     FOLDER Components
   )
 

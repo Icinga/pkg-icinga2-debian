@@ -24,17 +24,20 @@ set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_parser.cc PROPERTY EXCLUD
 flex_target(config_lexer config_lexer.ll ${CMAKE_CURRENT_BINARY_DIR}/config_lexer.cc)
 set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_lexer.cc PROPERTY EXCLUDE_UNITY_BUILD TRUE)
 
-add_flex_bison_dependency(config_lexer config_parser)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_parser.cc PROPERTY COMPILE_FLAGS "-Wno-deprecated-register")
+  set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_lexer.cc PROPERTY COMPILE_FLAGS "-Wno-deprecated-register")
+endif()
 
-mkembedconfig_target(base-type.conf base-type.cpp)
+add_flex_bison_dependency(config_lexer config_parser)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(config_SOURCES
-  applyrule.cpp base-type.conf base-type.cpp
+  applyrule.cpp
   configcompilercontext.cpp configcompiler.cpp configitembuilder.cpp
   configitem.cpp ${FLEX_config_lexer_OUTPUTS} ${BISON_config_parser_OUTPUTS}
-  configtype.cpp expression.cpp objectrule.cpp typerule.cpp typerulelist.cpp
+  expression.cpp objectrule.cpp
 )
 
 if(ICINGA2_UNITY_BUILD)
@@ -57,3 +60,10 @@ install(
   RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/icinga2
 )
+
+if(APPLE)
+  install(
+    TARGETS config
+    LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}/icinga-studio.app/Contents
+  )
+endif()
