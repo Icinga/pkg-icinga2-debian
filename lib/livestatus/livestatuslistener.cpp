@@ -18,10 +18,11 @@
  ******************************************************************************/
 
 #include "livestatus/livestatuslistener.hpp"
+#include "livestatus/livestatuslistener.tcpp"
 #include "icinga/perfdatavalue.hpp"
 #include "base/utility.hpp"
 #include "base/objectlock.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
 #include "base/tcpsocket.hpp"
@@ -35,19 +36,18 @@
 using namespace icinga;
 
 REGISTER_TYPE(LivestatusListener);
-REGISTER_SCRIPTFUNCTION(ValidateSocketType, &LivestatusListener::ValidateSocketType);
 
 static int l_ClientsConnected = 0;
 static int l_Connections = 0;
 static boost::mutex l_ComponentMutex;
 
-REGISTER_STATSFUNCTION(LivestatusListenerStats, &LivestatusListener::StatsFunc);
+REGISTER_STATSFUNCTION(LivestatusListener, &LivestatusListener::StatsFunc);
 
 void LivestatusListener::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const LivestatusListener::Ptr& livestatuslistener, DynamicType::GetObjectsByType<LivestatusListener>()) {
+	BOOST_FOREACH(const LivestatusListener::Ptr& livestatuslistener, ConfigType::GetObjectsByType<LivestatusListener>()) {
 		Dictionary::Ptr stats = new Dictionary();
 		stats->Set("connections", l_Connections);
 
@@ -62,9 +62,9 @@ void LivestatusListener::StatsFunc(const Dictionary::Ptr& status, const Array::P
 /**
  * Starts the component.
  */
-void LivestatusListener::Start(void)
+void LivestatusListener::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<LivestatusListener>::Start(runtimeCreated);
 
 	if (GetSocketType() == "tcp") {
 		TcpSocket::Ptr socket = new TcpSocket();
@@ -119,9 +119,9 @@ void LivestatusListener::Start(void)
 	}
 }
 
-void LivestatusListener::Stop(void)
+void LivestatusListener::Stop(bool runtimeRemoved)
 {
-	DynamicObject::Stop();
+	ObjectImpl<LivestatusListener>::Stop(runtimeRemoved);
 
 	m_Listener->Close();
 
@@ -161,7 +161,7 @@ void LivestatusListener::ServerThreadProc(void)
 				break;
 		}
 	} catch (std::exception&) {
-		Log(LogCritical, "ListenerListener", "Cannot accept new connection.");
+		Log(LogCritical, "LivestatusListener", "Cannot accept new connection.");
 	}
 
 	m_Listener->Close();
@@ -214,12 +214,10 @@ void LivestatusListener::ClientHandler(const Socket::Ptr& client)
 }
 
 
-void LivestatusListener::ValidateSocketType(const String& location, const LivestatusListener::Ptr& object)
+void LivestatusListener::ValidateSocketType(const String& value, const ValidationUtils& utils)
 {
-	String socket_type = object->GetSocketType();
+	ObjectImpl<LivestatusListener>::ValidateSocketType(value, utils);
 
-	if (socket_type != "unix" && socket_type != "tcp") {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": Socket type '" + socket_type + "' is invalid.", object->GetDebugInfo()));
-	}
+	if (value != "unix" && value != "tcp")
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("socket_type"), "Socket type '" + value + "' is invalid."));
 }

@@ -5,8 +5,6 @@
 %:
 	dh $@
 
-override_dh_systemd_enable:
-	dh_systemd_enable --name=icinga2
 override_dh_auto_build:
 	dh_auto_build --parallel
 
@@ -21,12 +19,13 @@ override_dh_auto_configure:
 	dh_auto_configure -- \
 		-DCMAKE_INSTALL_LOCALSTATEDIR=/var \
 		-DCMAKE_INSTALL_SYSCONFDIR=/etc \
-		-DICINGA2_RUNDIR=/run \
+		-DICINGA2_RUNDIR=/var/run \
 		-DICINGA2_USER=nagios \
 		-DICINGA2_GROUP=nagios \
 		-DICINGA2_COMMAND_GROUP=www-data \
 		-DICINGA2_GIT_VERSION_INFO=false \
-		-DICINGA2_PLUGINDIR=/usr/lib/nagios/plugins
+		-DICINGA2_PLUGINDIR=/usr/lib/nagios/plugins \
+		-DICINGA2_WITH_STUDIO=false
 
 override_dh_auto_install:
 	dh_auto_install
@@ -37,7 +36,7 @@ override_dh_install:
 	dh_install -Xprepare-dirs
 	# remove ido files from other packages
 	if [ -d debian/icinga2-common/ ]; then rm debian/icinga2-common/etc/icinga2/features-available/ido-*; fi
-	rm debian/icinga2-bin/usr/lib/icinga2/libdb_ido_*
+	rm debian/libicinga2/usr/lib/icinga2/libdb_ido_*
 	for dbms in mysql pgsql; do \
 		mkdir -p debian/icinga2-ido-$$dbms/usr/share/dbconfig-common/data/icinga2-ido-$$dbms/install ; \
 		mkdir -p debian/icinga2-ido-$$dbms/usr/share/dbconfig-common/data/icinga2-ido-$$dbms/upgrade/$$dbms; \
@@ -46,6 +45,10 @@ override_dh_install:
 			cp $$file debian/icinga2-ido-$$dbms/usr/share/dbconfig-common/data/icinga2-ido-$$dbms/upgrade/$$dbms/`basename $$file .sql`; \
 		done; \
 	done
+
+# private lib search for squeeze
+override_dh_shlibdeps:
+	dh_shlibdeps -Llibbar1
 
 override_dh_installinit:
 	dh_installinit --name=icinga2

@@ -51,15 +51,15 @@ public:
 
 	static void RegisterApplyRuleHandler(void);
 
-	static void ValidateFilters(const String& location, const Dependency::Ptr& object);
+	virtual void ValidateStates(const Array::Ptr& value, const ValidationUtils& utils) override;
 
 	static void EvaluateApplyRules(const intrusive_ptr<Host>& host);
 	static void EvaluateApplyRules(const intrusive_ptr<Service>& service);
 
 protected:
-	virtual void OnConfigLoaded(void);
-	virtual void OnAllConfigLoaded(void);
-	virtual void Stop(void);
+	virtual void OnConfigLoaded(void) override;
+	virtual void OnAllConfigLoaded(void) override;
+	virtual void Stop(bool runtimeRemoved) override;
 
 private:
 	Checkable::Ptr m_Parent;

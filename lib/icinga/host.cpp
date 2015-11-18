@@ -18,11 +18,11 @@
  ******************************************************************************/
 
 #include "icinga/host.hpp"
+#include "icinga/host.tcpp"
 #include "icinga/service.hpp"
 #include "icinga/hostgroup.hpp"
 #include "icinga/pluginutility.hpp"
 #include "icinga/scheduleddowntime.hpp"
-#include "base/exception.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
 #include "base/utility.hpp"
@@ -36,7 +36,7 @@ REGISTER_TYPE(Host);
 
 void Host::OnAllConfigLoaded(void)
 {
-	Checkable::OnAllConfigLoaded();
+	ObjectImpl<Host>::OnAllConfigLoaded();
 
 	HostGroup::EvaluateObjectRules(this);
 
@@ -71,9 +71,9 @@ void Host::CreateChildObjects(const Type::Ptr& childType)
 		Service::EvaluateApplyRules(this);
 }
 
-void Host::Stop(void)
+void Host::Stop(bool runtimeRemoved)
 {
-	Checkable::Stop();
+	ObjectImpl<Host>::Stop(runtimeRemoved);
 
 	Array::Ptr groups = GetGroups();
 
@@ -91,14 +91,15 @@ void Host::Stop(void)
 	// TODO: unregister slave services/notifications?
 }
 
-std::set<Service::Ptr> Host::GetServices(void) const
+std::vector<Service::Ptr> Host::GetServices(void) const
 {
 	boost::mutex::scoped_lock lock(m_ServicesMutex);
 
-	std::set<Service::Ptr> services;
+	std::vector<Service::Ptr> services;
+	services.reserve(m_Services.size());
 	typedef std::pair<String, Service::Ptr> ServicePair;
 	BOOST_FOREACH(const ServicePair& kv, m_Services) {
-		services.insert(kv.second);
+		services.push_back(kv.second);
 	}
 
 	return services;
@@ -172,17 +173,12 @@ HostState Host::GetLastHardState(void) const
 	return CalculateState(GetLastHardStateRaw());
 }
 
-double Host::GetLastStateUp(void) const
+void Host::SaveLastState(ServiceState state, double timestamp)
 {
-	if (GetLastStateOK() > GetLastStateWarning())
-		return GetLastStateOK();
-	else
-		return GetLastStateWarning();
-}
-
-double Host::GetLastStateDown(void) const
-{
-	return GetLastStateCritical();
+	if (state == ServiceOK || state == ServiceWarning)
+		SetLastStateUp(timestamp);
+	else if (state == ServiceCritical)
+		SetLastStateDown(timestamp);
 }
 
 HostState Host::StateFromString(const String& state)

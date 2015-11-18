@@ -18,6 +18,7 @@
  ******************************************************************************/
 
 #include "icinga/notification.hpp"
+#include "icinga/notification.tcpp"
 #include "icinga/notificationcommand.hpp"
 #include "icinga/service.hpp"
 #include "base/objectlock.hpp"
@@ -27,17 +28,16 @@
 #include "base/exception.hpp"
 #include "base/initialize.hpp"
 #include "base/scriptglobal.hpp"
-#include "base/function.hpp"
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(Notification);
-REGISTER_SCRIPTFUNCTION(ValidateNotificationFilters, &Notification::ValidateFilters);
-REGISTER_SCRIPTFUNCTION(ValidateNotificationUsers, &Notification::ValidateUsers);
 INITIALIZE_ONCE(&Notification::StaticInitialize);
 
-boost::signals2::signal<void (const Notification::Ptr&, double, const MessageOrigin&)> Notification::OnNextNotificationChanged;
+boost::signals2::signal<void (const Notification::Ptr&, const MessageOrigin::Ptr&)> Notification::OnNextNotificationChanged;
 
 String NotificationNameComposer::MakeName(const String& shortName, const Object::Ptr& context) const
 {
@@ -54,6 +54,27 @@ String NotificationNameComposer::MakeName(const String& shortName, const Object:
 	name += "!" + shortName;
 
 	return name;
+}
+
+Dictionary::Ptr NotificationNameComposer::ParseName(const String& name) const
+{
+	std::vector<String> tokens;
+	boost::algorithm::split(tokens, name, boost::is_any_of("!"));
+
+	if (tokens.size() < 2)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid Notification name."));
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("host_name", tokens[0]);
+
+	if (tokens.size() > 2) {
+		result->Set("service_name", tokens[1]);
+		result->Set("name", tokens[2]);
+	} else {
+		result->Set("name", tokens[1]);
+	}
+
+	return result;
 }
 
 void Notification::StaticInitialize(void)
@@ -78,48 +99,52 @@ void Notification::StaticInitialize(void)
 
 void Notification::OnConfigLoaded(void)
 {
+	ObjectImpl<Notification>::OnConfigLoaded();
+
 	SetTypeFilter(FilterArrayToInt(GetTypes(), ~0));
 	SetStateFilter(FilterArrayToInt(GetStates(), ~0));
 }
 
 void Notification::OnAllConfigLoaded(void)
 {
-	Checkable::Ptr obj = GetCheckable();
+	ObjectImpl<Notification>::OnAllConfigLoaded();
 
-	if (!obj)
+	Host::Ptr host = Host::GetByName(GetHostName());
+
+	if (GetServiceName().IsEmpty())
+		m_Checkable = host;
+	else
+		m_Checkable = host->GetServiceByShortName(GetServiceName());
+
+	if (!m_Checkable)
 		BOOST_THROW_EXCEPTION(ScriptError("Notification object refers to a host/service which doesn't exist.", GetDebugInfo()));
 
-	obj->AddNotification(this);
+	GetCheckable()->RegisterNotification(this);
 }
 
-void Notification::Start(void)
+void Notification::Start(bool runtimeCreated)
 {
-	DynamicObject::Start();
+	ObjectImpl<Notification>::Start(runtimeCreated);
 
 	Checkable::Ptr obj = GetCheckable();
 
 	if (obj)
-		obj->AddNotification(this);
+		obj->RegisterNotification(this);
 }
 
-void Notification::Stop(void)
+void Notification::Stop(bool runtimeRemoved)
 {
-	DynamicObject::Stop();
+	ObjectImpl<Notification>::Stop(runtimeRemoved);
 
 	Checkable::Ptr obj = GetCheckable();
 
 	if (obj)
-		obj->RemoveNotification(this);
+		obj->UnregisterNotification(this);
 }
 
 Checkable::Ptr Notification::GetCheckable(void) const
 {
-	Host::Ptr host = Host::GetByName(GetHostName());
-
-	if (GetServiceName().IsEmpty())
-		return host;
-	else
-		return host->GetServiceByShortName(GetServiceName());
+	return static_pointer_cast<Checkable>(m_Checkable);
 }
 
 NotificationCommand::Ptr Notification::GetCommand(void) const
@@ -176,22 +201,6 @@ TimePeriod::Ptr Notification::GetPeriod(void) const
 	return TimePeriod::GetByName(GetPeriodRaw());
 }
 
-double Notification::GetNextNotification(void) const
-{
-	return GetNextNotificationRaw();
-}
-
-/**
- * Sets the timestamp when the next periodical notification should be sent.
- * This does not affect notifications that are sent for state changes.
- */
-void Notification::SetNextNotification(double time, const MessageOrigin& origin)
-{
-	SetNextNotificationRaw(time);
-
-	OnNextNotificationChanged(this, time, origin);
-}
-
 void Notification::UpdateNotificationNumber(void)
 {
 	SetNotificationNumber(GetNotificationNumber() + 1);
@@ -231,8 +240,6 @@ String Notification::NotificationTypeToString(NotificationType type)
 
 void Notification::BeginExecuteNotification(NotificationType type, const CheckResult::Ptr& cr, bool force, const String& author, const String& text)
 {
-	ASSERT(!OwnsLock());
-
 	Log(LogNotice, "Notification")
 	    << "Attempting to send notifications for notification object '" << GetName() << "'.";
 
@@ -256,8 +263,8 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 				    << "Not sending notifications for notification object '" << GetName() << "': before escalation range";
 
 				/* we need to adjust the next notification time
- 				 * to now + begin delaying the first notification
- 				 */
+				 * to now + begin delaying the first notification
+				 */
 				double nextProposedNotification = now + times->Get("begin") + 1.0;
 				if (GetNextNotification() > nextProposedNotification)
 					SetNextNotification(nextProposedNotification);
@@ -389,8 +396,6 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 
 bool Notification::CheckNotificationUserFilters(NotificationType type, const User::Ptr& user, bool force)
 {
-	ASSERT(!OwnsLock());
-
 	if (!force) {
 		TimePeriod::Ptr tp = user->GetPeriod();
 
@@ -456,8 +461,6 @@ bool Notification::CheckNotificationUserFilters(NotificationType type, const Use
 
 void Notification::ExecuteNotificationHelper(NotificationType type, const User::Ptr& user, const CheckResult::Ptr& cr, bool force, const String& author, const String& text)
 {
-	ASSERT(!OwnsLock());
-
 	try {
 		NotificationCommand::Ptr command = GetCommand();
 
@@ -628,39 +631,43 @@ String Notification::NotificationHostStateToString(HostState state)
 	}
 }
 
-void Notification::ValidateUsers(const String& location, const Notification::Ptr& object)
+void Notification::Validate(int types, const ValidationUtils& utils)
 {
-	Array::Ptr users = object->GetUsersRaw();
-	Array::Ptr groups = object->GetUserGroupsRaw();
+	ObjectImpl<Notification>::Validate(types, utils);
 
-	if ((!users || users->GetLength() == 0) && (!groups || groups->GetLength() == 0)) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": No users/user_groups specified.", object->GetDebugInfo()));
-	}
+	if (!(types & FAConfig))
+		return;
+
+	Array::Ptr users = GetUsersRaw();
+	Array::Ptr groups = GetUserGroupsRaw();
+
+	if ((!users || users->GetLength() == 0) && (!groups || groups->GetLength() == 0))
+		BOOST_THROW_EXCEPTION(ValidationError(this, std::vector<String>(), "Validation failed: No users/user_groups specified."));
 }
 
-void Notification::ValidateFilters(const String& location, const Notification::Ptr& object)
+void Notification::ValidateStates(const Array::Ptr& value, const ValidationUtils& utils)
 {
-	int sfilter = FilterArrayToInt(object->GetStates(), 0);
+	ObjectImpl<Notification>::ValidateStates(value, utils);
 
-	if (object->GetServiceName().IsEmpty() && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": State filter is invalid.", object->GetDebugInfo()));
-	}
+	int sfilter = FilterArrayToInt(value, 0);
 
-	if (!object->GetServiceName().IsEmpty() && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": State filter is invalid.", object->GetDebugInfo()));
-	}
+	if (GetServiceName().IsEmpty() && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0)
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("states"), "State filter is invalid."));
 
-	int tfilter = FilterArrayToInt(object->GetTypes(), 0);
+	if (!GetServiceName().IsEmpty() && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0)
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("types"), "State filter is invalid."));
+}
+
+void Notification::ValidateTypes(const Array::Ptr& value, const ValidationUtils& utils)
+{
+	ObjectImpl<Notification>::ValidateTypes(value, utils);
+
+	int tfilter = FilterArrayToInt(value, 0);
 
 	if ((tfilter & ~(1 << NotificationDowntimeStart | 1 << NotificationDowntimeEnd | 1 << NotificationDowntimeRemoved |
 	    1 << NotificationCustom | 1 << NotificationAcknowledgement | 1 << NotificationProblem | 1 << NotificationRecovery |
-	    1 << NotificationFlappingStart | 1 << NotificationFlappingEnd)) != 0) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": Type filter is invalid.", object->GetDebugInfo()));
-	}
+	    1 << NotificationFlappingStart | 1 << NotificationFlappingEnd)) != 0)
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("types"), "Type filter is invalid."));
 }
 
 Endpoint::Ptr Notification::GetCommandEndpoint(void) const

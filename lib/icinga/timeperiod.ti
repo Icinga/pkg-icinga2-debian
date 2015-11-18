@@ -20,6 +20,8 @@
 #include "icinga/customvarobject.hpp"
 #include "base/function.hpp"
 
+library icinga;
+
 namespace icinga
 {
 
@@ -34,12 +36,18 @@ class TimePeriod : CustomVarObject
 		}}}
 	};
 	[config] Dictionary::Ptr ranges;
-	[config] Function::Ptr update;
-	[state] Value valid_begin;
-	[state] Value valid_end;
-	[state] Array::Ptr segments;
+	[config, required] Function::Ptr update;
+	[state, no_user_modify] Value valid_begin;
+	[state, no_user_modify] Value valid_end;
+	[state, no_user_modify] Array::Ptr segments;
 	[no_storage] bool is_inside {
 		get;
+	};
+};
+
+validator TimePeriod {
+	Dictionary ranges {
+		String "*";
 	};
 };
 

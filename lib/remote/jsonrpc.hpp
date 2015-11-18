@@ -36,7 +36,7 @@ class I2_REMOTE_API JsonRpc
 {
 public:
 	static void SendMessage(const Stream::Ptr& stream, const Dictionary::Ptr& message);
-	static StreamReadStatus ReadMessage(const Stream::Ptr& stream, Dictionary::Ptr *message, StreamReadContext& src);
+	static StreamReadStatus ReadMessage(const Stream::Ptr& stream, Dictionary::Ptr *message, StreamReadContext& src, bool may_wait = false);
 
 private:
 	JsonRpc(void);

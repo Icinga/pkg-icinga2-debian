@@ -15,23 +15,27 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
-mkclass_target(application.ti application.thpp)
-mkclass_target(dynamicobject.ti dynamicobject.thpp)
-mkclass_target(filelogger.ti filelogger.thpp)
-mkclass_target(logger.ti logger.thpp)
-mkclass_target(streamlogger.ti streamlogger.thpp)
-mkclass_target(sysloglogger.ti sysloglogger.thpp)
+mkclass_target(application.ti application.tcpp application.thpp)
+mkclass_target(configobject.ti configobject.tcpp configobject.thpp)
+mkclass_target(filelogger.ti filelogger.tcpp filelogger.thpp)
+mkclass_target(logger.ti logger.tcpp logger.thpp)
+mkclass_target(streamlogger.ti streamlogger.tcpp streamlogger.thpp)
+mkclass_target(sysloglogger.ti sysloglogger.tcpp sysloglogger.thpp)
 
 set(base_SOURCES
-  application.cpp application-version.cpp application.thpp array.cpp array-script.cpp boolean.cpp boolean-script.cpp console.cpp context.cpp
-  convert.cpp debuginfo.cpp dictionary.cpp dictionary-script.cpp dynamicobject.cpp dynamicobject.thpp dynamictype.cpp
-  exception.cpp fifo.cpp filelogger.cpp filelogger.thpp initialize.cpp json.cpp json-script.cpp logger.cpp logger.thpp math-script.cpp
-  netstring.cpp networkstream.cpp number.cpp number-script.cpp object.cpp object-script.cpp primitivetype.cpp process.cpp
-  ringbuffer.cpp scriptframe.cpp function.cpp function-script.cpp functionwrapper.cpp scriptglobal.cpp
+  application.cpp application.thpp application-version.cpp array.cpp
+  array-script.cpp boolean.cpp boolean-script.cpp console.cpp context.cpp
+  convert.cpp debuginfo.cpp dictionary.cpp dictionary-script.cpp
+  configobject.cpp configobject.thpp configobject-script.cpp configtype.cpp configwriter.cpp dependencygraph.cpp
+  exception.cpp fifo.cpp filelogger.cpp filelogger.thpp initialize.cpp json.cpp
+  json-script.cpp loader.cpp logger.cpp logger.thpp math-script.cpp
+  netstring.cpp networkstream.cpp number.cpp number-script.cpp object.cpp
+  object-script.cpp objecttype.cpp primitivetype.cpp process.cpp ringbuffer.cpp scriptframe.cpp
+  function.cpp function-script.cpp functionwrapper.cpp scriptglobal.cpp
   scriptutils.cpp serializer.cpp socket.cpp socketevents.cpp stacktrace.cpp
   statsfunction.cpp stdiostream.cpp stream.cpp streamlogger.cpp streamlogger.thpp string.cpp string-script.cpp
-  sysloglogger.cpp sysloglogger.thpp tcpsocket.cpp thinmutex.cpp threadpool.cpp timer.cpp
-  tlsstream.cpp tlsutility.cpp type.cpp unixsocket.cpp utility.cpp value.cpp
+  sysloglogger.cpp sysloglogger.thpp tcpsocket.cpp threadpool.cpp timer.cpp
+  tlsstream.cpp tlsutility.cpp type.cpp typetype-script.cpp unixsocket.cpp utility.cpp value.cpp
   value-operators.cpp workqueue.cpp
 )
 
@@ -81,5 +85,12 @@ install(
   RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/icinga2
 )
+
+if(APPLE)
+  install(
+    TARGETS base
+    LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR}/icinga-studio.app/Contents
+  )
+endif()
 
 set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "${CPACK_NSIS_EXTRA_INSTALL_COMMANDS}" PARENT_SCOPE)

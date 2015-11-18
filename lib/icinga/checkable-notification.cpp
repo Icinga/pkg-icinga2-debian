@@ -88,41 +88,14 @@ std::set<Notification::Ptr> Checkable::GetNotifications(void) const
 	return m_Notifications;
 }
 
-void Checkable::AddNotification(const Notification::Ptr& notification)
+void Checkable::RegisterNotification(const Notification::Ptr& notification)
 {
 	boost::mutex::scoped_lock lock(m_NotificationMutex);
 	m_Notifications.insert(notification);
 }
 
-void Checkable::RemoveNotification(const Notification::Ptr& notification)
+void Checkable::UnregisterNotification(const Notification::Ptr& notification)
 {
 	boost::mutex::scoped_lock lock(m_NotificationMutex);
 	m_Notifications.erase(notification);
-}
-
-bool Checkable::GetEnableNotifications(void) const
-{
-	if (!GetOverrideEnableNotifications().IsEmpty())
-		return GetOverrideEnableNotifications();
-	else
-		return GetEnableNotificationsRaw();
-}
-
-void Checkable::SetEnableNotifications(bool enabled, const MessageOrigin& origin)
-{
-	SetOverrideEnableNotifications(enabled);
-
-	OnEnableNotificationsChanged(this, enabled, origin);
-}
-
-bool Checkable::GetForceNextNotification(void) const
-{
-	return GetForceNextNotificationRaw();
-}
-
-void Checkable::SetForceNextNotification(bool forced, const MessageOrigin& origin)
-{
-	SetForceNextNotificationRaw(forced);
-
-	OnForceNextNotificationChanged(this, forced, origin);
 }

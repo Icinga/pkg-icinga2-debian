@@ -22,7 +22,7 @@
 
 #include "perfdata/graphitewriter.thpp"
 #include "icinga/service.hpp"
-#include "base/dynamicobject.hpp"
+#include "base/configobject.hpp"
 #include "base/tcpsocket.hpp"
 #include "base/timer.hpp"
 #include <fstream>
@@ -43,10 +43,11 @@ public:
 
 	static void StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata);
 
-	static void ValidateNameTemplates(const String& location, const GraphiteWriter::Ptr& object);
+	virtual void ValidateHostNameTemplate(const String& value, const ValidationUtils& utils) override;
+	virtual void ValidateServiceNameTemplate(const String& value, const ValidationUtils& utils) override;
 
 protected:
-	virtual void Start(void);
+	virtual void Start(bool runtimeCreated) override;
 
 private:
 	Stream::Ptr m_Stream;
@@ -56,8 +57,9 @@ private:
 	void CheckResultHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr);
 	void SendMetric(const String& prefix, const String& name, double value, double ts);
 	void SendPerfdata(const String& prefix, const CheckResult::Ptr& cr, double ts);
-	static String EscapeMetric(const String& str);
-	static Value EscapeMacroMetric(const Value& value);
+	static String EscapeMetric(const String& str, bool legacyMode = false);
+	static String EscapeMetricLabel(const String& str);
+	static Value EscapeMacroMetric(const Value& value, bool legacyMode = false);
 
 	void ReconnectTimerHandler(void);
 };

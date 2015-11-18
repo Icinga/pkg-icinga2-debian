@@ -22,7 +22,7 @@
 #include "icinga/checkcommand.hpp"
 #include "icinga/macroprocessor.hpp"
 #include "icinga/icingaapplication.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/logger.hpp"
 #include "base/function.hpp"
 #include "base/utility.hpp"
@@ -67,8 +67,8 @@ void PluginCheckTask::ProcessFinishedHandler(const Checkable::Ptr& checkable, co
 		    << pr.ExitStatus << ", output: " << pr.Output;
 	}
 
-	String output = pr.Output;
-	output.Trim();
+	String output = pr.Output.Trim();
+
 	std::pair<String, String> co = PluginUtility::ParseCheckOutput(output);
 	cr->SetCommand(commandLine);
 	cr->SetOutput(co.first);

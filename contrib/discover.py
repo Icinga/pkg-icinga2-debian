@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 #/******************************************************************************
 # * Icinga 2                                                                   *
 # * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
@@ -114,9 +113,10 @@ def print_host(host):
     print ""
 
     for serv, service in host["services"].iteritems():
-        print "apply Service \"%s\" {" % (serv)
+        print "object Service \"%s\" {" % (serv)
         print "\timport \"discovered-service\","
         print ""
+        print "\thost_name = \"%s\"" % (host["name"])
         print "\tcheck_command = \"%s\"," % (service["command"])
         print ""
         print "\tvars.port = %s" % (service["port"])

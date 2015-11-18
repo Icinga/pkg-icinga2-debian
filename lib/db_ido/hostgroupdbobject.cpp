@@ -22,7 +22,7 @@
 #include "db_ido/dbvalue.hpp"
 #include "base/objectlock.hpp"
 #include "base/initialize.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -49,21 +49,4 @@ Dictionary::Ptr HostGroupDbObject::GetConfigFields(void) const
 Dictionary::Ptr HostGroupDbObject::GetStatusFields(void) const
 {
 	return Empty;
-}
-
-void HostGroupDbObject::OnConfigUpdate(void)
-{
-	HostGroup::Ptr group = static_pointer_cast<HostGroup>(GetObject());
-
-	BOOST_FOREACH(const Host::Ptr& host, group->GetMembers()) {
-		DbQuery query1;
-		query1.Table = DbType::GetByName("HostGroup")->GetTable() + "_members";
-		query1.Type = DbQueryInsert;
-		query1.Category = DbCatConfig;
-		query1.Fields = new Dictionary();
-		query1.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
-		query1.Fields->Set("hostgroup_id", DbValue::FromObjectInsertID(group));
-		query1.Fields->Set("host_object_id", host);
-		OnQuery(query1);
-	}
 }

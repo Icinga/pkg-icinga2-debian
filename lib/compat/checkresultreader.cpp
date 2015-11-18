@@ -19,10 +19,11 @@
 
 #include "icinga/compatutility.hpp"
 #include "compat/checkresultreader.hpp"
+#include "compat/checkresultreader.tcpp"
 #include "icinga/service.hpp"
 #include "icinga/pluginutility.hpp"
 #include "icinga/icingaapplication.hpp"
-#include "base/dynamictype.hpp"
+#include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/convert.hpp"
@@ -37,13 +38,13 @@ using namespace icinga;
 
 REGISTER_TYPE(CheckResultReader);
 
-REGISTER_STATSFUNCTION(CheckResultReaderStats, &CheckResultReader::StatsFunc);
+REGISTER_STATSFUNCTION(CheckResultReader, &CheckResultReader::StatsFunc);
 
 void CheckResultReader::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const CheckResultReader::Ptr& checkresultreader, DynamicType::GetObjectsByType<CheckResultReader>()) {
+	BOOST_FOREACH(const CheckResultReader::Ptr& checkresultreader, ConfigType::GetObjectsByType<CheckResultReader>()) {
 		nodes->Set(checkresultreader->GetName(), 1); //add more stats
 	}
 
@@ -53,9 +54,9 @@ void CheckResultReader::StatsFunc(const Dictionary::Ptr& status, const Array::Pt
 /**
  * @threadsafety Always.
  */
-void CheckResultReader::Start(void)
+void CheckResultReader::Start(bool runtimeCreated)
 {
-	ObjectImpl<CheckResultReader>::Start();
+	ObjectImpl<CheckResultReader>::Start(runtimeCreated);
 
 	m_ReadTimer = new Timer();
 	m_ReadTimer->OnTimerExpired.connect(boost::bind(&CheckResultReader::ReadTimerHandler, this));

@@ -22,8 +22,8 @@
 
 using namespace icinga;
 
-PrimitiveType::PrimitiveType(const String& name)
-	: m_Name(name)
+PrimitiveType::PrimitiveType(const String& name, const String& base, const ObjectFactory& factory)
+	: m_Name(name), m_Base(base), m_Factory(factory)
 { }
 
 String PrimitiveType::GetName(void) const
@@ -33,7 +33,10 @@ String PrimitiveType::GetName(void) const
 
 Type::Ptr PrimitiveType::GetBaseType(void) const
 {
-	return Type::Ptr();
+	if (m_Base == "None")
+		return Type::Ptr();
+	else
+		return Type::GetByName(m_Base);
 }
 
 int PrimitiveType::GetAttributes(void) const
@@ -43,21 +46,36 @@ int PrimitiveType::GetAttributes(void) const
 
 int PrimitiveType::GetFieldId(const String& name) const
 {
-	return -1;
+	Type::Ptr base = GetBaseType();
+
+	if (base)
+		return base->GetFieldId(name);
+	else
+		return -1;
 }
 
 Field PrimitiveType::GetFieldInfo(int id) const
 {
-	throw std::runtime_error("Invalid field ID.");
+	Type::Ptr base = GetBaseType();
+
+	if (base)
+		return base->GetFieldInfo(id);
+	else
+		throw std::runtime_error("Invalid field ID.");
 }
 
 int PrimitiveType::GetFieldCount(void) const
 {
-	return 0;
+	Type::Ptr base = GetBaseType();
+
+	if (base)
+		return Object::TypeInstance->GetFieldCount();
+	else
+		return 0;
 }
 
 ObjectFactory PrimitiveType::GetFactory(void) const
 {
-	return NULL;
+	return m_Factory;
 }
 

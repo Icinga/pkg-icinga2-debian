@@ -18,16 +18,17 @@
  ******************************************************************************/
 
 #include "icinga/dependency.hpp"
+#include "icinga/dependency.tcpp"
 #include "icinga/service.hpp"
 #include "base/logger.hpp"
-#include "base/function.hpp"
 #include "base/exception.hpp"
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 using namespace icinga;
 
 REGISTER_TYPE(Dependency);
-REGISTER_SCRIPTFUNCTION(ValidateDependencyFilters, &Dependency::ValidateFilters);
 
 String DependencyNameComposer::MakeName(const String& shortName, const Object::Ptr& context) const
 {
@@ -46,6 +47,27 @@ String DependencyNameComposer::MakeName(const String& shortName, const Object::P
 	return name;
 }
 
+Dictionary::Ptr DependencyNameComposer::ParseName(const String& name) const
+{
+	std::vector<String> tokens;
+	boost::algorithm::split(tokens, name, boost::is_any_of("!"));
+
+	if (tokens.size() < 2)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid Dependency name."));
+
+	Dictionary::Ptr result = new Dictionary();
+	result->Set("child_host_name", tokens[0]);
+
+	if (tokens.size() > 2) {
+		result->Set("child_service_name", tokens[1]);
+		result->Set("name", tokens[2]);
+	} else {
+		result->Set("name", tokens[1]);
+	}
+
+	return result;
+}
+
 void Dependency::OnConfigLoaded(void)
 {
 	Value defaultFilter;
@@ -60,7 +82,7 @@ void Dependency::OnConfigLoaded(void)
 
 void Dependency::OnAllConfigLoaded(void)
 {
-	DynamicObject::OnAllConfigLoaded();
+	ObjectImpl<Dependency>::OnAllConfigLoaded();
 
 	Host::Ptr childHost = Host::GetByName(GetChildHostName());
 
@@ -101,9 +123,9 @@ void Dependency::OnAllConfigLoaded(void)
 	m_Parent->AddReverseDependency(this);
 }
 
-void Dependency::Stop(void)
+void Dependency::Stop(bool runtimeRemoved)
 {
-	DynamicObject::Stop();
+	ObjectImpl<Dependency>::Stop(runtimeRemoved);
 
 	GetChild()->RemoveDependency(this);
 	GetParent()->RemoveReverseDependency(this);
@@ -198,17 +220,16 @@ TimePeriod::Ptr Dependency::GetPeriod(void) const
 	return TimePeriod::GetByName(GetPeriodRaw());
 }
 
-void Dependency::ValidateFilters(const String& location, const Dependency::Ptr& object)
+void Dependency::ValidateStates(const Array::Ptr& value, const ValidationUtils& utils)
 {
-	int sfilter = FilterArrayToInt(object->GetStates(), 0);
+	ObjectImpl<Dependency>::ValidateStates(value, utils);
 
-	if (object->GetParentServiceName().IsEmpty() && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": State filter is invalid for host dependency.", object->GetDebugInfo()));
-	}
+	int sfilter = FilterArrayToInt(value, 0);
 
-	if (!object->GetParentServiceName().IsEmpty() && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": State filter is invalid for service dependency.", object->GetDebugInfo()));
-	}
+	if (GetParentServiceName().IsEmpty() && (sfilter & ~(StateFilterUp | StateFilterDown)) != 0)
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("states"), "State filter is invalid for host dependency."));
+
+	if (!GetParentServiceName().IsEmpty() && (sfilter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0)
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("states"), "State filter is invalid for service dependency."));
 }
+

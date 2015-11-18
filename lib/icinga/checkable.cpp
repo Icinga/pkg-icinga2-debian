@@ -18,9 +18,11 @@
  ******************************************************************************/
 
 #include "icinga/checkable.hpp"
+#include "icinga/checkable.tcpp"
+#include "icinga/host.hpp"
+#include "icinga/service.hpp"
 #include "base/objectlock.hpp"
 #include "base/utility.hpp"
-#include "base/function.hpp"
 #include "base/exception.hpp"
 #include <boost/foreach.hpp>
 #include <boost/bind/apply.hpp>
@@ -28,11 +30,9 @@
 using namespace icinga;
 
 REGISTER_TYPE(Checkable);
-REGISTER_SCRIPTFUNCTION(ValidateCheckableCheckInterval, &Checkable::ValidateCheckInterval);
 
-boost::signals2::signal<void (const Checkable::Ptr&, bool, const MessageOrigin&)> Checkable::OnEnablePerfdataChanged;
-boost::signals2::signal<void (const Checkable::Ptr&, const String&, const String&, AcknowledgementType, bool, double, const MessageOrigin&)> Checkable::OnAcknowledgementSet;
-boost::signals2::signal<void (const Checkable::Ptr&, const MessageOrigin&)> Checkable::OnAcknowledgementCleared;
+boost::signals2::signal<void (const Checkable::Ptr&, const String&, const String&, AcknowledgementType, bool, double, const MessageOrigin::Ptr&)> Checkable::OnAcknowledgementSet;
+boost::signals2::signal<void (const Checkable::Ptr&, const MessageOrigin::Ptr&)> Checkable::OnAcknowledgementCleared;
 
 Checkable::Checkable(void)
 	: m_CheckRunning(false)
@@ -40,49 +40,27 @@ Checkable::Checkable(void)
 	SetSchedulingOffset(Utility::Random());
 }
 
-void Checkable::Start(void)
+void Checkable::Start(bool runtimeCreated)
 {
 	double now = Utility::GetTime();
 
 	if (GetNextCheck() < now + 300)
 		UpdateNextCheck();
 
-	DynamicObject::Start();
-}
-
-void Checkable::OnStateLoaded(void)
-{
-	AddDowntimesToCache();
-	AddCommentsToCache();
-
-	std::vector<String> ids;
-	Dictionary::Ptr downtimes = GetDowntimes();
-
-	{
-		ObjectLock dlock(downtimes);
-		BOOST_FOREACH(const Dictionary::Pair& kv, downtimes) {
-			Downtime::Ptr downtime = kv.second;
-
-			if (downtime->GetScheduledBy().IsEmpty())
-				continue;
-
-			ids.push_back(kv.first);
-		}
-	}
-
-	BOOST_FOREACH(const String& id, ids) {
-		/* override config owner to clear downtimes once */
-		Downtime::Ptr downtime = GetDowntimeByID(id);
-		downtime->SetConfigOwner(Empty);
-		RemoveDowntime(id, true);
-	}
+	ObjectImpl<Checkable>::Start(runtimeCreated);
 }
 
 void Checkable::AddGroup(const String& name)
 {
 	boost::mutex::scoped_lock lock(m_CheckableMutex);
 
-	Array::Ptr groups = GetGroups();
+	Array::Ptr groups;
+	Host *host = dynamic_cast<Host *>(this);
+
+	if (host)
+		groups = host->GetGroups();
+	else
+		groups = static_cast<Service *>(this)->GetGroups();
 
 	if (groups && groups->Contains(name))
 		return;
@@ -114,7 +92,7 @@ bool Checkable::IsAcknowledged(void)
 	return GetAcknowledgement() != AcknowledgementNone;
 }
 
-void Checkable::AcknowledgeProblem(const String& author, const String& comment, AcknowledgementType type, bool notify, double expiry, const MessageOrigin& origin)
+void Checkable::AcknowledgeProblem(const String& author, const String& comment, AcknowledgementType type, bool notify, double expiry, const MessageOrigin::Ptr& origin)
 {
 	SetAcknowledgementRaw(type);
 	SetAcknowledgementExpiry(expiry);
@@ -125,7 +103,7 @@ void Checkable::AcknowledgeProblem(const String& author, const String& comment, 
 	OnAcknowledgementSet(this, author, comment, type, notify, expiry, origin);
 }
 
-void Checkable::ClearAcknowledgement(const MessageOrigin& origin)
+void Checkable::ClearAcknowledgement(const MessageOrigin::Ptr& origin)
 {
 	SetAcknowledgementRaw(AcknowledgementNone);
 	SetAcknowledgementExpiry(0);
@@ -133,132 +111,15 @@ void Checkable::ClearAcknowledgement(const MessageOrigin& origin)
 	OnAcknowledgementCleared(this, origin);
 }
 
-bool Checkable::GetEnablePerfdata(void) const
-{
-	if (!GetOverrideEnablePerfdata().IsEmpty())
-		return GetOverrideEnablePerfdata();
-	else
-		return GetEnablePerfdataRaw();
-}
-
-void Checkable::SetEnablePerfdata(bool enabled, const MessageOrigin& origin)
-{
-	SetOverrideEnablePerfdata(enabled);
-
-	OnEnablePerfdataChanged(this, enabled, origin);
-}
-
-int Checkable::GetModifiedAttributes(void) const
-{
-	int attrs = 0;
-
-	if (!GetOverrideEnableNotifications().IsEmpty())
-		attrs |= ModAttrNotificationsEnabled;
-
-	if (!GetOverrideEnableActiveChecks().IsEmpty())
-		attrs |= ModAttrActiveChecksEnabled;
-
-	if (!GetOverrideEnablePassiveChecks().IsEmpty())
-		attrs |= ModAttrPassiveChecksEnabled;
-
-	if (!GetOverrideEnableFlapping().IsEmpty())
-		attrs |= ModAttrFlapDetectionEnabled;
-
-	if (!GetOverrideEnableEventHandler().IsEmpty())
-		attrs |= ModAttrEventHandlerEnabled;
-
-	if (!GetOverrideEnablePerfdata().IsEmpty())
-		attrs |= ModAttrPerformanceDataEnabled;
-
-	if (!GetOverrideCheckInterval().IsEmpty())
-		attrs |= ModAttrNormalCheckInterval;
-
-	if (!GetOverrideRetryInterval().IsEmpty())
-		attrs |= ModAttrRetryCheckInterval;
-
-	if (!GetOverrideEventCommand().IsEmpty())
-		attrs |= ModAttrEventHandlerCommand;
-
-	if (!GetOverrideCheckCommand().IsEmpty())
-		attrs |= ModAttrCheckCommand;
-
-	if (!GetOverrideMaxCheckAttempts().IsEmpty())
-		attrs |= ModAttrMaxCheckAttempts;
-
-	if (!GetOverrideCheckPeriod().IsEmpty())
-		attrs |= ModAttrCheckTimeperiod;
-
-	if (GetOverrideVars())
-		attrs |= ModAttrCustomVariable;
-
-	// TODO: finish
-
-	return attrs;
-}
-
-void Checkable::SetModifiedAttributes(int flags, const MessageOrigin& origin)
-{
-	if ((flags & ModAttrNotificationsEnabled) == 0) {
-		SetOverrideEnableNotifications(Empty);
-		OnEnableNotificationsChanged(this, GetEnableNotifications(), origin);
-	}
-
-	if ((flags & ModAttrActiveChecksEnabled) == 0) {
-		SetOverrideEnableActiveChecks(Empty);
-		OnEnableActiveChecksChanged(this, GetEnableActiveChecks(), origin);
-	}
-
-	if ((flags & ModAttrPassiveChecksEnabled) == 0) {
-		SetOverrideEnablePassiveChecks(Empty);
-		OnEnablePassiveChecksChanged(this, GetEnablePassiveChecks(), origin);
-	}
-
-	if ((flags & ModAttrFlapDetectionEnabled) == 0) {
-		SetOverrideEnableFlapping(Empty);
-		OnEnableFlappingChanged(this, GetEnableFlapping(), origin);
-	}
-
-	if ((flags & ModAttrEventHandlerEnabled) == 0)
-		SetOverrideEnableEventHandler(Empty);
-
-	if ((flags & ModAttrPerformanceDataEnabled) == 0) {
-		SetOverrideEnablePerfdata(Empty);
-		OnEnablePerfdataChanged(this, GetEnablePerfdata(), origin);
-	}
-
-	if ((flags & ModAttrNormalCheckInterval) == 0)
-		SetOverrideCheckInterval(Empty);
-
-	if ((flags & ModAttrRetryCheckInterval) == 0)
-		SetOverrideRetryInterval(Empty);
-
-	if ((flags & ModAttrEventHandlerCommand) == 0)
-		SetOverrideEventCommand(Empty);
-
-	if ((flags & ModAttrCheckCommand) == 0)
-		SetOverrideCheckCommand(Empty);
-
-	if ((flags & ModAttrMaxCheckAttempts) == 0)
-		SetOverrideMaxCheckAttempts(Empty);
-
-	if ((flags & ModAttrCheckTimeperiod) == 0)
-		SetOverrideCheckPeriod(Empty);
-
-	if ((flags & ModAttrCustomVariable) == 0) {
-		SetOverrideVars(Empty);
-		OnVarsChanged(this, GetVars(), origin);
-	}
-}
-
 Endpoint::Ptr Checkable::GetCommandEndpoint(void) const
 {
 	return Endpoint::GetByName(GetCommandEndpointRaw());
 }
 
-void Checkable::ValidateCheckInterval(const String& location, const Checkable::Ptr& object)
+void Checkable::ValidateCheckInterval(double value, const ValidationUtils& utils)
 {
-	if (object->GetCheckInterval() <= 0) {
-		BOOST_THROW_EXCEPTION(ScriptError("Validation failed for " +
-		    location + ": check_interval must be greater than 0.", object->GetDebugInfo()));
-	}
+	ObjectImpl<Checkable>::ValidateCheckInterval(value, utils);
+
+	if (value <= 0)
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("check_interval"), "Interval must be greater than 0."));
 }

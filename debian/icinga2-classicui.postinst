@@ -77,6 +77,7 @@ case "$1" in
         # OLD methods for Apache < 2.4
         elif [ "$COMMON_STATE" = "installed" ] || [ "$COMMON_STATE" = "unpacked" ] ; then
             a2enmod cgi
+            a2enmod version
             # create symlink if not existing
             [ -e /etc/apache2/conf.d/icinga2-classicui.conf ] || ln -vs $en/apache2.conf /etc/apache2/conf.d/icinga2-classicui.conf
 
