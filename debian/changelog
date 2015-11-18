@@ -1,9 +1,13 @@
-icinga2 (2.4.0-1~debmon60+1) UNRELEASED; urgency=medium
+icinga2 (2.4.0-1~debmon60+1) debmon-squeeze; urgency=medium
 
+  [ Markus Frosch ]
   * Rebuild for debmon-squeeze.
   * [7473327] libicinga2 non-multiarch for squeeze
   * [418ffad] Disable icinga2-studio package on squeeze
   * [cebe7ec] help dh_shlibdeps on squeeze find the libraries
+
+  [ Alexander Wirt ]
+  * [fdc67b0] Add patch for a crash with GCC 4.7 in Process::IOThreadProc
 
  -- Markus Frosch <lazyfrosch@debian.org>  Mon, 16 Nov 2015 14:19:57 +0100
 
