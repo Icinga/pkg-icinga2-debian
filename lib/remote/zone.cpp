@@ -27,14 +27,9 @@ using namespace icinga;
 
 REGISTER_TYPE(Zone);
 
-void Zone::OnAllConfigLoaded(void)
-{
-	m_Parent = Zone::GetByName(GetParentRaw());
-}
-
 Zone::Ptr Zone::GetParent(void) const
 {
-	return m_Parent;
+	return Zone::GetByName(GetParentRaw());
 }
 
 std::set<Endpoint::Ptr> Zone::GetEndpoints(void) const
@@ -66,7 +61,7 @@ bool Zone::CanAccessObject(const ConfigObject::Ptr& object)
 	if (dynamic_pointer_cast<Zone>(object))
 		object_zone = static_pointer_cast<Zone>(object);
 	else
-		object_zone = static_pointer_cast<Zone>(object->GetZone());
+		object_zone = Zone::GetByName(object->GetZoneName());
 
 	if (!object_zone)
 		object_zone = Zone::GetLocalZone();
