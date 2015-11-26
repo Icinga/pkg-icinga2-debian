@@ -199,8 +199,8 @@ void Process::IOThreadProc(int tid)
 #endif /* _WIN32 */
 
 			int i = 1;
-			std::pair<ProcessHandle, Process::Ptr> kv;
-			BOOST_FOREACH(kv, l_Processes[tid]) {
+			typedef std::pair<ProcessHandle, Process::Ptr> kv_pair;
+			BOOST_FOREACH(const kv_pair& kv, l_Processes[tid]) {
 				const Process::Ptr& process = kv.second;
 #ifdef _WIN32
 				handles[i] = kv.first;
@@ -748,7 +748,7 @@ bool Process::DoEvents(void)
 		    << "PID " << m_PID << " (" << PrettyPrintArguments(m_Arguments) << ") terminated with exit code " << exitcode;
 	} else if (WIFSIGNALED(status)) {
 		int signum = WTERMSIG(status);
-		char *zsigname = strsignal(signum);
+		const char *zsigname = strsignal(signum);
 
 		String signame = Convert::ToString(signum);
 
