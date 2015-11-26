@@ -59,6 +59,8 @@ public:
 	Endpoint::Ptr GetMaster(void) const;
 	bool IsMaster(void) const;
 
+	Endpoint::Ptr GetLocalEndpoint(void) const;
+
 	static String GetApiDir(void);
 
 	void SyncSendMessage(const Endpoint::Ptr& endpoint, const Dictionary::Ptr& message);
@@ -97,6 +99,9 @@ private:
 	std::set<JsonRpcConnection::Ptr> m_AnonymousClients;
 	std::set<HttpServerConnection::Ptr> m_HttpClients;
 	Timer::Ptr m_Timer;
+	Endpoint::Ptr m_LocalEndpoint;
+
+	static ApiListener::Ptr m_Instance;
 
 	void ApiTimerHandler(void);
 
@@ -108,6 +113,7 @@ private:
 	void ListenerThreadProc(const Socket::Ptr& server);
 
 	WorkQueue m_RelayQueue;
+	WorkQueue m_SyncQueue;
 
 	boost::mutex m_LogLock;
 	Stream::Ptr m_LogFile;
@@ -139,6 +145,8 @@ private:
 	void DeleteConfigObject(const ConfigObject::Ptr& object, const MessageOrigin::Ptr& origin,
 	    const JsonRpcConnection::Ptr& client = JsonRpcConnection::Ptr());
 	void SendRuntimeConfigObjects(const JsonRpcConnection::Ptr& aclient);
+
+	void SyncClient(const JsonRpcConnection::Ptr& aclient, const Endpoint::Ptr& endpoint);
 };
 
 }

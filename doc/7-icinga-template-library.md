@@ -128,6 +128,7 @@ by_ssh_quiet    | **Optional.** Whether to suppress SSH warnings. Defaults to fa
 by_ssh_warn     | **Optional.** The warning threshold.
 by_ssh_crit     | **Optional.** The critical threshold.
 by_ssh_timeout  | **Optional.** The timeout in seconds.
+by_ssh_options  | **Optional.** Call ssh with '-o OPTION' (multiple options may be specified as an array).
 
 ### <a id="plugin-check-command-clamd"></a> clamd
 
@@ -222,7 +223,7 @@ disk_local             | **Optional.** Only check local filesystems. May be true
 disk_stat_remote_fs    | **Optional.** Only check local filesystems against thresholds. Yet call stat on remote filesystems to test if they are accessible (e.g. to detect Stale NFS Handles). Myy be true or false
 disk_mountpoint        | **Optional.** Display the mountpoint instead of the partition. May be true or false.
 disk_megabytes         | **Optional.** Same as --units MB. May be true or false.
-disk_all               | **Optional.** Explicitly select all paths. This is equivalent to -R '.*'. May be true or false.
+disk_all               | **Optional.** Explicitly select all paths. This is equivalent to -R '.\*'. May be true or false.
 disk_eregi_path        | **Optional.** Case insensitive regular expression for path/partition (may be repeated).
 disk_ereg_path         | **Optional.** Regular expression for path or partition (may be repeated).
 disk_ignore_eregi_path | **Optional.** Regular expression to ignore selected path/partition (case insensitive) (may be repeated).
@@ -509,7 +510,7 @@ Name            | Description
 ----------------|--------------
 ldap_address    | **Optional.** Host name, IP Address, or unix socket (must be an absolute path). Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
 ldap_port       | **Optional.** Port number. Defaults to 389.
-ldap_attr	| **Optional.** LDAP attribute to search for (default: "(objectclass=*)"
+ldap_attr	| **Optional.** LDAP attribute to search for (default: "(objectclass=\*)"
 ldap_base       | **Required.** LDAP base (eg. ou=myunit,o=myorg,c=at).
 ldap_bind       | **Optional.** LDAP bind DN (if required).
 ldap_pass       | **Optional.** LDAP password (if required).
@@ -1513,7 +1514,7 @@ snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. 
 snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default..
 snmp_warn               | **Optional.** The warning threshold.
 snmp_crit               | **Optional.** The critical threshold.
-snmp_process_name       | **Optional.** Name of the process (regexp). No trailing slash!. Defaults to ".*".
+snmp_process_name       | **Optional.** Name of the process (regexp). No trailing slash!. Defaults to ".\*".
 snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
@@ -1757,7 +1758,7 @@ ipmi_config_file                 | **Optional.** Path to the FreeIPMI configurat
 ipmi_username                    | **Optional.** The IPMI username.
 ipmi_password                    | **Optional.** The IPMI password.
 ipmi_privilege_level             | **Optional.** The IPMI privilege level of the IPMI user.
-ipmi_backward_compatibility_mode | **Optional.** Enable backward compatibility mode, useful for FreeIPMI 0.5.* (this omits FreeIPMI options "--quiet-cache" and "--sdr-cache-recreate").
+ipmi_backward_compatibility_mode | **Optional.** Enable backward compatibility mode, useful for FreeIPMI 0.5.\* (this omits FreeIPMI options "--quiet-cache" and "--sdr-cache-recreate").
 ipmi_sensor_type                 | **Optional.** Limit sensors to query based on IPMI sensor type. Examples for IPMI sensor types are 'Fan', 'Temperature' and 'Voltage'.
 ipmi_exclude_sensor_id           | **Optional.** Exclude sensor matching ipmi_sensor_id.
 ipmi_sensor_id                   | **Optional.** Include sensor matching ipmi_sensor_id.
@@ -1945,7 +1946,7 @@ This category includes all plugins for web-based checks.
 
 #### <a id="plugin-check-command-webinject"></a> webinject
 
-Check command object for the [check_webinject](http://http://www.webinject.org/manual.html) plugin.
+Check command object for the [check_webinject](http://www.webinject.org/manual.html) plugin.
 
 Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
 
@@ -2057,15 +2058,19 @@ Name         | Description
 mem_used     | **Optional.** Tell the plugin to check for used memory in opposite of **mem_free**. Must specify one of these as true.
 mem_free     | **Optional.** Tell the plugin to check for free memory in opposite of **mem_used**. Must specify one of these as true.
 mem_cache    | **Optional.** If set to true plugin will count cache as free memory. Defaults to false.
-mem_warning  | **Required.** Specifiy the warning threshold as number interpreted as percent.
-mem_critical | **Required.** Specifiy the critical threshold as number interpreted as percent.
+mem_warning  | **Required.** Specify the warning threshold as number interpreted as percent.
+mem_critical | **Required.** Specify the critical threshold as number interpreted as percent.
 
 #### <a id="plugin-contrib-command-running-kernel"></a> running_kernel
 
 Check command object for the `check_running_kernel` plugin
 provided by the `nagios-plugins-contrib` package on Debian.
 
-The `running_kernel` check command does not support any vars.
+Custom attributes:
+
+Name                       | Description
+---------------------------|-------------
+running\_kernel\_use\_sudo | Whether to run the plugin with `sudo`. Defaults to false except on Ubuntu where it defaults to true.
 
 #### <a id="plugin-contrib-command-yum"></a> yum
 
