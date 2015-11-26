@@ -252,6 +252,8 @@ Description: host and network monitoring system - debug symbols
 Package: libicinga2
 Architecture: any
 Section: libs
+Breaks: icinga2-bin (<< 2.4.0-1~)
+Replaces: icinga2-bin (<< 2.4.0-1~)
 Depends: ${misc:Depends},
          ${shlibs:Depends}
 Description: host and network monitoring system - internal libraries

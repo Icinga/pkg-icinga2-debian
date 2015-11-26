@@ -17,43 +17,47 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#ifndef PKIUTILITY_H
-#define PKIUTILITY_H
+#ifndef ACTIVATIONCONTEXT_H
+#define ACTIVATIONCONTEXT_H
 
-#include "base/i2-base.hpp"
-#include "cli/i2-cli.hpp"
-#include "base/dictionary.hpp"
-#include "base/string.hpp"
-#include <openssl/x509v3.h>
+#include "config/i2-config.hpp"
+#include "base/object.hpp"
+#include <boost/thread/tss.hpp>
+#include <stack>
 
 namespace icinga
 {
 
-/**
- * @ingroup cli
- */
-class I2_CLI_API PkiUtility
+class I2_CONFIG_API ActivationContext : public Object
 {
 public:
-	static String GetPkiPath(void);
-	static String GetLocalCaPath(void);
+	DECLARE_PTR_TYPEDEFS(ActivationContext);
 
-	static int NewCa(void);
-	static int NewCert(const String& cn, const String& keyfile, const String& csrfile, const String& certfile);
-	static int SignCsr(const String& csrfile, const String& certfile);
-	static boost::shared_ptr<X509> FetchCert(const String& host, const String& port);
-	static int WriteCert(const boost::shared_ptr<X509>& cert, const String& trustedfile);
-	static int GenTicket(const String& cn, const String& salt, std::ostream& ticketfp);
-	static int RequestCertificate(const String& host, const String& port, const String& keyfile,
-	    const String& certfile, const String& cafile, const boost::shared_ptr<X509>& trustedcert,
-	    const String& ticket);
-	static String GetCertificateInformation(const boost::shared_ptr<X509>& certificate);
+	static ActivationContext::Ptr GetCurrentContext(void);
 
 private:
-	PkiUtility(void);
+	static void PushContext(const ActivationContext::Ptr& context);
+	static void PopContext(void);
 
+	static std::stack<ActivationContext::Ptr>& GetActivationStack(void);
+
+	static boost::thread_specific_ptr<std::stack<ActivationContext::Ptr> > m_ActivationStack;
+
+	friend class ActivationScope;
+};
+
+class I2_CONFIG_API ActivationScope
+{
+public:
+	ActivationScope(const ActivationContext::Ptr& context = ActivationContext::Ptr());
+	~ActivationScope(void);
+
+	ActivationContext::Ptr GetContext(void) const;
+
+private:
+	ActivationContext::Ptr m_Context;
 };
 
 }
 
-#endif /* PKIUTILITY_H */
+#endif /* ACTIVATIONCONTEXT_H */

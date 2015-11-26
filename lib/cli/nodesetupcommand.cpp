@@ -58,7 +58,6 @@ void NodeSetupCommand::InitParameters(boost::program_options::options_descriptio
 {
 	visibleDesc.add_options()
 		("zone", po::value<std::string>(), "The name of the local zone")
-		("master_zone", po::value<std::string>(), "The name of the master zone")
 		("master_host", po::value<std::string>(), "The name of the master host for auto-signing the csr")
 		("endpoint", po::value<std::vector<std::string> >(), "Connect to remote endpoint; syntax: cn[,host,port]")
 		("listen", po::value<std::string>(), "Listen on host,port")
@@ -68,6 +67,9 @@ void NodeSetupCommand::InitParameters(boost::program_options::options_descriptio
 		("accept-config", "Accept config from master")
 		("accept-commands", "Accept commands from master")
 		("master", "Use setup for a master instance");
+
+	hiddenDesc.add_options()
+		("master_zone", po::value<std::string>(), "The name of the master zone");
 }
 
 std::vector<String> NodeSetupCommand::GetArgumentSuggestions(const String& argument, const String& word) const
@@ -154,13 +156,11 @@ int NodeSetupCommand::SetupMaster(const boost::program_options::variables_map& v
 		    << "'api' feature already enabled.\n";
 	}
 
-	NodeUtility::GenerateNodeMasterIcingaConfig(cn);
-
-	/* read zones.conf and update with zone + endpoint information */
+	/* write zones.conf and update with zone + endpoint information */
 
 	Log(LogInformation, "cli", "Generating zone and object configuration.");
 
-	NodeUtility::GenerateNodeMasterIcingaConfig(cn);
+	NodeUtility::GenerateNodeMasterIcingaConfig();
 
 	/* update the ApiListener config - SetupMaster() will always enable it */
 
@@ -220,6 +220,7 @@ int NodeSetupCommand::SetupMaster(const boost::program_options::variables_map& v
 	NodeUtility::CreateBackupFile(Application::GetSysconfDir() + "/icinga2/constants.conf");
 
 	NodeUtility::UpdateConstant("NodeName", cn);
+	NodeUtility::UpdateConstant("ZoneName", cn);
 
 	String salt = RandomString(16);
 
@@ -291,7 +292,7 @@ int NodeSetupCommand::SetupNode(const boost::program_options::variables_map& vm,
 		return 1;
 	}
 
-	String trustedcert = vm["trustedcert"].as<std::string>();
+	boost::shared_ptr<X509> trustedcert = GetX509Certificate(vm["trustedcert"].as<std::string>());
 
 	Log(LogInformation, "cli")
 	    << "Verifying trusted certificate from file '" << trustedcert << "'.";
@@ -433,7 +434,7 @@ int NodeSetupCommand::SetupNode(const boost::program_options::variables_map& vm,
 
 	Log(LogInformation, "cli", "Generating zone and object configuration.");
 
-	NodeUtility::GenerateNodeIcingaConfig(vm["endpoint"].as<std::vector<std::string> >(), cn, vm["zone"].as<std::string>());
+	NodeUtility::GenerateNodeIcingaConfig(vm["endpoint"].as<std::vector<std::string> >());
 
 	/* update constants.conf with NodeName = CN */
 	if (cn != Utility::GetFQDN()) {
@@ -446,6 +447,7 @@ int NodeSetupCommand::SetupNode(const boost::program_options::variables_map& vm,
 	NodeUtility::CreateBackupFile(Application::GetSysconfDir() + "/icinga2/constants.conf");
 
 	NodeUtility::UpdateConstant("NodeName", cn);
+	NodeUtility::UpdateConstant("ZoneName", vm["zone"].as<std::string>());
 
 	/* tell the user to reload icinga2 */
 
