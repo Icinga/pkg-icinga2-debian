@@ -17,43 +17,62 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#ifndef PKIUTILITY_H
-#define PKIUTILITY_H
+#include "config/activationcontext.hpp"
+#include "base/exception.hpp"
 
-#include "base/i2-base.hpp"
-#include "cli/i2-cli.hpp"
-#include "base/dictionary.hpp"
-#include "base/string.hpp"
-#include <openssl/x509v3.h>
+using namespace icinga;
 
-namespace icinga
+boost::thread_specific_ptr<std::stack<ActivationContext::Ptr> > ActivationContext::m_ActivationStack;
+
+std::stack<ActivationContext::Ptr>& ActivationContext::GetActivationStack(void)
 {
+	std::stack<ActivationContext::Ptr> *actx = m_ActivationStack.get();
 
-/**
- * @ingroup cli
- */
-class I2_CLI_API PkiUtility
-{
-public:
-	static String GetPkiPath(void);
-	static String GetLocalCaPath(void);
+	if (!actx) {
+		actx = new std::stack<ActivationContext::Ptr>();
+		m_ActivationStack.reset(actx);
+	}
 
-	static int NewCa(void);
-	static int NewCert(const String& cn, const String& keyfile, const String& csrfile, const String& certfile);
-	static int SignCsr(const String& csrfile, const String& certfile);
-	static boost::shared_ptr<X509> FetchCert(const String& host, const String& port);
-	static int WriteCert(const boost::shared_ptr<X509>& cert, const String& trustedfile);
-	static int GenTicket(const String& cn, const String& salt, std::ostream& ticketfp);
-	static int RequestCertificate(const String& host, const String& port, const String& keyfile,
-	    const String& certfile, const String& cafile, const boost::shared_ptr<X509>& trustedcert,
-	    const String& ticket);
-	static String GetCertificateInformation(const boost::shared_ptr<X509>& certificate);
-
-private:
-	PkiUtility(void);
-
-};
-
+	return *actx;
 }
 
-#endif /* PKIUTILITY_H */
+void ActivationContext::PushContext(const ActivationContext::Ptr& context)
+{
+	GetActivationStack().push(context);
+}
+
+void ActivationContext::PopContext(void)
+{
+	ASSERT(!GetActivationStack().empty());
+	GetActivationStack().pop();
+}
+
+ActivationContext::Ptr ActivationContext::GetCurrentContext(void)
+{
+	std::stack<ActivationContext::Ptr>& astack = GetActivationStack();
+
+	if (astack.empty())
+		BOOST_THROW_EXCEPTION(std::runtime_error("Objects may not be created outside of an activation context."));
+
+	return astack.top();
+}
+
+ActivationScope::ActivationScope(const ActivationContext::Ptr& context)
+    : m_Context(context)
+{
+	if (!m_Context)
+		m_Context = new ActivationContext();
+
+	ActivationContext::PushContext(m_Context);
+}
+
+ActivationScope::~ActivationScope(void)
+{
+	ActivationContext::PopContext();
+}
+
+ActivationContext::Ptr ActivationScope::GetContext(void) const
+{
+	return m_Context;
+}
+

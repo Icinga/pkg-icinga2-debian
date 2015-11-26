@@ -1,16 +1,16 @@
-icinga2 (2.4.0-1~ppa1~saucy1) saucy; urgency=medium
+icinga2 (2.4.1-1~ppa1~saucy1) saucy; urgency=medium
 
-  [ Markus Frosch ]
-  * Rebuild for debmon-squeeze.
-  * [7473327] libicinga2 non-multiarch for squeeze
-  * [418ffad] Disable icinga2-studio package on squeeze
-  * [cebe7ec] help dh_shlibdeps on squeeze find the libraries
-
-  [ Alexander Wirt ]
-  * [fdc67b0] Add patch for a crash with GCC 4.7 in Process::IOThreadProc
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+
+icinga2 (2.4.1-1) unstable; urgency=medium
+
+  * [9725e3c] Add proper conflicts and replaces from icinga2-bin to libicinga2
+    (Closes: #806146)
+  * [7b31eda] Imported Upstream version 2.4.1
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 26 Nov 2015 12:51:07 +0100
 
 icinga2 (2.4.0-1) unstable; urgency=medium
 
