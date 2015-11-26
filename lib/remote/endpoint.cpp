@@ -122,5 +122,5 @@ Endpoint::Ptr Endpoint::GetLocalEndpoint(void)
 	if (!listener)
 		return Endpoint::Ptr();
 
-	return listener->GetLocalEndpoint();
+	return Endpoint::GetByName(listener->GetIdentity());
 }

@@ -440,7 +440,7 @@ void ConfigObject::OnConfigLoaded(void)
 
 void ConfigObject::OnAllConfigLoaded(void)
 {
-	m_Zone = GetObject("Zone", GetZoneName());
+	/* Nothing to do here. */
 }
 
 void ConfigObject::CreateChildObjects(const Type::Ptr& childType)
@@ -683,9 +683,4 @@ ConfigObject::Ptr ConfigObject::GetObject(const String& type, const String& name
 	if (!dtype)
 		return ConfigObject::Ptr();
 	return dtype->GetObject(name);
-}
-
-ConfigObject::Ptr ConfigObject::GetZone(void) const
-{
-	return m_Zone;
 }

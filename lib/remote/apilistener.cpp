@@ -41,14 +41,13 @@ using namespace icinga;
 REGISTER_TYPE(ApiListener);
 
 boost::signals2::signal<void(bool)> ApiListener::OnMasterChanged;
-ApiListener::Ptr ApiListener::m_Instance;
 
 REGISTER_STATSFUNCTION(ApiListener, &ApiListener::StatsFunc);
 
 REGISTER_APIFUNCTION(Hello, icinga, &ApiListener::HelloAPIHandler);
 
 ApiListener::ApiListener(void)
-	: m_SyncQueue(0, 4), m_LogMessageCount(0)
+	: m_LogMessageCount(0)
 { }
 
 void ApiListener::OnConfigLoaded(void)
@@ -91,9 +90,7 @@ void ApiListener::OnConfigLoaded(void)
 
 void ApiListener::OnAllConfigLoaded(void)
 {
-	m_LocalEndpoint = Endpoint::GetByName(GetIdentity());
-
-	if (!m_LocalEndpoint)
+	if (!Endpoint::GetByName(GetIdentity()))
 		BOOST_THROW_EXCEPTION(ScriptError("Endpoint object for '" + GetIdentity() + "' is missing.", GetDebugInfo()));
 }
 
@@ -104,10 +101,11 @@ void ApiListener::Start(bool runtimeCreated)
 {
 	SyncZoneDirs();
 
-	if (m_Instance)
-		BOOST_THROW_EXCEPTION(ScriptError("Only one ApiListener object is allowed.", GetDebugInfo()));
-
-	m_Instance = this;
+	if (std::distance(ConfigType::GetObjectsByType<ApiListener>().first,
+	    ConfigType::GetObjectsByType<ApiListener>().second) > 1) {
+		Log(LogCritical, "ApiListener", "Only one ApiListener object is allowed.");
+		return;
+	}
 
 	ObjectImpl<ApiListener>::Start(runtimeCreated);
 
@@ -135,7 +133,10 @@ void ApiListener::Start(bool runtimeCreated)
 
 ApiListener::Ptr ApiListener::GetInstance(void)
 {
-	return m_Instance;
+	BOOST_FOREACH(const ApiListener::Ptr& listener, ConfigType::GetObjectsByType<ApiListener>())
+		return listener;
+
+	return ApiListener::Ptr();
 }
 
 boost::shared_ptr<SSL_CTX> ApiListener::GetSSLContext(void) const
@@ -168,7 +169,7 @@ bool ApiListener::IsMaster(void) const
 	if (!master)
 		return false;
 
-	return master == GetLocalEndpoint();
+	return master->GetName() == GetIdentity();
 }
 
 /**
@@ -373,8 +374,26 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 		if (endpoint) {
 			endpoint->AddClient(aclient);
 
-			if (need_sync)
-				m_SyncQueue.Enqueue(boost::bind(&ApiListener::SyncClient, this, aclient, endpoint));
+			if (need_sync) {
+				{
+					ObjectLock olock(endpoint);
+
+					endpoint->SetSyncing(true);
+				}
+
+				Log(LogInformation, "ApiListener")
+				    << "Sending updates for endpoint '" << endpoint->GetName() << "'.";
+
+				/* sync zone file config */
+				SendConfigUpdate(aclient);
+				/* sync runtime config */
+				SendRuntimeConfigObjects(aclient);
+
+				Log(LogInformation, "ApiListener")
+				    << "Finished sending updates for endpoint '" << endpoint->GetName() << "'.";
+
+				ReplayLog(aclient);
+			}
 		} else
 			AddAnonymousClient(aclient);
 	} else {
@@ -383,33 +402,6 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 		HttpServerConnection::Ptr aclient = new HttpServerConnection(identity, verify_ok, tlsStream);
 		aclient->Start();
 		AddHttpClient(aclient);
-	}
-}
-
-void ApiListener::SyncClient(const JsonRpcConnection::Ptr& aclient, const Endpoint::Ptr& endpoint)
-{
-	try {
-		{
-			ObjectLock olock(endpoint);
-
-			endpoint->SetSyncing(true);
-		}
-
-		Log(LogInformation, "ApiListener")
-		    << "Sending updates for endpoint '" << endpoint->GetName() << "'.";
-
-		/* sync zone file config */
-		SendConfigUpdate(aclient);
-		/* sync runtime config */
-		SendRuntimeConfigObjects(aclient);
-
-		Log(LogInformation, "ApiListener")
-		    << "Finished sending updates for endpoint '" << endpoint->GetName() << "'.";
-
-		ReplayLog(aclient);
-	} catch (const std::exception& ex) {
-		Log(LogCritical, "ApiListener")
-		    << "Error while syncing endpoint '" << endpoint->GetName() << "': " << DiagnosticInformation(ex);
 	}
 }
 
@@ -425,7 +417,7 @@ void ApiListener::ApiTimerHandler(void)
 		bool need = false;
 
 		BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
-			if (endpoint == GetLocalEndpoint())
+			if (endpoint->GetName() == GetIdentity())
 				continue;
 
 			if (endpoint->GetLogDuration() >= 0 && ts < now - endpoint->GetLogDuration())
@@ -462,7 +454,7 @@ void ApiListener::ApiTimerHandler(void)
 
 		BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
 			/* don't connect to ourselves */
-			if (endpoint == GetLocalEndpoint()) {
+			if (endpoint->GetName() == GetIdentity()) {
 				Log(LogDebug, "ApiListener")
 				    << "Not connecting to Endpoint '" << endpoint->GetName() << "' because that's us.";
 				continue;
@@ -609,7 +601,7 @@ void ApiListener::SyncRelayMessage(const MessageOrigin::Ptr& origin,
 
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
 		/* don't relay messages to ourselves */
-		if (endpoint == GetLocalEndpoint())
+		if (endpoint->GetName() == GetIdentity())
 			continue;
 
 		Zone::Ptr target_zone = endpoint->GetZone();
@@ -1036,9 +1028,4 @@ std::set<HttpServerConnection::Ptr> ApiListener::GetHttpClients(void) const
 Value ApiListener::HelloAPIHandler(const MessageOrigin::Ptr& origin, const Dictionary::Ptr& params)
 {
 	return Empty;
-}
-
-Endpoint::Ptr ApiListener::GetLocalEndpoint(void) const
-{
-	return m_LocalEndpoint;
 }
