@@ -5,6 +5,7 @@ set -e
 
 case "$1" in
     purge)
+        rm -rf /etc/icinga2/features-enabled/
         rm -rf /var/lib/icinga2/
         rm -rf /var/log/icinga2/
         rm -rf /var/cache/icinga2/
