@@ -5,7 +5,8 @@ Maintainer: Debian Nagios Maintainer Group <pkg-nagios-devel@lists.alioth.debian
 Uploaders: Markus Frosch <lazyfrosch@debian.org>,
            Jan Wagner <waja@cyconet.org>,
            Alexander Wirt <formorer@debian.org>
-Build-Depends: bison,
+Build-Depends: bash-completion,
+               bison,
                cmake (>= 2.8.7),
                debhelper (>= 9),
                dh-systemd (>= 1.5),
