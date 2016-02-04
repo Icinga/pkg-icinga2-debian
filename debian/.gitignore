@@ -6,5 +6,6 @@ files
 icinga2/
 icinga2-*/
 libicinga2/
+vim-icinga2/
 tmp/
 

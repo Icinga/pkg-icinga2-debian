@@ -36,7 +36,7 @@ Depends: icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
 Recommends: icinga2-doc, monitoring-plugins-basic | nagios-plugins-basic, libreadline6
-Suggests: icinga2-studio
+Suggests: icinga2-studio, vim-icinga2
 Description: host and network monitoring system
  Icinga 2 is a general-purpose monitoring application to fit the needs of
  any size of network. Icinga 1.x was a Nagios fork; this new generation
@@ -299,3 +299,15 @@ Description: host and network monitoring system - studio API GUI
   * native support for Livestatus and Graphite.
  .
  This package provides a GUI for the Icinga 2 API.
+
+Package: vim-icinga2
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: vim-addon-manager
+Description: syntax highlighting for Icinga 2 config files in VIM
+ The vim-icinga2 package provides filetype detection and syntax
+ highlighting for Icinga 2 config files.
+ .
+ As per the Debian vim policy, installed addons are not activated
+ automatically, but the "vim-addon-manager" tool can be used for this
+ purpose.
