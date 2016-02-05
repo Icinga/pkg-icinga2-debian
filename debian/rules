@@ -3,10 +3,12 @@
 #export DH_VERBOSE=1
 
 %:
-	dh $@
+	dh $@ --with bash_completion
 
 override_dh_systemd_enable:
 	dh_systemd_enable --name=icinga2
+override_dh_auto_configure:
+	dh_auto_configure --disable-silent-rules
 override_dh_auto_build:
 	dh_auto_build --parallel
 
@@ -34,11 +36,13 @@ override_dh_auto_install:
 	# remove features-enabled - these will be activated by postinst later
 	rm -r debian/tmp/etc/icinga2/features-enabled/*
 
-override_dh_install:
-	dh_install
-	if [ -d debian/icinga2-common/ ]; then chmod +x debian/icinga2-common/usr/lib/icinga2/prepare-dirs; fi
-	# remove ido files from other packages
-	if [ -d debian/icinga2-common/ ]; then rm debian/icinga2-common/etc/icinga2/features-available/ido-*; fi
+override_dh_install-indep:
+	dh_install -i
+	chmod +x debian/icinga2-common/usr/lib/icinga2/prepare-dirs
+	rm debian/icinga2-common/etc/icinga2/features-available/ido-*
+
+override_dh_install-arch:
+	dh_install -a
 	rm debian/libicinga2/usr/lib/*/icinga2/libdb_ido_*
 	for dbms in mysql pgsql; do \
 		mkdir -p debian/icinga2-ido-$$dbms/usr/share/dbconfig-common/data/icinga2-ido-$$dbms/install ; \

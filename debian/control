@@ -5,7 +5,8 @@ Maintainer: Debian Nagios Maintainer Group <pkg-nagios-devel@lists.alioth.debian
 Uploaders: Markus Frosch <lazyfrosch@debian.org>,
            Jan Wagner <waja@cyconet.org>,
            Alexander Wirt <formorer@debian.org>
-Build-Depends: bison,
+Build-Depends: bash-completion,
+               bison,
                cmake (>= 2.8.7),
                debhelper (>= 9),
                flex,
@@ -26,8 +27,8 @@ Build-Depends: bison,
                po-debconf
 Standards-Version: 3.9.6
 Homepage: http://www.icinga.org
-Vcs-Browser: http://anonscm.debian.org/cgit/pkg-nagios/pkg-icinga2.git
-Vcs-Git: git://anonscm.debian.org/pkg-nagios/pkg-icinga2.git
+Vcs-Browser: https://anonscm.debian.org/cgit/pkg-nagios/pkg-icinga2.git
+Vcs-Git: https://anonscm.debian.org/git/pkg-nagios/pkg-icinga2.git
 
 Package: icinga2
 Architecture: any
@@ -35,7 +36,7 @@ Depends: icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
 Recommends: icinga2-doc, monitoring-plugins-basic | nagios-plugins-basic, libreadline6
-Suggests: icinga2-studio
+Suggests: icinga2-studio, vim-icinga2
 Description: host and network monitoring system
  Icinga 2 is a general-purpose monitoring application to fit the needs of
  any size of network. Icinga 1.x was a Nagios fork; this new generation
@@ -298,3 +299,15 @@ Description: host and network monitoring system - studio API GUI
   * native support for Livestatus and Graphite.
  .
  This package provides a GUI for the Icinga 2 API.
+
+Package: vim-icinga2
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: vim-addon-manager
+Description: syntax highlighting for Icinga 2 config files in VIM
+ The vim-icinga2 package provides filetype detection and syntax
+ highlighting for Icinga 2 config files.
+ .
+ As per the Debian vim policy, installed addons are not activated
+ automatically, but the "vim-addon-manager" tool can be used for this
+ purpose.
