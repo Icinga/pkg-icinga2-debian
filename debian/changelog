@@ -1,3 +1,9 @@
+icinga2 (2.4.1-2~debmon8+3) debmon-jessie; urgency=medium
+
+  * Fix wrong build 
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 05 Feb 2016 18:48:50 +0100
+
 icinga2 (2.4.1-2~debmon8+2) debmon-jessie; urgency=medium
 
   * Rebuild against jessie 
