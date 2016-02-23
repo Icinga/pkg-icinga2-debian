@@ -1,5 +1,5 @@
 # Icinga 2
-# Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)
+# Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -38,6 +38,7 @@ option(ICINGA2_WITH_LIVESTATUS "Build the Livestatus module" ON)
 option(ICINGA2_WITH_NOTIFICATION "Build the notification module" ON)
 option(ICINGA2_WITH_PERFDATA "Build the perfdata module" ON)
 option(ICINGA2_WITH_STUDIO "Build the Icinga Studio application" OFF)
+option(ICINGA2_WITH_TESTS "Run unit tests" ON)
 
 file(STRINGS icinga2.spec VERSION_LINE REGEX "^Version: ")
 string(REPLACE "Version: " "" ICINGA2_VERSION ${VERSION_LINE})
@@ -139,8 +140,8 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -lpthread")
   else()
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -pthread")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -pthread")
   endif()
 
   if(NOT CMAKE_SYSTEM_NAME MATCHES AIX AND NOT CMAKE_SYSTEM_NAME MATCHES OpenBSD AND NOT CMAKE_SYSTEM_NAME MATCHES SunOS)
@@ -199,14 +200,27 @@ if(HAVE_LIBEXECINFO)
   set(HAVE_BACKTRACE_SYMBOLS TRUE)
 endif()
 
+set(_ICINGA2_CXX11 OFF)
+
 if(UNIX)
   include(CheckCXXCompilerFlag)
   check_cxx_compiler_flag("-std=c++11" CXX_FLAG_CXX11)
-  check_cxx_compiler_flag("-std=c++0x" CXX_FLAG_CXX0X)
+
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    exec_program(${CMAKE_CXX_COMPILER}
+      ARGS -dumpversion
+      OUTPUT_VARIABLE _ICINGA2_COMPILER_VERSION
+    )
+
+    if("${_ICINGA2_COMPILER_VERSION}" VERSION_LESS "4.7.0")
+      message(STATUS "Your version of GCC is too old for building Icinga 2 in C++11 mode.")
+      set(CXX_FLAG_CXX11 OFF)
+    endif()
+  endif()
+
   if(CXX_FLAG_CXX11)
+    set(_ICINGA2_CXX11 ON)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-  elseif(CXX_FLAG_CXX0X)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
   endif()
 
   check_cxx_compiler_flag("-Wno-inconsistent-missing-override" CXX_FLAG_NO_OVERRIDE_WARNING)
@@ -215,11 +229,17 @@ if(UNIX)
   endif()
 endif()
 
-include(CheckCXXSourceCompiles)
-check_cxx_source_compiles("class Base { public: virtual void test(void) { } }; class Derived : public Base { virtual void test(void) override { } }; int main(){}" CXX_FEATURE_OVERRIDE)
+if(NOT MSVC)
+  set(CXX_FEATURE_OVERRIDE OFF)
 
-if(NOT CXX_FEATURE_OVERRIDE)
-  add_definitions("-Doverride=")
+  if(_ICINGA2_CXX11)
+    include(CheckCXXSourceCompiles)
+    check_cxx_source_compiles("class Base { public: virtual void test(void) { } }; class Derived : public Base { virtual void test(void) override { } }; int main(){}" CXX_FEATURE_OVERRIDE)
+  endif()
+
+  if(NOT CXX_FEATURE_OVERRIDE)
+    add_definitions("-Doverride=")
+  endif()
 endif()
 
 configure_file(config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h ESCAPE_QUOTES)
@@ -241,12 +261,15 @@ add_subdirectory(icinga-app)
 add_subdirectory(etc)
 add_subdirectory(itl)
 add_subdirectory(doc)
-add_subdirectory(test)
 add_subdirectory(agent)
 add_subdirectory(plugins)
 
 if(ICINGA2_WITH_STUDIO)
   add_subdirectory(icinga-studio)
+endif()
+
+if(ICINGA2_WITH_TESTS)
+  add_subdirectory(test)
 endif()
 
 set(CPACK_PACKAGE_NAME "Icinga2")

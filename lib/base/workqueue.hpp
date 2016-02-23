@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -27,12 +27,48 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
 #include <boost/exception_ptr.hpp>
+#include <queue>
 #include <deque>
 
 namespace icinga
 {
 
-typedef boost::function<void (void)> Task;
+enum WorkQueuePriority
+{
+	PriorityLow,
+	PriorityNormal,
+	PriorityHigh
+};
+
+struct Task
+{
+	Task(void)
+	    : Priority(PriorityNormal), ID(-1)
+	{ }
+
+	Task(const boost::function<void (void)>& function, WorkQueuePriority priority, int id)
+	    : Function(function), Priority(priority), ID(id)
+	{ }
+
+	boost::function<void (void)> Function;
+	WorkQueuePriority Priority;
+	int ID;
+};
+
+inline bool operator<(const Task& a, const Task& b)
+{
+	if (a.Priority < b.Priority)
+		return true;
+
+	if (a.Priority == b.Priority) {
+		if (a.ID > b.ID)
+			return true;
+		else
+			return false;
+	}
+
+	return false;
+}
 
 /**
  * A workqueue.
@@ -47,7 +83,8 @@ public:
 	WorkQueue(size_t maxItems = 0, int threadCount = 1);
 	~WorkQueue(void);
 
-	void Enqueue(const Task& task, bool allowInterleaved = false);
+	void Enqueue(const boost::function<void (void)>& function, WorkQueuePriority priority = PriorityNormal,
+	    bool allowInterleaved = false);
 	void Join(bool stop = false);
 
 	bool IsWorkerThread(void) const;
@@ -74,7 +111,8 @@ private:
 	size_t m_MaxItems;
 	bool m_Stopped;
 	int m_Processing;
-	std::deque<Task> m_Tasks;
+	std::priority_queue<Task, std::deque<Task> > m_Tasks;
+	int m_NextTaskID;
 	ExceptionCallback m_ExceptionCallback;
 	std::vector<boost::exception_ptr> m_Exceptions;
 	Timer::Ptr m_StatusTimer;

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -117,6 +117,8 @@ public:
 
 	static std::vector<ZoneFragment> GetZoneDirs(const String& zone);
 	static void RegisterZoneDir(const String& tag, const String& ppath, const String& zoneName);
+
+	static bool HasZoneConfigAuthority(const String& zoneName);
 
 private:
 	boost::promise<boost::shared_ptr<Expression> > m_Promise;

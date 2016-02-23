@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -53,6 +53,8 @@ public:
 	Value GetExtension(const String& key);
 	void ClearExtension(const String& key);
 
+	ConfigObject::Ptr GetZone(void) const;
+
 	void ModifyAttribute(const String& attr, const Value& value, bool updateVersion = true);
 	void RestoreAttribute(const String& attr, bool updateVersion = true);
 	bool IsAttributeModified(const String& attr) const;
@@ -97,6 +99,8 @@ protected:
 	explicit ConfigObject(void);
 
 private:
+	ConfigObject::Ptr m_Zone;
+
 	static void RestoreObject(const String& message, int attributeTypes);
 };
 

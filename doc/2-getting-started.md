@@ -1,7 +1,7 @@
 # <a id="getting-started"></a> Getting Started
 
 This tutorial is a step-by-step introduction to installing [Icinga 2](2-getting-started.md#setting-up-icinga2)
-and [Icinga Web 2](2-getting-started.md#setting-up-the-user-interface).
+and [Icinga Web 2](2-getting-started.md#setting-up-icingaweb2).
 It assumes that you are familiar with the operating system you're using to install Icinga 2.
 
 ## <a id="setting-up-icinga2"></a> Setting up Icinga 2
@@ -165,26 +165,63 @@ Without plugins Icinga 2 does not know how to check external services. The
 an extensive set of plugins which can be used with Icinga 2 to check whether
 services are working properly.
 
-The recommended way of installing these standard plugins is to use your
-distribution's package manager.
+> **Note**
+>
+> These plugins are required to make the [example configuration](4-configuring-icinga-2.md#configuring-icinga2-overview)
+> work out-of-the-box.
 
 For your convenience here is a list of package names for some of the more
 popular operating systems/distributions:
 
-OS/Distribution        | Package Name       | Installation Path
------------------------|--------------------|---------------------------
-RHEL/CentOS (EPEL)     | nagios-plugins-all | /usr/lib/nagios/plugins or /usr/lib64/nagios/plugins
-Debian                 | nagios-plugins     | /usr/lib/nagios/plugins
-FreeBSD                | monitoring-plugins | /usr/local/libexec/nagios
-OS X (MacPorts)        | nagios-plugins     | /opt/local/libexec
+OS/Distribution        | Package Name       | Repository                | Installation Path
+-----------------------|--------------------|---------------------------|----------------------------
+RHEL/CentOS            | nagios-plugins-all | [EPEL](http://fedoraproject.org/wiki/EPEL) | /usr/lib/nagios/plugins or /usr/lib64/nagios/plugins
+SLES/OpenSUSE          | monitoring-plugins | [server:monitoring](https://build.opensuse.org/project/repositories/server:monitoring) | /usr/lib/nagios/plugins
+Debian/Ubuntu          | nagios-plugins     | -                         | /usr/lib/nagios/plugins
+FreeBSD                | monitoring-plugins | -                         | /usr/local/libexec/nagios
+OS X                   | nagios-plugins     | [MacPorts](http://www.macports.org), [Homebrew](http://brew.sh) | /opt/local/libexec or /usr/local/sbin
+
+The recommended way of installing these standard plugins is to use your
+distribution's package manager.
+
+Debian/Ubuntu:
+
+    # apt-get install nagios-plugins
+
+RHEL/CentOS:
+
+    # yum install nagios-plugins-all
+
+The packages for RHEL/CentOS depend on other packages which are distributed
+as part of the [EPEL repository](http://fedoraproject.org/wiki/EPEL). Please
+make sure to enable this repository by following
+[these instructions](http://fedoraproject.org/wiki/EPEL#How_can_I_use_these_extra_packages.3F).
+
+Fedora:
+
+    # dnf install nagios-plugins-all
+
+SLES/openSUSE:
+
+    # zypper install monitoring-plugins
+
+The packages for SLES/OpenSUSE depend on other packages which are distributed
+as part of the [server:monitoring repository](https://build.opensuse.org/project/repositories/server:monitoring).
+Please make sure to enable this repository beforehand.
+
+FreeBSD:
+
+    # pkg install monitoring-plugins
 
 Depending on which directory your plugins are installed into you may need to
 update the global `PluginDir` constant in your [Icinga 2 configuration](4-configuring-icinga-2.md#constants-conf).
 This constant is used by the check command definitions contained in the Icinga Template Library
 to determine where to find the plugin binaries.
 
-Please refer to the [plugins](14-addons-plugins.md#plugins) chapter for details about how to integrate
-additional check plugins into your Icinga 2 setup.
+> **Note**
+>
+> Please refer to the [plugins](14-addons-plugins.md#plugins) chapter for details about how to integrate
+> additional check plugins into your Icinga 2 setup.
 
 ## <a id="running-icinga2"></a> Running Icinga 2
 
@@ -309,7 +346,7 @@ Test it:
     $ nano /etc/icinga2/conf.d/templates.conf
 
 
-## <a id="setting-up-the-user-interface"></a> Setting up Icinga Web 2
+## <a id="setting-up-icingaweb2"></a> Setting up Icinga Web 2
 
 Icinga 2 can be used with Icinga Web 2 and a number of other web interfaces.
 This chapter explains how to set up Icinga Web 2.
@@ -449,7 +486,7 @@ RHEL/CentOS 5/6:
 RHEL/CentOS 7:
 
     # yum install postgresql-server postgresql
-    # postgresql-setup --initdb
+    # postgresql-setup initdb
     # systemctl enable postgresql
     # systemctl start postgresql
 
@@ -498,15 +535,17 @@ and located at /usr/local/share/icinga2-ido-pgsql/schema/pgsql.sql
 Set up a PostgreSQL database for Icinga 2:
 
     # cd /tmp
-    # sudo -u postgres psql -c "CREATE ROLE icinga WITH LOGIN PASSWORD 'icinga'";
+    # sudo -u postgres psql -c "CREATE ROLE icinga WITH LOGIN PASSWORD 'icinga'"
     # sudo -u postgres createdb -O icinga -E UTF8 icinga
     # sudo -u postgres createlang plpgsql icinga
 
 > **Note**
 >
 > When using PostgreSQL 9.x you can omit the `createlang` command.
+> Also it is assumed here that your locale is set to utf-8, you may run into
+> problems otherwise.
 
-Locate your pg_hba.conf (Debian: `/etc/postgresql/*/main/pg_hba.conf`,
+Locate your pg\_hba.conf (Debian: `/etc/postgresql/*/main/pg_hba.conf`,
 RHEL/SUSE: `/var/lib/pgsql/data/pg_hba.conf`), add the icinga user with md5
 authentication method and restart the postgresql server.
 
@@ -661,7 +700,7 @@ group using the `id` command:
     $ id <your-webserver-user>
 
 
-### <a id="setting-up-icingaweb2"></a> Installing up Icinga Web 2
+### <a id="installing-icingaweb2"></a> Installing Icinga Web 2
 
 Please consult the [installation documentation](https://github.com/Icinga/icingaweb2/blob/master/doc/installation.md)
 for further instructions on how to install Icinga Web 2.

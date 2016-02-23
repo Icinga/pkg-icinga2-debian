@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -38,6 +38,15 @@ namespace icinga
 class JsonRpcConnection;
 
 /**
+ * @ingroup remote
+ */
+struct ConfigDirInformation
+{
+	Dictionary::Ptr UpdateV1;
+	Dictionary::Ptr UpdateV2;
+};
+
+/**
 * @ingroup remote
 */
 class I2_REMOTE_API ApiListener : public ObjectImpl<ApiListener>
@@ -58,6 +67,8 @@ public:
 
 	Endpoint::Ptr GetMaster(void) const;
 	bool IsMaster(void) const;
+
+	Endpoint::Ptr GetLocalEndpoint(void) const;
 
 	static String GetApiDir(void);
 
@@ -97,6 +108,9 @@ private:
 	std::set<JsonRpcConnection::Ptr> m_AnonymousClients;
 	std::set<HttpServerConnection::Ptr> m_HttpClients;
 	Timer::Ptr m_Timer;
+	Endpoint::Ptr m_LocalEndpoint;
+
+	static ApiListener::Ptr m_Instance;
 
 	void ApiTimerHandler(void);
 
@@ -108,11 +122,13 @@ private:
 	void ListenerThreadProc(const Socket::Ptr& server);
 
 	WorkQueue m_RelayQueue;
+	WorkQueue m_SyncQueue;
 
 	boost::mutex m_LogLock;
 	Stream::Ptr m_LogFile;
 	size_t m_LogMessageCount;
 
+	bool RelayMessageOne(const Zone::Ptr& zone, const MessageOrigin::Ptr& origin, const Dictionary::Ptr& message, const Endpoint::Ptr& currentMaster);
 	void SyncRelayMessage(const MessageOrigin::Ptr& origin, const ConfigObject::Ptr& secobj, const Dictionary::Ptr& message, bool log);
 	void PersistMessage(const Dictionary::Ptr& message, const ConfigObject::Ptr& secobj);
 
@@ -123,14 +139,14 @@ private:
 	void ReplayLog(const JsonRpcConnection::Ptr& client);
 
 	/* filesync */
-	static Dictionary::Ptr LoadConfigDir(const String& dir);
-	static bool UpdateConfigDir(const Dictionary::Ptr& oldConfig, const Dictionary::Ptr& newConfig, const String& configDir, bool authoritative);
+	static ConfigDirInformation LoadConfigDir(const String& dir);
+	static Dictionary::Ptr MergeConfigUpdate(const ConfigDirInformation& config);
+	static bool UpdateConfigDir(const ConfigDirInformation& oldConfig, const ConfigDirInformation& newConfig, const String& configDir, bool authoritative);
 
 	void SyncZoneDirs(void) const;
 	void SyncZoneDir(const Zone::Ptr& zone) const;
 
-	static bool IsConfigMaster(const Zone::Ptr& zone);
-	static void ConfigGlobHandler(Dictionary::Ptr& config, const String& path, const String& file);
+	static void ConfigGlobHandler(ConfigDirInformation& config, const String& path, const String& file);
 	void SendConfigUpdate(const JsonRpcConnection::Ptr& aclient);
 
 	/* configsync */
@@ -139,6 +155,8 @@ private:
 	void DeleteConfigObject(const ConfigObject::Ptr& object, const MessageOrigin::Ptr& origin,
 	    const JsonRpcConnection::Ptr& client = JsonRpcConnection::Ptr());
 	void SendRuntimeConfigObjects(const JsonRpcConnection::Ptr& aclient);
+
+	void SyncClient(const JsonRpcConnection::Ptr& aclient, const Endpoint::Ptr& endpoint, bool needSync);
 };
 
 }
