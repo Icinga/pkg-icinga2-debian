@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -212,14 +212,17 @@ Expression *ConfigCompiler::HandleIncludeZones(const String& relativeBase, const
     const String& path, const String& pattern, const String& package, const DebugInfo&)
 {
 	String ppath;
+	String newRelativeBase = relativeBase;
 
 	if (path.GetLength() > 0 && path[0] == '/')
 		ppath = path;
-	else
+	else {
 		ppath = relativeBase + "/" + path;
+		newRelativeBase = ".";
+	}
 
 	std::vector<Expression *> expressions;
-	Utility::Glob(ppath + "/*", boost::bind(&ConfigCompiler::HandleIncludeZone, relativeBase, tag, _1, pattern, package, boost::ref(expressions)), GlobDirectory);
+	Utility::Glob(ppath + "/*", boost::bind(&ConfigCompiler::HandleIncludeZone, newRelativeBase, tag, _1, pattern, package, boost::ref(expressions)), GlobDirectory);
 	return new DictExpression(expressions);
 }
 
@@ -318,5 +321,24 @@ void ConfigCompiler::RegisterZoneDir(const String& tag, const String& ppath, con
 
 	boost::mutex::scoped_lock lock(m_ZoneDirsMutex);
 	m_ZoneDirs[zoneName].push_back(zf);
+}
+
+bool ConfigCompiler::HasZoneConfigAuthority(const String& zoneName)
+{
+	std::vector<ZoneFragment> zoneDirs = m_ZoneDirs[zoneName];
+
+	bool empty = zoneDirs.empty();
+
+	if (!empty) {
+		std::vector<String> paths;
+		BOOST_FOREACH(const ZoneFragment& zf, zoneDirs) {
+			paths.push_back(zf.Path);
+		}
+
+		Log(LogNotice, "ConfigCompiler")
+		    << "Registered authoritative config directories for zone '" << zoneName << "': " << Utility::NaturalJoin(paths);
+	}
+
+	return !empty;
 }
 

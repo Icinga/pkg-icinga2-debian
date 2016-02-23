@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -242,7 +242,6 @@ void ConfigObject::RestoreAttribute(const String& attr, bool updateVersion)
 	String fieldName = tokens[0];
 
 	int fid = type->GetFieldId(fieldName);
-	Field field = type->GetFieldInfo(fid);
 
 	Value currentValue = GetField(fid);
 
@@ -259,7 +258,7 @@ void ConfigObject::RestoreAttribute(const String& attr, bool updateVersion)
 		Value current = newValue;
 
 		if (current.IsEmpty())
-			BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot restore non-existing object attribute"));
+			BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot restore non-existent object attribute"));
 
 		String prefix = tokens[0];
 
@@ -273,7 +272,7 @@ void ConfigObject::RestoreAttribute(const String& attr, bool updateVersion)
 			prefix += "." + key;
 
 			if (!dict->Contains(key))
-				BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot restore non-existing object attribute"));
+				BOOST_THROW_EXCEPTION(std::invalid_argument("Cannot restore non-existent object attribute"));
 
 			current = dict->Get(key);
 		}
@@ -415,8 +414,6 @@ void ConfigObject::Deactivate(bool runtimeRemoved)
 {
 	CONTEXT("Deactivating object '" + GetName() + "' of type '" + GetType()->GetName() + "'");
 
-	SetAuthority(false);
-
 	{
 		ObjectLock olock(this);
 
@@ -425,6 +422,8 @@ void ConfigObject::Deactivate(bool runtimeRemoved)
 
 		SetActive(false, true);
 	}
+
+	SetAuthority(false);
 
 	Stop(runtimeRemoved);
 
@@ -440,7 +439,7 @@ void ConfigObject::OnConfigLoaded(void)
 
 void ConfigObject::OnAllConfigLoaded(void)
 {
-	/* Nothing to do here. */
+	m_Zone = GetObject("Zone", GetZoneName());
 }
 
 void ConfigObject::CreateChildObjects(const Type::Ptr& childType)
@@ -471,10 +470,10 @@ void ConfigObject::SetAuthority(bool authority)
 		ASSERT(GetResumeCalled());
 		SetPaused(false);
 	} else if (!authority && !GetPaused()) {
+		SetPaused(true);
 		SetPauseCalled(false);
 		Pause();
 		ASSERT(GetPauseCalled());
-		SetPaused(true);
 	}
 }
 
@@ -483,10 +482,8 @@ void ConfigObject::DumpObjects(const String& filename, int attributeTypes)
 	Log(LogInformation, "ConfigObject")
 	    << "Dumping program state to file '" << filename << "'";
 
-	String tempFilename = filename + ".tmp";
-
 	std::fstream fp;
-	fp.open(tempFilename.CStr(), std::ios_base::out);
+	String tempFilename = Utility::CreateTempFile(filename + ".XXXXXX", fp);
 
 	if (!fp)
 		BOOST_THROW_EXCEPTION(std::runtime_error("Could not open '" + tempFilename + "' file"));
@@ -683,4 +680,9 @@ ConfigObject::Ptr ConfigObject::GetObject(const String& type, const String& name
 	if (!dtype)
 		return ConfigObject::Ptr();
 	return dtype->GetObject(name);
+}
+
+ConfigObject::Ptr ConfigObject::GetZone(void) const
+{
+	return m_Zone;
 }
