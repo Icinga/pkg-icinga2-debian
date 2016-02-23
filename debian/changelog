@@ -1,8 +1,35 @@
-icinga2 (2.4.1-1~ppa1~xenial1) xenial; urgency=medium
+icinga2 (2.4.2-1~ppa1~xenial1) xenial; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
+
+icinga2 (2.4.2-1) unstable; urgency=medium
+
+  * [3584c36] Imported Upstream version 2.4.2
+  * [89ee45e] Bump standards version to 3.9.7
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Tue, 23 Feb 2016 16:30:32 +0100
+
+icinga2 (2.4.1-2) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [09024ca] Fail on reload if daemon isn't running
+
+  [ Markus Frosch ]
+  * [dafe178] Fix rules for binary-{arch,indep} (Closes: #806623)
+  * [522fca2] Add vim-icinga2 syntax package
+  * [9261421] Don't install all the syntax files with icinga2-common
+  * [b4f5917] Install nanorc properly with icinga2-common
+  * [89b3a4a] Move bash-completion to /usr/share
+  * [53e9965] Remove obsolete menu file for icinga2-studio
+  * [108f078] Update lintian-overrides for icinga2-classicui
+  * [5a824b1] Update VCS URLs to secure
+  * [6222da3] Update copyright
+  * [ee74d47] Remove features-enabled on purge
+  * [ccb8bbe] Enable verbose cmake output for build log validation
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Thu, 04 Feb 2016 16:55:46 +0100
 
 icinga2 (2.4.1-1) unstable; urgency=medium
 

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -146,7 +146,7 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 	boost::algorithm::split(tokens, options, boost::is_any_of(";"));
 
 	/* set default values */
-	bag->Set("log_class", LogEntryClassInfo);
+	bag->Set("class", LogEntryClassInfo);
 	bag->Set("log_type", 0);
 	bag->Set("state", 0);
 	bag->Set("attempt", 0);
@@ -165,15 +165,15 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		bag->Set("plugin_output", tokens[4]);
 
 		if (type.Contains("INITIAL HOST STATE")) {
-			bag->Set("log_class", LogEntryClassState);
+			bag->Set("class", LogEntryClassState);
 			bag->Set("log_type", LogEntryTypeHostInitialState);
 		}
 		else if (type.Contains("CURRENT HOST STATE")) {
-			bag->Set("log_class", LogEntryClassState);
+			bag->Set("class", LogEntryClassState);
 			bag->Set("log_type", LogEntryTypeHostCurrentState);
 		}
 		else {
-			bag->Set("log_class", LogEntryClassAlert);
+			bag->Set("class", LogEntryClassAlert);
 			bag->Set("log_type", LogEntryTypeHostAlert);
 		}
 
@@ -188,10 +188,10 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		bag->Set("comment", tokens[2]);
 
 		if (type.Contains("HOST FLAPPING ALERT")) {
-			bag->Set("log_class", LogEntryClassAlert);
+			bag->Set("class", LogEntryClassAlert);
 			bag->Set("log_type", LogEntryTypeHostFlapping);
 		} else {
-			bag->Set("log_class", LogEntryClassAlert);
+			bag->Set("class", LogEntryClassAlert);
 			bag->Set("log_type", LogEntryTypeHostDowntimeAlert);
 		}
 
@@ -210,15 +210,15 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		bag->Set("plugin_output", tokens[5]);
 
 		if (type.Contains("INITIAL SERVICE STATE")) {
-			bag->Set("log_class", LogEntryClassState);
+			bag->Set("class", LogEntryClassState);
 			bag->Set("log_type", LogEntryTypeServiceInitialState);
 		}
 		else if (type.Contains("CURRENT SERVICE STATE")) {
-			bag->Set("log_class", LogEntryClassState);
+			bag->Set("class", LogEntryClassState);
 			bag->Set("log_type", LogEntryTypeServiceCurrentState);
 		}
 		else {
-			bag->Set("log_class", LogEntryClassAlert);
+			bag->Set("class", LogEntryClassAlert);
 			bag->Set("log_type", LogEntryTypeServiceAlert);
 		}
 
@@ -234,10 +234,10 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		bag->Set("comment", tokens[3]);
 
 		if (type.Contains("SERVICE FLAPPING ALERT")) {
-			bag->Set("log_class", LogEntryClassAlert);
+			bag->Set("class", LogEntryClassAlert);
 			bag->Set("log_type", LogEntryTypeServiceFlapping);
 		} else {
-			bag->Set("log_class", LogEntryClassAlert);
+			bag->Set("class", LogEntryClassAlert);
 			bag->Set("log_type", LogEntryTypeServiceDowntimeAlert);
 		}
 
@@ -246,7 +246,7 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		if (tokens.size() < 4)
 			return bag;
 
-		bag->Set("log_class", LogEntryClassState);
+		bag->Set("class", LogEntryClassState);
 		bag->Set("log_type", LogEntryTypeTimeperiodTransition);
 
 		bag->Set("host_name", tokens[0]);
@@ -264,7 +264,7 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		bag->Set("command_name", tokens[4]);
 		bag->Set("plugin_output", tokens[5]);
 
-		bag->Set("log_class", LogEntryClassNotification);
+		bag->Set("class", LogEntryClassNotification);
 		bag->Set("log_type", LogEntryTypeHostNotification);
 
 		return bag;
@@ -280,7 +280,7 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		bag->Set("command_name", tokens[5]);
 		bag->Set("plugin_output", tokens[6]);
 
-		bag->Set("log_class", LogEntryClassNotification);
+		bag->Set("class", LogEntryClassNotification);
 		bag->Set("log_type", LogEntryTypeServiceNotification);
 
 		return bag;
@@ -292,7 +292,7 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		bag->Set("state", Host::StateFromString(tokens[1]));
 		bag->Set("plugin_output", tokens[2]);
 
-		bag->Set("log_class", LogEntryClassPassive);
+		bag->Set("class", LogEntryClassPassive);
 
 		return bag;
 	} else if (type.Contains("PASSIVE SERVICE CHECK")) {
@@ -304,26 +304,26 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		bag->Set("state", Host::StateFromString(tokens[2]));
 		bag->Set("plugin_output", tokens[3]);
 
-		bag->Set("log_class", LogEntryClassPassive);
+		bag->Set("class", LogEntryClassPassive);
 
 		return bag;
 	} else if (type.Contains("EXTERNAL COMMAND")) {
-		bag->Set("log_class", LogEntryClassCommand);
+		bag->Set("class", LogEntryClassCommand);
 		/* string processing not implemented in 1.x */
 
 		return bag;
 	} else if (type.Contains("LOG VERSION")) {
-		bag->Set("log_class", LogEntryClassProgram);
+		bag->Set("class", LogEntryClassProgram);
 		bag->Set("log_type", LogEntryTypeVersion);
 
 		return bag;
 	} else if (type.Contains("logging initial states")) {
-		bag->Set("log_class", LogEntryClassProgram);
+		bag->Set("class", LogEntryClassProgram);
 		bag->Set("log_type", LogEntryTypeInitialStates);
 
 		return bag;
 	} else if (type.Contains("starting... (PID=")) {
-		bag->Set("log_class", LogEntryClassProgram);
+		bag->Set("class", LogEntryClassProgram);
 		bag->Set("log_type", LogEntryTypeProgramStarting);
 
 		return bag;
@@ -334,7 +334,7 @@ Dictionary::Ptr LivestatusLogUtility::GetAttributes(const String& text)
 		 type.Contains("Bailing out") ||
 		 type.Contains("active mode...") ||
 		 type.Contains("standby mode...")) {
-		bag->Set("log_class", LogEntryClassProgram);
+		bag->Set("class", LogEntryClassProgram);
 
 		return bag;
 	}

@@ -24,6 +24,9 @@ is_fresh_install()
     return 1
 }
 
+dpkg-maintscript-helper rm_conffile \
+   "/etc/bash_completion.d/icinga2" "2.4.1-2~" -- "$@"
+
 case "$1" in
     configure)
         if ! getent passwd nagios > /dev/null ; then
