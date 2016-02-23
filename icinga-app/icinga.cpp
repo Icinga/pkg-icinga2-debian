@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -206,11 +206,7 @@ int Main(void)
 	po::options_description hiddenDesc("Hidden options");
 
 	hiddenDesc.add_options()
-#ifndef _WIN32
 		("no-stack-rlimit", "used internally, do not specify manually")
-#else /* _WIN32 */
-		("no-stack-rlimit", "used internally, do not specify manually")
-#endif /* _WIN32 */
 		("arg", po::value<std::vector<std::string> >(), "positional argument");
 
 	po::positional_options_description positionalDesc;
@@ -357,7 +353,7 @@ int Main(void)
 			}
 
 			if (vm.count("version")) {
-				std::cout << "Copyright (c) 2012-2015 Icinga Development Team (https://www.icinga.org)" << std::endl
+				std::cout << "Copyright (c) 2012-2016 Icinga Development Team (https://www.icinga.org/)" << std::endl
 					<< "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl2.html>" << std::endl
 					<< "This is free software: you are free to change and redistribute it." << std::endl
 					<< "There is NO WARRANTY, to the extent permitted by law.";

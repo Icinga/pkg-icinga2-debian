@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -70,11 +70,12 @@ struct I2_DB_IDO_API DbQuery
 	intrusive_ptr<CustomVarObject> NotificationObject;
 	bool ConfigUpdate;
 	bool StatusUpdate;
+	WorkQueuePriority Priority;
 
 	static void StaticInitialize(void);
 
 	DbQuery(void)
-		: Type(0), Category(DbCatInvalid), ConfigUpdate(false), StatusUpdate(false)
+		: Type(0), Category(DbCatInvalid), ConfigUpdate(false), StatusUpdate(false), Priority(PriorityLow)
 	{ }
 };
 

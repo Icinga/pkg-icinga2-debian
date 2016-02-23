@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -55,6 +55,7 @@ protected:
 	virtual void ActivateObject(const DbObject::Ptr& dbobj) override;
 	virtual void DeactivateObject(const DbObject::Ptr& dbobj) override;
 	virtual void ExecuteQuery(const DbQuery& query) override;
+	virtual void ExecuteMultipleQueries(const std::vector<DbQuery>& queries);
 	virtual void CleanUpExecuteQuery(const String& table, const String& time_key, double time_value) override;
 	virtual void FillIDCache(const DbType::Ptr& type) override;
 	virtual void NewTransaction(void) override;
@@ -90,13 +91,20 @@ private:
 	void TxTimerHandler(void);
 	void ReconnectTimerHandler(void);
 
+	void StatsLoggerTimerHandler(void);
+
+	bool CanExecuteQuery(const DbQuery& query);
+
 	void InternalExecuteQuery(const DbQuery& query, DbQueryType *typeOverride = NULL);
+	void InternalExecuteMultipleQueries(const std::vector<DbQuery>& queries);
 	void InternalCleanUpExecuteQuery(const String& table, const String& time_key, double time_value);
 
 	virtual void ClearConfigTable(const String& table) override;
 	void ClearCustomVarTable(const String& table);
 
 	void ExceptionHandler(boost::exception_ptr exp);
+
+	void FinishConnect(double startTime);
 };
 
 }

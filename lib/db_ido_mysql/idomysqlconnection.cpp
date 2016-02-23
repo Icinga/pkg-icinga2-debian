@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -39,7 +39,7 @@ REGISTER_TYPE(IdoMysqlConnection);
 REGISTER_STATSFUNCTION(IdoMysqlConnection, &IdoMysqlConnection::StatsFunc);
 
 IdoMysqlConnection::IdoMysqlConnection(void)
-	: m_QueryQueue(500000)
+	: m_QueryQueue(1000000)
 { }
 
 void IdoMysqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
@@ -95,7 +95,7 @@ void IdoMysqlConnection::Pause(void)
 
 	DbConnection::Pause();
 
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::Disconnect, this));
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::Disconnect, this), PriorityHigh);
 	m_QueryQueue.Join();
 }
 
@@ -138,8 +138,8 @@ void IdoMysqlConnection::TxTimerHandler(void)
 
 void IdoMysqlConnection::NewTransaction(void)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalNewTransaction, this));
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::FinishAsyncQueries, this, true));
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalNewTransaction, this), PriorityHigh);
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::FinishAsyncQueries, this), PriorityHigh);
 }
 
 void IdoMysqlConnection::InternalNewTransaction(void)
@@ -155,20 +155,22 @@ void IdoMysqlConnection::InternalNewTransaction(void)
 
 void IdoMysqlConnection::ReconnectTimerHandler(void)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::Reconnect, this));
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::Reconnect, this), PriorityLow);
 }
 
 void IdoMysqlConnection::Reconnect(void)
 {
 	AssertOnWorkQueue();
 
+	if (!IsActive())
+		return;
+
 	CONTEXT("Reconnecting to MySQL IDO database '" + GetName() + "'");
 
+	double startTime = Utility::GetTime();
 	m_SessionToken = static_cast<int>(Utility::GetTime());
 
 	SetShouldConnect(true);
-
-	std::vector<DbObject::Ptr> active_dbobjs;
 
 	bool reconnect = false;
 
@@ -348,6 +350,8 @@ void IdoMysqlConnection::Reconnect(void)
 	q1buf << "SELECT object_id, objecttype_id, name1, name2, is_active FROM " + GetTablePrefix() + "objects WHERE instance_id = " << static_cast<long>(m_InstanceID);
 	result = Query(q1buf.str());
 
+	std::vector<DbObject::Ptr> activeDbObjs;
+
 	while ((row = FetchRow(result))) {
 		DbType::Ptr dbtype = DbType::GetByID(row->Get("objecttype_id"));
 
@@ -356,29 +360,47 @@ void IdoMysqlConnection::Reconnect(void)
 
 		DbObject::Ptr dbobj = dbtype->GetOrCreateObjectByName(row->Get("name1"), row->Get("name2"));
 		SetObjectID(dbobj, DbReference(row->Get("object_id")));
-		SetObjectActive(dbobj, row->Get("is_active"));
+		bool active = row->Get("is_active");
+		SetObjectActive(dbobj, active);
 
-		if (GetObjectActive(dbobj))
-			active_dbobjs.push_back(dbobj);
+		if (active)
+			activeDbObjs.push_back(dbobj);
 	}
 
 	Query("BEGIN");
 
-	UpdateAllObjects();
-
-	/* deactivate all deleted configuration objects */
-	BOOST_FOREACH(const DbObject::Ptr& dbobj, active_dbobjs) {
+	BOOST_FOREACH(const DbObject::Ptr& dbobj, activeDbObjs) {
 		if (dbobj->GetObject() == NULL) {
 			Log(LogNotice, "IdoMysqlConnection")
 			    << "Deactivate deleted object name1: '" << dbobj->GetName1()
 			    << "' name2: '" << dbobj->GetName2() + "'.";
 			DeactivateObject(dbobj);
+		} else {
+			dbobj->SendConfigUpdate();
+			dbobj->SendStatusUpdate();
 		}
 	}
+
+	UpdateAllObjects();
 
 	/* delete all customvariables without current session token */
 	ClearCustomVarTable("customvariables");
 	ClearCustomVarTable("customvariablestatus");
+
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::FinishConnect, this, startTime), PriorityLow);
+}
+
+void IdoMysqlConnection::FinishConnect(double startTime)
+{
+	AssertOnWorkQueue();
+
+	if (!GetConnected())
+		return;
+
+	FinishAsyncQueries();
+
+	Log(LogInformation, "IdoMysqlConnection")
+	    << "Finished reconnecting to MySQL IDO database in " << std::setw(2) << Utility::GetTime() - startTime << " second(s).";
 
 	Query("COMMIT");
 	Query("BEGIN");
@@ -402,18 +424,10 @@ void IdoMysqlConnection::AsyncQuery(const String& query, const boost::function<v
 	aq.Query = query;
 	aq.Callback = callback;
 	m_AsyncQueries.push_back(aq);
-
-	if (m_AsyncQueries.size() > 500)
-		FinishAsyncQueries(true);
-	else
-		m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::FinishAsyncQueries, this, false));
 }
 
-void IdoMysqlConnection::FinishAsyncQueries(bool force)
+void IdoMysqlConnection::FinishAsyncQueries(void)
 {
-	if (m_AsyncQueries.size() < 10 && !force)
-		return;
-
 	std::vector<IdoAsyncQuery> queries;
 	m_AsyncQueries.swap(queries);
 
@@ -512,7 +526,7 @@ IdoMysqlResult IdoMysqlConnection::Query(const String& query)
 	AssertOnWorkQueue();
 
 	/* finish all async queries to maintain the right order for queries */
-	FinishAsyncQueries(true);
+	FinishAsyncQueries();
 
 	Log(LogDebug, "IdoMysqlConnection")
 	    << "Query: " << query;
@@ -574,10 +588,12 @@ String IdoMysqlConnection::Escape(const String& s)
 {
 	AssertOnWorkQueue();
 
-	size_t length = s.GetLength();
-	char *to = new char[s.GetLength() * 2 + 1];
+	String utf8s = Utility::ValidateUTF8(s);
 
-	mysql_real_escape_string(&m_Connection, to, s.CStr(), length);
+	size_t length = utf8s.GetLength();
+	char *to = new char[utf8s.GetLength() * 2 + 1];
+
+	mysql_real_escape_string(&m_Connection, to, utf8s.CStr(), length);
 
 	String result = String(to);
 
@@ -623,7 +639,7 @@ void IdoMysqlConnection::DiscardRows(const IdoMysqlResult& result)
 
 void IdoMysqlConnection::ActivateObject(const DbObject::Ptr& dbobj)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalActivateObject, this, dbobj));
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalActivateObject, this, dbobj), PriorityLow);
 }
 
 void IdoMysqlConnection::InternalActivateObject(const DbObject::Ptr& dbobj)
@@ -657,7 +673,7 @@ void IdoMysqlConnection::InternalActivateObject(const DbObject::Ptr& dbobj)
 
 void IdoMysqlConnection::DeactivateObject(const DbObject::Ptr& dbobj)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalDeactivateObject, this, dbobj));
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalDeactivateObject, this, dbobj), PriorityLow);
 }
 
 void IdoMysqlConnection::InternalDeactivateObject(const DbObject::Ptr& dbobj)
@@ -685,13 +701,16 @@ bool IdoMysqlConnection::FieldToEscapedString(const String& key, const Value& va
 	if (key == "instance_id") {
 		*result = static_cast<long>(m_InstanceID);
 		return true;
-	}
-	if (key == "session_token") {
+	} else if (key == "session_token") {
 		*result = m_SessionToken;
 		return true;
-	}
-	if (key == "notification_id") {
-		*result = static_cast<long>(GetNotificationInsertID(value));
+	} else if (key == "notification_id") {
+		DbReference ref = GetNotificationInsertID(value);
+
+		if (!ref.IsValid())
+			return false;
+
+		*result = static_cast<long>(ref);
 		return true;
 	}
 
@@ -751,7 +770,64 @@ void IdoMysqlConnection::ExecuteQuery(const DbQuery& query)
 {
 	ASSERT(query.Category != DbCatInvalid);
 
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), true);
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), query.Priority, true);
+}
+
+void IdoMysqlConnection::ExecuteMultipleQueries(const std::vector<DbQuery>& queries)
+{
+	ASSERT(!queries.empty());
+
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteMultipleQueries, this, queries), queries[0].Priority, true);
+}
+
+bool IdoMysqlConnection::CanExecuteQuery(const DbQuery& query)
+{
+	if (query.WhereCriteria) {
+		ObjectLock olock(query.WhereCriteria);
+		Value value;
+
+		BOOST_FOREACH(const Dictionary::Pair& kv, query.WhereCriteria) {
+			if (!FieldToEscapedString(kv.first, kv.second, &value))
+				return false;
+		}
+	}
+
+	if (query.Fields) {
+		ObjectLock olock(query.Fields);
+
+		BOOST_FOREACH(const Dictionary::Pair& kv, query.Fields) {
+			Value value;
+
+			if (kv.second.IsEmpty() && !kv.second.IsString())
+				continue;
+
+			if (!FieldToEscapedString(kv.first, kv.second, &value))
+				return false;
+		}
+	}
+
+	return true;
+}
+
+void IdoMysqlConnection::InternalExecuteMultipleQueries(const std::vector<DbQuery>& queries)
+{
+	AssertOnWorkQueue();
+
+	if (!GetConnected())
+		return;
+
+	BOOST_FOREACH(const DbQuery& query, queries) {
+		ASSERT(query.Category != DbCatInvalid);
+
+		if (!CanExecuteQuery(query)) {
+			m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteMultipleQueries, this, queries), query.Priority);
+			return;
+		}
+	}
+
+	BOOST_FOREACH(const DbQuery& query, queries) {
+		InternalExecuteQuery(query, NULL);
+	}
 }
 
 void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType *typeOverride)
@@ -779,7 +855,7 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 
 		BOOST_FOREACH(const Dictionary::Pair& kv, query.WhereCriteria) {
 			if (!FieldToEscapedString(kv.first, kv.second, &value)) {
-				m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL));
+				m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), query.Priority);
 				return;
 			}
 
@@ -842,8 +918,10 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 			if (kv.second.IsEmpty() && !kv.second.IsString())
 				continue;
 
-			if (!FieldToEscapedString(kv.first, kv.second, &value))
+			if (!FieldToEscapedString(kv.first, kv.second, &value)) {
+				m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), query.Priority);
 				return;
+			}
 
 			if (type == DbQueryInsert) {
 				if (!first) {
@@ -900,7 +978,7 @@ void IdoMysqlConnection::FinishExecuteQuery(const DbQuery& query, int type, bool
 
 void IdoMysqlConnection::CleanUpExecuteQuery(const String& table, const String& time_column, double max_age)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalCleanUpExecuteQuery, this, table, time_column, max_age), true);
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalCleanUpExecuteQuery, this, table, time_column, max_age), PriorityLow, true);
 }
 
 void IdoMysqlConnection::InternalCleanUpExecuteQuery(const String& table, const String& time_column, double max_age)

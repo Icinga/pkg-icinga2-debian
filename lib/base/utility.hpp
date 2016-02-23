@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -139,9 +139,17 @@ public:
 	static String GetPlatformVersion(void);
 	static String GetPlatformArchitecture(void);
 
+	static String ValidateUTF8(const String& input);
+
+	static String CreateTempFile(const String& path, std::fstream& fp);
+
 private:
 	Utility(void);
 	static void CollectPaths(const String& path, std::vector<String>& paths);
+
+#ifdef _WIN32
+	static int MksTemp (char *tmpl);
+#endif /* _WIN32 */
 
 	static boost::thread_specific_ptr<String> m_ThreadName;
 	static boost::thread_specific_ptr<unsigned int> m_RandSeed;

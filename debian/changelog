@@ -1,3 +1,10 @@
+icinga2 (2.4.2-1) unstable; urgency=medium
+
+  * [3584c36] Imported Upstream version 2.4.2
+  * [89ee45e] Bump standards version to 3.9.7
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Tue, 23 Feb 2016 16:30:32 +0100
+
 icinga2 (2.4.1-2~debmon8+2) debmon-jessie; urgency=medium
 
   * Rebuild against jessie 
