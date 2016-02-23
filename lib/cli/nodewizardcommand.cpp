@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -135,19 +135,6 @@ int NodeWizardCommand::Run(const boost::program_options::variables_map& vm,
 		String cn = answer;
 		cn = cn.Trim();
 
-		std::cout << ConsoleColorTag(Console_Bold)
-		    << "Please specifiy the local zone name"
-		    << ConsoleColorTag(Console_Normal) << " [" << cn << "]: ";
-
-		std::getline(std::cin, answer);
-		boost::algorithm::to_lower(answer);
-
-		if (answer.empty())
-			answer = cn;
-
-		String local_zone = answer;
-		local_zone = local_zone.Trim();
-
 		std::vector<std::string> endpoints;
 
 		String endpoint_buffer;
@@ -182,6 +169,8 @@ wizard_endpoint_loop_start:
 		boost::algorithm::to_lower(answer);
 		choice = answer;
 
+		String tmpPort = "5665";
+
 		if (choice.Contains("n")) {
 			Log(LogWarning, "cli", "Node to master connection setup skipped");
 			std::cout << "Connection setup skipped. Please configure your master to connect to this node.\n";
@@ -208,17 +197,15 @@ wizard_endpoint_loop_start:
 
 			std::cout << ConsoleColorTag(Console_Bold)
 			     << "Master endpoint port" << ConsoleColorTag(Console_Normal)
-			     << " [5665]: ";
+			     << " [" << tmpPort << "]: ";
 
 			std::getline(std::cin, answer);
 			boost::algorithm::to_lower(answer);
 
 			if (!answer.empty())
-				tmp = answer;
-			else
-				tmp = "5665";
+				tmpPort = answer;
 
-			endpoint_buffer += "," + tmp.Trim();
+			endpoint_buffer += "," + tmpPort.Trim();
 		}
 
 		endpoints.push_back(endpoint_buffer);
@@ -255,15 +242,15 @@ wizard_master_host:
 		master_host = master_host.Trim();
 
 		std::cout << ConsoleColorTag(Console_Bold) << "Port"
-		    << ConsoleColorTag(Console_Normal) << " [5665]: ";
+		    << ConsoleColorTag(Console_Normal) << " [" << tmpPort << "]: ";
 
 		std::getline(std::cin, answer);
 		boost::algorithm::to_lower(answer);
 
-		if (answer.empty())
-			answer = "5665";
+		if (!answer.empty())
+			tmpPort = answer;
 
-		String master_port = answer;
+		String master_port = tmpPort;
 		master_port = master_port.Trim();
 
 		/* workaround for fetching the master cert */
@@ -425,10 +412,8 @@ wizard_ticket:
 		String apipath = FeatureUtility::GetFeaturesAvailablePath() + "/api.conf";
 		NodeUtility::CreateBackupFile(apipath);
 
-		String apipathtmp = apipath + ".tmp";
-
-		std::ofstream fp;
-		fp.open(apipathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
+		std::fstream fp;
+		String tempApiPath = Utility::CreateTempFile(apipath + ".XXXXXX", fp);
 
 		fp << "/**\n"
 		    << " * The API listener is used for distributed monitoring setups.\n"
@@ -456,11 +441,11 @@ wizard_ticket:
 		_unlink(apipath.CStr());
 #endif /* _WIN32 */
 
-		if (rename(apipathtmp.CStr(), apipath.CStr()) < 0) {
+		if (rename(tempApiPath.CStr(), apipath.CStr()) < 0) {
 			BOOST_THROW_EXCEPTION(posix_error()
 			    << boost::errinfo_api_function("rename")
 			    << boost::errinfo_errno(errno)
-			    << boost::errinfo_file_name(apipathtmp));
+			    << boost::errinfo_file_name(tempApiPath));
 		}
 
 		/* apilistener config */
@@ -481,7 +466,7 @@ wizard_ticket:
 		NodeUtility::CreateBackupFile(constants_file);
 
 		NodeUtility::UpdateConstant("NodeName", cn);
-		NodeUtility::UpdateConstant("ZoneName", local_zone);
+		NodeUtility::UpdateConstant("ZoneName", cn);
 	} else {
 		/* master setup */
 		std::cout << ConsoleColorTag(Console_Bold) << "Starting the Master setup routine...\n";
@@ -551,10 +536,9 @@ wizard_ticket:
 		String apipath = FeatureUtility::GetFeaturesAvailablePath() + "/api.conf";
 		NodeUtility::CreateBackupFile(apipath);
 
-		String apipathtmp = apipath + ".tmp";
 
-		std::ofstream fp;
-		fp.open(apipathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
+		std::fstream fp;
+		String tempApiPath = Utility::CreateTempFile(apipath + ".XXXXXX", fp);
 
 		fp << "/**\n"
 		    << " * The API listener is used for distributed monitoring setups.\n"
@@ -579,11 +563,11 @@ wizard_ticket:
 		_unlink(apipath.CStr());
 #endif /* _WIN32 */
 
-		if (rename(apipathtmp.CStr(), apipath.CStr()) < 0) {
+		if (rename(tempApiPath.CStr(), apipath.CStr()) < 0) {
 			BOOST_THROW_EXCEPTION(posix_error()
 			    << boost::errinfo_api_function("rename")
 			    << boost::errinfo_errno(errno)
-			    << boost::errinfo_file_name(apipathtmp));
+			    << boost::errinfo_file_name(tempApiPath));
 		}
 
 		/* update constants.conf with NodeName = CN + TicketSalt = random value */

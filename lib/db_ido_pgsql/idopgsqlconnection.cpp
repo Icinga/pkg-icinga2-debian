@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -41,7 +41,7 @@ REGISTER_TYPE(IdoPgsqlConnection);
 REGISTER_STATSFUNCTION(IdoPgsqlConnection, &IdoPgsqlConnection::StatsFunc);
 
 IdoPgsqlConnection::IdoPgsqlConnection(void)
-	: m_QueryQueue(500000)
+	: m_QueryQueue(1000000)
 { }
 
 void IdoPgsqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
@@ -97,7 +97,7 @@ void IdoPgsqlConnection::Pause(void)
 
 	DbConnection::Pause();
 
-	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::Disconnect, this));
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::Disconnect, this), PriorityHigh);
 	m_QueryQueue.Join();
 }
 
@@ -139,7 +139,7 @@ void IdoPgsqlConnection::TxTimerHandler(void)
 
 void IdoPgsqlConnection::NewTransaction(void)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalNewTransaction, this), true);
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalNewTransaction, this), PriorityHigh, true);
 }
 
 void IdoPgsqlConnection::InternalNewTransaction(void)
@@ -155,7 +155,7 @@ void IdoPgsqlConnection::InternalNewTransaction(void)
 
 void IdoPgsqlConnection::ReconnectTimerHandler(void)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::Reconnect, this));
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::Reconnect, this), PriorityLow);
 }
 
 void IdoPgsqlConnection::Reconnect(void)
@@ -164,216 +164,231 @@ void IdoPgsqlConnection::Reconnect(void)
 
 	CONTEXT("Reconnecting to PostgreSQL IDO database '" + GetName() + "'");
 
+	double startTime = Utility::GetTime();
 	m_SessionToken = static_cast<int>(Utility::GetTime());
 
 	SetShouldConnect(true);
 
-	std::vector<DbObject::Ptr> active_dbobjs;
+	bool reconnect = false;
 
-	{
-		bool reconnect = false;
-
-		if (GetConnected()) {
-			/* Check if we're really still connected */
-			try {
-				Query("SELECT 1");
-				return;
-			} catch (const std::exception&) {
-				PQfinish(m_Connection);
-				SetConnected(false);
-				reconnect = true;
-			}
-		}
-
-		ClearIDCache();
-
-		String ihost, iport, iuser, ipasswd, idb;
-		const char *host, *port, *user , *passwd, *db;
-
-		ihost = GetHost();
-		iport = GetPort();
-		iuser = GetUser();
-		ipasswd = GetPassword();
-		idb = GetDatabase();
-
-		host = (!ihost.IsEmpty()) ? ihost.CStr() : NULL;
-		port = (!iport.IsEmpty()) ? iport.CStr() : NULL;
-		user = (!iuser.IsEmpty()) ? iuser.CStr() : NULL;
-		passwd = (!ipasswd.IsEmpty()) ? ipasswd.CStr() : NULL;
-		db = (!idb.IsEmpty()) ? idb.CStr() : NULL;
-
-		m_Connection = PQsetdbLogin(host, port, NULL, NULL, db, user, passwd);
-
-		if (!m_Connection)
+	if (GetConnected()) {
+		/* Check if we're really still connected */
+		try {
+			Query("SELECT 1");
 			return;
-
-		if (PQstatus(m_Connection) != CONNECTION_OK) {
-			String message = PQerrorMessage(m_Connection);
+		} catch (const std::exception&) {
 			PQfinish(m_Connection);
 			SetConnected(false);
-
-			Log(LogCritical, "IdoPgsqlConnection")
-			    << "Connection to database '" << db << "' with user '" << user << "' on '" << host << ":" << port
-			    << "' failed: \"" << message << "\"";
-
-			BOOST_THROW_EXCEPTION(std::runtime_error(message));
+			reconnect = true;
 		}
-
-		SetConnected(true);
-
-		IdoPgsqlResult result;
-
-		/* explicitely require legacy mode for string escaping in PostgreSQL >= 9.1
-		 * changing standard_conforming_strings to on by default
-		 */
-		if (PQserverVersion(m_Connection) >= 90100)
-			result = Query("SET standard_conforming_strings TO off");
-
-		String dbVersionName = "idoutils";
-		result = Query("SELECT version FROM " + GetTablePrefix() + "dbversion WHERE name=E'" + Escape(dbVersionName) + "'");
-
-		Dictionary::Ptr row = FetchRow(result, 0);
-
-		if (!row) {
-			PQfinish(m_Connection);
-			SetConnected(false);
-
-			Log(LogCritical, "IdoPgsqlConnection", "Schema does not provide any valid version! Verify your schema installation.");
-
-			Application::Exit(EXIT_FAILURE);
-		}
-
-		String version = row->Get("version");
-
-		SetSchemaVersion(version);
-
-		if (Utility::CompareVersion(IDO_COMPAT_SCHEMA_VERSION, version) < 0) {
-			PQfinish(m_Connection);
-			SetConnected(false);
-
-			Log(LogCritical, "IdoPgsqlConnection")
-			    << "Schema version '" << version << "' does not match the required version '"
-			    << IDO_COMPAT_SCHEMA_VERSION << "' (or newer)! Please check the upgrade documentation.";
-
-			Application::Exit(EXIT_FAILURE);
-		}
-
-		String instanceName = GetInstanceName();
-
-		result = Query("SELECT instance_id FROM " + GetTablePrefix() + "instances WHERE instance_name = E'" + Escape(instanceName) + "'");
-		row = FetchRow(result, 0);
-
-		if (!row) {
-			Query("INSERT INTO " + GetTablePrefix() + "instances (instance_name, instance_description) VALUES (E'" + Escape(instanceName) + "', E'" + Escape(GetInstanceDescription()) + "')");
-			m_InstanceID = GetSequenceValue(GetTablePrefix() + "instances", "instance_id");
-		} else {
-			m_InstanceID = DbReference(row->Get("instance_id"));
-		}
-
-		Endpoint::Ptr my_endpoint = Endpoint::GetLocalEndpoint();
-
-		/* we have an endpoint in a cluster setup, so decide if we can proceed here */
-		if (my_endpoint && GetHAMode() == HARunOnce) {
-			/* get the current endpoint writing to programstatus table */
-			result = Query("SELECT UNIX_TIMESTAMP(status_update_time) AS status_update_time, endpoint_name FROM " +
-			    GetTablePrefix() + "programstatus WHERE instance_id = " + Convert::ToString(m_InstanceID));
-			row = FetchRow(result, 0);
-
-			String endpoint_name;
-
-			if (row)
-				endpoint_name = row->Get("endpoint_name");
-			else
-				Log(LogNotice, "IdoPgsqlConnection", "Empty program status table");
-
-			/* if we did not write into the database earlier, another instance is active */
-			if (endpoint_name != my_endpoint->GetName()) {
-				double status_update_time;
-
-				if (row)
-					status_update_time = row->Get("status_update_time");
-				else
-					status_update_time = 0;
-
-				double status_update_age = Utility::GetTime() - status_update_time;
-
-				Log(LogNotice, "IdoPgsqlConnection")
-				    << "Last update by '" << endpoint_name << "' was " << status_update_age << "s ago.";
-
-				if (status_update_age < GetFailoverTimeout()) {
-					PQfinish(m_Connection);
-					SetConnected(false);
-					SetShouldConnect(false);
-
-					return;
-				}
-
-				/* activate the IDO only, if we're authoritative in this zone */
-				if (IsPaused()) {
-					Log(LogNotice, "IdoPgsqlConnection")
-					    << "Local endpoint '" << my_endpoint->GetName() << "' is not authoritative, bailing out.";
-
-					PQfinish(m_Connection);
-					SetConnected(false);
-
-					return;
-				}
-			}
-
-			Log(LogNotice, "IdoPgsqlConnection", "Enabling IDO connection.");
-		}
-
-		Log(LogInformation, "IdoPgsqlConnection")
-		    << "pgSQL IDO instance id: " << static_cast<long>(m_InstanceID) << " (schema version: '" + version + "')";
-
-		/* record connection */
-		Query("INSERT INTO " + GetTablePrefix() + "conninfo " +
-		    "(instance_id, connect_time, last_checkin_time, agent_name, agent_version, connect_type, data_start_time) VALUES ("
-		    + Convert::ToString(static_cast<long>(m_InstanceID)) + ", NOW(), NOW(), E'icinga2 db_ido_pgsql', E'" + Escape(Application::GetAppVersion())
-		    + "', E'" + (reconnect ? "RECONNECT" : "INITIAL") + "', NOW())");
-
-		/* clear config tables for the initial config dump */
-		PrepareDatabase();
-
-		std::ostringstream q1buf;
-		q1buf << "SELECT object_id, objecttype_id, name1, name2, is_active FROM " + GetTablePrefix() + "objects WHERE instance_id = " << static_cast<long>(m_InstanceID);
-		result = Query(q1buf.str());
-
-		int index = 0;
-		while ((row = FetchRow(result, index))) {
-			index++;
-
-			DbType::Ptr dbtype = DbType::GetByID(row->Get("objecttype_id"));
-
-			if (!dbtype)
-				continue;
-
-			DbObject::Ptr dbobj = dbtype->GetOrCreateObjectByName(row->Get("name1"), row->Get("name2"));
-			SetObjectID(dbobj, DbReference(row->Get("object_id")));
-			SetObjectActive(dbobj, row->Get("is_active"));
-
-			if (GetObjectActive(dbobj))
-				active_dbobjs.push_back(dbobj);
-		}
-
-		Query("BEGIN");
 	}
 
-	UpdateAllObjects();
+	ClearIDCache();
 
-	/* deactivate all deleted configuration objects */
-	BOOST_FOREACH(const DbObject::Ptr& dbobj, active_dbobjs) {
+	String ihost, iport, iuser, ipasswd, idb;
+	const char *host, *port, *user , *passwd, *db;
+
+	ihost = GetHost();
+	iport = GetPort();
+	iuser = GetUser();
+	ipasswd = GetPassword();
+	idb = GetDatabase();
+
+	host = (!ihost.IsEmpty()) ? ihost.CStr() : NULL;
+	port = (!iport.IsEmpty()) ? iport.CStr() : NULL;
+	user = (!iuser.IsEmpty()) ? iuser.CStr() : NULL;
+	passwd = (!ipasswd.IsEmpty()) ? ipasswd.CStr() : NULL;
+	db = (!idb.IsEmpty()) ? idb.CStr() : NULL;
+
+	m_Connection = PQsetdbLogin(host, port, NULL, NULL, db, user, passwd);
+
+	if (!m_Connection)
+		return;
+
+	if (PQstatus(m_Connection) != CONNECTION_OK) {
+		String message = PQerrorMessage(m_Connection);
+		PQfinish(m_Connection);
+		SetConnected(false);
+
+		Log(LogCritical, "IdoPgsqlConnection")
+		    << "Connection to database '" << db << "' with user '" << user << "' on '" << host << ":" << port
+		    << "' failed: \"" << message << "\"";
+
+		BOOST_THROW_EXCEPTION(std::runtime_error(message));
+	}
+
+	SetConnected(true);
+
+	IdoPgsqlResult result;
+
+	/* explicitely require legacy mode for string escaping in PostgreSQL >= 9.1
+	 * changing standard_conforming_strings to on by default
+	 */
+	if (PQserverVersion(m_Connection) >= 90100)
+		result = Query("SET standard_conforming_strings TO off");
+
+	String dbVersionName = "idoutils";
+	result = Query("SELECT version FROM " + GetTablePrefix() + "dbversion WHERE name=E'" + Escape(dbVersionName) + "'");
+
+	Dictionary::Ptr row = FetchRow(result, 0);
+
+	if (!row) {
+		PQfinish(m_Connection);
+		SetConnected(false);
+
+		Log(LogCritical, "IdoPgsqlConnection", "Schema does not provide any valid version! Verify your schema installation.");
+
+		Application::Exit(EXIT_FAILURE);
+	}
+
+	String version = row->Get("version");
+
+	SetSchemaVersion(version);
+
+	if (Utility::CompareVersion(IDO_COMPAT_SCHEMA_VERSION, version) < 0) {
+		PQfinish(m_Connection);
+		SetConnected(false);
+
+		Log(LogCritical, "IdoPgsqlConnection")
+		    << "Schema version '" << version << "' does not match the required version '"
+		    << IDO_COMPAT_SCHEMA_VERSION << "' (or newer)! Please check the upgrade documentation.";
+
+		Application::Exit(EXIT_FAILURE);
+	}
+
+	String instanceName = GetInstanceName();
+
+	result = Query("SELECT instance_id FROM " + GetTablePrefix() + "instances WHERE instance_name = E'" + Escape(instanceName) + "'");
+	row = FetchRow(result, 0);
+
+	if (!row) {
+		Query("INSERT INTO " + GetTablePrefix() + "instances (instance_name, instance_description) VALUES (E'" + Escape(instanceName) + "', E'" + Escape(GetInstanceDescription()) + "')");
+		m_InstanceID = GetSequenceValue(GetTablePrefix() + "instances", "instance_id");
+	} else {
+		m_InstanceID = DbReference(row->Get("instance_id"));
+	}
+
+	Endpoint::Ptr my_endpoint = Endpoint::GetLocalEndpoint();
+
+	/* we have an endpoint in a cluster setup, so decide if we can proceed here */
+	if (my_endpoint && GetHAMode() == HARunOnce) {
+		/* get the current endpoint writing to programstatus table */
+		result = Query("SELECT UNIX_TIMESTAMP(status_update_time) AS status_update_time, endpoint_name FROM " +
+		    GetTablePrefix() + "programstatus WHERE instance_id = " + Convert::ToString(m_InstanceID));
+		row = FetchRow(result, 0);
+
+		String endpoint_name;
+
+		if (row)
+			endpoint_name = row->Get("endpoint_name");
+		else
+			Log(LogNotice, "IdoPgsqlConnection", "Empty program status table");
+
+		/* if we did not write into the database earlier, another instance is active */
+		if (endpoint_name != my_endpoint->GetName()) {
+			double status_update_time;
+
+			if (row)
+				status_update_time = row->Get("status_update_time");
+			else
+				status_update_time = 0;
+
+			double status_update_age = Utility::GetTime() - status_update_time;
+
+			Log(LogNotice, "IdoPgsqlConnection")
+			    << "Last update by '" << endpoint_name << "' was " << status_update_age << "s ago.";
+
+			if (status_update_age < GetFailoverTimeout()) {
+				PQfinish(m_Connection);
+				SetConnected(false);
+				SetShouldConnect(false);
+
+				return;
+			}
+
+			/* activate the IDO only, if we're authoritative in this zone */
+			if (IsPaused()) {
+				Log(LogNotice, "IdoPgsqlConnection")
+				    << "Local endpoint '" << my_endpoint->GetName() << "' is not authoritative, bailing out.";
+
+				PQfinish(m_Connection);
+				SetConnected(false);
+
+				return;
+			}
+		}
+
+		Log(LogNotice, "IdoPgsqlConnection", "Enabling IDO connection.");
+	}
+
+	Log(LogInformation, "IdoPgsqlConnection")
+	    << "pgSQL IDO instance id: " << static_cast<long>(m_InstanceID) << " (schema version: '" + version + "')";
+
+	/* record connection */
+	Query("INSERT INTO " + GetTablePrefix() + "conninfo " +
+	    "(instance_id, connect_time, last_checkin_time, agent_name, agent_version, connect_type, data_start_time) VALUES ("
+	    + Convert::ToString(static_cast<long>(m_InstanceID)) + ", NOW(), NOW(), E'icinga2 db_ido_pgsql', E'" + Escape(Application::GetAppVersion())
+	    + "', E'" + (reconnect ? "RECONNECT" : "INITIAL") + "', NOW())");
+
+	/* clear config tables for the initial config dump */
+	PrepareDatabase();
+
+	std::ostringstream q1buf;
+	q1buf << "SELECT object_id, objecttype_id, name1, name2, is_active FROM " + GetTablePrefix() + "objects WHERE instance_id = " << static_cast<long>(m_InstanceID);
+	result = Query(q1buf.str());
+
+	std::vector<DbObject::Ptr> activeDbObjs;
+
+	int index = 0;
+	while ((row = FetchRow(result, index))) {
+		index++;
+
+		DbType::Ptr dbtype = DbType::GetByID(row->Get("objecttype_id"));
+
+		if (!dbtype)
+			continue;
+
+		DbObject::Ptr dbobj = dbtype->GetOrCreateObjectByName(row->Get("name1"), row->Get("name2"));
+		SetObjectID(dbobj, DbReference(row->Get("object_id")));
+		bool active = row->Get("is_active");
+		SetObjectActive(dbobj, active);
+
+		if (active)
+			activeDbObjs.push_back(dbobj);
+	}
+
+	Query("BEGIN");
+
+	BOOST_FOREACH(const DbObject::Ptr& dbobj, activeDbObjs) {
 		if (dbobj->GetObject() == NULL) {
 			Log(LogNotice, "IdoPgsqlConnection")
 			    << "Deactivate deleted object name1: '" << dbobj->GetName1()
 			    << "' name2: '" << dbobj->GetName2() + "'.";
 			DeactivateObject(dbobj);
+		} else {
+			dbobj->SendConfigUpdate();
+			dbobj->SendStatusUpdate();
 		}
 	}
+
+	UpdateAllObjects();
 
 	/* delete all customvariables without current session token */
 	ClearCustomVarTable("customvariables");
 	ClearCustomVarTable("customvariablestatus");
+
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::FinishConnect, this, startTime), PriorityLow);
+}
+
+void IdoPgsqlConnection::FinishConnect(double startTime)
+{
+	AssertOnWorkQueue();
+
+	if (!GetConnected())
+		return;
+
+	Log(LogInformation, "IdoPgsqlConnection")
+	    << "Finished reconnecting to PostgreSQL IDO database in " << std::setw(2) << Utility::GetTime() - startTime << " second(s).";
 
 	Query("COMMIT");
 	Query("BEGIN");
@@ -464,10 +479,12 @@ String IdoPgsqlConnection::Escape(const String& s)
 {
 	AssertOnWorkQueue();
 
-	size_t length = s.GetLength();
-	char *to = new char[s.GetLength() * 2 + 1];
+	String utf8s = Utility::ValidateUTF8(s);
 
-	PQescapeStringConn(m_Connection, to, s.CStr(), length, NULL);
+	size_t length = utf8s.GetLength();
+	char *to = new char[utf8s.GetLength() * 2 + 1];
+
+	PQescapeStringConn(m_Connection, to, utf8s.CStr(), length, NULL);
 
 	String result = String(to);
 
@@ -501,7 +518,7 @@ Dictionary::Ptr IdoPgsqlConnection::FetchRow(const IdoPgsqlResult& result, int r
 
 void IdoPgsqlConnection::ActivateObject(const DbObject::Ptr& dbobj)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalActivateObject, this, dbobj));
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalActivateObject, this, dbobj), PriorityLow);
 }
 
 void IdoPgsqlConnection::InternalActivateObject(const DbObject::Ptr& dbobj)
@@ -535,7 +552,7 @@ void IdoPgsqlConnection::InternalActivateObject(const DbObject::Ptr& dbobj)
 
 void IdoPgsqlConnection::DeactivateObject(const DbObject::Ptr& dbobj)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalDeactivateObject, this, dbobj));
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalDeactivateObject, this, dbobj), PriorityLow);
 }
 
 void IdoPgsqlConnection::InternalDeactivateObject(const DbObject::Ptr& dbobj)
@@ -563,13 +580,16 @@ bool IdoPgsqlConnection::FieldToEscapedString(const String& key, const Value& va
 	if (key == "instance_id") {
 		*result = static_cast<long>(m_InstanceID);
 		return true;
-	}
-	if (key == "session_token") {
+	} else if (key == "session_token") {
 		*result = m_SessionToken;
 		return true;
-	}
-	if (key == "notification_id") {
-		*result = static_cast<long>(GetNotificationInsertID(value));
+	} else if (key == "notification_id") {
+		DbReference ref = GetNotificationInsertID(value);
+
+		if (!ref.IsValid())
+			return false;
+
+		*result = static_cast<long>(ref);
 		return true;
 	}
 
@@ -628,7 +648,64 @@ void IdoPgsqlConnection::ExecuteQuery(const DbQuery& query)
 {
 	ASSERT(query.Category != DbCatInvalid);
 
-	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), true);
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), query.Priority, true);
+}
+
+void IdoPgsqlConnection::ExecuteMultipleQueries(const std::vector<DbQuery>& queries)
+{
+	ASSERT(!queries.empty());
+
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalExecuteMultipleQueries, this, queries), queries[0].Priority, true);
+}
+
+bool IdoPgsqlConnection::CanExecuteQuery(const DbQuery& query)
+{
+	if (query.WhereCriteria) {
+		ObjectLock olock(query.WhereCriteria);
+		Value value;
+
+		BOOST_FOREACH(const Dictionary::Pair& kv, query.WhereCriteria) {
+			if (!FieldToEscapedString(kv.first, kv.second, &value))
+				return false;
+		}
+	}
+
+	if (query.Fields) {
+		ObjectLock olock(query.Fields);
+
+		BOOST_FOREACH(const Dictionary::Pair& kv, query.Fields) {
+			Value value;
+
+			if (kv.second.IsEmpty() && !kv.second.IsString())
+				continue;
+
+			if (!FieldToEscapedString(kv.first, kv.second, &value))
+				return false;
+		}
+	}
+
+	return true;
+}
+
+void IdoPgsqlConnection::InternalExecuteMultipleQueries(const std::vector<DbQuery>& queries)
+{
+	AssertOnWorkQueue();
+
+	if (!GetConnected())
+		return;
+
+	BOOST_FOREACH(const DbQuery& query, queries) {
+		ASSERT(query.Category != DbCatInvalid);
+
+		if (!CanExecuteQuery(query)) {
+			m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalExecuteMultipleQueries, this, queries), query.Priority);
+			return;
+		}
+	}
+
+	BOOST_FOREACH(const DbQuery& query, queries) {
+		InternalExecuteQuery(query, NULL);
+	}
 }
 
 void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType *typeOverride)
@@ -655,8 +732,10 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 		bool first = true;
 
 		BOOST_FOREACH(const Dictionary::Pair& kv, query.WhereCriteria) {
-			if (!FieldToEscapedString(kv.first, kv.second, &value))
+			if (!FieldToEscapedString(kv.first, kv.second, &value)) {
+				m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), query.Priority);
 				return;
+			}
 
 			if (!first)
 				where << " AND ";
@@ -716,8 +795,10 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 			if (kv.second.IsEmpty() && !kv.second.IsString())
 				continue;
 
-			if (!FieldToEscapedString(kv.first, kv.second, &value))
+			if (!FieldToEscapedString(kv.first, kv.second, &value)) {
+				m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), query.Priority);
 				return;
+			}
 
 			if (type == DbQueryInsert) {
 				if (!first) {
@@ -779,7 +860,7 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 
 void IdoPgsqlConnection::CleanUpExecuteQuery(const String& table, const String& time_column, double max_age)
 {
-	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalCleanUpExecuteQuery, this, table, time_column, max_age), true);
+	m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalCleanUpExecuteQuery, this, table, time_column, max_age), PriorityLow, true);
 }
 
 void IdoPgsqlConnection::InternalCleanUpExecuteQuery(const String& table, const String& time_column, double max_age)

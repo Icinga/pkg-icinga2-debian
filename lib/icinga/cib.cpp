@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -311,6 +311,7 @@ void CIB::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata) {
 
 	status->Set("num_hosts_up", hs.hosts_up);
 	status->Set("num_hosts_down", hs.hosts_down);
+	status->Set("num_hosts_pending", hs.hosts_pending);
 	status->Set("num_hosts_unreachable", hs.hosts_unreachable);
 	status->Set("num_hosts_flapping", hs.hosts_flapping);
 	status->Set("num_hosts_in_downtime", hs.hosts_in_downtime);

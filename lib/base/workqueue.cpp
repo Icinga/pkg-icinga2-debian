@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -55,12 +55,13 @@ WorkQueue::~WorkQueue(void)
  * allowInterleaved is true in which case the new task might be run
  * immediately if it's being enqueued from within the WorkQueue thread.
  */
-void WorkQueue::Enqueue(const Task& task, bool allowInterleaved)
+void WorkQueue::Enqueue(const boost::function<void (void)>& function, WorkQueuePriority priority,
+    bool allowInterleaved)
 {
 	bool wq_thread = IsWorkerThread();
 
 	if (wq_thread && allowInterleaved) {
-		task();
+		function();
 
 		return;
 	}
@@ -80,7 +81,7 @@ void WorkQueue::Enqueue(const Task& task, bool allowInterleaved)
 			m_CVFull.wait(lock);
 	}
 
-	m_Tasks.push_back(task);
+	m_Tasks.push(Task(function, priority, ++m_NextTaskID));
 
 	m_CVEmpty.notify_one();
 }
@@ -200,15 +201,15 @@ void WorkQueue::WorkerThreadProc(void)
 		if (m_Tasks.size() >= m_MaxItems && m_MaxItems != 0)
 			m_CVFull.notify_all();
 
-		Task task = m_Tasks.front();
-		m_Tasks.pop_front();
+		Task task = m_Tasks.top();
+		m_Tasks.pop();
 
 		m_Processing++;
 
 		lock.unlock();
 
 		try {
-			task();
+			task.Function();
 		} catch (const std::exception&) {
 			lock.lock();
 
