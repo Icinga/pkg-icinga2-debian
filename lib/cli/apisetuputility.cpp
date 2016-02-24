@@ -171,7 +171,7 @@ bool ApiSetupUtility::SetupMasterApiUser(void)
 	NodeUtility::CreateBackupFile(apiUsersPath);
 
 	std::fstream fp;
-	String tempFilename = Utility::CreateTempFile(apiUsersPath + ".XXXXXX", 0640, fp);
+	String tempFilename = Utility::CreateTempFile(apiUsersPath + ".XXXXXX", fp);
 
 	fp << "/**\n"
 	    << " * The APIUser objects are used for authentication against the API.\n"
