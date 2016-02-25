@@ -1,8 +1,14 @@
-icinga2 (2.4.2-1~ppa1~xenial1) xenial; urgency=medium
+icinga2 (2.4.3-1~ppa1~xenial1) xenial; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
+
+icinga2 (2.4.3-1) unstable; urgency=medium
+
+  * [39ba8d6] Imported Upstream version 2.4.3
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Wed, 24 Feb 2016 16:13:18 +0100
 
 icinga2 (2.4.2-1) unstable; urgency=medium
 
