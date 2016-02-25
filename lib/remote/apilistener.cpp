@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -41,17 +41,23 @@ using namespace icinga;
 REGISTER_TYPE(ApiListener);
 
 boost::signals2::signal<void(bool)> ApiListener::OnMasterChanged;
+ApiListener::Ptr ApiListener::m_Instance;
 
 REGISTER_STATSFUNCTION(ApiListener, &ApiListener::StatsFunc);
 
 REGISTER_APIFUNCTION(Hello, icinga, &ApiListener::HelloAPIHandler);
 
 ApiListener::ApiListener(void)
-	: m_LogMessageCount(0)
+	: m_SyncQueue(0, 4), m_LogMessageCount(0)
 { }
 
 void ApiListener::OnConfigLoaded(void)
 {
+	if (m_Instance)
+		BOOST_THROW_EXCEPTION(ScriptError("Only one ApiListener object is allowed.", GetDebugInfo()));
+
+	m_Instance = this;
+
 	/* set up SSL context */
 	boost::shared_ptr<X509> cert;
 	try {
@@ -90,7 +96,9 @@ void ApiListener::OnConfigLoaded(void)
 
 void ApiListener::OnAllConfigLoaded(void)
 {
-	if (!Endpoint::GetByName(GetIdentity()))
+	m_LocalEndpoint = Endpoint::GetByName(GetIdentity());
+
+	if (!m_LocalEndpoint)
 		BOOST_THROW_EXCEPTION(ScriptError("Endpoint object for '" + GetIdentity() + "' is missing.", GetDebugInfo()));
 }
 
@@ -100,12 +108,6 @@ void ApiListener::OnAllConfigLoaded(void)
 void ApiListener::Start(bool runtimeCreated)
 {
 	SyncZoneDirs();
-
-	if (std::distance(ConfigType::GetObjectsByType<ApiListener>().first,
-	    ConfigType::GetObjectsByType<ApiListener>().second) > 1) {
-		Log(LogCritical, "ApiListener", "Only one ApiListener object is allowed.");
-		return;
-	}
 
 	ObjectImpl<ApiListener>::Start(runtimeCreated);
 
@@ -133,10 +135,7 @@ void ApiListener::Start(bool runtimeCreated)
 
 ApiListener::Ptr ApiListener::GetInstance(void)
 {
-	BOOST_FOREACH(const ApiListener::Ptr& listener, ConfigType::GetObjectsByType<ApiListener>())
-		return listener;
-
-	return ApiListener::Ptr();
+	return m_Instance;
 }
 
 boost::shared_ptr<SSL_CTX> ApiListener::GetSSLContext(void) const
@@ -169,7 +168,7 @@ bool ApiListener::IsMaster(void) const
 	if (!master)
 		return false;
 
-	return master->GetName() == GetIdentity();
+	return master == GetLocalEndpoint();
 }
 
 /**
@@ -323,9 +322,23 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 		}
 
 		verify_ok = tlsStream->IsVerifyOK();
+		if (!hostname.IsEmpty()) {
+			if (identity != hostname) {
+				Log(LogWarning, "ApiListener")
+					<< "Unexpected certificate common name while connecting to endpoint '"
+				    << hostname << "': got '" << identity << "'";
+				return;
+			} else if (!verify_ok) {
+				Log(LogWarning, "ApiListener")
+					<< "Peer certificate for endpoint '" << hostname
+					<< "' is not signed by the certificate authority.";
+				return;
+			}
+		}
 
 		Log(LogInformation, "ApiListener")
-		    << "New client connection for identity '" << identity << "'" << (verify_ok ? "" : " (unauthenticated)");
+		    << "New client connection for identity '" << identity << "'"
+		    << (verify_ok ? "" : " (client certificate not signed by CA)");
 
 		if (verify_ok)
 			endpoint = Endpoint::GetByName(identity);
@@ -333,11 +346,6 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 		Log(LogInformation, "ApiListener")
 		    << "New client connection (no client certificate)";
 	}
-
-	bool need_sync = false;
-
-	if (endpoint)
-		need_sync = !endpoint->GetConnected();
 
 	ClientType ctype;
 
@@ -372,28 +380,11 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 		aclient->Start();
 
 		if (endpoint) {
+			bool needSync = !endpoint->GetConnected();
+
 			endpoint->AddClient(aclient);
 
-			if (need_sync) {
-				{
-					ObjectLock olock(endpoint);
-
-					endpoint->SetSyncing(true);
-				}
-
-				Log(LogInformation, "ApiListener")
-				    << "Sending updates for endpoint '" << endpoint->GetName() << "'.";
-
-				/* sync zone file config */
-				SendConfigUpdate(aclient);
-				/* sync runtime config */
-				SendRuntimeConfigObjects(aclient);
-
-				Log(LogInformation, "ApiListener")
-				    << "Finished sending updates for endpoint '" << endpoint->GetName() << "'.";
-
-				ReplayLog(aclient);
-			}
+			m_SyncQueue.Enqueue(boost::bind(&ApiListener::SyncClient, this, aclient, endpoint, needSync));
 		} else
 			AddAnonymousClient(aclient);
 	} else {
@@ -402,6 +393,52 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 		HttpServerConnection::Ptr aclient = new HttpServerConnection(identity, verify_ok, tlsStream);
 		aclient->Start();
 		AddHttpClient(aclient);
+	}
+}
+
+void ApiListener::SyncClient(const JsonRpcConnection::Ptr& aclient, const Endpoint::Ptr& endpoint, bool needSync)
+{
+	try {
+		{
+			ObjectLock olock(endpoint);
+
+			endpoint->SetSyncing(true);
+		}
+
+		/* Make sure that the config updates are synced
+		 * before the logs are replayed.
+		 */
+
+		Log(LogInformation, "ApiListener")
+		    << "Sending config updates for endpoint '" << endpoint->GetName() << "'.";
+
+		/* sync zone file config */
+		SendConfigUpdate(aclient);
+		/* sync runtime config */
+		SendRuntimeConfigObjects(aclient);
+
+		Log(LogInformation, "ApiListener")
+		    << "Finished sending config updates for endpoint '" << endpoint->GetName() << "'.";
+
+		if (!needSync) {
+			ObjectLock olock2(endpoint);
+			endpoint->SetSyncing(false);
+			return;
+		}
+
+		Log(LogInformation, "ApiListener")
+		    << "Sending replay log for endpoint '" << endpoint->GetName() << "'.";
+
+		ReplayLog(aclient);
+
+		Log(LogInformation, "ApiListener")
+		    << "Finished sending replay log for endpoint '" << endpoint->GetName() << "'.";
+	} catch (const std::exception& ex) {
+		ObjectLock olock2(endpoint);
+		endpoint->SetSyncing(false);
+
+		Log(LogCritical, "ApiListener")
+		    << "Error while syncing endpoint '" << endpoint->GetName() << "': " << DiagnosticInformation(ex);
 	}
 }
 
@@ -417,7 +454,7 @@ void ApiListener::ApiTimerHandler(void)
 		bool need = false;
 
 		BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
-			if (endpoint->GetName() == GetIdentity())
+			if (endpoint == GetLocalEndpoint())
 				continue;
 
 			if (endpoint->GetLogDuration() >= 0 && ts < now - endpoint->GetLogDuration())
@@ -454,7 +491,7 @@ void ApiListener::ApiTimerHandler(void)
 
 		BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
 			/* don't connect to ourselves */
-			if (endpoint->GetName() == GetIdentity()) {
+			if (endpoint == GetLocalEndpoint()) {
 				Log(LogDebug, "ApiListener")
 				    << "Not connecting to Endpoint '" << endpoint->GetName() << "' because that's us.";
 				continue;
@@ -506,8 +543,19 @@ void ApiListener::ApiTimerHandler(void)
 		lmessage->Set("method", "log::SetLogPosition");
 		lmessage->Set("params", lparams);
 
-		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients())
-			client->SendMessage(lmessage);
+		double maxTs = 0;
+
+		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+			if (client->GetTimestamp() > maxTs)
+				maxTs = client->GetTimestamp();
+		}
+
+		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+			if (client->GetTimestamp() != maxTs)
+				client->Disconnect();
+			else
+				client->SendMessage(lmessage);
+		}
 
 		Log(LogNotice, "ApiListener")
 		    << "Setting log position for identity '" << endpoint->GetName() << "': "
@@ -532,7 +580,10 @@ void ApiListener::ApiTimerHandler(void)
 void ApiListener::RelayMessage(const MessageOrigin::Ptr& origin,
     const ConfigObject::Ptr& secobj, const Dictionary::Ptr& message, bool log)
 {
-	m_RelayQueue.Enqueue(boost::bind(&ApiListener::SyncRelayMessage, this, origin, secobj, message, log), true);
+	if (!IsActive())
+		return;
+
+	m_RelayQueue.Enqueue(boost::bind(&ApiListener::SyncRelayMessage, this, origin, secobj, message, log), PriorityNormal, true);
 }
 
 void ApiListener::PersistMessage(const Dictionary::Ptr& message, const ConfigObject::Ptr& secobj)
@@ -572,11 +623,93 @@ void ApiListener::SyncSendMessage(const Endpoint::Ptr& endpoint, const Dictionar
 		Log(LogNotice, "ApiListener")
 		    << "Sending message to '" << endpoint->GetName() << "'";
 
-		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients())
+		double maxTs = 0;
+
+		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+			if (client->GetTimestamp() > maxTs)
+				maxTs = client->GetTimestamp();
+		}
+
+		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+			if (client->GetTimestamp() != maxTs)
+				continue;
+
 			client->SendMessage(message);
+		}
 	}
 }
 
+bool ApiListener::RelayMessageOne(const Zone::Ptr& targetZone, const MessageOrigin::Ptr& origin, const Dictionary::Ptr& message, const Endpoint::Ptr& currentMaster)
+{
+	ASSERT(targetZone);
+
+	Zone::Ptr myZone = Zone::GetLocalZone();
+
+	/* only relay the message to a) the same zone, b) the parent zone and c) direct child zones */
+	if (targetZone != myZone && targetZone != myZone->GetParent() && targetZone->GetParent() != myZone)
+		return true;
+
+	Endpoint::Ptr myEndpoint = GetLocalEndpoint();
+
+	std::vector<Endpoint::Ptr> skippedEndpoints;
+
+	bool relayed = false, log_needed = false, log_done = false;
+
+	BOOST_FOREACH(const Endpoint::Ptr& endpoint, targetZone->GetEndpoints()) {
+		/* don't relay messages to ourselves */
+		if (endpoint == GetLocalEndpoint())
+			continue;
+
+		log_needed = true;
+
+		/* don't relay messages to disconnected endpoints */
+		if (!endpoint->GetConnected()) {
+			if (targetZone == myZone)
+				log_done = false;
+
+			continue;
+		}
+
+		log_done = true;
+
+		/* don't relay the message to the zone through more than one endpoint unless this is our own zone */
+		if (relayed && targetZone != myZone) {
+			skippedEndpoints.push_back(endpoint);
+			continue;
+		}
+
+		/* don't relay messages back to the endpoint which we got the message from */
+		if (origin && origin->FromClient && endpoint == origin->FromClient->GetEndpoint()) {
+			skippedEndpoints.push_back(endpoint);
+			continue;
+		}
+
+		/* don't relay messages back to the zone which we got the message from */
+		if (origin && origin->FromZone && targetZone == origin->FromZone) {
+			skippedEndpoints.push_back(endpoint);
+			continue;
+		}
+
+		/* only relay message to the master if we're not currently the master */
+		if (currentMaster != myEndpoint && currentMaster != endpoint) {
+			skippedEndpoints.push_back(endpoint);
+			continue;
+		}
+
+		relayed = true;
+
+		SyncSendMessage(endpoint, message);
+	}
+
+	if (!skippedEndpoints.empty()) {
+		double ts = message->Get("ts");
+
+		BOOST_FOREACH(const Endpoint::Ptr& endpoint, skippedEndpoints)
+			endpoint->SetLocalLogPosition(ts);
+	}
+
+	return !log_needed || log_done;
+}
 
 void ApiListener::SyncRelayMessage(const MessageOrigin::Ptr& origin,
     const ConfigObject::Ptr& secobj, const Dictionary::Ptr& message, bool log)
@@ -590,81 +723,29 @@ void ApiListener::SyncRelayMessage(const MessageOrigin::Ptr& origin,
 	if (origin && origin->FromZone)
 		message->Set("originZone", origin->FromZone->GetName());
 
-	bool is_master = IsMaster();
-	Endpoint::Ptr master = GetMaster();
-	Zone::Ptr my_zone = Zone::GetLocalZone();
+	Zone::Ptr target_zone;
 
-	std::vector<Endpoint::Ptr> skippedEndpoints;
-	std::set<Zone::Ptr> allZones;
-	std::set<Zone::Ptr> finishedZones;
-	std::set<Zone::Ptr> finishedLogZones;
-
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
-		/* don't relay messages to ourselves */
-		if (endpoint->GetName() == GetIdentity())
-			continue;
-
-		Zone::Ptr target_zone = endpoint->GetZone();
-
-		allZones.insert(target_zone);
-
-		/* only relay messages to zones which have access to the object */
-		if (!target_zone->CanAccessObject(secobj)) {
-			finishedLogZones.insert(target_zone);
-			continue;
-		}
-
-		/* don't relay messages to disconnected endpoints */
-		if (!endpoint->GetConnected()) {
-			if (target_zone == my_zone)
-				finishedLogZones.erase(target_zone);
-
-			continue;
-		}
-
-		finishedLogZones.insert(target_zone);
-
-		/* don't relay the message to the zone through more than one endpoint unless this is our own zone */
-		if (finishedZones.find(target_zone) != finishedZones.end() && target_zone != my_zone) {
-			skippedEndpoints.push_back(endpoint);
-			continue;
-		}
-
-		/* don't relay messages back to the endpoint which we got the message from */
-		if (origin && origin->FromClient && endpoint == origin->FromClient->GetEndpoint()) {
-			skippedEndpoints.push_back(endpoint);
-			continue;
-		}
-
-		/* don't relay messages back to the zone which we got the message from */
-		if (origin && origin->FromZone && target_zone == origin->FromZone) {
-			skippedEndpoints.push_back(endpoint);
-			continue;
-		}
-
-		/* only relay message to the master if we're not currently the master */
-		if (!is_master && master != endpoint) {
-			skippedEndpoints.push_back(endpoint);
-			continue;
-		}
-
-		/* only relay the message to a) the same zone, b) the parent zone and c) direct child zones */
-		if (target_zone != my_zone && target_zone != my_zone->GetParent() &&
-		    secobj->GetZoneName() != target_zone->GetName()) {
-			skippedEndpoints.push_back(endpoint);
-			continue;
-		}
-
-		finishedZones.insert(target_zone);
-
-		SyncSendMessage(endpoint, message);
+	if (secobj) {
+		if (secobj->GetReflectionType() == Zone::TypeInstance)
+			target_zone = static_pointer_cast<Zone>(secobj);
+		else
+			target_zone = static_pointer_cast<Zone>(secobj->GetZone());
 	}
 
-	if (log && allZones.size() != finishedLogZones.size())
-		PersistMessage(message, secobj);
+	if (!target_zone)
+		target_zone = Zone::GetLocalZone();
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, skippedEndpoints)
-		endpoint->SetLocalLogPosition(ts);
+	Endpoint::Ptr master = GetMaster();
+
+	bool need_log = !RelayMessageOne(target_zone, origin, message, master);
+
+	BOOST_FOREACH(const Zone::Ptr& zone, target_zone->GetAllParents()) {
+		if (!RelayMessageOne(zone, origin, message, master))
+			need_log = true;
+	}
+
+	if (log && need_log)
+		PersistMessage(message, secobj);
 }
 
 String ApiListener::GetApiDir(void)
@@ -735,6 +816,12 @@ void ApiListener::ReplayLog(const JsonRpcConnection::Ptr& client)
 {
 	Endpoint::Ptr endpoint = client->GetEndpoint();
 
+	if (endpoint->GetLogDuration() == 0) {
+		ObjectLock olock2(endpoint);
+		endpoint->SetSyncing(false);
+		return;
+	}
+
 	CONTEXT("Replaying log for Endpoint '" + endpoint->GetName() + "'");
 
 	int count = -1;
@@ -747,8 +834,11 @@ void ApiListener::ReplayLog(const JsonRpcConnection::Ptr& client)
 
 	Zone::Ptr target_zone = target_endpoint->GetZone();
 
-	if (!target_zone)
+	if (!target_zone) {
+		ObjectLock olock2(endpoint);
+		endpoint->SetSyncing(false);
 		return;
+	}
 
 	for (;;) {
 		boost::mutex::scoped_lock lock(m_LogLock);
@@ -1028,4 +1118,9 @@ std::set<HttpServerConnection::Ptr> ApiListener::GetHttpClients(void) const
 Value ApiListener::HelloAPIHandler(const MessageOrigin::Ptr& origin, const Dictionary::Ptr& params)
 {
 	return Empty;
+}
+
+Endpoint::Ptr ApiListener::GetLocalEndpoint(void) const
+{
+	return m_LocalEndpoint;
 }

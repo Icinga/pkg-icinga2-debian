@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -85,7 +85,7 @@ bool ApiSetupUtility::SetupMasterCertificates(const String& cn)
 
 	if (Utility::PathExists(key)) {
 		Log(LogInformation, "cli")
-		    << "Private key file '" << key << "' already existing, skipping.";
+		    << "Private key file '" << key << "' already exists, not generating new certificate.";
 		return true;
 	}
 
@@ -157,23 +157,21 @@ bool ApiSetupUtility::SetupMasterApiUser(void)
 {
 	String api_username = "root"; // TODO make this available as cli parameter?
 	String api_password = RandomString(8);
-	String apiuserspath = GetConfdPath() + "/api-users.conf";
+	String apiUsersPath = GetConfdPath() + "/api-users.conf";
 
-	if (Utility::PathExists(apiuserspath)) {
+	if (Utility::PathExists(apiUsersPath)) {
 		Log(LogInformation, "cli")
-		    << "API user config file '" << apiuserspath << "' already existing, skipping.";
+		    << "API user config file '" << apiUsersPath << "' already exists, not creating config file.";
 		return true;
 	}
 
 	Log(LogInformation, "cli")
-	    << "Adding new ApiUser '" << api_username << "' in '" << apiuserspath << "'.";
+	    << "Adding new ApiUser '" << api_username << "' in '" << apiUsersPath << "'.";
 
-	NodeUtility::CreateBackupFile(apiuserspath);
+	NodeUtility::CreateBackupFile(apiUsersPath);
 
-	String apiuserspathtmp = apiuserspath + ".tmp";
-
-	std::ofstream fp;
-	fp.open(apiuserspathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
+	std::fstream fp;
+	String tempFilename = Utility::CreateTempFile(apiUsersPath + ".XXXXXX", 0644, fp);
 
 	fp << "/**\n"
 	    << " * The APIUser objects are used for authentication against the API.\n"
@@ -188,14 +186,14 @@ bool ApiSetupUtility::SetupMasterApiUser(void)
 	fp.close();
 
 #ifdef _WIN32
-	_unlink(apiuserspath.CStr());
+	_unlink(apiUsersPath.CStr());
 #endif /* _WIN32 */
 
-	if (rename(apiuserspathtmp.CStr(), apiuserspath.CStr()) < 0) {
+	if (rename(tempFilename.CStr(), apiUsersPath.CStr()) < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("rename")
 		    << boost::errinfo_errno(errno)
-		    << boost::errinfo_file_name(apiuserspathtmp));
+		    << boost::errinfo_file_name(tempFilename));
 	}
 
 	return true;

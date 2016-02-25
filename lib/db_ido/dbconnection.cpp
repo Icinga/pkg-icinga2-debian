@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -39,7 +39,7 @@ Timer::Ptr DbConnection::m_ProgramStatusTimer;
 boost::once_flag DbConnection::m_OnceFlag = BOOST_ONCE_INIT;
 
 DbConnection::DbConnection(void)
-	: m_QueryStats(15 * 60)
+	: m_QueryStats(15 * 60), m_PendingQueries(0), m_PendingQueriesTimestamp(0)
 { }
 
 void DbConnection::OnConfigLoaded(void)
@@ -61,7 +61,39 @@ void DbConnection::Start(bool runtimeCreated)
 	ObjectImpl<DbConnection>::Start(runtimeCreated);
 
 	DbObject::OnQuery.connect(boost::bind(&DbConnection::ExecuteQuery, this, _1));
+	DbObject::OnMultipleQueries.connect(boost::bind(&DbConnection::ExecuteMultipleQueries, this, _1));
 	ConfigObject::OnActiveChanged.connect(boost::bind(&DbConnection::UpdateObject, this, _1));
+}
+
+void DbConnection::StatsLoggerTimerHandler(void)
+{
+	if (!GetConnected())
+		return;
+
+	int pending = GetPendingQueryCount();
+
+	double now = Utility::GetTime();
+	double gradient = (pending - m_PendingQueries) / (now - m_PendingQueriesTimestamp);
+	double timeToZero = -pending / gradient;
+
+	String timeInfo;
+
+	if (pending > GetQueryCount(5)) {
+		timeInfo = " empty in ";
+		if (timeToZero < 0)
+			timeInfo += "infinite time, your database isn't able to keep up";
+		else
+			timeInfo += Utility::FormatDuration(timeToZero);
+	}
+
+	m_PendingQueries = pending;
+	m_PendingQueriesTimestamp = now;
+
+	Log(LogInformation, GetReflectionType()->GetName())
+	    << "Query queue items: " << pending
+	    << ", query rate: " << std::setw(2) << GetQueryCount(60) / 60.0 << "/s"
+	    << " (" << GetQueryCount(60) << "/min " << GetQueryCount(5 * 60) << "/5min " << GetQueryCount(15 * 60) << "/15min);"
+	    << timeInfo;
 }
 
 void DbConnection::Resume(void)
@@ -75,6 +107,11 @@ void DbConnection::Resume(void)
 	m_CleanUpTimer->SetInterval(60);
 	m_CleanUpTimer->OnTimerExpired.connect(boost::bind(&DbConnection::CleanUpHandler, this));
 	m_CleanUpTimer->Start();
+
+	m_StatsLoggerTimer = new Timer();
+	m_StatsLoggerTimer->SetInterval(15);
+	m_StatsLoggerTimer->OnTimerExpired.connect(boost::bind(&DbConnection::StatsLoggerTimerHandler, this));
+	m_StatsLoggerTimer->Start();
 }
 
 void DbConnection::Pause(void)
@@ -97,6 +134,9 @@ void DbConnection::Pause(void)
 	query1.Fields = new Dictionary();
 	query1.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	query1.Fields->Set("program_end_time", DbValue::FromTimestamp(Utility::GetTime()));
+
+	query1.Priority = PriorityHigh;
+
 	ExecuteQuery(query1);
 
 	NewTransaction();
@@ -128,13 +168,16 @@ void DbConnection::ProgramStatusHandler(void)
 	Log(LogNotice, "DbConnection")
 	     << "Updating programstatus table.";
 
+	std::vector<DbQuery> queries;
+
 	DbQuery query1;
 	query1.Table = "programstatus";
 	query1.Type = DbQueryDelete;
 	query1.Category = DbCatProgramStatus;
 	query1.WhereCriteria = new Dictionary();
 	query1.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
-	DbObject::OnQuery(query1);
+	query1.Priority = PriorityHigh;
+	queries.push_back(query1);
 
 	DbQuery query2;
 	query2.Table = "programstatus";
@@ -160,7 +203,10 @@ void DbConnection::ProgramStatusHandler(void)
 	query2.Fields->Set("event_handlers_enabled", (IcingaApplication::GetInstance()->GetEnableEventHandlers() ? 1 : 0));
 	query2.Fields->Set("flap_detection_enabled", (IcingaApplication::GetInstance()->GetEnableFlapping() ? 1 : 0));
 	query2.Fields->Set("process_performance_data", (IcingaApplication::GetInstance()->GetEnablePerfdata() ? 1 : 0));
-	DbObject::OnQuery(query2);
+	query2.Priority = PriorityHigh;
+	queries.push_back(query2);
+
+	DbObject::OnMultipleQueries(queries);
 
 	DbQuery query3;
 	query3.Table = "runtimevariables";
@@ -346,11 +392,6 @@ bool DbConnection::GetStatusUpdate(const DbObject::Ptr& dbobj) const
 	return (m_StatusUpdates.find(dbobj) != m_StatusUpdates.end());
 }
 
-void DbConnection::ExecuteQuery(const DbQuery&)
-{
-	/* Default handler does nothing. */
-}
-
 void DbConnection::UpdateObject(const ConfigObject::Ptr& object)
 {
 	if (!GetConnected())
@@ -359,15 +400,19 @@ void DbConnection::UpdateObject(const ConfigObject::Ptr& object)
 	DbObject::Ptr dbobj = DbObject::GetOrCreateByObject(object);
 
 	if (dbobj) {
+		bool dbActive = GetObjectActive(dbobj);
 		bool active = object->IsActive();
 
-		if (active) {
+		if (active && !dbActive) {
 			ActivateObject(dbobj);
-
 			dbobj->SendConfigUpdate();
 			dbobj->SendStatusUpdate();
-		} else
+		} else if (!active) {
+			/* Deactivate the deleted object no matter
+			 * which state it had in the database.
+			 */
 			DeactivateObject(dbobj);
+		}
 	}
 }
 
@@ -390,7 +435,7 @@ void DbConnection::PrepareDatabase(void)
 	 */
 
 	//ClearConfigTable("commands");
-	ClearConfigTable("comments");
+	//ClearConfigTable("comments");
 	ClearConfigTable("contact_addresses");
 	ClearConfigTable("contact_notificationcommands");
 	ClearConfigTable("contactgroup_members");
@@ -409,7 +454,7 @@ void DbConnection::PrepareDatabase(void)
 	//ClearConfigTable("hostgroups");
 	//ClearConfigTable("hosts");
 	//ClearConfigTable("hoststatus");
-	ClearConfigTable("scheduleddowntime");
+	//ClearConfigTable("scheduleddowntime");
 	ClearConfigTable("service_contactgroups");
 	ClearConfigTable("service_contacts");
 	ClearConfigTable("servicedependencies");

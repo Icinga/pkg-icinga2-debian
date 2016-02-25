@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -576,6 +576,7 @@ Value ClusterEvents::ExecuteCommandAPIHandler(const MessageOrigin::Ptr& origin, 
 
 		attrs->Set("__name", params->Get("host"));
 		attrs->Set("type", "Host");
+		attrs->Set("enable_active_checks", false);
 
 		Deserialize(host, attrs, false, FAConfig);
 
@@ -721,9 +722,10 @@ Value ClusterEvents::UpdateRepositoryAPIHandler(const MessageOrigin::Ptr& origin
 		return Empty;
 
 	String repositoryFile = GetRepositoryDir() + SHA256(params->Get("endpoint")) + ".repo";
-	String repositoryTempFile = repositoryFile + ".tmp";
 
-	std::ofstream fp(repositoryTempFile.CStr(), std::ofstream::out | std::ostream::trunc);
+	std::fstream fp;
+	String tempRepositoryFile = Utility::CreateTempFile(repositoryFile + ".XXXXXX", 0644, fp);
+
 	fp << JsonEncode(params);
 	fp.close();
 
@@ -731,11 +733,11 @@ Value ClusterEvents::UpdateRepositoryAPIHandler(const MessageOrigin::Ptr& origin
 	_unlink(repositoryFile.CStr());
 #endif /* _WIN32 */
 
-	if (rename(repositoryTempFile.CStr(), repositoryFile.CStr()) < 0) {
+	if (rename(tempRepositoryFile.CStr(), repositoryFile.CStr()) < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("rename")
 		    << boost::errinfo_errno(errno)
-		    << boost::errinfo_file_name(repositoryTempFile));
+		    << boost::errinfo_file_name(tempRepositoryFile));
 	}
 
 	ApiListener::Ptr listener = ApiListener::GetInstance();

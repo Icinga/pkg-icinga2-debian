@@ -197,6 +197,7 @@ case "$1" in
     ;;
   reload|force-reload)
     do_check_config
+    status_of_proc -p "$PIDFILE" "$DAEMON" "$NAME" || exit $?
     log_daemon_msg "Reloading $DESC" "$NAME"
     do_reload
     log_end_msg $?
