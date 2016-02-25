@@ -36,11 +36,7 @@ Depends: icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
 Recommends: icinga2-doc, monitoring-plugins-basic | nagios-plugins-basic, libreadline6
-<<<<<<< HEAD
-#Suggests: icinga2-studio
-=======
-Suggests: icinga2-studio, vim-icinga2
->>>>>>> master
+Suggests: vim-icinga2
 Description: host and network monitoring system
  Icinga 2 is a general-purpose monitoring application to fit the needs of
  any size of network. Icinga 1.x was a Nagios fork; this new generation
@@ -279,7 +275,6 @@ Description: host and network monitoring system - internal libraries
  .
  This package provides internal libraries for the daemon or studio.
 
-<<<<<<< HEAD
 #Package: icinga2-studio
 #Architecture: any
 #Pre-Depends: ${misc:Pre-Depends}
@@ -304,32 +299,6 @@ Description: host and network monitoring system - internal libraries
 #  * native support for Livestatus and Graphite.
 # .
 # This package provides a GUI for the Icinga 2 API.
-=======
-Package: icinga2-studio
-Architecture: any
-Pre-Depends: ${misc:Pre-Depends}
-Depends: libicinga2 (= ${binary:Version}),
-         ${misc:Depends},
-         ${shlibs:Depends}
-Description: host and network monitoring system - studio API GUI
- Icinga 2 is a general-purpose monitoring application to fit the needs of
- any size of network. Icinga 1.x was a Nagios fork; this new generation
- has been rewritten from scratch in C++, with multi-threading and cluster
- support.
- .
- Features:
-  * all standard features of Icinga and Nagios;
-  * much faster and more scalable than Icinga 1 and Nagios;
-  * new, more intuitive, template-based configuration format;
-  * monitoring services on ICMP (ping) or TCP ports (HTTP, NNTP, POP3,
-    SMTP, etc.) by executing checks (see monitoring-plugins*);
-  * any small script following the Nagios plugin API can be used as a
-    check plugin;
-  * notifications about alerts for any custom script (with examples);
-  * native support for Livestatus and Graphite.
- .
- This package provides a GUI for the Icinga 2 API.
-
 Package: vim-icinga2
 Architecture: all
 Depends: ${misc:Depends}
@@ -341,4 +310,3 @@ Description: syntax highlighting for Icinga 2 config files in VIM
  As per the Debian vim policy, installed addons are not activated
  automatically, but the "vim-addon-manager" tool can be used for this
  purpose.
->>>>>>> master
