@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -46,12 +46,6 @@ void JsonRpcConnection::HeartbeatTimerHandler(void)
 {
 	BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
 		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
-			if (endpoint->GetSyncing()) {
-				Log(LogInformation, "JsonRpcConnection")
-				    << "Not sending heartbeat for endpoint '" << endpoint->GetName() << "' because we're replaying the log for it.";
-				continue;
-			}
-
 			if (client->m_NextHeartbeat != 0 && client->m_NextHeartbeat < Utility::GetTime()) {
 				Log(LogWarning, "JsonRpcConnection")
 				    << "Client for endpoint '" << endpoint->GetName() << "' has requested "

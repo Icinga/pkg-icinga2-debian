@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -133,7 +133,7 @@ void IcingaApplication::OnShutdown(void)
 	DumpProgramState();
 }
 
-static void PersistModAttrHelper(std::ofstream& fp, ConfigObject::Ptr& previousObject, const ConfigObject::Ptr& object, const String& attr, const Value& value)
+static void PersistModAttrHelper(std::fstream& fp, ConfigObject::Ptr& previousObject, const ConfigObject::Ptr& object, const String& attr, const Value& value)
 {
 	if (object != previousObject) {
 		if (previousObject) {
@@ -173,10 +173,9 @@ void IcingaApplication::DumpProgramState(void)
 void IcingaApplication::DumpModifiedAttributes(void)
 {
 	String path = GetModAttrPath();
-	String pathtmp = path + ".tmp";
 
-	std::ofstream fp;
-	fp.open(pathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
+	std::fstream fp;
+	String tempFilename = Utility::CreateTempFile(path + ".XXXXXX", 0644, fp);
 
 	ConfigObject::Ptr previousObject;
 	ConfigObject::DumpModifiedAttributes(boost::bind(&PersistModAttrHelper, boost::ref(fp), boost::ref(previousObject), _1, _2, _3));
@@ -193,11 +192,11 @@ void IcingaApplication::DumpModifiedAttributes(void)
 	_unlink(path.CStr());
 #endif /* _WIN32 */
 
-	if (rename(pathtmp.CStr(), path.CStr()) < 0) {
+	if (rename(tempFilename.CStr(), path.CStr()) < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("rename")
 		    << boost::errinfo_errno(errno)
-		    << boost::errinfo_file_name(pathtmp));
+		    << boost::errinfo_file_name(tempFilename));
 	}
 }
 
@@ -277,6 +276,9 @@ bool IcingaApplication::ResolveMacro(const String& macro, const CheckResult::Ptr
 			return true;
 		} else if (macro == "num_hosts_down") {
 			*result = Convert::ToString(hs.hosts_down);
+			return true;
+		} else if (macro == "num_hosts_pending") {
+			*result = Convert::ToString(hs.hosts_pending);
 			return true;
 		} else if (macro == "num_hosts_unreachable") {
 			*result = Convert::ToString(hs.hosts_unreachable);

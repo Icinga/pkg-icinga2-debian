@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -138,7 +138,7 @@ int NodeSetupCommand::SetupMaster(const boost::program_options::variables_map& v
 
 	if (Utility::PathExists(existing_path)) {
 		Log(LogWarning, "cli")
-		    << "Certificate '" << existing_path << "' for CN '" << cn << "' already existing. Skipping certificate generation.";
+		    << "Certificate '" << existing_path << "' for CN '" << cn << "' already exists. Not generating new certificate.";
 	} else {
 		Log(LogInformation, "cli")
 		    << "Certificates not yet generated. Running 'api setup' now.";
@@ -169,10 +169,8 @@ int NodeSetupCommand::SetupMaster(const boost::program_options::variables_map& v
 	String apipath = FeatureUtility::GetFeaturesAvailablePath() + "/api.conf";
 	NodeUtility::CreateBackupFile(apipath);
 
-	String apipathtmp = apipath + ".tmp";
-
-	std::ofstream fp;
-	fp.open(apipathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
+	std::fstream fp;
+	String tempApiPath = Utility::CreateTempFile(apipath + ".XXXXXX", 0644, fp);
 
 	fp << "/**\n"
 	    << " * The API listener is used for distributed monitoring setups.\n"
@@ -202,11 +200,11 @@ int NodeSetupCommand::SetupMaster(const boost::program_options::variables_map& v
 	_unlink(apipath.CStr());
 #endif /* _WIN32 */
 
-	if (rename(apipathtmp.CStr(), apipath.CStr()) < 0) {
+	if (rename(tempApiPath.CStr(), apipath.CStr()) < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("rename")
 		    << boost::errinfo_errno(errno)
-		    << boost::errinfo_file_name(apipathtmp));
+		    << boost::errinfo_file_name(tempApiPath));
 	}
 
 	/* update constants.conf with NodeName = CN + TicketSalt = random value */
@@ -335,16 +333,9 @@ int NodeSetupCommand::SetupNode(const boost::program_options::variables_map& vm,
 	}
 
 	/* fix permissions: root -> icinga daemon user */
-	std::vector<String> files;
-	files.push_back(ca);
-	files.push_back(key);
-	files.push_back(cert);
-
-	BOOST_FOREACH(const String& file, files) {
-		if (!Utility::SetFileOwnership(file, user, group)) {
-			Log(LogWarning, "cli")
-			    << "Cannot set ownership for user '" << user << "' group '" << group << "' on file '" << file << "'. Verify it yourself!";
-		}
+	if (!Utility::SetFileOwnership(key, user, group)) {
+		Log(LogWarning, "cli")
+		    << "Cannot set ownership for user '" << user << "' group '" << group << "' on file '" << key << "'. Verify it yourself!";
 	}
 
 	Log(LogInformation, "cli", "Requesting a signed certificate from the master.");
@@ -352,6 +343,11 @@ int NodeSetupCommand::SetupNode(const boost::program_options::variables_map& vm,
 	if (PkiUtility::RequestCertificate(master_host, master_port, key, cert, ca, trustedcert, ticket) != 0) {
 		Log(LogCritical, "cli", "Failed to request certificate from Icinga 2 master.");
 		return 1;
+	}
+
+	if (!Utility::SetFileOwnership(ca, user, group)) {
+		Log(LogWarning, "cli")
+		    << "Cannot set ownership for user '" << user << "' group '" << group << "' on file '" << ca << "'. Verify it yourself!";
 	}
 
 	/* fix permissions (again) when updating the signed certificate */
@@ -378,10 +374,8 @@ int NodeSetupCommand::SetupNode(const boost::program_options::variables_map& vm,
 	String apipath = FeatureUtility::GetFeaturesAvailablePath() + "/api.conf";
 	NodeUtility::CreateBackupFile(apipath);
 
-	String apipathtmp = apipath + ".tmp";
-
-	std::ofstream fp;
-	fp.open(apipathtmp.CStr(), std::ofstream::out | std::ofstream::trunc);
+	std::fstream fp;
+	String tempApiPath = Utility::CreateTempFile(apipath + ".XXXXXX", 0644, fp);
 
 	fp << "/**\n"
 	    << " * The API listener is used for distributed monitoring setups.\n"
@@ -423,11 +417,11 @@ int NodeSetupCommand::SetupNode(const boost::program_options::variables_map& vm,
 	_unlink(apipath.CStr());
 #endif /* _WIN32 */
 
-	if (rename(apipathtmp.CStr(), apipath.CStr()) < 0) {
+	if (rename(tempApiPath.CStr(), apipath.CStr()) < 0) {
 		BOOST_THROW_EXCEPTION(posix_error()
 		    << boost::errinfo_api_function("rename")
 		    << boost::errinfo_errno(errno)
-		    << boost::errinfo_file_name(apipathtmp));
+		    << boost::errinfo_file_name(tempApiPath));
 	}
 
 	/* generate local zones.conf with zone+endpoint */

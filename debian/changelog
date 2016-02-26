@@ -1,8 +1,27 @@
-icinga2 (2.4.1-2~debmon8+3) debmon-jessie; urgency=medium
+icinga2 (2.4.3-1~debmon8+1) debmon-jessie; urgency=medium
 
-  * Fix wrong build 
+  * Rebuild for debmon-jessie.
 
- -- Alexander Wirt <formorer@debian.org>  Fri, 05 Feb 2016 18:48:50 +0100
+ -- Markus Frosch <lazyfrosch@debian.org>  Wed, 24 Feb 2016 16:27:29 +0100
+
+icinga2 (2.4.3-1) unstable; urgency=medium
+
+  * [39ba8d6] Imported Upstream version 2.4.3
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Wed, 24 Feb 2016 16:13:18 +0100
+
+icinga2 (2.4.2-1~debmon8+1) debmon-jessie; urgency=medium
+
+  * Rebuild for debmon-jessie.
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Tue, 23 Feb 2016 16:58:16 +0100
+
+icinga2 (2.4.2-1) unstable; urgency=medium
+
+  * [3584c36] Imported Upstream version 2.4.2
+  * [89ee45e] Bump standards version to 3.9.7
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Tue, 23 Feb 2016 16:30:32 +0100
 
 icinga2 (2.4.1-2~debmon8+2) debmon-jessie; urgency=medium
 

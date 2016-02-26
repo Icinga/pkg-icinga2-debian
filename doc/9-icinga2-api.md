@@ -332,10 +332,8 @@ to worry about escaping values:
     $ curl -k -s -u 'root:icinga' -H 'X-HTTP-Method-Override: GET' -X POST 'https://localhost:5665/v1/objects/hosts' \
     -d '{ "filter": "host.vars.os == os", "filter_vars": { "os": "Linux" } }'
 
-> **Note**
->
-> We're using X-HTTP-Method-Override here because the HTTP specification does
-> not allow message bodies for GET requests.
+We're using X-HTTP-Method-Override here because the HTTP specification does
+not allow message bodies for GET requests.
 
 The `filters_vars` attribute can only be used inside the request body, but not as
 a URL parameter because there is no way to specify a dictionary in a URL.
@@ -907,7 +905,7 @@ Send a `POST` request to the URL endpoint `/v1/actions/schedule-downtime`.
   start\_time   | timestamp | **Required.** Timestamp marking the beginning of the downtime.
   end\_time     | timestamp | **Required.** Timestamp marking the end of the downtime.
   duration      | integer   | **Required.** Duration of the downtime in seconds if `fixed` is set to false.
-  fixed         | boolean   | **Optional.** Defaults to `false`. If true the downtime is `fixed` otherwise `flexible`. See [downtimes](5-advanced-topics.md#downtimes) for more information.
+  fixed         | boolean   | **Optional.** Defaults to `true`. If true the downtime is `fixed` otherwise `flexible`. See [downtimes](5-advanced-topics.md#downtimes) for more information.
   trigger\_name | string    | **Optional.** Sets the trigger for a triggered downtime. See [downtimes](5-advanced-topics.md#downtimes) for more information on triggered downtimes.
 
 In addition to these parameters a [filter](9-icinga2-api.md#icinga2-api-filters) must be provided. The valid types for this action are `Host` and `Service`.
@@ -1157,12 +1155,29 @@ Package names starting with an underscore are reserved for internal packages and
 
 ### <a id="icinga2-api-config-management-create-config-stage"></a> Uploading configuration for a Config Package
 
-Configuration files in packages are managed in stages. Stages provide a way to maintain multiple configuration versions for a package.
+Configuration files in packages are managed in stages.
+Stages provide a way to maintain multiple configuration versions for a package.
 
 Send a `POST` request to the URL endpoint `/v1/config/stages` and add the name of an existing
 configuration package to the URL path (e.g. `example-cmdb`).
 The request body must contain the `files` attribute with the value being
 a dictionary of file targets and their content.
+
+The file path requires one of these two directories inside its path:
+
+  Directory   | Description
+  ------------|------------------------------------
+  conf.d      | Local configuration directory.
+  zones.d     | Configuration directory for cluster zones, each zone must be put into its own zone directory underneath. Supports the [cluster config sync](13-distributed-monitoring-ha.md#cluster-zone-config-sync).
+
+Example for a local configuration in the `conf.d` directory:
+
+    "files": { "conf.d/host1.conf": "object Host \"local-host\" { address = \"127.0.0.1\", check_command = \"hostalive\" }" }
+
+Example for a host configuration inside the `satellite` zone in the `zones.d` directory:
+
+    "files": { "zones.d/satellite/host2.conf": "object Host \"satellite-host\" { address = \"192.168.1.100\", check_command = \"hostalive\" }" }
+
 
 The example below will create a new file called `test.conf` in the `conf.d`
 directory. Note: This example contains an error (`chec_command`). This is

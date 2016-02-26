@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -65,10 +65,8 @@ void ScriptGlobal::WriteToFile(const String& filename)
 	Log(LogInformation, "ScriptGlobal")
 		<< "Dumping variables to file '" << filename << "'";
 
-	String tempFilename = filename + ".tmp";
-
 	std::fstream fp;
-	fp.open(tempFilename.CStr(), std::ios_base::out);
+	String tempFilename = Utility::CreateTempFile(filename + ".XXXXXX", 0600, fp);
 
 	if (!fp)
 		BOOST_THROW_EXCEPTION(std::runtime_error("Could not open '" + tempFilename + "' file"));

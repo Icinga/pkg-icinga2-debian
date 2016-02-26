@@ -1,6 +1,6 @@
 #/******************************************************************************
 # * Icinga 2                                                                   *
-# * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+# * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
 # *                                                                            *
 # * This program is free software; you can redistribute it and/or              *
 # * modify it under the terms of the GNU General Public License                *
@@ -66,7 +66,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.4.1
+Version: 2.4.3
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System

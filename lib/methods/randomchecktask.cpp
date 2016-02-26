@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2015 Icinga Development Team (http://www.icinga.org)    *
+ * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -22,6 +22,7 @@
 #endif /* _WIN32 */
 #include "methods/randomchecktask.hpp"
 #include "icinga/perfdatavalue.hpp"
+#include "icinga/icingaapplication.hpp"
 #include "base/utility.hpp"
 #include "base/convert.hpp"
 #include "base/function.hpp"
@@ -38,7 +39,7 @@ void RandomCheckTask::ScriptFunc(const Checkable::Ptr& service, const CheckResul
 		return;
 
 	String output = "Hello from ";
-	output += Utility::GetFQDN();
+	output += IcingaApplication::GetInstance()->GetNodeName();
 
 	Array::Ptr perfdata = new Array();
 	perfdata->Add(new PerfdataValue("time", Convert::ToDouble(Utility::GetTime())));
