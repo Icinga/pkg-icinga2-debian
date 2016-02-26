@@ -1,23 +1,23 @@
-icinga2 (2.4.3-1~ppa1~wily1) wily; urgency=medium
+icinga2 (2.4.3-1~ppa1~vivid1) vivid; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
 
-icinga2 (2.4.3-1) wily; urgency=medium
+icinga2 (2.4.3-1) vivid; urgency=medium
 
   * [39ba8d6] Imported Upstream version 2.4.3
 
  -- Markus Frosch <lazyfrosch@debian.org>  Wed, 24 Feb 2016 16:13:18 +0100
 
-icinga2 (2.4.2-1) wily; urgency=medium
+icinga2 (2.4.2-1) vivid; urgency=medium
 
   * [3584c36] Imported Upstream version 2.4.2
   * [89ee45e] Bump standards version to 3.9.7
 
  -- Markus Frosch <lazyfrosch@debian.org>  Tue, 23 Feb 2016 16:30:32 +0100
 
-icinga2 (2.4.1-2) wily; urgency=medium
+icinga2 (2.4.1-2) vivid; urgency=medium
 
   [ Alexander Wirt ]
   * [09024ca] Fail on reload if daemon isn't running
@@ -37,7 +37,7 @@ icinga2 (2.4.1-2) wily; urgency=medium
 
  -- Markus Frosch <lazyfrosch@debian.org>  Thu, 04 Feb 2016 16:55:46 +0100
 
-icinga2 (2.4.1-1) wily; urgency=medium
+icinga2 (2.4.1-1) vivid; urgency=medium
 
   * [9725e3c] Add proper conflicts and replaces from icinga2-bin to libicinga2
     (Closes: #806146)
@@ -45,7 +45,7 @@ icinga2 (2.4.1-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 26 Nov 2015 12:51:07 +0100
 
-icinga2 (2.4.0-1) wily; urgency=medium
+icinga2 (2.4.0-1) vivid; urgency=medium
 
   [ Gunnar Beutner ]
   * Add Build-Depends for libedit and add Recommends for libreadline6
@@ -63,33 +63,33 @@ icinga2 (2.4.0-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 16 Nov 2015 11:25:14 +0100
 
-icinga2 (2.3.11-1) wily; urgency=medium
+icinga2 (2.3.11-1) vivid; urgency=medium
 
   * [b9e26af] Change ido database name/user to icinga2 for new installations
   * [6d4fa9d] Imported Upstream version 2.3.11
 
  -- Alexander Wirt <formorer@debian.org>  Tue, 20 Oct 2015 09:08:18 +0200
 
-icinga2 (2.3.10-1) wily; urgency=medium
+icinga2 (2.3.10-1) vivid; urgency=medium
 
   * [129f6ea] Imported Upstream version 2.3.10
   * [173da67] Merge systemd service file with upstreams implementation
 
  -- Alexander Wirt <formorer@debian.org>  Sun, 06 Sep 2015 21:29:12 +0200
 
-icinga2 (2.3.9-1) wily; urgency=medium
+icinga2 (2.3.9-1) vivid; urgency=medium
 
   * [a03c364] Imported Upstream version 2.3.9
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 27 Aug 2015 12:30:21 +0200
 
-icinga2 (2.3.8-1) wily; urgency=medium
+icinga2 (2.3.8-1) vivid; urgency=medium
 
   * [0f463b5] Imported Upstream version 2.3.8
 
  -- Markus Frosch <lazyfrosch@debian.org>  Mon, 20 Jul 2015 21:24:42 +0200
 
-icinga2 (2.3.7-1) wily; urgency=medium
+icinga2 (2.3.7-1) vivid; urgency=medium
 
   * [c4d8f2b] Really enable ido-pgsql if we have to
   * [35c654e] Allow nagios group to write/remove perfdata
@@ -97,34 +97,34 @@ icinga2 (2.3.7-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Wed, 15 Jul 2015 11:41:51 +0200
 
-icinga2 (2.3.6-1) wily; urgency=medium
+icinga2 (2.3.6-1) vivid; urgency=medium
 
   [ Alexander Wirt ]
   * [7eaa5f9] Imported Upstream version 2.3.6
 
  -- Alexander Wirt <formorer@debian.org>  Wed, 08 Jul 2015 10:57:35 +0200
 
-icinga2 (2.3.5-1) wily; urgency=medium
+icinga2 (2.3.5-1) vivid; urgency=medium
 
   * [64334db] Imported Upstream version 2.3.5
   * [afffeeb] Remove obsolete patches
 
  -- Alexander Wirt <formorer@debian.org>  Wed, 17 Jun 2015 14:48:59 +0200
 
-icinga2 (2.3.4-3) wily; urgency=medium
+icinga2 (2.3.4-3) vivid; urgency=medium
 
   * [392a0bf] Add patch to fix broken postrotate script
 
  -- Alexander Wirt <formorer@debian.org>  Wed, 22 Apr 2015 09:42:11 +0200
 
-icinga2 (2.3.4-2) wily; urgency=medium
+icinga2 (2.3.4-2) vivid; urgency=medium
 
   * [54904c5] Fix upstream version in icinga2 --version
   * [3bb3712] Add first autopkgtest (dep8) support
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 17:19:39 +0200
 
-icinga2 (2.3.4-1) wily; urgency=medium
+icinga2 (2.3.4-1) vivid; urgency=medium
 
   [ Achim Ledermüller ]
   * [8009d66] Specify pidfile for status_of_proc in the init script
@@ -136,26 +136,26 @@ icinga2 (2.3.4-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 20 Apr 2015 13:16:16 +0200
 
-icinga2 (2.3.3-1) wily; urgency=medium
+icinga2 (2.3.3-1) vivid; urgency=medium
 
   * [8870a28] Imported Upstream version 2.3.3
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 26 Mar 2015 11:43:11 +0100
 
-icinga2 (2.3.2-1) wily; urgency=medium
+icinga2 (2.3.2-1) vivid; urgency=medium
 
   * [d4e0ec3] Imported Upstream version 2.3.2
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 12 Mar 2015 16:05:24 +0100
 
-icinga2 (2.3.1-1) wily; urgency=medium
+icinga2 (2.3.1-1) vivid; urgency=medium
 
   * [2927737] Create /var/log/icinga2/crash
   * [730bfc7] Imported Upstream version 2.3.1
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 12 Mar 2015 15:05:34 +0100
 
-icinga2 (2.3.0-1) wily; urgency=medium
+icinga2 (2.3.0-1) vivid; urgency=medium
 
   [ Gunnar Beutner ]
   * [bbd4107] Add the PIDFile setting to the systemd unit file
@@ -168,7 +168,7 @@ icinga2 (2.3.0-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Tue, 10 Mar 2015 10:38:18 +0100
 
-icinga2 (2.2.4-1) wily; urgency=medium
+icinga2 (2.2.4-1) vivid; urgency=medium
 
   [ Alexander Wirt ]
   * [9f05d5b] Imported Upstream version 2.2.4
@@ -178,19 +178,19 @@ icinga2 (2.2.4-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 05 Feb 2015 16:05:57 +0100
 
-icinga2 (2.2.3-1) wily; urgency=medium
+icinga2 (2.2.3-1) vivid; urgency=medium
 
   * [c33e9ae] Imported Upstream version 2.2.3
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 12 Jan 2015 10:38:27 +0100
 
-icinga2 (2.2.2-2) wily; urgency=medium
+icinga2 (2.2.2-2) vivid; urgency=medium
 
   * [ec8d305] Fix binary-only builds
 
  -- Markus Frosch <lazyfrosch@debian.org>  Sun, 28 Dec 2014 17:24:06 +0100
 
-icinga2 (2.2.2-1) wily; urgency=medium
+icinga2 (2.2.2-1) vivid; urgency=medium
 
   * [89b506f] Imported Upstream version 2.2.2
   * [b04381a] Let icinga2-classicui depend on icinga2-bin (Closes: #770534)
@@ -204,7 +204,7 @@ icinga2 (2.2.2-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 18 Dec 2014 13:11:04 +0100
 
-icinga2 (2.2.1-1) wily; urgency=medium
+icinga2 (2.2.1-1) vivid; urgency=medium
 
   [ Alexander Wirt ]
   * [e73d057] Links are tested with -L
@@ -220,7 +220,7 @@ icinga2 (2.2.1-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 20:48:59 +0100
 
-icinga2 (2.2.0-2) wily; urgency=medium
+icinga2 (2.2.0-2) vivid; urgency=medium
 
   * [cf28c7d] Fix indentation in apache config
   * [d608338] Lower needed dpkg version in pre-depends
@@ -228,7 +228,7 @@ icinga2 (2.2.0-2) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Sat, 22 Nov 2014 13:29:20 +0100
 
-icinga2 (2.2.0-1) wily; urgency=medium
+icinga2 (2.2.0-1) vivid; urgency=medium
 
   [ Jan Wagner ]
   * [cc6aad5] Fixing threshold for snmp-load check command
@@ -267,7 +267,7 @@ icinga2 (2.2.0-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Fri, 21 Nov 2014 13:48:18 +0100
 
-icinga2 (2.1.1-1) wily; urgency=medium
+icinga2 (2.1.1-1) vivid; urgency=medium
 
   * [4a0350e] Imported Upstream version 2.1.1
   * [81a704c] gnu_hurd.patch is now upstream
@@ -275,14 +275,14 @@ icinga2 (2.1.1-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 18 Sep 2014 08:00:44 +0200
 
-icinga2 (2.1.0-3) wily; urgency=medium
+icinga2 (2.1.0-3) vivid; urgency=medium
 
   * [dd04e8c] Fix build problem with CMake libdir on Hurd and kFreeBSD
               Using dist version of GNUInstallDirs.cmake
 
  -- Markus Frosch <lazyfrosch@debian.org>  Mon, 08 Sep 2014 16:39:23 +0200
 
-icinga2 (2.1.0-2) wily; urgency=medium
+icinga2 (2.1.0-2) vivid; urgency=medium
 
   [ Markus Frosch ]
   * [26e4092] Update copyright for python embed
@@ -301,7 +301,7 @@ icinga2 (2.1.0-2) wily; urgency=medium
   * Brazilian Portuguese ().  Closes: #759599
   * Danish (Joe Hansen).  Closes: #759778
   * Japanese (victory).  Closes: #760094
-  * Swily; (Matías A. Bellone).  Closes: #760115
+  * Svivid; (Matías A. Bellone).  Closes: #760115
   * Czech (Michal Simunek).  Closes: #760145
   * Polish (Michał Kułach).  Closes: #760180
   * Italian (Beatrice Torracca).  Closes: #760300
@@ -310,7 +310,7 @@ icinga2 (2.1.0-2) wily; urgency=medium
 
  -- Markus Frosch <lazyfrosch@debian.org>  Mon, 08 Sep 2014 14:03:13 +0200
 
-icinga2 (2.1.0-1) wily; urgency=medium
+icinga2 (2.1.0-1) vivid; urgency=medium
 
   [ Alexander Wirt ]
   * [e1b3b50] Prefer monitoring-plugins over nagios-plugins
@@ -327,7 +327,7 @@ icinga2 (2.1.0-1) wily; urgency=medium
 
  -- Markus Frosch <lazyfrosch@debian.org>  Fri, 29 Aug 2014 14:07:28 +0200
 
-icinga2 (2.0.2-1) wily; urgency=medium
+icinga2 (2.0.2-1) vivid; urgency=medium
 
   [ Jan Wagner ]
   * [e6fec86] Adding me to the Uploaders
@@ -340,7 +340,7 @@ icinga2 (2.0.2-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 07 Aug 2014 14:42:05 +0200
 
-icinga2 (2.0.1-2) wily; urgency=medium
+icinga2 (2.0.1-2) vivid; urgency=medium
 
   [ Alexander Wirt ]
   * [93ca878] Fix dependency on apache2-utils and take care cgi is loaded
@@ -350,7 +350,7 @@ icinga2 (2.0.1-2) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Wed, 30 Jul 2014 19:36:09 +0200
 
-icinga2 (2.0.1-1) wily; urgency=medium
+icinga2 (2.0.1-1) vivid; urgency=medium
 
   [ Alexander Wirt ]
   * [1fc2d37] Wrap and sort
@@ -366,7 +366,7 @@ icinga2 (2.0.1-1) wily; urgency=medium
 
  -- Alexander Wirt <formorer@debian.org>  Mon, 14 Jul 2014 20:33:58 +0200
 
-icinga2 (2.0.0-1) wily; urgency=low
+icinga2 (2.0.0-1) vivid; urgency=low
 
   [ Markus Frosch ]
   * Initial Debian packaging for the Icinga 2 betas (Closes: #751509)
