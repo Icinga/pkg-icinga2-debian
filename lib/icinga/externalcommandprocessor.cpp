@@ -215,7 +215,7 @@ void ExternalCommandProcessor::StaticInitialize(void)
 	RegisterCommand("DEL_SVC_DOWNTIME", &ExternalCommandProcessor::DelSvcDowntime, 1);
 	RegisterCommand("SCHEDULE_HOST_DOWNTIME", &ExternalCommandProcessor::ScheduleHostDowntime, 8);
 	RegisterCommand("DEL_HOST_DOWNTIME", &ExternalCommandProcessor::DelHostDowntime, 1);
-	RegisterCommand("DEL_DOWNTIME_BY_HOST_NAME", &ExternalCommandProcessor::DelDowntimeByHostName, 1);
+	RegisterCommand("DEL_DOWNTIME_BY_HOST_NAME", &ExternalCommandProcessor::DelDowntimeByHostName, 1, 4);
 	RegisterCommand("SCHEDULE_HOST_SVC_DOWNTIME", &ExternalCommandProcessor::ScheduleHostSvcDowntime, 8);
 	RegisterCommand("SCHEDULE_HOSTGROUP_HOST_DOWNTIME", &ExternalCommandProcessor::ScheduleHostgroupHostDowntime, 8);
 	RegisterCommand("SCHEDULE_HOSTGROUP_SVC_DOWNTIME", &ExternalCommandProcessor::ScheduleHostgroupSvcDowntime, 8);
@@ -327,6 +327,11 @@ void ExternalCommandProcessor::ProcessHostCheckResult(double time, const std::ve
 	    << "Processing passive check result for host '" << arguments[0] << "'";
 
 	host->ProcessCheckResult(result);
+
+	/* Reschedule the next check. The side effect of this is that for as long
+	 * as we receive passive results for a service we won't execute any
+	 * active checks. */
+	host->SetNextCheck(Utility::GetTime() + host->GetCheckInterval());
 }
 
 void ExternalCommandProcessor::ProcessServiceCheckResult(double time, const std::vector<String>& arguments)
@@ -357,6 +362,11 @@ void ExternalCommandProcessor::ProcessServiceCheckResult(double time, const std:
 	    << "Processing passive check result for service '" << arguments[1] << "'";
 
 	service->ProcessCheckResult(result);
+
+	/* Reschedule the next check. The side effect of this is that for as long
+	 * as we receive passive results for a service we won't execute any
+	 * active checks. */
+	service->SetNextCheck(Utility::GetTime() + service->GetCheckInterval());
 }
 
 void ExternalCommandProcessor::ScheduleHostCheck(double, const std::vector<String>& arguments)
