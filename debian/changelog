@@ -2,7 +2,13 @@ icinga2 (2.4.3-1~ppa1~precise1) precise; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
- -- Alexander Wirt <formorer@debian.org>  Mon, 01 Dec 2014 22:39:28 +0100
+ -- Alexander Wirt <formorer@debian.org>  Wed, 16 Mar 2016 13:05:52 +0100
+
+icinga2 (2.4.4-1) unstable; urgency=medium
+
+  * [a2d01fb] Imported Upstream version 2.4.4
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 16 Mar 2016 12:10:49 +0100
 
 icinga2 (2.4.3-1) unstable; urgency=medium
 

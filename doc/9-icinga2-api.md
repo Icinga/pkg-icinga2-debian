@@ -501,6 +501,11 @@ via a join:
         ]
     }
 
+In case you want to fetch all [comments](6-object-types.md#objecttype-comment)
+for hosts and services, you can use the following query URL (similar example
+for downtimes):
+
+   https://localhost:5665/v1/objects/comments?joins=host&joins=service
 
 ### <a id="icinga2-api-config-objects-create"></a> Creating Config Objects
 
@@ -552,6 +557,16 @@ which is required for host objects:
         ]
     }
 
+Service objects must be created using their full name ("hostname!servicename") referencing an existing host object:
+
+    $ curl -k -s -u root:icinga -H 'Accept: application/json' -X PUT 'https://localhost:5665/v1/objects/services/localhost!realtime-load' \
+    -d '{ "templates": [ "generic-service" ], "attrs": { "check_command": "load", "check_interval": 1,"retry_interval": 1 } }'
+
+
+Example for a new CheckCommand object:
+
+    $ curl -k -s -u root:icinga -H 'Accept: application/json' -X PUT 'https://localhost:5665/v1/objects/checkcommands/mytest' \
+    -d '{ "templates": [ "plugin-check-command" ], "attrs": { "command": [ "/usr/local/sbin/check_http" ], "arguments": { "-I": "$mytest_iparam$" } } }'
 
 
 ### <a id="icinga2-api-config-objects-modify"></a> Modifying Objects
@@ -778,7 +793,7 @@ In addition to these parameters a [filter](9-icinga2-api.md#icinga2-api-filters)
 The following example acknowledges all services which are in a hard critical state and sends out
 a notification for them:
 
-    $ curl -k -s -u root:icinga -H 'Accept: application/json' -X POST 'https://localhost:566tions/acknowledge-problem?type=Service&filter=service.state==2&service.state_type=1' \
+    $ curl -k -s -u root:icinga -H 'Accept: application/json' -X POST 'https://localhost:5665/v1/actions/acknowledge-problem?type=Service&filter=service.state==2&service.state_type=1' \
     -d '{ "author": "icingaadmin", "comment": "Global outage. Working on it.", "notify": true }' | python -m json.tool
 
     {
