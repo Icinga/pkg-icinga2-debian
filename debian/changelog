@@ -1,10 +1,18 @@
-icinga2 (2.4.3-1~ppa1~trusty1) trusty; urgency=medium
+icinga2 (2.4.4-1~ppa1~trusty1) trusty; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
- -- Alexander Wirt <formorer@debian.org>  Mon, 16 Jun 2014 16:52:55 +0200
+ -- Alexander Wirt <formorer@debian.org>  Wed, 16 Mar 2016 13:09:11 +0100
 
 icinga2 (2.4.3-1) vivid; urgency=medium
+
+icinga2 (2.4.4-1) unstable; urgency=medium
+
+  * [a2d01fb] Imported Upstream version 2.4.4
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 16 Mar 2016 12:10:49 +0100
+
+icinga2 (2.4.3-1) unstable; urgency=medium
 
   * [39ba8d6] Imported Upstream version 2.4.3
 

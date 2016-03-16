@@ -66,7 +66,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.4.3
+Version: 2.4.4
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
@@ -93,7 +93,7 @@ BuildRequires: libyajl-devel
 BuildRequires: libedit-devel
 BuildRequires: ncurses-devel
 %if "%{_vendor}" == "suse" && 0%{?suse_version} < 1210
-BuildRequires: gcc47-c++
+BuildRequires: gcc48-c++
 BuildRequires: libstdc++47-devel
 BuildRequires: libopenssl1-devel
 %else
