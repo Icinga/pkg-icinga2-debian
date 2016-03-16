@@ -92,6 +92,8 @@ public:
 	void UpdateNextCheck(void);
 
 	bool HasBeenChecked(void) const;
+	virtual bool IsStateOK(ServiceState state) = 0;
+
 	virtual double GetLastCheck(void) const override;
 
 	virtual void SaveLastState(ServiceState state, double timestamp) = 0;
