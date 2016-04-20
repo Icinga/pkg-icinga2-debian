@@ -125,30 +125,17 @@ int Main(void)
 #ifdef _WIN32
 	bool builtinPaths = true;
 
-	HKEY hKey;
-	if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, "SOFTWARE\\Icinga Development Team\\ICINGA2", 0,
-	    KEY_QUERY_VALUE, &hKey) == ERROR_SUCCESS) {
-		BYTE pvData[MAX_PATH];
-		DWORD cbData = sizeof(pvData)-1;
-		DWORD lType;
-		if (RegQueryValueEx(hKey, NULL, NULL, &lType, pvData, &cbData) == ERROR_SUCCESS && lType == REG_SZ) {
-			pvData[cbData] = '\0';
+	String binaryPrefix = Utility::GetIcingaInstallPath();
+	String dataPrefix = Utility::GetIcingaDataPath();
 
-			String prefix = (char *)pvData;
-			Application::DeclarePrefixDir(prefix);
-			Application::DeclareSysconfDir(prefix + "\\etc");
-			Application::DeclareRunDir(prefix + "\\var\\run");
-			Application::DeclareLocalStateDir(prefix + "\\var");
-			Application::DeclarePkgDataDir(prefix + "\\share\\icinga2");
-			Application::DeclareIncludeConfDir(prefix + "\\share\\icinga2\\include");
-
-			builtinPaths = false;
-		}
-
-		RegCloseKey(hKey);
-	}
-
-	if (builtinPaths) {
+	if (!binaryPrefix.IsEmpty() && !dataPrefix.IsEmpty()) {
+		Application::DeclarePrefixDir(binaryPrefix);
+		Application::DeclareSysconfDir(dataPrefix + "\\etc");
+		Application::DeclareRunDir(dataPrefix + "\\var\\run");
+		Application::DeclareLocalStateDir(dataPrefix + "\\var");
+		Application::DeclarePkgDataDir(binaryPrefix + "\\share\\icinga2");
+		Application::DeclareIncludeConfDir(binaryPrefix + "\\share\\icinga2\\include");
+	} else {
 		Log(LogWarning, "icinga-app", "Registry key could not be read. Falling back to built-in paths.");
 
 #endif /* _WIN32 */
