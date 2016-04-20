@@ -65,7 +65,7 @@ namespace Icinga
 		{
 			FileStream fp = null;
 			try {
-				fp = File.Open(Program.Icinga2InstallDir + String.Format("\\etc\\icinga2\\features-enabled\\{0}.conf", feature), FileMode.Create);
+				fp = File.Open(Program.Icinga2DataDir + String.Format("\\etc\\icinga2\\features-enabled\\{0}.conf", feature), FileMode.Create);
 				using (StreamWriter sw = new StreamWriter(fp, Encoding.ASCII)) {
 					fp = null;
 					sw.Write(String.Format("include \"../features-available/{0}.conf\"\n", feature));
@@ -144,8 +144,7 @@ namespace Icinga
 		{
 			SetRetrievalStatus(25);
 
-			string pathPrefix = Program.Icinga2InstallDir + "\\etc\\icinga2\\pki\\" + txtInstanceName.Text;
-
+			string pathPrefix = Program.Icinga2DataDir + "\\etc\\icinga2\\pki\\" + txtInstanceName.Text;
 			string output;
 
 			if (!File.Exists(pathPrefix + ".crt")) {
@@ -255,7 +254,7 @@ namespace Icinga
 
 				Process proc = new Process();
 				proc.StartInfo.FileName = "msiexec.exe";
-				proc.StartInfo.Arguments = "/i \"" + Program.Icinga2InstallDir + "\\sbin\\NSCP-Win32.msi\"";
+				proc.StartInfo.Arguments = "/i \"" + Program.Icinga2InstallDir + "\\sbin\\NSCP.msi\"";
 				proc.Start();
 				proc.WaitForExit();
 			}
@@ -273,25 +272,6 @@ namespace Icinga
 			}
 
 			tbcPages.SelectedTab = tabFinish;
-		}
-
-		private void AgentWizard_Shown(object sender, EventArgs e)
-		{
-			string installDir = Program.Icinga2InstallDir;
-
-			/* TODO: This is something the NSIS installer should do */
-			Directory.CreateDirectory(installDir + "\\etc\\icinga2\\pki");
-			Directory.CreateDirectory(installDir + "\\var\\cache\\icinga2");
-			Directory.CreateDirectory(installDir + "\\var\\lib\\icinga2\\pki");
-			Directory.CreateDirectory(installDir + "\\var\\lib\\icinga2\\agent\\inventory");
-			Directory.CreateDirectory(installDir + "\\var\\lib\\icinga2\\api\\config");
-			Directory.CreateDirectory(installDir + "\\var\\lib\\icinga2\\api\\log");
-			Directory.CreateDirectory(installDir + "\\var\\lib\\icinga2\\api\\zones");
-			Directory.CreateDirectory(installDir + "\\var\\log\\icinga2\\compat\\archive");
-			Directory.CreateDirectory(installDir + "\\var\\log\\icinga2\\crash");
-			Directory.CreateDirectory(installDir + "\\var\\run\\icinga2\\cmd");
-			Directory.CreateDirectory(installDir + "\\var\\spool\\icinga2\\perfdata");
-			Directory.CreateDirectory(installDir + "\\var\\spool\\icinga2\\tmp");
 		}
 
 		private void btnBack_Click(object sender, EventArgs e)
@@ -374,8 +354,8 @@ namespace Icinga
 				thread.Start();
 			}
 
-			/*if (tbcPages.SelectedTab == tabParameters &&
-				!File.Exists(Icinga2InstallDir + "\\etc\\icinga2\\pki\\agent\\agent.crt")) {
+            /*if (tbcPages.SelectedTab == tabParameters &&
+				!File.Exists(Icinga2DataDir + "\\etc\\icinga2\\pki\\agent\\agent.crt")) {
 				byte[] bytes = Convert.FromBase64String(txtBundle.Text);
 				MemoryStream ms = new MemoryStream(bytes);
 				GZipStream gz = new GZipStream(ms, CompressionMode.Decompress);
@@ -387,10 +367,10 @@ namespace Icinga
 					ms2.Write(buffer, 0, rc);
 				ms2.Position = 0;
 				TarReader tr = new TarReader(ms2);
-				tr.ReadToEnd(Icinga2InstallDir + "\\etc\\icinga2\\pki\\agent");
+				tr.ReadToEnd(Icinga2DataDir + "\\etc\\icinga2\\pki\\agent");
 			}*/
 
-			if (tbcPages.SelectedTab == tabConfigure) {
+            if (tbcPages.SelectedTab == tabConfigure) {
 				Thread thread = new Thread(ConfigureService);
 				thread.Start();
 			}

@@ -175,6 +175,11 @@ String Comment::AddComment(const Checkable::Ptr& checkable, CommentType entryTyp
 	if (service)
 		attrs->Set("service_name", service->GetShortName());
 
+	String zone = checkable->GetZoneName();
+
+	if (!zone.IsEmpty())
+		attrs->Set("zone", zone);
+
 	String config = ConfigObjectUtility::CreateObjectConfig(Comment::TypeInstance, fullName, true, Array::Ptr(), attrs);
 
 	Array::Ptr errors = new Array();
@@ -239,7 +244,7 @@ void Comment::CommentsExpireTimerHandler(void)
 	}
 
 	BOOST_FOREACH(const Comment::Ptr& comment, comments) {
-		if (comment->IsExpired())
+		if (comment->IsActive() && comment->IsExpired())
 			RemoveComment(comment->GetName());
 	}
 }

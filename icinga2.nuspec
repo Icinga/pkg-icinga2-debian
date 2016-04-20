@@ -6,7 +6,7 @@
     <!-- Read this before publishing packages to chocolatey.org: https://github.com/chocolatey/chocolatey/wiki/CreatePackages -->
     <id>icinga2</id>
     <title>Icinga2</title>
-    <version>2.4.4</version>
+    <version>2.4.5</version>
     <authors>2016 - The Icinga Project</authors>
     <owners>Icinga Development Team</owners>
     <summary>icinga2 - Monitoring Agent for Windows</summary>
@@ -16,9 +16,6 @@
     <licenseUrl>https://www.icinga.org/resources/faq/</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <iconUrl>https://www.icinga.org/wp-content/uploads/2015/05/icinga_icon_128x128.png</iconUrl>
-    <dependencies>
-      <dependency id="DotNet3.5" />
-    </dependencies>
   </metadata>
   <files>
     <file src="tools\chocolateyInstall.ps1" target="tools" />
