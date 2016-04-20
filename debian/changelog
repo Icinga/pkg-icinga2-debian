@@ -2,8 +2,8 @@ icinga2 (2.4.5-1~debmon70+1) debmon-wheezy; urgency=medium
 
   * Rebuild for debmon-wheezy.
 
- -- Alexander Wirt <formorer@debian.org>  Wed, 16 Mar 2016 12:21:19 +0100
-=======
+ -- Alexander Wirt <formorer@debian.org>  Wed, 20 Apr 2016 13:32:36 +0200
+
 icinga2 (2.4.5-1) unstable; urgency=medium
 
   * [26a7374] Imported Upstream version 2.4.5
