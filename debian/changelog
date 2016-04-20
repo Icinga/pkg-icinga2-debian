@@ -1,4 +1,4 @@
-icinga2 (2.4.5-1~ppa1~precise1) precise; urgency=medium
+icinga2 (2.4.5-1~ppa1~lucid1) lucid; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
