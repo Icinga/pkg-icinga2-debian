@@ -61,7 +61,7 @@ long Checkable::GetSchedulingOffset(void)
 	return m_SchedulingOffset;
 }
 
-void Checkable::UpdateNextCheck(void)
+void Checkable::UpdateNextCheck(const MessageOrigin::Ptr& origin)
 {
 	double interval;
 
@@ -76,7 +76,7 @@ void Checkable::UpdateNextCheck(void)
 	if (interval > 1)
 		adj = fmod(now * 100 + GetSchedulingOffset(), interval * 100) / 100.0;
 
-	SetNextCheck(now - adj + interval);
+	SetNextCheck(now - adj + interval, false, origin);
 }
 
 bool Checkable::HasBeenChecked(void) const
@@ -197,7 +197,7 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 			attempt = old_attempt + 1; // NOT-OK -> NOT-OK counter
 		} else if (IsStateOK(old_state)) {
 			SetStateType(StateTypeSoft);
-			attempt = 1; //OK -> NOT-OK transition, reset the counter
+			attempt = 1; // OK -> NOT-OK transition, reset the counter
 		} else {
 			attempt = old_attempt;
 		}
@@ -321,6 +321,19 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 		UpdateFlappingStatus(stateChange);
 
 	is_flapping = IsFlapping();
+
+	if (cr->GetActive()) {
+		/* If there was a OK -> NOT-OK state change for actively scheduled checks,
+		 * update the next check time using the retry_interval.
+		 * Important: Add the cluster message origin. */
+		if (GetStateType() == StateTypeSoft)
+			UpdateNextCheck(origin);
+	} else {
+		/* Reschedule the next check for passive check results. The side effect of
+		 * this is that for as long as we receive passive results for a service we
+		 * won't execute any active checks. */
+		SetNextCheck(Utility::GetTime() + GetCheckInterval(), false, origin);
+	}
 
 	olock.Unlock();
 
@@ -463,8 +476,16 @@ void Checkable::ExecuteCheck(void)
 			/* fail to perform check on unconnected endpoint */
 			cr->SetState(ServiceUnknown);
 
-			cr->SetOutput("Remote Icinga instance '" + endpoint->GetName() +
-			    "' " + "is not connected to '" + Endpoint::GetLocalEndpoint()->GetName() + "'");
+			String output = "Remote Icinga instance '" + endpoint->GetName() + "' is not connected to ";
+
+			Endpoint::Ptr localEndpoint = Endpoint::GetLocalEndpoint();
+
+			if (localEndpoint)
+				output += "'" + localEndpoint->GetName() + "'";
+			else
+				output += "this instance";
+
+			cr->SetOutput(output);
 
 			ProcessCheckResult(cr);
 		}
