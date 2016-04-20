@@ -1,8 +1,8 @@
-icinga2 (2.4.5-1) UNRELEASED; urgency=medium
+icinga2 (2.4.5-1) unstable; urgency=medium
 
   * [26a7374] Imported Upstream version 2.4.5
 
- -- Alexander Wirt <formorer@debian.org>  Wed, 20 Apr 2016 12:01:54 +0200
+ -- Alexander Wirt <formorer@debian.org>  Wed, 20 Apr 2016 13:09:03 +0200
 
 icinga2 (2.4.4-1) unstable; urgency=medium
 
