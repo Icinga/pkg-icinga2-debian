@@ -321,17 +321,14 @@ void ExternalCommandProcessor::ProcessHostCheckResult(double time, const std::ve
 	result->SetScheduleEnd(time);
 	result->SetExecutionStart(time);
 	result->SetExecutionEnd(time);
+
+	/* Mark this check result as passive. */
 	result->SetActive(false);
 
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Processing passive check result for host '" << arguments[0] << "'";
 
 	host->ProcessCheckResult(result);
-
-	/* Reschedule the next check. The side effect of this is that for as long
-	 * as we receive passive results for a service we won't execute any
-	 * active checks. */
-	host->SetNextCheck(Utility::GetTime() + host->GetCheckInterval());
 }
 
 void ExternalCommandProcessor::ProcessServiceCheckResult(double time, const std::vector<String>& arguments)
@@ -356,17 +353,14 @@ void ExternalCommandProcessor::ProcessServiceCheckResult(double time, const std:
 	result->SetScheduleEnd(time);
 	result->SetExecutionStart(time);
 	result->SetExecutionEnd(time);
+
+	/* Mark this check result as passive. */
 	result->SetActive(false);
 
 	Log(LogNotice, "ExternalCommandProcessor")
 	    << "Processing passive check result for service '" << arguments[1] << "'";
 
 	service->ProcessCheckResult(result);
-
-	/* Reschedule the next check. The side effect of this is that for as long
-	 * as we receive passive results for a service we won't execute any
-	 * active checks. */
-	service->SetNextCheck(Utility::GetTime() + service->GetCheckInterval());
 }
 
 void ExternalCommandProcessor::ScheduleHostCheck(double, const std::vector<String>& arguments)

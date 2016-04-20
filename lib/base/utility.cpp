@@ -55,6 +55,8 @@
 #	include <VersionHelpers.h>
 #	include <windows.h>
 #	include <io.h>
+#	include <msi.h>
+#	include <shlobj.h>
 #endif /*_WIN32*/
 
 using namespace icinga;
@@ -661,7 +663,7 @@ bool Utility::GlobRecursive(const String& path, const String& pattern, const boo
 
 		struct stat statbuf;
 
-		if (lstat(cpath.CStr(), &statbuf) < 0)
+		if (stat(cpath.CStr(), &statbuf) < 0)
 			continue;
 
 		if (S_ISDIR(statbuf.st_mode))
@@ -726,7 +728,11 @@ void Utility::MkDirP(const String& path, int mode)
 #else /*_ WIN32 */
 		pos = path.FindFirstOf("/\\", pos + 1);
 #endif /* _WIN32 */
-		MkDir(path.SubStr(0, pos), mode);
+
+		String spath = path.SubStr(0, pos + 1);
+		struct stat statbuf;
+		if (stat(spath.CStr(), &statbuf) < 0 && errno == ENOENT)
+			MkDir(path.SubStr(0, pos), mode);
 	}
 }
 
@@ -1855,4 +1861,35 @@ int Utility::MksTemp(char *tmpl)
 	errno = EEXIST;
 	return -1;
 }
-#endif /*_WIN32*/
+
+String Utility::GetIcingaInstallPath(void)
+{
+	char szProduct[39];
+
+	for (int i = 0; MsiEnumProducts(i, szProduct) == ERROR_SUCCESS; i++) {
+		char szName[128];
+		DWORD cbName = sizeof(szName);
+		if (MsiGetProductInfo(szProduct, INSTALLPROPERTY_INSTALLEDPRODUCTNAME, szName, &cbName) != ERROR_SUCCESS)
+			continue;
+
+		if (strcmp(szName, "Icinga 2") != 0)
+			continue;
+
+		char szLocation[1024];
+		DWORD cbLocation = sizeof(szLocation);
+		if (MsiGetProductInfo(szProduct, INSTALLPROPERTY_INSTALLLOCATION, szLocation, &cbLocation) == ERROR_SUCCESS)
+			return szLocation;
+	}
+
+	return "";
+}
+
+String Utility::GetIcingaDataPath(void)
+{
+	char path[MAX_PATH];
+	if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_COMMON_APPDATA, NULL, 0, path)))
+		return "";
+	return String(path) + "\\icinga2";
+}
+
+#endif /* _WIN32 */

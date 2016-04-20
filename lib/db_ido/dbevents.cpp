@@ -505,8 +505,9 @@ void DbEvents::AddDowntimeInternal(std::vector<DbQuery>& queries, const Downtime
 	fields1->Set("duration", downtime->GetDuration());
 	fields1->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->GetStartTime()));
 	fields1->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->GetEndTime()));
-	fields1->Set("was_started", 0);
-	fields1->Set("is_in_effect", 0);
+	fields1->Set("was_started", ((downtime->GetStartTime() <= Utility::GetTime()) ? 1 : 0));
+	fields1->Set("is_in_effect", (downtime->IsActive() ? 1 : 0));
+	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 	String node = IcingaApplication::GetInstance()->GetNodeName();
@@ -527,6 +528,39 @@ void DbEvents::AddDowntimeInternal(std::vector<DbQuery>& queries, const Downtime
 	query1.Fields = fields1;
 
 	queries.push_back(query1);
+
+	/* host/service status */
+	if (!historical) {
+		Host::Ptr host;
+		Service::Ptr service;
+		tie(host, service) = GetHostService(checkable);
+
+		DbQuery query2;
+		if (service)
+			query2.Table = "servicestatus";
+		else
+			query2.Table = "hoststatus";
+
+		query2.Type = DbQueryUpdate;
+		query2.Category = DbCatState;
+		query2.StatusUpdate = true;
+		query2.Object = DbObject::GetOrCreateByObject(checkable);
+
+		Dictionary::Ptr fields2 = new Dictionary();
+		fields2->Set("scheduled_downtime_depth", checkable->GetDowntimeDepth());
+
+		query2.Fields = fields2;
+
+		query2.WhereCriteria = new Dictionary();
+		if (service)
+			query2.WhereCriteria->Set("service_object_id", service);
+		else
+			query2.WhereCriteria->Set("host_object_id", host);
+
+		query2.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
+
+		queries.push_back(query2);
+	}
 }
 
 void DbEvents::RemoveDowntime(const Downtime::Ptr& downtime)
@@ -564,6 +598,7 @@ void DbEvents::RemoveDowntimeInternal(std::vector<DbQuery>& queries, const Downt
 	fields3->Set("was_cancelled", downtime->GetWasCancelled() ? 1 : 0);
 	fields3->Set("actual_end_time", DbValue::FromTimestamp(time_bag.first));
 	fields3->Set("actual_end_time_usec", time_bag.second);
+	fields3->Set("is_in_effect", 0);
 	query3.Fields = fields3;
 
 	query3.WhereCriteria = new Dictionary();
@@ -623,7 +658,7 @@ void DbEvents::TriggerDowntime(const Downtime::Ptr& downtime)
 	fields1->Set("was_started", 1);
 	fields1->Set("actual_start_time", DbValue::FromTimestamp(time_bag.first));
 	fields1->Set("actual_start_time_usec", time_bag.second);
-	fields1->Set("is_in_effect", 1);
+	fields1->Set("is_in_effect", (downtime->IsActive() ? 1 : 0));
 	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
@@ -798,8 +833,7 @@ void DbEvents::AddNotificationHistory(const Notification::Ptr& notification, con
 	query1.Table = "notifications";
 	query1.Type = DbQueryInsert;
 	query1.Category = DbCatNotification;
-	/* store the object ptr for caching the insert id for this object */
-	query1.NotificationObject = notification;
+	query1.NotificationInsertID = new DbValue(DbValueObjectInsertID, -1);
 
 	Host::Ptr host;
 	Service::Ptr service;
@@ -833,15 +867,16 @@ void DbEvents::AddNotificationHistory(const Notification::Ptr& notification, con
 	query1.Fields = fields1;
 	DbObject::OnQuery(query1);
 
-	DbQuery query2;
-	query2.Table = "contactnotifications";
-	query2.Type = DbQueryInsert;
-	query2.Category = DbCatNotification;
+	std::vector<DbQuery> queries;
 
-	/* filtered users */
 	BOOST_FOREACH(const User::Ptr& user, users) {
 		Log(LogDebug, "DbEvents")
 		    << "add contact notification history for service '" << checkable->GetName() << "' and user '" << user->GetName() << "'.";
+
+		DbQuery query2;
+		query2.Table = "contactnotifications";
+		query2.Type = DbQueryInsert;
+		query2.Category = DbCatNotification;
 
 		Dictionary::Ptr fields2 = new Dictionary();
 		fields2->Set("contact_object_id", user);
@@ -850,12 +885,14 @@ void DbEvents::AddNotificationHistory(const Notification::Ptr& notification, con
 		fields2->Set("end_time", DbValue::FromTimestamp(time_bag.first));
 		fields2->Set("end_time_usec", time_bag.second);
 
-		fields2->Set("notification_id", notification); /* DbConnection class fills in real ID from notification insert id cache */
+		fields2->Set("notification_id", query1.NotificationInsertID);
 		fields2->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
 		query2.Fields = fields2;
-		DbObject::OnQuery(query2);
+		queries.push_back(query2);
 	}
+
+	DbObject::OnMultipleQueries(queries);
 }
 
 /* statehistory */
