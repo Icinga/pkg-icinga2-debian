@@ -944,6 +944,9 @@ snmpv3_ereg          | **Optional.** Return OK state (for that OID) if extended 
 snmpv3_eregi         | **Optional.** Return OK state (for that OID) if case-insensitive extended REGEX matches.
 snmpv3_invert_search | **Optional.** Invert search result and return CRITICAL if found
 snmpv3_label         | **Optional.** Prefix label for output value.
+snmpv3_units         | **Optional.** Units label(s) for output value (e.g., 'sec.').
+snmpv3_rate_multiplier | **Optional.** Converts rate per second. For example, set to 60 to convert to per minute.
+snmpv3_rate          | **Optional.** Boolean. Enable rate calculation.
 snmpv3_timeout       | **Optional.** The command timeout in seconds. Defaults to 10 seconds.
 
 ### <a id="plugin-check-command-snmp-uptime"></a> snmp-uptime
@@ -1646,6 +1649,7 @@ mssql_health_password            | **Optional.** The password for the database c
 mssql_health_warning             | **Optional.** The warning threshold depending on the mode.
 mssql_health_critical            | **Optional.** The critical threshold depending on the mode.
 mssql_health_mode                | **Required.** The mode uses predefined keywords for the different checks. For example "connection-time", "database-free" or "sql".
+mssql_health_method              | **Optional.** How the plugin should connect to the database (dbi for the perl module `DBD::Sybase` (default) and `sqlrelay` for the SQLRelay proxy).
 mssql_health_name                | **Optional.** Depending on the mode this could be the database name or a SQL statement.
 mssql_health_name2               | **Optional.** If "mssql_health_name" is a sql statement, "mssql_health_name2" can be used to appear in the output and the performance data.
 mssql_health_regexp              | **Optional.** If set to true, "mssql_health_name" will be interpreted as a regular expression. Defaults to false.
@@ -1671,6 +1675,7 @@ mysql_health_database            | **Optional.** The database to connect to. Def
 mysql_health_warning             | **Optional.** The warning threshold depending on the mode.
 mysql_health_critical            | **Optional.** The critical threshold depending on the mode.
 mysql_health_mode                | **Required.** The mode uses predefined keywords for the different checks. For example "connection-time", "slave-lag" or "sql".
+mysql_health_method              | **Optional.** How the plugin should connect to the database (`dbi` for using DBD::Mysql (default), `mysql` for using the mysql-Tool).
 mysql_health_name                | **Optional.** The SQL statement to be executed with "mysql_health_mode" sql.
 mysql_health_name2               | **Optional.** If "mysql_health_name" is a sql statement, "mysql_health_name2" can be used to appear in the output and the performance data.
 mysql_health_units               | **Optional.** This is used for a better output of mode=sql and for specifying thresholds for mode=tablespace-free. Possible values are "%", "KB", "MB" and "GB".
@@ -1691,6 +1696,7 @@ oracle_health_password           | **Optional.** The password for the database c
 oracle_health_warning            | **Optional.** The warning threshold depending on the mode.
 oracle_health_critical           | **Optional.** The critical threshold depending on the mode.
 oracle_health_mode               | **Required.** The mode uses predefined keywords for the different checks. For example "connection-time", "flash-recovery-area-usage" or "sql".
+oracle_health_method             | **Optional.** How the plugin should connect to the database (`dbi` for using DBD::Oracle (default), `sqlplus` for using the sqlplus-Tool).
 oracle_health_name               | **Optional.** The tablespace, datafile, wait event, latch, enqueue depending on the mode or SQL statement to be executed with "oracle_health_mode" sql.
 oracle_health_name2              | **Optional.** If "oracle_health_name" is a sql statement, "oracle_health_name2" can be used to appear in the output and the performance data.
 oracle_health_regexp             | **Optional.** If set to true, "oracle_health_name" will be interpreted as a regular expression. Defaults to false.
