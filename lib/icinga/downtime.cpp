@@ -223,6 +223,11 @@ String Downtime::AddDowntime(const Checkable::Ptr& checkable, const String& auth
 	if (service)
 		attrs->Set("service_name", service->GetShortName());
 
+	String zone = checkable->GetZoneName();
+
+	if (!zone.IsEmpty())
+		attrs->Set("zone", zone);
+
 	String config = ConfigObjectUtility::CreateObjectConfig(Downtime::TypeInstance, fullName, true, Array::Ptr(), attrs);
 
 	Array::Ptr errors = new Array();
@@ -353,7 +358,7 @@ void Downtime::DowntimesExpireTimerHandler(void)
 	}
 
 	BOOST_FOREACH(const Downtime::Ptr& downtime, downtimes) {
-		if (downtime->IsExpired())
+		if (downtime->IsActive() && downtime->IsExpired())
 			RemoveDowntime(downtime->GetName(), false, true);
 	}
 }
