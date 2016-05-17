@@ -106,9 +106,6 @@ public:
 
 	Endpoint::Ptr GetCommandEndpoint(void) const;
 
-	static double CalculateExecutionTime(const CheckResult::Ptr& cr);
-	static double CalculateLatency(const CheckResult::Ptr& cr);
-
 	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, const MessageOrigin::Ptr&)> OnNewCheckResult;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, StateType, const MessageOrigin::Ptr&)> OnStateChange;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, std::set<Checkable::Ptr>, const MessageOrigin::Ptr&)> OnReachabilityChanged;
@@ -181,6 +178,10 @@ public:
 
 	virtual void ValidateCheckInterval(double value, const ValidationUtils& utils) override;
 
+	static void IncreasePendingChecks(void);
+	static void DecreasePendingChecks(void);
+	static int GetPendingChecks(void);
+
 protected:
 	virtual void Start(bool runtimeCreated) override;
 
@@ -188,6 +189,9 @@ private:
 	mutable boost::mutex m_CheckableMutex;
 	bool m_CheckRunning;
 	long m_SchedulingOffset;
+
+	static boost::mutex m_StatsMutex;
+	static int m_PendingChecks;
 
 	/* Downtimes */
 	std::set<Downtime::Ptr> m_Downtimes;
