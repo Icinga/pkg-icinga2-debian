@@ -324,6 +324,11 @@ void IdoPgsqlConnection::Reconnect(void)
 	Log(LogInformation, "IdoPgsqlConnection")
 	    << "pgSQL IDO instance id: " << static_cast<long>(m_InstanceID) << " (schema version: '" + version + "')";
 
+	Query("BEGIN");
+
+	/* update programstatus table */
+	UpdateProgramStatus();
+
 	/* record connection */
 	Query("INSERT INTO " + GetTablePrefix() + "conninfo " +
 	    "(instance_id, connect_time, last_checkin_time, agent_name, agent_version, connect_type, data_start_time) VALUES ("
@@ -356,8 +361,6 @@ void IdoPgsqlConnection::Reconnect(void)
 		if (active)
 			activeDbObjs.push_back(dbobj);
 	}
-
-	Query("BEGIN");
 
 	BOOST_FOREACH(const DbObject::Ptr& dbobj, activeDbObjs) {
 		if (dbobj->GetObject() == NULL) {
@@ -697,7 +700,7 @@ void IdoPgsqlConnection::InternalExecuteMultipleQueries(const std::vector<DbQuer
 		return;
 
 	BOOST_FOREACH(const DbQuery& query, queries) {
-		ASSERT(query.Category != DbCatInvalid);
+		ASSERT(query.Type == DbQueryNewTransaction || query.Category != DbCatInvalid);
 
 		if (!CanExecuteQuery(query)) {
 			m_QueryQueue.Enqueue(boost::bind(&IdoPgsqlConnection::InternalExecuteMultipleQueries, this, queries), query.Priority);
@@ -714,10 +717,15 @@ void IdoPgsqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 {
 	AssertOnWorkQueue();
 
-	if ((query.Category & GetCategories()) == 0)
+	if (!GetConnected())
 		return;
 
-	if (!GetConnected())
+	if (query.Type == DbQueryNewTransaction) {
+		InternalNewTransaction();
+		return;
+	}
+
+	if ((query.Category & GetCategories()) == 0)
 		return;
 
 	if (query.Object && query.Object->GetObject()->GetExtension("agent_check").ToBool())
