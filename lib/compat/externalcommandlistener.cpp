@@ -115,13 +115,18 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 			try {
 				rc = sock->Read(buffer, sizeof(buffer));
 			} catch (const std::exception& ex) {
+				/* We have read all data. */
+				if (errno == EAGAIN)
+					continue;
+
 				Log(LogWarning, "ExternalCommandListener")
-				    << "Cannot read from socket." << DiagnosticInformation(ex);
+				    << "Cannot read from command pipe." << DiagnosticInformation(ex);
 				break;
 			}
 
-			if (rc <= 0)
-				break;
+			/* Empty pipe (EOF) */
+			if (rc == 0)
+				continue;
 
 			fifo->Write(buffer, rc);
 
@@ -139,7 +144,7 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 					ExternalCommandProcessor::Execute(command);
 				} catch (const std::exception& ex) {
 					Log(LogWarning, "ExternalCommandListener")
-					    << "External command failed." << DiagnosticInformation(ex);
+					    << "External command failed: " << DiagnosticInformation(ex);
 				}
 			}
 		}
