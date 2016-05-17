@@ -41,6 +41,9 @@ boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, st
 boost::signals2::signal<void (const Checkable::Ptr&, NotificationType, const CheckResult::Ptr&, const String&, const String&)> Checkable::OnNotificationsRequested;
 boost::signals2::signal<void (const Checkable::Ptr&)> Checkable::OnNextCheckUpdated;
 
+boost::mutex Checkable::m_StatsMutex;
+int Checkable::m_PendingChecks = 0;
+
 CheckCommand::Ptr Checkable::GetCheckCommand(void) const
 {
 	return dynamic_pointer_cast<CheckCommand>(NavigateCheckCommandRaw());
@@ -406,6 +409,10 @@ void Checkable::ExecuteCheck(void)
 {
 	CONTEXT("Executing check for object '" + GetName() + "'");
 
+	/* keep track of scheduling info in case the check type doesn't provide its own information */
+	double scheduled_start = GetNextCheck();
+	double before_check = Utility::GetTime();
+
 	UpdateNextCheck();
 
 	bool reachable = IsReachable();
@@ -423,10 +430,6 @@ void Checkable::ExecuteCheck(void)
 		SetLastStateType(GetLastStateType());
 		SetLastReachable(reachable);
 	}
-
-	/* keep track of scheduling info in case the check type doesn't provide its own information */
-	double scheduled_start = GetNextCheck();
-	double before_check = Utility::GetTime();
 
 	CheckResult::Ptr cr = new CheckResult();
 
@@ -516,23 +519,20 @@ void Checkable::UpdateStatistics(const CheckResult::Ptr& cr, CheckableType type)
 	}
 }
 
-double Checkable::CalculateExecutionTime(const CheckResult::Ptr& cr)
+void Checkable::IncreasePendingChecks(void)
 {
-	if (!cr)
-		return 0;
-
-	return cr->GetExecutionEnd() - cr->GetExecutionStart();
+	boost::mutex::scoped_lock lock(m_StatsMutex);
+	m_PendingChecks++;
 }
 
-double Checkable::CalculateLatency(const CheckResult::Ptr& cr)
+void Checkable::DecreasePendingChecks(void)
 {
-	if (!cr)
-		return 0;
+	boost::mutex::scoped_lock lock(m_StatsMutex);
+	m_PendingChecks--;
+}
 
-	double latency = (cr->GetScheduleEnd() - cr->GetScheduleStart()) - CalculateExecutionTime(cr);
-
-	if (latency < 0)
-		latency = 0;
-
-	return latency;
+int Checkable::GetPendingChecks(void)
+{
+	boost::mutex::scoped_lock lock(m_StatsMutex);
+	return m_PendingChecks;
 }
