@@ -506,7 +506,7 @@ void DbEvents::AddDowntimeInternal(std::vector<DbQuery>& queries, const Downtime
 	fields1->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->GetStartTime()));
 	fields1->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->GetEndTime()));
 	fields1->Set("was_started", ((downtime->GetStartTime() <= Utility::GetTime()) ? 1 : 0));
-	fields1->Set("is_in_effect", (downtime->IsActive() ? 1 : 0));
+	fields1->Set("is_in_effect", (downtime->IsInEffect() ? 1 : 0));
 	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
@@ -658,7 +658,7 @@ void DbEvents::TriggerDowntime(const Downtime::Ptr& downtime)
 	fields1->Set("was_started", 1);
 	fields1->Set("actual_start_time", DbValue::FromTimestamp(time_bag.first));
 	fields1->Set("actual_start_time_usec", time_bag.second);
-	fields1->Set("is_in_effect", (downtime->IsActive() ? 1 : 0));
+	fields1->Set("is_in_effect", (downtime->IsInEffect() ? 1 : 0));
 	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
 
@@ -1391,7 +1391,7 @@ void DbEvents::AddCheckableCheckHistory(const Checkable::Ptr& checkable, const C
 	double end = cr->GetExecutionEnd();
 	std::pair<unsigned long, unsigned long> time_bag_end = CompatUtility::ConvertTimestamp(end);
 
-	double execution_time = Service::CalculateExecutionTime(cr);
+	double execution_time = cr->CalculateExecutionTime();
 
 	fields1->Set("start_time", DbValue::FromTimestamp(time_bag_start.first));
 	fields1->Set("start_time_usec", time_bag_start.second);
@@ -1401,7 +1401,7 @@ void DbEvents::AddCheckableCheckHistory(const Checkable::Ptr& checkable, const C
 	fields1->Set("command_args", Empty);
 	fields1->Set("command_line", CompatUtility::GetCommandLine(checkable->GetCheckCommand()));
 	fields1->Set("execution_time", Convert::ToString(execution_time));
-	fields1->Set("latency", Convert::ToString(Service::CalculateLatency(cr)));
+	fields1->Set("latency", Convert::ToString(cr->CalculateLatency()));
 	fields1->Set("return_code", cr->GetExitStatus());
 	fields1->Set("output", CompatUtility::GetCheckResultOutput(cr));
 	fields1->Set("long_output", CompatUtility::GetCheckResultLongOutput(cr));

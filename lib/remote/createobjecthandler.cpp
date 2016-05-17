@@ -30,7 +30,7 @@ using namespace icinga;
 
 REGISTER_URLHANDLER("/v1/objects", CreateObjectHandler);
 
-bool CreateObjectHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& request, HttpResponse& response)
+bool CreateObjectHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& request, HttpResponse& response, const Dictionary::Ptr& params)
 {
 	if (request.RequestUrl->GetPath().size() != 4)
 		return false;
@@ -48,7 +48,6 @@ bool CreateObjectHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& r
 	FilterUtility::CheckPermission(user, "objects/create/" + type->GetName());
 
 	String name = request.RequestUrl->GetPath()[3];
-	Dictionary::Ptr params = HttpUtility::FetchRequestParameters(request);
 	Array::Ptr templates = params->Get("templates");
 	Dictionary::Ptr attrs = params->Get("attrs");
 
@@ -62,13 +61,28 @@ bool CreateObjectHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& r
 	if (params->Contains("ignore_on_error"))
 		ignoreOnError = HttpUtility::GetLastParameter(params, "ignore_on_error");
 
-	String config = ConfigObjectUtility::CreateObjectConfig(type, name, ignoreOnError, templates, attrs);
-
 	Array::Ptr results = new Array();
 	results->Add(result1);
 
 	Dictionary::Ptr result = new Dictionary();
 	result->Set("results", results);
+
+	String config;
+
+	try {
+		config = ConfigObjectUtility::CreateObjectConfig(type, name, ignoreOnError, templates, attrs);
+	} catch (const std::exception& ex) {
+		errors->Add(DiagnosticInformation(ex));
+
+		result1->Set("errors", errors);
+		result1->Set("code", 500);
+		result1->Set("status", "Object could not be created.");
+
+		response.SetStatus(500, "Object could not be created");
+		HttpUtility::SendJsonBody(response, result);
+
+		return true;
+	}
 
 	if (!ConfigObjectUtility::CreateObject(type, name, config, errors)) {
 		result1->Set("errors", errors);
