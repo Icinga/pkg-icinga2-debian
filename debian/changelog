@@ -1,8 +1,14 @@
-icinga2 (2.4.8-1~ppa1~wily1) wily; urgency=medium
+icinga2 (2.4.9-1~ppa2~wily1) wily; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
- -- Alexander Wirt <formorer@debian.org>  Thu, 21 Apr 2016 19:53:46 +0200
+ -- Alexander Wirt <formorer@debian.org>  Thu, 19 May 2016 12:52:34 +0200
+
+icinga2 (2.4.9-1) unstable; urgency=medium
+
+  * [71d8006] Imported Upstream version 2.4.9
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 19 May 2016 11:30:53 +0200
 
 icinga2 (2.4.8-1) unstable; urgency=medium
 
