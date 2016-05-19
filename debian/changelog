@@ -1,4 +1,4 @@
-icinga2 (2.4.9-1~ppa1~trusty1) trusty; urgency=medium
+icinga2 (2.4.9-1~ppa1~trusty1) xenial; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
