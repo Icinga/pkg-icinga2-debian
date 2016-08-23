@@ -24,16 +24,47 @@
 using namespace icinga;
 
 boost::thread_specific_ptr<std::stack<ScriptFrame *> > ScriptFrame::m_ScriptFrames;
+Array::Ptr ScriptFrame::m_Imports;
+
+INITIALIZE_ONCE_WITH_PRIORITY(&ScriptFrame::StaticInitialize, 50);
+
+void ScriptFrame::StaticInitialize(void)
+{
+	Dictionary::Ptr systemNS = new Dictionary();
+	ScriptGlobal::Set("System", systemNS);
+	AddImport(systemNS);
+
+	Dictionary::Ptr typesNS = new Dictionary();
+	ScriptGlobal::Set("Types", typesNS);
+	AddImport(typesNS);
+
+	Dictionary::Ptr deprecatedNS = new Dictionary();
+	ScriptGlobal::Set("Deprecated", deprecatedNS);
+	AddImport(deprecatedNS);
+}
 
 ScriptFrame::ScriptFrame(void)
 	: Locals(new Dictionary()), Self(ScriptGlobal::GetGlobals()), Sandboxed(false), Depth(0)
 {
-	PushFrame(this);
+	InitializeFrame();
 }
 
 ScriptFrame::ScriptFrame(const Value& self)
 	: Locals(new Dictionary()), Self(self), Sandboxed(false), Depth(0)
 {
+	InitializeFrame();
+}
+
+void ScriptFrame::InitializeFrame(void)
+{
+	std::stack<ScriptFrame *> *frames = m_ScriptFrames.get();
+
+	if (frames && !frames->empty()) {
+		ScriptFrame *frame = frames->top();
+
+		Sandboxed = frame->Sandboxed;
+	}
+
 	PushFrame(this);
 }
 
@@ -92,3 +123,23 @@ void ScriptFrame::PushFrame(ScriptFrame *frame)
 
 	frames->push(frame);
 }
+
+Array::Ptr ScriptFrame::GetImports(void)
+{
+	return m_Imports;
+}
+
+void ScriptFrame::AddImport(const Object::Ptr& import)
+{
+	Array::Ptr imports;
+
+	if (!m_Imports)
+		imports = new Array();
+	else
+		imports = m_Imports->ShallowClone();
+
+	imports->Add(import);
+
+	m_Imports = imports;
+}
+

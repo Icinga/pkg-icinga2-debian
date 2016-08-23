@@ -39,8 +39,15 @@ REGISTER_TYPE(IdoMysqlConnection);
 REGISTER_STATSFUNCTION(IdoMysqlConnection, &IdoMysqlConnection::StatsFunc);
 
 IdoMysqlConnection::IdoMysqlConnection(void)
-	: m_QueryQueue(1000000)
+	: m_QueryQueue(10000000)
 { }
+
+void IdoMysqlConnection::OnConfigLoaded(void)
+{
+	ObjectImpl<IdoMysqlConnection>::OnConfigLoaded();
+
+	m_QueryQueue.SetName("IdoMysqlConnection, " + GetName());
+}
 
 void IdoMysqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& perfdata)
 {
@@ -168,7 +175,6 @@ void IdoMysqlConnection::Reconnect(void)
 	CONTEXT("Reconnecting to MySQL IDO database '" + GetName() + "'");
 
 	double startTime = Utility::GetTime();
-	m_SessionToken = static_cast<int>(Utility::GetTime());
 
 	SetShouldConnect(true);
 
@@ -187,7 +193,10 @@ void IdoMysqlConnection::Reconnect(void)
 	ClearIDCache();
 
 	String ihost, isocket_path, iuser, ipasswd, idb;
+	String isslKey, isslCert, isslCa, isslCaPath, isslCipher;
 	const char *host, *socket_path, *user , *passwd, *db;
+	const char *sslKey, *sslCert, *sslCa, *sslCaPath, *sslCipher;
+	bool enableSsl;
 	long port;
 
 	ihost = GetHost();
@@ -196,12 +205,25 @@ void IdoMysqlConnection::Reconnect(void)
 	ipasswd = GetPassword();
 	idb = GetDatabase();
 
+	enableSsl = GetEnableSsl();
+	isslKey = GetSslKey();
+	isslCert = GetSslCert();
+	isslCa = GetSslCa();
+	isslCaPath = GetSslCapath();
+	isslCipher = GetSslCipher();
+
 	host = (!ihost.IsEmpty()) ? ihost.CStr() : NULL;
 	port = GetPort();
 	socket_path = (!isocket_path.IsEmpty()) ? isocket_path.CStr() : NULL;
 	user = (!iuser.IsEmpty()) ? iuser.CStr() : NULL;
 	passwd = (!ipasswd.IsEmpty()) ? ipasswd.CStr() : NULL;
 	db = (!idb.IsEmpty()) ? idb.CStr() : NULL;
+
+	sslKey = (!isslKey.IsEmpty()) ? isslKey.CStr() : NULL;
+	sslCert = (!isslCert.IsEmpty()) ? isslCert.CStr() : NULL;
+	sslCa = (!isslCa.IsEmpty()) ? isslCa.CStr() : NULL;
+	sslCaPath = (!isslCaPath.IsEmpty()) ? isslCaPath.CStr() : NULL;
+	sslCipher = (!isslCipher.IsEmpty()) ? isslCipher.CStr() : NULL;
 
 	/* connection */
 	if (!mysql_init(&m_Connection)) {
@@ -211,10 +233,13 @@ void IdoMysqlConnection::Reconnect(void)
 		BOOST_THROW_EXCEPTION(std::bad_alloc());
 	}
 
+	if (enableSsl)
+		mysql_ssl_set(&m_Connection, sslKey, sslCert, sslCa, sslCaPath, sslCipher);
+
 	if (!mysql_real_connect(&m_Connection, host, user, passwd, db, port, socket_path, CLIENT_FOUND_ROWS | CLIENT_MULTI_STATEMENTS)) {
 		Log(LogCritical, "IdoMysqlConnection")
 		    << "Connection to database '" << db << "' with user '" << user << "' on '" << host << ":" << port
-		    << "' failed: \"" << mysql_error(&m_Connection) << "\"";
+		    << "' " << (enableSsl ? "(SSL enabled) " : "") << "failed: \"" << mysql_error(&m_Connection) << "\"";
 
 		BOOST_THROW_EXCEPTION(std::runtime_error(mysql_error(&m_Connection)));
 	}
@@ -372,23 +397,23 @@ void IdoMysqlConnection::Reconnect(void)
 			activeDbObjs.push_back(dbobj);
 	}
 
+	SetIDCacheValid(true);
+
+	EnableActiveChangedHandler();
+
 	BOOST_FOREACH(const DbObject::Ptr& dbobj, activeDbObjs) {
-		if (dbobj->GetObject() == NULL) {
-			Log(LogNotice, "IdoMysqlConnection")
-			    << "Deactivate deleted object name1: '" << dbobj->GetName1()
-			    << "' name2: '" << dbobj->GetName2() + "'.";
-			DeactivateObject(dbobj);
-		} else {
-			dbobj->SendConfigUpdate();
-			dbobj->SendStatusUpdate();
-		}
+		if (dbobj->GetObject())
+			continue;
+
+		Log(LogNotice, "IdoMysqlConnection")
+		    << "Deactivate deleted object name1: '" << dbobj->GetName1()
+		    << "' name2: '" << dbobj->GetName2() + "'.";
+		DeactivateObject(dbobj);
 	}
 
 	UpdateAllObjects();
 
-	/* delete all customvariables without current session token */
-	ClearCustomVarTable("customvariables");
-	ClearCustomVarTable("customvariablestatus");
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::ClearTablesBySession, this), PriorityLow);
 
 	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::FinishConnect, this, startTime), PriorityLow);
 }
@@ -409,14 +434,18 @@ void IdoMysqlConnection::FinishConnect(double startTime)
 	Query("BEGIN");
 }
 
-void IdoMysqlConnection::ClearCustomVarTable(const String& table)
+void IdoMysqlConnection::ClearTablesBySession(void)
 {
-	Query("DELETE FROM " + GetTablePrefix() + table + " WHERE session_token <> " + Convert::ToString(m_SessionToken));
+	/* delete all comments and downtimes without current session token */
+	ClearTableBySession("comments");
+	ClearTableBySession("scheduleddowntime");
 }
 
-void IdoMysqlConnection::ClearConfigTable(const String& table)
+void IdoMysqlConnection::ClearTableBySession(const String& table)
 {
-	Query("DELETE FROM " + GetTablePrefix() + table + " WHERE instance_id = " + Convert::ToString(static_cast<long>(m_InstanceID)));
+	Query("DELETE FROM " + GetTablePrefix() + table + " WHERE instance_id = " +
+	    Convert::ToString(static_cast<long>(m_InstanceID)) + " AND session_token <> " +
+	    Convert::ToString(GetSessionToken()));
 }
 
 void IdoMysqlConnection::AsyncQuery(const String& query, const boost::function<void (const IdoMysqlResult&)>& callback)
@@ -427,6 +456,11 @@ void IdoMysqlConnection::AsyncQuery(const String& query, const boost::function<v
 	aq.Query = query;
 	aq.Callback = callback;
 	m_AsyncQueries.push_back(aq);
+
+	if (m_AsyncQueries.size() > 25000) {
+		FinishAsyncQueries();
+		InternalNewTransaction();
+	}
 }
 
 void IdoMysqlConnection::FinishAsyncQueries(void)
@@ -705,7 +739,7 @@ bool IdoMysqlConnection::FieldToEscapedString(const String& key, const Value& va
 		*result = static_cast<long>(m_InstanceID);
 		return true;
 	} else if (key == "session_token") {
-		*result = m_SessionToken;
+		*result = GetSessionToken();
 		return true;
 	}
 
@@ -718,6 +752,9 @@ bool IdoMysqlConnection::FieldToEscapedString(const String& key, const Value& va
 			*result = 0;
 			return true;
 		}
+
+		if (!IsIDCacheValid())
+			return false;
 
 		DbReference dbrefcol;
 
@@ -773,7 +810,7 @@ void IdoMysqlConnection::ExecuteQuery(const DbQuery& query)
 {
 	ASSERT(query.Category != DbCatInvalid);
 
-	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), query.Priority, true);
+	m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, -1), query.Priority, true);
 }
 
 void IdoMysqlConnection::ExecuteMultipleQueries(const std::vector<DbQuery>& queries)
@@ -786,6 +823,9 @@ void IdoMysqlConnection::ExecuteMultipleQueries(const std::vector<DbQuery>& quer
 
 bool IdoMysqlConnection::CanExecuteQuery(const DbQuery& query)
 {
+	if (query.Object && !IsIDCacheValid())
+		return false;
+
 	if (query.WhereCriteria) {
 		ObjectLock olock(query.WhereCriteria);
 		Value value;
@@ -830,11 +870,11 @@ void IdoMysqlConnection::InternalExecuteMultipleQueries(const std::vector<DbQuer
 	}
 
 	BOOST_FOREACH(const DbQuery& query, queries) {
-		InternalExecuteQuery(query, NULL);
+		InternalExecuteQuery(query);
 	}
 }
 
-void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType *typeOverride)
+void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, int typeOverride)
 {
 	AssertOnWorkQueue();
 
@@ -846,11 +886,18 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 		return;
 	}
 
-	if ((query.Category & GetCategories()) == 0)
+	/* check whether we're allowed to execute the query first */
+	if (GetCategoryFilter() != DbCatEverything && (query.Category & GetCategoryFilter()) == 0)
 		return;
 
 	if (query.Object && query.Object->GetObject()->GetExtension("agent_check").ToBool())
 		return;
+
+	/* check if there are missing object/insert ids and re-enqueue the query */
+	if (!CanExecuteQuery(query)) {
+		m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, typeOverride), query.Priority);
+		return;
+	}
 
 	std::ostringstream qbuf, where;
 	int type;
@@ -864,7 +911,7 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 
 		BOOST_FOREACH(const Dictionary::Pair& kv, query.WhereCriteria) {
 			if (!FieldToEscapedString(kv.first, kv.second, &value)) {
-				m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), query.Priority);
+				m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, -1), query.Priority);
 				return;
 			}
 
@@ -878,24 +925,32 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 		}
 	}
 
-	type = typeOverride ? *typeOverride : query.Type;
+	type = (typeOverride != -1) ? typeOverride : query.Type;
 
 	bool upsert = false;
 
 	if ((type & DbQueryInsert) && (type & DbQueryUpdate)) {
 		bool hasid = false;
 
-		ASSERT(query.Object);
-
-		if (query.ConfigUpdate)
-			hasid = GetConfigUpdate(query.Object);
-		else if (query.StatusUpdate)
-			hasid = GetStatusUpdate(query.Object);
+		if (query.Object) {
+			if (query.ConfigUpdate)
+				hasid = GetConfigUpdate(query.Object);
+			else if (query.StatusUpdate)
+				hasid = GetStatusUpdate(query.Object);
+		}
 
 		if (!hasid)
 			upsert = true;
 
 		type = DbQueryUpdate;
+	}
+
+	if ((type & DbQueryInsert) && (type & DbQueryDelete)) {
+		std::ostringstream qdel;
+		qdel << "DELETE FROM " << GetTablePrefix() << query.Table << where.str();
+		AsyncQuery(qdel.str());
+
+		type = DbQueryInsert;
 	}
 
 	switch (type) {
@@ -928,7 +983,7 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 				continue;
 
 			if (!FieldToEscapedString(kv.first, kv.second, &value)) {
-				m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, (DbQueryType *)NULL), query.Priority);
+				m_QueryQueue.Enqueue(boost::bind(&IdoMysqlConnection::InternalExecuteQuery, this, query, -1), query.Priority);
 				return;
 			}
 
@@ -964,8 +1019,7 @@ void IdoMysqlConnection::InternalExecuteQuery(const DbQuery& query, DbQueryType 
 void IdoMysqlConnection::FinishExecuteQuery(const DbQuery& query, int type, bool upsert)
 {
 	if (upsert && GetAffectedRows() == 0) {
-		DbQueryType to = DbQueryInsert;
-		InternalExecuteQuery(query, &to);
+		InternalExecuteQuery(query, DbQueryDelete | DbQueryInsert);
 
 		return;
 	}
@@ -1001,13 +1055,15 @@ void IdoMysqlConnection::InternalCleanUpExecuteQuery(const String& table, const 
 
 void IdoMysqlConnection::FillIDCache(const DbType::Ptr& type)
 {
-	String query = "SELECT " + type->GetIDColumn() + " AS object_id, " + type->GetTable() + "_id FROM " + GetTablePrefix() + type->GetTable() + "s";
+	String query = "SELECT " + type->GetIDColumn() + " AS object_id, " + type->GetTable() + "_id, config_hash FROM " + GetTablePrefix() + type->GetTable() + "s";
 	IdoMysqlResult result = Query(query);
 
 	Dictionary::Ptr row;
 
 	while ((row = FetchRow(result))) {
-		SetInsertID(type, DbReference(row->Get("object_id")), DbReference(row->Get(type->GetTable() + "_id")));
+		DbReference dbref(row->Get("object_id"));
+		SetInsertID(type, dbref, DbReference(row->Get(type->GetTable() + "_id")));
+		SetConfigHash(type, dbref, row->Get("config_hash"));
 	}
 }
 

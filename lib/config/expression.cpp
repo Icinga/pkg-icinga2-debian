@@ -122,8 +122,10 @@ ExpressionResult VariableExpression::DoEvaluate(ScriptFrame& frame, DebugHint *d
 
 	if (frame.Locals && frame.Locals->Get(m_Variable, &value))
 		return value;
-	else if (frame.Self.IsObject() && frame.Locals != static_cast<Object::Ptr>(frame.Self) && VMOps::HasField(frame.Self, m_Variable))
+	else if (frame.Self.IsObject() && frame.Locals != static_cast<Object::Ptr>(frame.Self) && static_cast<Object::Ptr>(frame.Self)->HasOwnField(m_Variable))
 		return VMOps::GetField(frame.Self, m_Variable, frame.Sandboxed, m_DebugInfo);
+	else if (VMOps::FindVarImport(frame, m_Variable, &value, m_DebugInfo))
+		return value;
 	else
 		return ScriptGlobal::Get(m_Variable);
 }
@@ -137,11 +139,13 @@ bool VariableExpression::GetReference(ScriptFrame& frame, bool init_dict, Value 
 
 		if (dhint)
 			*dhint = NULL;
-	} else if (frame.Self.IsObject() && frame.Locals != static_cast<Object::Ptr>(frame.Self) && VMOps::HasField(frame.Self, m_Variable)) {
+	} else if (frame.Self.IsObject() && frame.Locals != static_cast<Object::Ptr>(frame.Self) && static_cast<Object::Ptr>(frame.Self)->HasOwnField(m_Variable)) {
 		*parent = frame.Self;
 
 		if (dhint && *dhint)
 			*dhint = new DebugHint((*dhint)->GetChild(m_Variable));
+	} else if (VMOps::FindVarImportRef(frame, m_Variable, parent, m_DebugInfo)) {
+		return true;
 	} else if (ScriptGlobal::Exists(m_Variable)) {
 		*parent = ScriptGlobal::GetGlobals();
 
@@ -424,15 +428,15 @@ ExpressionResult FunctionCallExpression::DoEvaluate(ScriptFrame& frame, DebugHin
 	}
 
 	if (vfunc.IsObjectType<Type>()) {
-		if (m_Args.empty())
-			return VMOps::ConstructorCall(vfunc, m_DebugInfo);
-		else if (m_Args.size() == 1) {
-			ExpressionResult argres = m_Args[0]->Evaluate(frame);
+		std::vector<Value> arguments;
+		BOOST_FOREACH(Expression *arg, m_Args) {
+			ExpressionResult argres = arg->Evaluate(frame);
 			CHECK_RESULT(argres);
 
-			return VMOps::CopyConstructorCall(vfunc, argres.GetValue(), m_DebugInfo);
-		} else
-			BOOST_THROW_EXCEPTION(ScriptError("Too many arguments for constructor.", m_DebugInfo));
+			arguments.push_back(argres.GetValue());
+		}
+
+		return VMOps::ConstructorCall(vfunc, arguments, m_DebugInfo);
 	}
 
 	if (!vfunc.IsObjectType<Function>())
@@ -747,6 +751,11 @@ ExpressionResult ImportExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhi
 	if (!item)
 		BOOST_THROW_EXCEPTION(ScriptError("Import references unknown template: '" + name + "'", m_DebugInfo));
 
+	Dictionary::Ptr scope = item->GetScope();
+
+	if (scope)
+		scope->CopyTo(frame.Locals);
+
 	ExpressionResult result = item->GetExpression()->Evaluate(frame, dhint);
 	CHECK_RESULT(result);
 
@@ -755,7 +764,7 @@ ExpressionResult ImportExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhi
 
 ExpressionResult FunctionExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
 {
-	return VMOps::NewFunction(frame, m_Args, m_ClosedVars, m_Expression);
+	return VMOps::NewFunction(frame, m_Name, m_Args, m_ClosedVars, m_Expression);
 }
 
 ExpressionResult ApplyExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
@@ -887,6 +896,23 @@ ExpressionResult IncludeExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dh
 ExpressionResult BreakpointExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
 {
 	ScriptBreakpoint(frame, NULL, GetDebugInfo());
+
+	return Empty;
+}
+
+ExpressionResult UsingExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
+{
+	if (frame.Sandboxed)
+		BOOST_THROW_EXCEPTION(ScriptError("Using directives are not allowed in sandbox mode.", m_DebugInfo));
+
+	ExpressionResult importres = m_Name->Evaluate(frame);
+	CHECK_RESULT(importres);
+	Value import = importres.GetValue();
+
+	if (!import.IsObjectType<Dictionary>())
+		BOOST_THROW_EXCEPTION(ScriptError("The parameter must resolve to an object of type 'Dictionary'", m_DebugInfo));
+
+	ScriptFrame::AddImport(import);
 
 	return Empty;
 }

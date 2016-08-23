@@ -29,8 +29,8 @@
 #include <boost/thread/once.hpp>
 #include <boost/thread/mutex.hpp>
 
-#define IDO_CURRENT_SCHEMA_VERSION "1.14.0"
-#define IDO_COMPAT_SCHEMA_VERSION "1.14.0"
+#define IDO_CURRENT_SCHEMA_VERSION "1.14.1"
+#define IDO_COMPAT_SCHEMA_VERSION "1.14.1"
 
 namespace icinga
 {
@@ -48,6 +48,11 @@ public:
 	DbConnection(void);
 
 	static void InitializeDbTimer(void);
+
+	void SetConfigHash(const DbObject::Ptr& dbobj, const String& hash);
+	void SetConfigHash(const DbType::Ptr& type, const DbReference& objid, const String& hash);
+	String GetConfigHash(const DbObject::Ptr& dbobj) const;
+	String GetConfigHash(const DbType::Ptr& type, const DbReference& objid) const;
 
 	void SetObjectID(const DbObject::Ptr& dbobj, const DbReference& dbref);
 	DbReference GetObjectID(const DbObject::Ptr& dbobj) const;
@@ -95,9 +100,18 @@ protected:
 
 	void IncreaseQueryCount(void);
 
+	bool IsIDCacheValid(void) const;
+	void SetIDCacheValid(bool valid);
+
+	void EnableActiveChangedHandler(void);
+
 	static void UpdateProgramStatus(void);
 
+	static int GetSessionToken(void);
+
 private:
+	bool m_IDCacheValid;
+	std::map<std::pair<DbType::Ptr, DbReference>, String> m_ConfigHashes;
 	std::map<DbObject::Ptr, DbReference> m_ObjectIDs;
 	std::map<std::pair<DbType::Ptr, DbReference>, DbReference> m_InsertIDs;
 	std::set<DbObject::Ptr> m_ActiveObjects;
@@ -106,8 +120,6 @@ private:
 	Timer::Ptr m_CleanUpTimer;
 
 	void CleanUpHandler(void);
-
-	virtual void ClearConfigTable(const String& table) = 0;
 
 	static Timer::Ptr m_ProgramStatusTimer;
 	static boost::once_flag m_OnceFlag;
@@ -121,6 +133,7 @@ private:
 	RingBuffer m_QueryStats;
 	int m_PendingQueries;
 	double m_PendingQueriesTimestamp;
+	bool m_ActiveChangedHandler;
 };
 
 struct database_error : virtual std::exception, virtual boost::exception { };

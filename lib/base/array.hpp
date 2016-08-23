@@ -118,11 +118,25 @@ public:
 		return std::set<T>(Begin(), End());
 	}
 
+	template<typename T>
+	static Array::Ptr FromSet(const std::set<T>& v)
+	{
+		Array::Ptr result = new Array();
+		ObjectLock olock(result);
+		std::copy(v.begin(), v.end(), std::back_inserter(result->m_Data));
+		return result;
+	}
+
 	virtual Object::Ptr Clone(void) const override;
 
 	Array::Ptr Reverse(void) const;
 
+	void Sort(void);
+
 	virtual String ToString(void) const override;
+
+	virtual Value GetFieldByName(const String& field, bool sandboxed, const DebugInfo& debugInfo) const override;
+	virtual void SetFieldByName(const String& field, const Value& value, const DebugInfo& debugInfo) override;
 
 private:
 	std::vector<Value> m_Data; /**< The data for the array. */

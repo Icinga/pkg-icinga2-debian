@@ -38,7 +38,7 @@ using namespace icinga;
 boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, const MessageOrigin::Ptr&)> Checkable::OnNewCheckResult;
 boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, StateType, const MessageOrigin::Ptr&)> Checkable::OnStateChange;
 boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, std::set<Checkable::Ptr>, const MessageOrigin::Ptr&)> Checkable::OnReachabilityChanged;
-boost::signals2::signal<void (const Checkable::Ptr&, NotificationType, const CheckResult::Ptr&, const String&, const String&)> Checkable::OnNotificationsRequested;
+boost::signals2::signal<void (const Checkable::Ptr&, NotificationType, const CheckResult::Ptr&, const String&, const String&, const MessageOrigin::Ptr&)> Checkable::OnNotificationsRequested;
 boost::signals2::signal<void (const Checkable::Ptr&)> Checkable::OnNextCheckUpdated;
 
 boost::mutex Checkable::m_StatsMutex;
@@ -79,6 +79,8 @@ void Checkable::UpdateNextCheck(const MessageOrigin::Ptr& origin)
 	if (interval > 1)
 		adj = fmod(now * 100 + GetSchedulingOffset(), interval * 100) / 100.0;
 
+	adj = std::min(0.5 + fmod(GetSchedulingOffset(), interval * 5) / 100.0, adj);
+
 	SetNextCheck(now - adj + interval, false, origin);
 }
 
@@ -104,6 +106,9 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 		ObjectLock olock(this);
 		m_CheckRunning = false;
 	}
+
+	if (!cr)
+		return;
 
 	double now = Utility::GetTime();
 
@@ -175,16 +180,11 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 
 	std::set<Checkable::Ptr> children = GetChildren();
 
-	if (!old_cr) {
-		SetStateType(StateTypeHard);
-	} else if (IsStateOK(cr->GetState())) {
-		if (IsStateOK(old_state) && old_stateType == StateTypeSoft) {
-			SetStateType(StateTypeHard); // SOFT OK -> HARD OK
-			recovery = true;
-		}
+	if (IsStateOK(cr->GetState())) {
+		SetStateType(StateTypeHard); // NOT-OK -> HARD OK
 
 		if (!IsStateOK(old_state))
-			recovery = true; // NOT OK -> SOFT/HARD OK
+			recovery = true;
 
 		ResetNotificationNumbers();
 		SaveLastState(ServiceOK, Utility::GetTime());
@@ -193,7 +193,7 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 		if (!children.empty())
 			OnReachabilityChanged(this, cr, children, origin);
 	} else {
-		if (old_attempt >= GetMaxCheckAttempts()) {
+		if (old_attempt + 1 >= GetMaxCheckAttempts()) {
 			SetStateType(StateTypeHard);
 		} else if (old_stateType == StateTypeSoft && !IsStateOK(old_state)) {
 			SetStateType(StateTypeSoft);
@@ -285,16 +285,12 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 			send_notification = true;
 	}
 
-	if (!old_cr)
-		send_notification = false; /* Don't send notifications for the initial state change */
-
 	if (IsStateOK(old_state) && old_stateType == StateTypeSoft)
 		send_notification = false; /* Don't send notifications for SOFT-OK -> HARD-OK. */
 
 	if (is_volatile && IsStateOK(old_state) && IsStateOK(new_state))
 		send_notification = false; /* Don't send notifications for volatile OK -> OK changes. */
 
-	bool send_downtime_notification = (GetLastInDowntime() != in_downtime);
 	SetLastInDowntime(in_downtime);
 
 	olock.Unlock();
@@ -326,11 +322,7 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 	is_flapping = IsFlapping();
 
 	if (cr->GetActive()) {
-		/* If there was a OK -> NOT-OK state change for actively scheduled checks,
-		 * update the next check time using the retry_interval.
-		 * Important: Add the cluster message origin. */
-		if (GetStateType() == StateTypeSoft)
-			UpdateNextCheck(origin);
+		UpdateNextCheck(origin);
 	} else {
 		/* Reschedule the next check for passive check results. The side effect of
 		 * this is that for as long as we receive passive results for a service we
@@ -355,39 +347,53 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 	String old_state_str = (service ? Service::StateToString(old_state) : Host::StateToString(Host::CalculateState(old_state)));
 	String new_state_str = (service ? Service::StateToString(new_state) : Host::StateToString(Host::CalculateState(new_state)));
 
-	if (hardChange || is_volatile) {
+	/* Whether a hard state change or a volatile state change except OK -> OK happened. */
+	if (hardChange || (is_volatile && !(IsStateOK(old_state) && IsStateOK(new_state)))) {
 		OnStateChange(this, cr, StateTypeHard, origin);
 		Log(LogNotice, "Checkable")
 		    << "State Change: Checkable " << GetName() << " hard state change from " << old_state_str << " to " << new_state_str << " detected." << (is_volatile ? " Checkable is volatile." : "");
-	} else if (stateChange) {
+	}
+	/* Whether a state change happened or the state type is SOFT (must be logged too). */
+	else if (stateChange || GetStateType() == StateTypeSoft) {
 		OnStateChange(this, cr, StateTypeSoft, origin);
 		Log(LogNotice, "Checkable")
 		    << "State Change: Checkable " << GetName() << " soft state change from " << old_state_str << " to " << new_state_str << " detected.";
 	}
 
-	if (GetStateType() == StateTypeSoft || hardChange || recovery || is_volatile)
+	if (GetStateType() == StateTypeSoft || hardChange || recovery ||
+	    (is_volatile && !(IsStateOK(old_state) && IsStateOK(new_state))))
 		ExecuteEventHandler();
 
-	if (send_downtime_notification)
-		OnNotificationsRequested(this, in_downtime ? NotificationDowntimeStart : NotificationDowntimeEnd, cr, "", "");
+	/* Flapping start/end notifications */
+	if (!was_flapping && is_flapping) {
+		if (!IsPaused())
+			OnNotificationsRequested(this, NotificationFlappingStart, cr, "", "", MessageOrigin::Ptr());
 
-	if (send_notification) {
-		if (!was_flapping && is_flapping) {
-			OnNotificationsRequested(this, NotificationFlappingStart, cr, "", "");
+		Log(LogNotice, "Checkable")
+			<< "Flapping: Checkable " << GetName() << " started flapping (" << GetFlappingThreshold() << "% < " << GetFlappingCurrent() << "%).";
 
-			Log(LogNotice, "Checkable")
-				<< "Flapping: Checkable " << GetName() << " started flapping (" << GetFlappingThreshold() << "% < " << GetFlappingCurrent() << "%).";
+		NotifyFlapping(origin);
+	} else if (was_flapping && !is_flapping) {
+		if (!IsPaused())
+			OnNotificationsRequested(this, NotificationFlappingEnd, cr, "", "", MessageOrigin::Ptr());
 
-			NotifyFlapping(origin);
-		} else if (was_flapping && !is_flapping) {
-			OnNotificationsRequested(this, NotificationFlappingEnd, cr, "", "");
+		Log(LogNotice, "Checkable")
+			<< "Flapping: Checkable " << GetName() << " stopped flapping (" << GetFlappingThreshold() << "% >= " << GetFlappingCurrent() << "%).";
 
-			Log(LogNotice, "Checkable")
-				<< "Flapping: Checkable " << GetName() << " stopped flapping (" << GetFlappingThreshold() << "% >= " << GetFlappingCurrent() << "%).";
+		NotifyFlapping(origin);
+	}
 
-			NotifyFlapping(origin);
-		} else if (!was_flapping && !is_flapping)
-			OnNotificationsRequested(this, recovery ? NotificationRecovery : NotificationProblem, cr, "", "");
+	if (recovery) {
+		/* Recovery notifications must be sent any time.
+		 * Users who where notified about a problem before
+		 * will be filtered when processing the notification.
+		 */
+		if (!IsPaused())
+			OnNotificationsRequested(this, NotificationRecovery, cr, "", "", MessageOrigin::Ptr());
+	} else if (send_notification && !is_flapping) {
+		/* Problem notifications */
+		if (!IsPaused())
+			OnNotificationsRequested(this, NotificationProblem, cr, "", "", MessageOrigin::Ptr());
 	}
 }
 

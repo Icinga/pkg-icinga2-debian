@@ -159,6 +159,11 @@ bool MacroProcessor::ResolveMacro(const String& macro, const ResolverList& resol
 				}
 
 				ref = object->GetField(field);
+
+				Field fieldInfo = type->GetFieldInfo(field);
+
+				if (strcmp(fieldInfo.TypeName, "Timestamp") == 0)
+					ref = static_cast<long>(ref);
 			}
 		}
 
@@ -211,15 +216,15 @@ Value MacroProcessor::EvaluateFunction(const Function::Ptr& func, const Resolver
 		resolvers_this->Set(resolver.first, resolver.second);
 	}
 
-	resolvers_this->Set("macro", new Function(boost::bind(&MacroProcessor::InternalResolveMacrosShim,
+	resolvers_this->Set("macro", new Function("macro (temporary)", boost::bind(&MacroProcessor::InternalResolveMacrosShim,
 	    _1, boost::cref(resolvers), cr, MacroProcessor::EscapeCallback(), resolvedMacros, useResolvedMacros,
 	    recursionLevel + 1)));
-	resolvers_this->Set("resolve_arguments", new Function(boost::bind(&MacroProcessor::InternalResolveArgumentsShim,
+	resolvers_this->Set("resolve_arguments", new Function("resolve_arguments (temporary)", boost::bind(&MacroProcessor::InternalResolveArgumentsShim,
 	    _1, boost::cref(resolvers), cr, resolvedMacros, useResolvedMacros,
 	    recursionLevel + 1)));
 
-	ScriptFrame frame(resolvers_this);
-	return func->Invoke();
+	std::vector<Value> args;
+	return func->Invoke(resolvers_this, args);
 }
 
 Value MacroProcessor::InternalResolveMacros(const String& str, const ResolverList& resolvers,

@@ -45,12 +45,19 @@ public:
 	inline void AddMessage(const String& message, const DebugInfo& di)
 	{
 		Array::Ptr amsg = new Array();
-		amsg->Add(message);
-		amsg->Add(di.Path);
-		amsg->Add(di.FirstLine);
-		amsg->Add(di.FirstColumn);
-		amsg->Add(di.LastLine);
-		amsg->Add(di.LastColumn);
+
+		{
+			ObjectLock olock(amsg);
+
+			amsg->Reserve(6);
+			amsg->Add(message);
+			amsg->Add(di.Path);
+			amsg->Add(di.FirstLine);
+			amsg->Add(di.FirstColumn);
+			amsg->Add(di.LastLine);
+			amsg->Add(di.LastColumn);
+		}
+
 		GetMessages()->Add(amsg);
 	}
 
@@ -58,14 +65,14 @@ public:
 	{
 		Dictionary::Ptr children = GetChildren();
 
-		Dictionary::Ptr child = children->Get(name);
+		Value vchild;
 
-		if (!child) {
-			child = new Dictionary();
-			children->Set(name, child);
+		if (!children->Get(name, &vchild)) {
+			vchild = new Dictionary();
+			children->Set(name, vchild);
 		}
 
-		return DebugHint(child);
+		return DebugHint(vchild);
 	}
 
 	Dictionary::Ptr ToDictionary(void) const
@@ -81,14 +88,14 @@ private:
 		if (!m_Hints)
 			m_Hints = new Dictionary();
 
-		Array::Ptr messages = m_Hints->Get("messages");
+		Value vmessages;
 
-		if (!messages) {
-			messages = new Array();
-			m_Hints->Set("messages", messages);
+		if (!m_Hints->Get("messages", &vmessages)) {
+			vmessages = new Array();
+			m_Hints->Set("messages", vmessages);
 		}
 
-		return messages;
+		return vmessages;
 	}
 
 	Dictionary::Ptr GetChildren(void)
@@ -96,14 +103,14 @@ private:
 		if (!m_Hints)
 			m_Hints = new Dictionary();
 
-		Dictionary::Ptr children = m_Hints->Get("properties");
+		Value vchildren;
 
-		if (!children) {
-			children = new Dictionary;
-			m_Hints->Set("properties", children);
+		if (!m_Hints->Get("properties", &vchildren)) {
+			vchildren = new Dictionary();
+			m_Hints->Set("properties", vchildren);
 		}
 
-		return children;
+		return vchildren;
 	}
 };
 
@@ -790,15 +797,28 @@ private:
 class I2_CONFIG_API FunctionExpression : public DebuggableExpression
 {
 public:
-	FunctionExpression(const std::vector<String>& args,
+	FunctionExpression(const String& name, const std::vector<String>& args,
 	    std::map<String, Expression *> *closedVars, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
-		: DebuggableExpression(debugInfo), m_Args(args), m_ClosedVars(closedVars), m_Expression(expression)
+		: DebuggableExpression(debugInfo), m_Args(args), m_Name(name), m_ClosedVars(closedVars), m_Expression(expression)
 	{ }
+
+	~FunctionExpression(void)
+	{
+		if (m_ClosedVars) {
+			typedef std::pair<String, Expression *> kv_pair;
+			BOOST_FOREACH(const kv_pair& kv, *m_ClosedVars) {
+				delete kv.second;
+			}
+		}
+
+		delete m_ClosedVars;
+	}
 
 protected:
 	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const override;
 
 private:
+	String m_Name;
 	std::vector<String> m_Args;
 	std::map<String, Expression *> *m_ClosedVars;
 	boost::shared_ptr<Expression> m_Expression;
@@ -820,6 +840,15 @@ public:
 	~ApplyExpression(void)
 	{
 		delete m_Name;
+
+		if (m_ClosedVars) {
+			typedef std::pair<String, Expression *> kv_pair;
+			BOOST_FOREACH(const kv_pair& kv, *m_ClosedVars) {
+				delete kv.second;
+			}
+		}
+
+		delete m_ClosedVars;
 	}
 
 protected:
@@ -853,6 +882,15 @@ public:
 	~ObjectExpression(void)
 	{
 		delete m_Name;
+
+		if (m_ClosedVars) {
+			typedef std::pair<String, Expression *> kv_pair;
+			BOOST_FOREACH(const kv_pair& kv, *m_ClosedVars) {
+				delete kv.second;
+			}
+		}
+
+		delete m_ClosedVars;
 	}
 
 protected:
@@ -950,6 +988,25 @@ public:
 
 protected:
 	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const override;
+};
+
+class I2_CONFIG_API UsingExpression : public DebuggableExpression
+{
+public:
+	UsingExpression(Expression *name, const DebugInfo& debugInfo = DebugInfo())
+		: DebuggableExpression(debugInfo), m_Name(name)
+	{ }
+
+	~UsingExpression(void)
+	{
+		delete m_Name;
+	}
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const override;
+
+private:
+	Expression *m_Name;
 };
 
 }

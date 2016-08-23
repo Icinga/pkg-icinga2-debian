@@ -86,7 +86,7 @@ public:
 
 	String GetPluralName(void) const;
 
-	Object::Ptr Instantiate(void) const;
+	Object::Ptr Instantiate(const std::vector<Value>& args) const;
 
 	bool IsAssignableFrom(const Type::Ptr& other) const;
 
@@ -97,6 +97,7 @@ public:
 
 	static void Register(const Type::Ptr& type);
 	static Type::Ptr GetByName(const String& name);
+	static std::vector<Type::Ptr> GetAllTypes(void);
 
 	virtual void SetField(int id, const Value& value, bool suppress_events = false, const Value& cookie = Empty) override;
 	virtual Value GetField(int id) const override;
@@ -132,7 +133,7 @@ protected:
 };
 
 template<typename T>
-class TypeImpl
+class I2_BASE_API TypeImpl
 {
 };
 
