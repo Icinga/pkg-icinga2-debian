@@ -17,7 +17,7 @@
 # * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
 # ******************************************************************************/
 
-%define revision 1
+%define revision 3
 
 # make sure that _rundir is working on older systems
 %if ! %{defined _rundir}
@@ -66,7 +66,7 @@
 
 Summary: Network monitoring application
 Name: icinga2
-Version: 2.4.10
+Version: 2.5.0
 Release: %{revision}%{?dist}
 License: GPL-2.0+
 Group: Applications/System
@@ -105,6 +105,9 @@ BuildRequires: cmake
 BuildRequires: flex >= 2.5.35
 BuildRequires: bison
 BuildRequires: make
+%if 0%{?fedora}
+BuildRequires: wxGTK3-devel
+%endif
 
 %if 0%{?build_icinga_org} && "%{_vendor}" == "redhat" && (0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5" || 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6")
 # el5 and el6 require packages.icinga.org
@@ -123,11 +126,11 @@ BuildRequires: systemd
 Requires: systemd
 %endif
 
-Requires: %{name}-common = %{version}-%{release}
+Requires: %{name}-libs = %{version}-%{release}
 
 %description bin
 Icinga 2 is a general-purpose network monitoring application.
-Provides binaries and libraries for Icinga 2 Core.
+Provides binaries for Icinga 2 Core.
 
 %package common
 Summary:      Common Icinga 2 configuration
@@ -152,6 +155,15 @@ Requires:     %{name} = %{version}-%{release}
 
 %description doc
 Provides documentation for Icinga 2.
+
+
+%package libs
+Summary:      Libraries for Icinga 2
+Group:        Applications/System
+Requires:     %{name}-common = %{version}-%{release}
+
+%description libs
+Provides internal libraries for the daemon or studio.
 
 
 %package ido-mysql
@@ -222,6 +234,39 @@ SELinux policy module supporting icinga2
 %endif
 
 
+%if 0%{?fedora}
+%package studio
+Summary:      Studio for Icinga 2
+Group:        Applications/System
+Requires:     %{name}-libs = %{version}-%{release}
+Requires:     wxGTK3
+
+%description studio
+Provides a GUI for the Icinga 2 API.
+%endif
+
+
+%package -n vim-icinga2
+Summary:      Vim syntax highlighting for icinga2
+Group:        Applications/System
+%if "%{_vendor}" == "suse"
+Requires:     vim-data
+%else
+Requires:     vim-filesystem
+%endif
+
+%description -n vim-icinga2
+Vim syntax highlighting for icinga2
+
+
+%package -n nano-icinga2
+Summary:      Nano syntax highlighting for icinga2
+Group:        Applications/System
+Requires:     nano
+
+%description -n nano-icinga2
+Nano syntax highlighting for icinga2
+
 %prep
 %setup -q -n %{name}-%{version}
 
@@ -236,6 +281,9 @@ CMAKE_OPTS="-DCMAKE_INSTALL_PREFIX=/usr \
          -DICINGA2_USER=%{icinga_user} \
          -DICINGA2_GROUP=%{icinga_group} \
          -DICINGA2_COMMAND_GROUP=%{icingacmd_group}"
+%if 0%{?fedora}
+CMAKE_OPTS="$CMAKE_OPTS -DICINGA2_WITH_STUDIO=true"
+%endif
 %if "%{_vendor}" == "redhat"
 %if 0%{?el5} || 0%{?rhel} == 5 || "%{?dist}" == ".el5" || 0%{?el6} || 0%{?rhel} == 6 || "%{?dist}" == ".el6"
 # Boost_VERSION 1.41.0 vs 101400 - disable build tests
@@ -320,6 +368,39 @@ cd -
 
 /usr/sbin/hardlink -cv %{buildroot}%{_datadir}/selinux
 %endif
+
+%if 0%{?fedora}
+mkdir -p "%{buildroot}%{_datadir}/icinga2-studio"
+install -p -m 644 icinga-studio/icinga.ico %{buildroot}%{_datadir}/icinga2-studio
+
+mkdir -p "%{buildroot}%{_datadir}/applications"
+echo "[Desktop Entry]
+Name=Icinga 2 Studio
+Comment=API viewer for Icinga 2
+TryExec=icinga-studio
+Exec=icinga-studio
+Icon=/usr/share/icinga2-studio/icinga.ico
+StartupNotify=true
+Terminal=false
+Type=Application
+Categories=GTK;Utility;
+Keywords=Monitoring;" > %{buildroot}%{_datadir}/applications/icinga2-studio.desktop
+%endif
+
+%if "%{_vendor}" == "suse"
+%if 0%{?suse_version} >= 1310
+install -D -m 0644 tools/syntax/vim/syntax/%{name}.vim %{buildroot}%{_datadir}/vim/vim74/syntax/%{name}.vim
+install -D -m 0644 tools/syntax/vim/ftdetect/%{name}.vim %{buildroot}%{_datadir}/vim/vim74/ftdetect/%{name}.vim
+%else
+install -D -m 0644 tools/syntax/vim/syntax/%{name}.vim %{buildroot}%{_datadir}/vim/vim72/syntax/%{name}.vim
+install -D -m 0644 tools/syntax/vim/ftdetect/%{name}.vim %{buildroot}%{_datadir}/vim/vim72/ftdetect/%{name}.vim
+%endif
+%else
+install -D -m 0644 tools/syntax/vim/syntax/%{name}.vim %{buildroot}%{_datadir}/vim/vimfiles/syntax/%{name}.vim
+install -D -m 0644 tools/syntax/vim/ftdetect/%{name}.vim %{buildroot}%{_datadir}/vim/vimfiles/ftdetect/%{name}.vim
+%endif
+
+install -D -m 0644 tools/syntax/nano/%{name}.nanorc %{buildroot}%{_datadir}/nano/%{name}.nanorc
 
 %clean
 [ "%{buildroot}" != "/" ] && [ -d "%{buildroot}" ] && rm -rf %{buildroot}
@@ -537,10 +618,6 @@ fi
 %defattr(-,root,root,-)
 %doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
 %{_sbindir}/%{name}
-%exclude %{_libdir}/%{name}/libdb_ido_mysql*
-%exclude %{_libdir}/%{name}/libdb_ido_pgsql*
-%dir %{_libdir}/%{name}
-%{_libdir}/%{name}/*.so*
 %dir %{_libdir}/%{name}/sbin
 %{_libdir}/%{name}/sbin/%{name}
 %{_datadir}/%{name}
@@ -556,6 +633,14 @@ fi
 
 %attr(0750,%{icinga_user},%{icingacmd_group}) %ghost %{_rundir}/%{name}
 %attr(2750,%{icinga_user},%{icingacmd_group}) %ghost %{_rundir}/%{name}/cmd
+
+%files libs
+%defattr(-,root,root,-)
+%doc COPYING COPYING.Exceptions README.md NEWS AUTHORS ChangeLog
+%exclude %{_libdir}/%{name}/libdb_ido_mysql*
+%exclude %{_libdir}/%{name}/libdb_ido_pgsql*
+%dir %{_libdir}/%{name}
+%{_libdir}/%{name}/*.so*
 
 %files common
 %defattr(-,root,root,-)
@@ -633,5 +718,32 @@ fi
 %doc tools/selinux/*
 %{_datadir}/selinux/*/%{modulename}.pp
 %endif
+
+%if 0%{?fedora}
+%files studio
+%defattr(-,root,root,-)
+%{_bindir}/icinga-studio
+%{_datadir}/icinga2-studio
+%{_datadir}/applications/icinga2-studio.desktop
+%endif
+
+%files -n vim-icinga2
+%defattr(-,root,root,-)
+%if "%{_vendor}" == "suse"
+%if 0%{?suse_version} >= 1310
+%{_datadir}/vim/vim74/syntax/%{name}.vim
+%{_datadir}/vim/vim74/ftdetect/%{name}.vim
+%else
+%{_datadir}/vim/vim72/syntax/%{name}.vim
+%{_datadir}/vim/vim72/ftdetect/%{name}.vim
+%endif
+%else
+%{_datadir}/vim/vimfiles/syntax/%{name}.vim
+%{_datadir}/vim/vimfiles/ftdetect/%{name}.vim
+%endif
+
+%files -n nano-icinga2
+%defattr(-,root,root,-)
+%{_datadir}/nano/%{name}.nanorc
 
 %changelog

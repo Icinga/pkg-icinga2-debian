@@ -22,6 +22,7 @@
 #include "base/functionwrapper.hpp"
 #include "base/scriptframe.hpp"
 #include "base/objectlock.hpp"
+#include "base/exception.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -94,6 +95,11 @@ static Array::Ptr ArraySort(const std::vector<Value>& args)
 		ObjectLock olock(arr);
 		std::sort(arr->Begin(), arr->End());
 	} else {
+		Function::Ptr function = args[0];
+
+		if (vframe->Sandboxed && !function->IsSideEffectFree())
+			BOOST_THROW_EXCEPTION(ScriptError("Sort function must be side-effect free."));
+
 		ObjectLock olock(arr);
 		std::sort(arr->Begin(), arr->End(), boost::bind(ArraySortCmp, args[0], _1, _2));
 	}
@@ -137,25 +143,108 @@ static Array::Ptr ArrayReverse(void)
 	return self->Reverse();
 }
 
+static Array::Ptr ArrayMap(const Function::Ptr& function)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Array::Ptr self = static_cast<Array::Ptr>(vframe->Self);
+
+	if (vframe->Sandboxed && !function->IsSideEffectFree())
+		BOOST_THROW_EXCEPTION(ScriptError("Map function must be side-effect free."));
+
+	Array::Ptr result = new Array();
+
+	ObjectLock olock(self);
+	BOOST_FOREACH(const Value& item, self) {
+		std::vector<Value> args;
+		args.push_back(item);
+		result->Add(function->Invoke(args));
+	}
+
+	return result;
+}
+
+static Value ArrayReduce(const Function::Ptr& function)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Array::Ptr self = static_cast<Array::Ptr>(vframe->Self);
+
+	if (vframe->Sandboxed && !function->IsSideEffectFree())
+		BOOST_THROW_EXCEPTION(ScriptError("Reduce function must be side-effect free."));
+
+	if (self->GetLength() == 0)
+		return Empty;
+
+	Value result = self->Get(0);
+
+	ObjectLock olock(self);
+	for (size_t i = 1; i < self->GetLength(); i++) {
+		std::vector<Value> args;
+		args.push_back(result);
+		args.push_back(self->Get(i));
+		result = function->Invoke(args);
+	}
+
+	return result;
+}
+
+static Array::Ptr ArrayFilter(const Function::Ptr& function)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Array::Ptr self = static_cast<Array::Ptr>(vframe->Self);
+
+	if (vframe->Sandboxed && !function->IsSideEffectFree())
+		BOOST_THROW_EXCEPTION(ScriptError("Filter function must be side-effect free."));
+
+	Array::Ptr result = new Array();
+
+	ObjectLock olock(self);
+	BOOST_FOREACH(const Value& item, self) {
+		std::vector<Value> args;
+		args.push_back(item);
+		if (function->Invoke(args))
+			result->Add(item);
+	}
+
+	return result;
+}
+
+static Array::Ptr ArrayUnique(void)
+{
+	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
+	Array::Ptr self = static_cast<Array::Ptr>(vframe->Self);
+
+	std::set<Value> result;
+
+	ObjectLock olock(self);
+	BOOST_FOREACH(const Value& item, self) {
+		result.insert(item);
+	}
+
+	return Array::FromSet(result);
+}
+
 Object::Ptr Array::GetPrototype(void)
 {
 	static Dictionary::Ptr prototype;
 
 	if (!prototype) {
 		prototype = new Dictionary();
-		prototype->Set("len", new Function(WrapFunction(ArrayLen), true));
-		prototype->Set("set", new Function(WrapFunction(ArraySet)));
-		prototype->Set("get", new Function(WrapFunction(ArrayGet)));
-		prototype->Set("add", new Function(WrapFunction(ArrayAdd)));
-		prototype->Set("remove", new Function(WrapFunction(ArrayRemove)));
-		prototype->Set("contains", new Function(WrapFunction(ArrayContains), true));
-		prototype->Set("clear", new Function(WrapFunction(ArrayClear)));
-		prototype->Set("sort", new Function(WrapFunction(ArraySort), true));
-		prototype->Set("shallow_clone", new Function(WrapFunction(ArrayShallowClone), true));
-		prototype->Set("join", new Function(WrapFunction(ArrayJoin), true));
-		prototype->Set("reverse", new Function(WrapFunction(ArrayReverse), true));
+		prototype->Set("len", new Function("Array#len", WrapFunction(ArrayLen), true));
+		prototype->Set("set", new Function("Array#set", WrapFunction(ArraySet)));
+		prototype->Set("get", new Function("Array#get", WrapFunction(ArrayGet)));
+		prototype->Set("add", new Function("Array#add", WrapFunction(ArrayAdd)));
+		prototype->Set("remove", new Function("Array#remove", WrapFunction(ArrayRemove)));
+		prototype->Set("contains", new Function("Array#contains", WrapFunction(ArrayContains), true));
+		prototype->Set("clear", new Function("Array#clear", WrapFunction(ArrayClear)));
+		prototype->Set("sort", new Function("Array#sort", WrapFunction(ArraySort), true));
+		prototype->Set("shallow_clone", new Function("Array#shallow_clone", WrapFunction(ArrayShallowClone), true));
+		prototype->Set("join", new Function("Array#join", WrapFunction(ArrayJoin), true));
+		prototype->Set("reverse", new Function("Array#reverse", WrapFunction(ArrayReverse), true));
+		prototype->Set("map", new Function("Array#map", WrapFunction(ArrayMap), true));
+		prototype->Set("reduce", new Function("Array#reduce", WrapFunction(ArrayReduce), true));
+		prototype->Set("filter", new Function("Array#filter", WrapFunction(ArrayFilter), true));
+		prototype->Set("unique", new Function("Array#unique", WrapFunction(ArrayUnique), true));
 	}
 
 	return prototype;
 }
-

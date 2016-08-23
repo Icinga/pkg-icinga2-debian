@@ -75,15 +75,15 @@ void NotificationComponent::NotificationTimerHandler(void)
 		if (!notification->IsActive())
 			continue;
 
-		Checkable::Ptr checkable = notification->GetCheckable();
-
-		if (checkable->IsPaused() && GetEnableHA())
+		if (notification->IsPaused() && GetEnableHA())
 			continue;
+
+		Checkable::Ptr checkable = notification->GetCheckable();
 
 		if (!IcingaApplication::GetInstance()->GetEnableNotifications() || !checkable->GetEnableNotifications())
 			continue;
 
-		if (notification->GetInterval() <= 0 && notification->GetLastProblemNotification() > checkable->GetLastHardStateChange())
+		if (notification->GetInterval() <= 0 && notification->GetNoMoreNotifications())
 			continue;
 
 		if (notification->GetNextNotification() > now)
@@ -115,8 +115,8 @@ void NotificationComponent::NotificationTimerHandler(void)
 
 		try {
 			Log(LogNotice, "NotificationComponent")
-			    << "Attempting to send reminder notification for object '" << checkable->GetName() << "'";
-			notification->BeginExecuteNotification(NotificationProblem, checkable->GetLastCheckResult(), false);
+			    << "Attempting to send reminder notification '" << notification->GetName() << "'";
+			notification->BeginExecuteNotification(NotificationProblem, checkable->GetLastCheckResult(), false, true);
 		} catch (const std::exception& ex) {
 			Log(LogWarning, "NotificationComponent")
 			    << "Exception occured during notification for object '"
@@ -131,8 +131,5 @@ void NotificationComponent::NotificationTimerHandler(void)
 void NotificationComponent::SendNotificationsHandler(const Checkable::Ptr& checkable, NotificationType type,
     const CheckResult::Ptr& cr, const String& author, const String& text)
 {
-	if (checkable->IsPaused() && GetEnableHA())
-		return;
-
 	checkable->SendNotifications(type, cr, author, text);
 }

@@ -64,6 +64,10 @@ using namespace icinga;
 boost::thread_specific_ptr<String> Utility::m_ThreadName;
 boost::thread_specific_ptr<unsigned int> Utility::m_RandSeed;
 
+#ifdef I2_DEBUG
+double Utility::m_DebugTime = -1;
+#endif /* I2_DEBUG */
+
 /**
  * Demangles a symbol name.
  *
@@ -332,6 +336,29 @@ void Utility::NullDeleter(void *)
 	/* Nothing to do here. */
 }
 
+#ifdef I2_DEBUG
+/**
+ * (DEBUG / TESTING ONLY) Sets the current system time to a static value,
+ * that will be be retrieved by any component of Icinga, when using GetTime().
+ *
+ * This should be only used for testing purposes, e.g. unit tests and debugging of certain functionalities.
+ */
+void Utility::SetTime(double time)
+{
+	m_DebugTime = time;
+}
+
+/**
+ * (DEBUG / TESTING ONLY) Increases the set debug system time by X seconds.
+ *
+ * This should be only used for testing purposes, e.g. unit tests and debugging of certain functionalities.
+ */
+void Utility::IncrementTime(double diff)
+{
+	m_DebugTime += diff;
+}
+#endif /* I2_DEBUG */
+
 /**
  * Returns the current UNIX timestamp including fractions of seconds.
  *
@@ -339,6 +366,12 @@ void Utility::NullDeleter(void *)
  */
 double Utility::GetTime(void)
 {
+#ifdef I2_DEBUG
+	if (m_DebugTime >= 0) {
+		// (DEBUG / TESTING ONLY) this will return a *STATIC* system time, if the value has been set!
+		return m_DebugTime;
+	}
+#endif /* I2_DEBUG */
 #ifdef _WIN32
 	FILETIME cft;
 	GetSystemTimeAsFileTime(&cft);
@@ -388,7 +421,11 @@ pid_t Utility::GetPid(void)
 void Utility::Sleep(double timeout)
 {
 #ifndef _WIN32
-	usleep(timeout * 1000 * 1000);
+	unsigned long micros = timeout * 1000000u;
+	if (timeout >= 1.0)
+		sleep((unsigned)timeout);
+
+	usleep(micros % 1000000u);
 #else /* _WIN32 */
 	::Sleep(timeout * 1000);
 #endif /* _WIN32 */
@@ -902,7 +939,7 @@ String Utility::NaturalJoin(const std::vector<String>& tokens)
 	return result;
 }
 
-String Utility::Join(const Array::Ptr& tokens, char separator)
+String Utility::Join(const Array::Ptr& tokens, char separator, bool escapeSeparator)
 {
 	String result;
 	bool first = true;
@@ -910,15 +947,18 @@ String Utility::Join(const Array::Ptr& tokens, char separator)
 	ObjectLock olock(tokens);
 	BOOST_FOREACH(const Value& vtoken, tokens) {
 		String token = Convert::ToString(vtoken);
-		boost::algorithm::replace_all(token, "\\", "\\\\");
 
-		char sep_before[2], sep_after[3];
-		sep_before[0] = separator;
-		sep_before[1] = '\0';
-		sep_after[0] = '\\';
-		sep_after[1] = separator;
-		sep_after[2] = '\0';
-		boost::algorithm::replace_all(token, sep_before, sep_after);
+		if (escapeSeparator) {
+			boost::algorithm::replace_all(token, "\\", "\\\\");
+
+			char sep_before[2], sep_after[3];
+			sep_before[0] = separator;
+			sep_before[1] = '\0';
+			sep_after[0] = '\\';
+			sep_after[1] = separator;
+			sep_after[2] = '\0';
+			boost::algorithm::replace_all(token, sep_before, sep_after);
+		}
 
 		if (first)
 			first = false;
