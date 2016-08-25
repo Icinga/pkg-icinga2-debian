@@ -1,3 +1,9 @@
+icinga2 (2.5.3-1) unstable; urgency=medium
+
+  * [6cd83c4] Imported Upstream version 2.5.3
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 25 Aug 2016 13:11:20 +0200
+
 icinga2 (2.5.1-1) unstable; urgency=medium
 
   [ Markus Frosch ]
