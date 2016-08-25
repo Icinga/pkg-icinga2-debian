@@ -100,8 +100,8 @@ class Dependency : CustomVarObject < DependencyNameComposer
 		}}}
 	};
 
-	[config] array(double) states;
-	int state_filter_real (StateFilter);
+	[config] array(Value) states;
+	[no_user_view, no_user_modify] int state_filter_real (StateFilter);
 
 	[config] bool ignore_soft_states {
 		default {{{ return true; }}}

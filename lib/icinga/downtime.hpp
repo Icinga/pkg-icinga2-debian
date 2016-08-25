@@ -48,6 +48,7 @@ public:
 	bool IsInEffect(void) const;
 	bool IsTriggered(void) const;
 	bool IsExpired(void) const;
+	bool HasValidConfigOwner(void) const;
 
 	static int GetNextDowntimeID(void);
 
@@ -70,8 +71,8 @@ protected:
 	virtual void Start(bool runtimeCreated) override;
 	virtual void Stop(bool runtimeRemoved) override;
 
-	virtual void ValidateStartTime(double value, const ValidationUtils& utils) override;
-	virtual void ValidateEndTime(double value, const ValidationUtils& utils) override;
+	virtual void ValidateStartTime(const Timestamp& value, const ValidationUtils& utils) override;
+	virtual void ValidateEndTime(const Timestamp& value, const ValidationUtils& utils) override;
 
 private:
 	ObjectImpl<Checkable>::Ptr m_Checkable;

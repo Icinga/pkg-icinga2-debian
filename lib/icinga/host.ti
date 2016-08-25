@@ -19,6 +19,7 @@
 
 #include "icinga/checkable.hpp"
 #include "icinga/customvarobject.hpp"
+#impl_include "icinga/hostgroup.hpp"
 
 library icinga;
 
@@ -27,6 +28,10 @@ namespace icinga
 
 class Host : Checkable
 {
+	load_after ApiListener;
+	load_after Endpoint;
+	load_after Zone;
+
 	[config, no_user_modify] array(name(HostGroup)) groups {
 		default {{{ return new Array(); }}}
 	};
@@ -52,8 +57,8 @@ class Host : Checkable
 	[enum, no_storage] HostState last_hard_state {
 		get;
 	};
-	[state] double last_state_up;
-	[state] double last_state_down;
+	[state] Timestamp last_state_up;
+	[state] Timestamp last_state_down;
 };
 
 }

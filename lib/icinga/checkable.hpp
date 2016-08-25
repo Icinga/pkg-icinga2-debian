@@ -68,6 +68,8 @@ public:
 	DECLARE_OBJECT(Checkable);
 	DECLARE_OBJECTNAME(Checkable);
 
+	static void StaticInitialize(void);
+
 	Checkable(void);
 
 	std::set<Checkable::Ptr> GetParents(void) const;
@@ -110,16 +112,13 @@ public:
 	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, StateType, const MessageOrigin::Ptr&)> OnStateChange;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const CheckResult::Ptr&, std::set<Checkable::Ptr>, const MessageOrigin::Ptr&)> OnReachabilityChanged;
 	static boost::signals2::signal<void (const Checkable::Ptr&, NotificationType, const CheckResult::Ptr&,
-	    const String&, const String&)> OnNotificationsRequested;
-	static boost::signals2::signal<void (const Notification::Ptr&, const Checkable::Ptr&, const std::set<User::Ptr>&,
-	    const NotificationType&, const CheckResult::Ptr&, const String&,
-	    const String&)> OnNotificationSendStart;
+	    const String&, const String&, const MessageOrigin::Ptr&)> OnNotificationsRequested;
 	static boost::signals2::signal<void (const Notification::Ptr&, const Checkable::Ptr&, const User::Ptr&,
-	    const NotificationType&, const CheckResult::Ptr&, const String&,
-	    const String&, const String&)> OnNotificationSentToUser;
+	    const NotificationType&, const CheckResult::Ptr&, const String&, const String&, const String&,
+	    const MessageOrigin::Ptr&)> OnNotificationSentToUser;
 	static boost::signals2::signal<void (const Notification::Ptr&, const Checkable::Ptr&, const std::set<User::Ptr>&,
 	    const NotificationType&, const CheckResult::Ptr&, const String&,
-	    const String&)> OnNotificationSentToAllUsers;
+	    const String&, const MessageOrigin::Ptr&)> OnNotificationSentToAllUsers;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const String&, const String&, AcknowledgementType,
 					     bool, double, const MessageOrigin::Ptr&)> OnAcknowledgementSet;
 	static boost::signals2::signal<void (const Checkable::Ptr&, const MessageOrigin::Ptr&)> OnAcknowledgementCleared;
@@ -127,7 +126,7 @@ public:
 	static boost::signals2::signal<void (const Checkable::Ptr&)> OnEventCommandExecuted;
 
 	/* Downtimes */
-	int GetDowntimeDepth(void) const;
+	virtual int GetDowntimeDepth(void) const override;
 
 	void RemoveAllDowntimes(void);
 	void TriggerDowntimes(void);
@@ -182,8 +181,11 @@ public:
 	static void DecreasePendingChecks(void);
 	static int GetPendingChecks(void);
 
+	static Object::Ptr GetPrototype(void);
+
 protected:
 	virtual void Start(bool runtimeCreated) override;
+	virtual void OnAllConfigLoaded(void) override;
 
 private:
 	mutable boost::mutex m_CheckableMutex;
@@ -196,6 +198,12 @@ private:
 	/* Downtimes */
 	std::set<Downtime::Ptr> m_Downtimes;
 	mutable boost::mutex m_DowntimeMutex;
+
+	static void NotifyFixedDowntimeStart(const Downtime::Ptr& downtime);
+	static void NotifyFlexibleDowntimeStart(const Downtime::Ptr& downtime);
+	static void NotifyDowntimeInternal(const Downtime::Ptr& downtime);
+
+	static void NotifyDowntimeEnd(const Downtime::Ptr& downtime);
 
 	/* Comments */
 	std::set<Comment::Ptr> m_Comments;

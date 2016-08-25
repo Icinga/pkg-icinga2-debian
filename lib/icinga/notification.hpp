@@ -55,15 +55,15 @@ enum NotificationFilter
  */
 enum NotificationType
 {
-	NotificationDowntimeStart = 0,
-	NotificationDowntimeEnd = 1,
-	NotificationDowntimeRemoved = 2,
-	NotificationCustom = 3,
-	NotificationAcknowledgement = 4,
-	NotificationProblem = 5,
-	NotificationRecovery = 6,
-	NotificationFlappingStart = 7 ,
-	NotificationFlappingEnd = 8,
+	NotificationDowntimeStart = 1,
+	NotificationDowntimeEnd = 2,
+	NotificationDowntimeRemoved = 4,
+	NotificationCustom = 8,
+	NotificationAcknowledgement = 16,
+	NotificationProblem = 32,
+	NotificationRecovery = 64,
+	NotificationFlappingStart = 128,
+	NotificationFlappingEnd = 256
 };
 
 class NotificationCommand;
@@ -94,14 +94,13 @@ public:
 	void UpdateNotificationNumber(void);
 	void ResetNotificationNumber(void);
 
-	void BeginExecuteNotification(NotificationType type, const CheckResult::Ptr& cr, bool force, const String& author = "", const String& text = "");
-
-	bool CheckNotificationUserFilters(NotificationType type, const User::Ptr& user, bool force);
+	void BeginExecuteNotification(NotificationType type, const CheckResult::Ptr& cr, bool force,
+	    bool reminder = false, const String& author = "", const String& text = "");
 
 	Endpoint::Ptr GetCommandEndpoint(void) const;
 
 	static String NotificationTypeToString(NotificationType type);
-	static String NotificationFilterToString(int filter);
+	static String NotificationFilterToString(int filter, const std::map<String, int>& filterMap);
 
 	static boost::signals2::signal<void (const Notification::Ptr&, const MessageOrigin::Ptr&)> OnNextNotificationChanged;
 
@@ -115,6 +114,9 @@ public:
 	static void EvaluateApplyRules(const intrusive_ptr<Host>& host);
 	static void EvaluateApplyRules(const intrusive_ptr<Service>& service);
 
+	static const std::map<String, int>& GetStateFilterMap(void);
+	static const std::map<String, int>& GetTypeFilterMap(void);
+
 protected:
 	virtual void OnConfigLoaded(void) override;
 	virtual void OnAllConfigLoaded(void) override;
@@ -124,6 +126,8 @@ protected:
 private:
 	ObjectImpl<Checkable>::Ptr m_Checkable;
 
+	bool CheckNotificationUserFilters(NotificationType type, const User::Ptr& user, bool force, bool reminder);
+
 	void ExecuteNotificationHelper(NotificationType type, const User::Ptr& user, const CheckResult::Ptr& cr, bool force, const String& author = "", const String& text = "");
 
 	static bool EvaluateApplyRuleInstance(const intrusive_ptr<Checkable>& checkable, const String& name, ScriptFrame& frame, const ApplyRule& rule);
@@ -132,12 +136,13 @@ private:
 	static String NotificationTypeToStringInternal(NotificationType type);
 	static String NotificationServiceStateToString(ServiceState state);
 	static String NotificationHostStateToString(HostState state);
+
+	static std::map<String, int> m_StateFilterMap;
+	static std::map<String, int> m_TypeFilterMap;
 };
 
 I2_ICINGA_API int ServiceStateToFilter(ServiceState state);
 I2_ICINGA_API int HostStateToFilter(HostState state);
-I2_ICINGA_API int FilterArrayToInt(const Array::Ptr& typeFilters, int defaultValue);
-I2_ICINGA_API std::vector<String> FilterIntToArray(int iFilter);
 
 }
 

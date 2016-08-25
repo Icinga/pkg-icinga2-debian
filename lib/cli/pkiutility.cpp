@@ -49,7 +49,6 @@ int PkiUtility::NewCa(void)
 	String caDir = GetLocalCaPath();
 	String caCertFile = caDir + "/ca.crt";
 	String caKeyFile = caDir + "/ca.key";
-	String caSerialFile = caDir + "/serial.txt";
 
 	if (Utility::PathExists(caCertFile) && Utility::PathExists(caKeyFile)) {
 		Log(LogCritical, "cli")
@@ -59,7 +58,7 @@ int PkiUtility::NewCa(void)
 
 	Utility::MkDirP(caDir, 0700);
 
-	MakeX509CSR("Icinga CA", caKeyFile, String(), caCertFile, caSerialFile, true);
+	MakeX509CSR("Icinga CA", caKeyFile, String(), caCertFile, true);
 
 	return 0;
 }
@@ -96,17 +95,7 @@ int PkiUtility::SignCsr(const String& csrfile, const String& certfile)
 
 	X509_REQ_free(req);
 
-	std::ofstream fpcert;
-	fpcert.open(certfile.CStr());
-
-	if (!fpcert) {
-		Log(LogCritical, "cli")
-		    << "Failed to open certificate file '" << certfile << "' for output";
-		return 1;
-	}
-
-	fpcert << CertificateToString(cert);
-	fpcert.close();
+	WriteCert(cert, certfile);
 
 	return 0;
 }
@@ -162,7 +151,7 @@ int PkiUtility::WriteCert(const boost::shared_ptr<X509>& cert, const String& tru
 	}
 
 	Log(LogInformation, "pki")
-	    << "Writing trusted certificate to file '" << trustedfile << "'.";
+	    << "Writing certificate to file '" << trustedfile << "'.";
 
 	return 0;
 }
@@ -319,11 +308,11 @@ String PkiUtility::GetCertificateInformation(const boost::shared_ptr<X509>& cert
 
 	pre = "\n Valid From:  ";
 	BIO_write(out, pre.CStr(), pre.GetLength());
-	ASN1_TIME_print(out, X509_get_notBefore(cert));
+	ASN1_TIME_print(out, X509_get_notBefore(cert.get()));
 
 	pre = "\n Valid Until: ";
 	BIO_write(out, pre.CStr(), pre.GetLength());
-	ASN1_TIME_print(out, X509_get_notAfter(cert));
+	ASN1_TIME_print(out, X509_get_notAfter(cert.get()));
 
 	pre = "\n Fingerprint: ";
 	BIO_write(out, pre.CStr(), pre.GetLength());

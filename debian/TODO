@@ -7,8 +7,20 @@ icinga2 source TODOs
 * Document embedded sources in tarball
   - third-party/
 
-* init
-  - configtest
-  - multi instanz
-  - pid file handling testen
+* icinga2 not a meta package
+  - move default config to it
+  - move service to it
+  - to optimize dependencies
 
+* dependencies
+  - we should depend on /usr/bin/mail
+  - and probably recommend mail-transport-agent
+
+* IDO updates
+  - can fail when the daemon is running
+  - should properly disable/re-enable on updates
+
+* IDO packages
+  - mysql and pgsql should able to be installed at the same time
+  - enabling the feature on first install does not work (debconf)
+  - are features disabled properly on uninstall?

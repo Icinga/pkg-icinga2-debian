@@ -109,6 +109,20 @@ void ClassCompiler::HandleCode(const std::string& code, const ClassDebugInfo&)
 void ClassCompiler::HandleLibrary(const std::string& library, const ClassDebugInfo& locp)
 {
 	m_Library = library;
+
+	std::string libName = m_Library;
+	std::locale locale;
+
+	for (std::string::size_type i = 0; i < libName.size(); i++)
+		libName[i] = std::toupper(libName[i], locale);
+
+	m_Header << "#ifndef I2_" << libName << "_API" << std::endl
+		 << "#	ifdef I2_" << libName << "_BUILD" << std::endl
+		 << "#		define I2_" << libName << "_API I2_EXPORT" << std::endl
+		 << "#	else /* I2_" << libName << "_BUILD */" << std::endl
+		 << "#		define I2_" << libName << "_API I2_IMPORT" << std::endl
+		 << "#	endif /* I2_" << libName << "_BUILD */" << std::endl
+		 << "#endif /* I2_" << libName << "_API */" << std::endl << std::endl;
 }
 
 unsigned long ClassCompiler::SDBM(const std::string& str, size_t len = std::string::npos)
@@ -204,14 +218,6 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 		for (std::string::size_type i = 0; i < libName.size(); i++)
 			libName[i] = std::toupper(libName[i], locale);
 
-		m_Header << "#ifndef I2_" << libName << "_API" << std::endl
-			 << "#	ifdef I2_" << libName << "_BUILD" << std::endl
-			 << "#		define I2_" << libName << "_API I2_EXPORT" << std::endl
-			 << "#	else /* I2_" << libName << "_BUILD */" << std::endl
-			 << "#		define I2_" << libName << "_API I2_IMPORT" << std::endl
-			 << "#	endif /* I2_" << libName << "_BUILD */" << std::endl
-			 << "#endif /* I2_" << libName << "_API */" << std::endl << std::endl;
-
 		apiMacro = "I2_" + libName + "_API ";
 	}
 
@@ -222,7 +228,7 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 	/* TypeHelper */
 	if (klass.Attributes & TAAbstract) {
 		m_Header << "template<>" << std::endl
-			 << "struct TypeHelper<" << klass.Name << ">" << std::endl
+			 << "struct TypeHelper<" << klass.Name << ", " << ((klass.Attributes & TAVarArgConstructor) ? "true" : "false") << ">" << std::endl
 			 << "{" << std::endl
 			 << "\t" << "static ObjectFactory GetFactory(void)" << std::endl
 			 << "\t" << "{" << std::endl
@@ -233,15 +239,19 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 
 	/* TypeImpl */
 	m_Header << "template<>" << std::endl
-		 << "class TypeImpl<" << klass.Name << ">"
+		 << "class " << apiMacro << "TypeImpl<" << klass.Name << ">"
 		 << " : public Type";
+
+	if (!klass.Parent.empty())
+		m_Header << "Impl<" << klass.Parent << ">";
 	
 	if (!klass.TypeBase.empty())
 		m_Header << ", public " + klass.TypeBase;
 
 	m_Header << std::endl
 		 << "{" << std::endl
-		 << "public:" << std::endl;
+		 << "public:" << std::endl
+		 << "\t" << "DECLARE_PTR_TYPEDEFS(TypeImpl<" << klass.Name << ">);" << std::endl << std::endl;
 
 	m_Impl << "template class TypeImpl<" << klass.Name << ">;" << std::endl << std::endl;
 
@@ -412,7 +422,7 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 
 	m_Impl << "ObjectFactory TypeImpl<" << klass.Name << ">::GetFactory(void) const" << std::endl
 	       << "{" << std::endl
-	       << "\t" << "return TypeHelper<" << klass.Name << ">::GetFactory();" << std::endl
+	       << "\t" << "return TypeHelper<" << klass.Name << ", " << ((klass.Attributes & TAVarArgConstructor) ? "true" : "false") << ">::GetFactory();" << std::endl
 	       << "}" << std::endl << std::endl;
 
 	/* GetLoadDependencies */
@@ -515,6 +525,12 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 			       << "\t\t" << "BOOST_FOREACH(const Value& avalue, value) {" << std::endl;
 		} else
 			m_Impl << "\t" << "Value avalue = value;" << std::endl;
+
+		m_Impl << "\t" << "if (avalue.IsObjectType<Function>()) {" << std::endl
+		       << "\t\t" << "Function::Ptr func = avalue;" << std::endl
+		       << "\t\t" << "if (func->IsDeprecated())" << std::endl
+		       << "\t\t\t" << "Log(LogWarning, \"" << klass.Name << "\") << \"Attribute '" << field.Name << "' for object '\" << dynamic_cast<ConfigObject *>(this)->GetName() << \"' of type '\" << dynamic_cast<ConfigObject *>(this)->GetReflectionType()->GetName() << \"' is set to a deprecated function: \" << func->GetName();" << std::endl
+		       << "\t" << "}" << std::endl << std::endl;
 
 		std::string ftype = FieldTypeToIcingaName(field, true);
 
@@ -843,24 +859,58 @@ void ClassCompiler::HandleClass(const Klass& klass, const ClassDebugInfo&)
 			if (!it->TrackAccessor.empty())
 				m_Impl << "\t" << it->TrackAccessor << std::endl;
 
-			if (it->Type.ArrayRank > 0) {
-				m_Impl << "\t" << "if (oldValue) {" << std::endl
-				       << "\t\t" << "ObjectLock olock(oldValue);" << std::endl
-				       << "\t\t" << "BOOST_FOREACH(const String& ref, oldValue) {" << std::endl
-				       << "\t\t\t" << "DependencyGraph::RemoveDependency(this, ConfigObject::GetObject(\"" << it->Type.TypeName << "\", ref).get());" << std::endl
-				       << "\t\t" << "}" << std::endl
-				       << "\t" << "}" << std::endl
-				       << "\t" << "if (newValue) {" << std::endl
-				       << "\t\t" << "ObjectLock olock(newValue);" << std::endl
-				       << "\t\t" << "BOOST_FOREACH(const String& ref, newValue) {" << std::endl
-				       << "\t\t\t" << "DependencyGraph::AddDependency(this, ConfigObject::GetObject(\"" << it->Type.TypeName << "\", ref).get());" << std::endl
-				       << "\t\t" << "}" << std::endl
-				       << "\t" << "}" << std::endl;
-			} else {
-				m_Impl << "\t" << "if (!oldValue.IsEmpty())" << std::endl
-				       << "\t\t" << "DependencyGraph::RemoveDependency(this, ConfigObject::GetObject(\"" << it->Type.TypeName << "\", oldValue).get());" << std::endl
-				       << "\t" << "if (!newValue.IsEmpty())" << std::endl
-				       << "\t\t" << "DependencyGraph::AddDependency(this, ConfigObject::GetObject(\"" << it->Type.TypeName << "\", newValue).get());" << std::endl;
+			if (it->Type.TypeName != "String") {
+				if (it->Type.ArrayRank > 0) {
+					m_Impl << "\t" << "if (oldValue) {" << std::endl
+					       << "\t\t" << "ObjectLock olock(oldValue);" << std::endl
+					       << "\t\t" << "BOOST_FOREACH(const String& ref, oldValue) {" << std::endl
+					       << "\t\t\t" << "DependencyGraph::RemoveDependency(this, ConfigObject::GetObject";
+
+					/* Ew */
+					if (it->Type.TypeName == "Zone" && m_Library == "base")
+						m_Impl << "(\"Zone\", ";
+					else
+						m_Impl << "<" << it->Type.TypeName << ">(";
+
+					m_Impl << "ref).get());" << std::endl
+					       << "\t\t" << "}" << std::endl
+					       << "\t" << "}" << std::endl
+					       << "\t" << "if (newValue) {" << std::endl
+					       << "\t\t" << "ObjectLock olock(newValue);" << std::endl
+					       << "\t\t" << "BOOST_FOREACH(const String& ref, newValue) {" << std::endl
+					       << "\t\t\t" << "DependencyGraph::AddDependency(this, ConfigObject::GetObject";
+
+					/* Ew */
+					if (it->Type.TypeName == "Zone" && m_Library == "base")
+						m_Impl << "(\"Zone\", ";
+					else
+						m_Impl << "<" << it->Type.TypeName << ">(";
+
+					m_Impl << "ref).get());" << std::endl
+					       << "\t\t" << "}" << std::endl
+					       << "\t" << "}" << std::endl;
+				} else {
+					m_Impl << "\t" << "if (!oldValue.IsEmpty())" << std::endl
+					       << "\t\t" << "DependencyGraph::RemoveDependency(this, ConfigObject::GetObject";
+
+					/* Ew */
+					if (it->Type.TypeName == "Zone" && m_Library == "base")
+						m_Impl << "(\"Zone\", ";
+					else
+						m_Impl << "<" << it->Type.TypeName << ">(";
+
+					m_Impl << "oldValue).get());" << std::endl
+					       << "\t" << "if (!newValue.IsEmpty())" << std::endl
+					       << "\t\t" << "DependencyGraph::AddDependency(this, ConfigObject::GetObject";
+
+					/* Ew */
+					if (it->Type.TypeName == "Zone" && m_Library == "base")
+						m_Impl << "(\"Zone\", ";
+					else
+						m_Impl << "<" << it->Type.TypeName << ">(";
+
+					m_Impl << "newValue).get());" << std::endl;
+				}
 			}
 
 			m_Impl << "}" << std::endl << std::endl;
@@ -1373,6 +1423,9 @@ void ClassCompiler::CompileStream(const std::string& path, std::istream& input,
 	      << "#include \"base/utility.hpp\"" << std::endl
 	      << "#include \"base/convert.hpp\"" << std::endl
 	      << "#include \"base/dependencygraph.hpp\"" << std::endl
+	      << "#include \"base/logger.hpp\"" << std::endl
+	      << "#include \"base/function.hpp\"" << std::endl
+	      << "#include \"base/configtype.hpp\"" << std::endl
 	      << "#include <boost/foreach.hpp>" << std::endl
 	      << "#include <boost/assign/list_of.hpp>" << std::endl
 	      << "#ifdef _MSC_VER" << std::endl

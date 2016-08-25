@@ -4,6 +4,9 @@ After=postgresql.service mariadb.service carbon-cache.service mysql.service yslo
 
 [Service]
 Type=simple
+UMask=0007
+EnvironmentFile=/usr/lib/icinga2/icinga2
+EnvironmentFile=/etc/default/icinga2
 ExecStartPre=/usr/lib/icinga2/prepare-dirs /usr/lib/icinga2/icinga2
 ExecStart=/usr/sbin/icinga2 daemon -e ${ICINGA2_ERROR_LOG}
 ExecReload=/usr/lib/icinga2/safe-reload /usr/lib/icinga2/icinga2

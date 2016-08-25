@@ -111,7 +111,7 @@ a member and includes all members of the `hg1` hostgroup.
       hostgroup_members               hg1
     }
 
-This can be migrated to Icinga 2 and [using group assign](18-language-reference.md#group-assign). The additional nested hostgroup
+This can be migrated to Icinga 2 and [using group assign](17-language-reference.md#group-assign). The additional nested hostgroup
 `hg1` is included into `hg2` with the `groups` attribute.
 
 
@@ -249,8 +249,8 @@ Can be written as the following in Icinga 2:
       vars.CVTEST = "service cv value"
     }
 
-If you are just defining `$CVTEST$` in your command definition its value depends on the
-execution scope - the host check command will fetch the host attribute value of `vars.CVTEST`
+If you are just defining `$CVTEST$` in your command definition, its value depends on the
+execution scope -- the host check command will fetch the host attribute value of `vars.CVTEST`
 while the service check command resolves its value to the service attribute attribute `vars.CVTEST`.
 
 > **Note**
@@ -469,7 +469,7 @@ filters, this behaviour has changed in Icinga 2. There is no 1:1 migration but g
 the state filter defined in the `execution_failure_criteria` defines the Icinga 2 `state` attribute.
 If the state filter matches, you can define whether to disable checks and notifications or not.
 
-The following example describes service dependencies. If you migrate from Icinga 1.x you will only
+The following example describes service dependencies. If you migrate from Icinga 1.x, you will only
 want to use the classic `Host-to-Host` and `Service-to-Service` dependency relationships.
 
     define service {
@@ -663,10 +663,10 @@ daemon for passing check results between instances.
 * Icinga 2 does not support any 1.x NEB addons for check load distribution
 
 * If your current setup consists of instances distributing the check load, you should consider
-building a [load distribution](13-distributed-monitoring-ha.md#cluster-scenarios-load-distribution) setup with Icinga 2.
-* If your current setup includes active/passive clustering with external tools like Pacemaker/DRBD
-consider the [High Availability](13-distributed-monitoring-ha.md#cluster-scenarios-high-availability) setup.
-* If you have build your own custom configuration deployment and check result collecting mechanism
+building a [load distribution](6-distributed-monitoring.md#distributed-monitoring-scenarios) setup with Icinga 2.
+* If your current setup includes active/passive clustering with external tools like Pacemaker/DRBD,
+consider the [High Availability](6-distributed-monitoring.md#distributed-monitoring-scenarios) setup.
+* If you have build your own custom configuration deployment and check result collecting mechanism,
 you should re-design your setup and re-evaluate your requirements, and how they may be fulfilled
 using the Icinga 2 cluster capabilities.
 
@@ -690,8 +690,8 @@ objects.cfg:
        notifications_enabled    0
     }
 
-Icinga 2 supports objects and (global) variables, but does not make a difference
-if it's the main configuration file, or any included file.
+Icinga 2 supports objects and (global) variables, but does not make a difference 
+between the main configuration file or any other included file.
 
 icinga2.conf:
 
@@ -726,11 +726,11 @@ included in `icinga2.conf` by default.
 ### <a id="differences-1x-2-main-config"></a> Main Config File
 
 In Icinga 1.x there are many global configuration settings available in `icinga.cfg`.
-Icinga 2 only uses a small set of [global constants](18-language-reference.md#constants) allowing
+Icinga 2 only uses a small set of [global constants](17-language-reference.md#constants) allowing
 you to specify certain different setting such as the `NodeName` in a cluster scenario.
 
 Aside from that, the [icinga2.conf](4-configuring-icinga-2.md#icinga2-conf) should take care of including
-global constants, enabled [features](8-cli-commands.md#enable-features) and the object configuration.
+global constants, enabled [features](11-cli-commands.md#enable-features) and the object configuration.
 
 ### <a id="differences-1x-2-include-files-dirs"></a> Include Files and Directories
 
@@ -779,7 +779,7 @@ set in the `constants.conf` configuration file:
 
     const PluginDir = "/usr/lib/nagios/plugins"
 
-[Global macros](18-language-reference.md#constants) can only be defined once. Trying to modify a
+[Global macros](17-language-reference.md#constants) can only be defined once. Trying to modify a
 global constant will result in an error.
 
 ### <a id="differences-1x-2-configuration-comments"></a> Configuration Comments
@@ -845,7 +845,7 @@ requires an equal sign (=) between them.
         check_interval = 5m
     }
 
-Please note that the default time value is seconds, if no duration literal
+Please note that the default time value is seconds if no duration literal
 is given. `check_interval = 5` behaves the same as `check_interval = 5s`.
 
 All strings require double quotes in Icinga 2. Therefore a double quote
@@ -893,7 +893,7 @@ The preferred way of associating hosts with services in Icinga 2 is by
 using the [apply](3-monitoring-basics.md#using-apply) keyword.
 
 Direct object relations between a service and a host still allow you to use
-the `host_name` [Service](6-object-types.md#objecttype-service) object attribute.
+the `host_name` [Service](9-object-types.md#objecttype-service) object attribute.
 
 ### <a id="differences-1x-2-users"></a> Users
 
@@ -917,11 +917,11 @@ and their users.
 ### <a id="differences-1x-2-macros"></a> Macros
 
 Various object attributes and runtime variables can be accessed as macros in
-commands in Icinga 1.x - Icinga 2 supports all required [custom attributes](3-monitoring-basics.md#custom-attributes).
+commands in Icinga 1.x -- Icinga 2 supports all required [custom attributes](3-monitoring-basics.md#custom-attributes).
 
 #### <a id="differences-1x-2-command-arguments"></a> Command Arguments
 
-If you have previously used Icinga 1.x you may already be familiar with
+If you have previously used Icinga 1.x, you may already be familiar with
 user and argument definitions (e.g., `USER1` or `ARG1`). Unlike in Icinga 1.x
 the Icinga 2 custom attributes may have arbitrary names and arguments are no
 longer specified in the `check_command` setting.
@@ -1082,10 +1082,10 @@ Changes to global statistic macros:
 ### <a id="differences-1x-2-external-commands"></a> External Commands
 
 `CHANGE_CUSTOM_CONTACT_VAR` was renamed to `CHANGE_CUSTOM_USER_VAR`.
-`CHANGE_CONTACT_MODATTR` was renamed to `CHANGE_USER_MODATTR`.
 
 The following external commands are not supported:
 
+    CHANGE_*MODATTR
     CHANGE_CONTACT_HOST_NOTIFICATION_TIMEPERIOD
     CHANGE_HOST_NOTIFICATION_TIMEPERIOD
     CHANGE_SVC_NOTIFICATION_TIMEPERIOD
@@ -1131,9 +1131,10 @@ The following external commands are not supported:
 
 ### <a id="differences-1x-2-async-event-execution"></a> Asynchronous Event Execution
 
-Unlike Icinga 1.x, Icinga 2 does not block when it waits for a command
-being executed - be it a check, notification, event handler, performance data writing update, etc.
-That way you'll recognize low to zero (check) latencies with Icinga 2.
+Unlike Icinga 1.x, Icinga 2 does not block when it's waiting for a command
+being executed -- whether if it's a check, a notification, an event
+handler, a performance data writing update, etc. That way you'll
+recognize low to zero (check) latencies with Icinga 2.
 
 ### <a id="differences-1x-2-checks"></a> Checks
 
@@ -1186,8 +1187,8 @@ In Icinga 1.x there were two global options defining a host and service check
 timeout. This was essentially bad when there only was a couple of check plugins
 requiring some command timeouts to be extended.
 
-Icinga 2 allows you to specify the command timeout directly on the command. So
-if your VMVware check plugin takes 15 minutes, [increase the timeout](6-object-types.md#objecttype-checkcommand)
+Icinga 2 allows you to specify the command timeout directly on the command. So,
+if your VMVware check plugin takes 15 minutes, [increase the timeout](9-object-types.md#objecttype-checkcommand)
 accordingly.
 
 
@@ -1322,7 +1323,7 @@ child attributes may be omitted.
 For detailed examples on how to use the dependencies please check the [dependencies](3-monitoring-basics.md#dependencies)
 chapter.
 
-Dependencies can be applied to hosts or services using the [apply rules](18-language-reference.md#apply).
+Dependencies can be applied to hosts or services using the [apply rules](17-language-reference.md#apply).
 
 The `StatusDataWriter`, `IdoMysqlConnection` and `LivestatusListener` types
 support the Icinga 1.x schema with dependencies and parent attributes for
@@ -1360,7 +1361,7 @@ service check is forced.
 In Nagios / Icinga 1.x a daemon reload does the following:
 
 * receive reload signal SIGHUP
-* stop all events (checks, notifications, etc)
+* stop all events (checks, notifications, etc.)
 * read the configuration from disk and validate all config objects in a single threaded fashion
 * validation NOT ok: stop the daemon (cannot restore old config state)
 * validation ok: start with new objects, dump status.dat / ido
@@ -1373,7 +1374,7 @@ execution during config validation:
 * parent process continues with old configuration objects and the event scheduling
 (doing checks, replicating cluster events, triggering alert notifications, etc.)
 * validation NOT ok: child process terminates, parent process continues with old configuration state
-(this is **essential** for the [cluster config synchronisation](13-distributed-monitoring-ha.md#cluster-zone-config-sync))
+(this is **essential** for the [cluster config synchronisation](6-distributed-monitoring.md#distributed-monitoring-top-down-config-sync))
 * validation ok: child process signals parent process to terminate and save its current state
 (all events until now) into the icinga2 state file
 * parent process shuts down writing icinga2.state file
@@ -1430,7 +1431,7 @@ not synced between the master and slave nodes. There are addons available solvin
 and configuration distribution problems Icinga 1.x distributed monitoring currently suffers from.
 
 Icinga 2 implements a new built-in
-[distributed monitoring architecture](13-distributed-monitoring-ha.md#distributed-monitoring-high-availability),
+[distributed monitoring architecture](6-distributed-monitoring.md#distributed-monitoring-scenarios),
 including config and check distribution, IPv4/IPv6 support, SSL certificates and zone support for DMZ.
 High Availability and load balancing are also part of the Icinga 2 Cluster feature, next to local replay
 logs on connection loss ensuring that the event history is kept in sync.

@@ -25,6 +25,7 @@
 #include <boost/thread/recursive_mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
 #include <boost/smart_ptr/intrusive_ptr.hpp>
+#include <vector>
 
 using boost::intrusive_ptr;
 using boost::dynamic_pointer_cast;
@@ -40,6 +41,7 @@ class Value;
 class Object;
 class Type;
 class String;
+struct DebugInfo;
 class ValidationUtils;
 
 extern I2_BASE_API Value Empty;
@@ -61,19 +63,42 @@ extern I2_BASE_API Value Empty;
 	IMPL_TYPE_LOOKUP();
 
 template<typename T>
-intrusive_ptr<Object> DefaultObjectFactory(void)
+intrusive_ptr<Object> DefaultObjectFactory(const std::vector<Value>& args)
 {
+	if (!args.empty())
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Constructor does not take any arguments."));
+
 	return new T();
 }
 
-typedef intrusive_ptr<Object> (*ObjectFactory)(void);
+template<typename T>
+intrusive_ptr<Object> DefaultObjectFactoryVA(const std::vector<Value>& args)
+{
+	return new T(args);
+}
+
+typedef intrusive_ptr<Object> (*ObjectFactory)(const std::vector<Value>&);
+
+template<typename T, bool VA>
+struct TypeHelper
+{
+};
 
 template<typename T>
-struct TypeHelper
+struct TypeHelper<T, false>
 {
 	static ObjectFactory GetFactory(void)
 	{
 		return DefaultObjectFactory<T>;
+	}
+};
+
+template<typename T>
+struct TypeHelper<T, true>
+{
+	static ObjectFactory GetFactory(void)
+	{
+		return DefaultObjectFactoryVA<T>;
 	}
 };
 
@@ -99,6 +124,9 @@ public:
 
 	virtual void SetField(int id, const Value& value, bool suppress_events = false, const Value& cookie = Empty);
 	virtual Value GetField(int id) const;
+	virtual Value GetFieldByName(const String& field, bool sandboxed, const DebugInfo& debugInfo) const;
+	virtual void SetFieldByName(const String& field, const Value& value, const DebugInfo& debugInfo);
+	virtual bool HasOwnField(const String& field) const;
 	virtual void ValidateField(int id, const Value& value, const ValidationUtils& utils);
 	virtual void NotifyField(int id, const Value& cookie = Empty);
 	virtual Object::Ptr NavigateField(int id) const;
@@ -134,6 +162,8 @@ private:
 	friend void intrusive_ptr_release(Object *object);
 };
 
+I2_BASE_API Value GetPrototypeField(const Value& context, const String& field, bool not_found_error, const DebugInfo& debugInfo);
+
 void TypeAddObject(Object *object);
 void TypeRemoveObject(Object *object);
 
@@ -161,7 +191,7 @@ inline void intrusive_ptr_release(Object *object)
 	refs = __sync_sub_and_fetch(&object->m_References, 1);
 #endif /* _WIN32 */
 
-	if (refs == 0) {
+	if (unlikely(refs == 0)) {
 #ifdef I2_LEAK_DEBUG
 		TypeRemoveObject(object);
 #endif /* I2_LEAK_DEBUG */

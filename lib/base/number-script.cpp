@@ -28,8 +28,7 @@ using namespace icinga;
 static String NumberToString(void)
 {
 	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
-	double self = vframe->Self;
-	return Convert::ToString(self);
+	return vframe->Self;
 }
 
 Object::Ptr Number::GetPrototype(void)
@@ -38,7 +37,7 @@ Object::Ptr Number::GetPrototype(void)
 
 	if (!prototype) {
 		prototype = new Dictionary();
-		prototype->Set("to_string", new Function(WrapFunction(NumberToString), true));
+		prototype->Set("to_string", new Function("Number#to_string", WrapFunction(NumberToString), true));
 	}
 
 	return prototype;

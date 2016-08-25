@@ -32,6 +32,7 @@ namespace icinga
 static bool l_SSLInitialized = false;
 static boost::mutex *l_Mutexes;
 
+#ifdef CRYPTO_LOCK
 static void OpenSSLLockingCallback(int mode, int type, const char *, int)
 {
 	if (mode & CRYPTO_LOCK)
@@ -48,6 +49,7 @@ static unsigned long OpenSSLIDCallback(void)
 	return (unsigned long)pthread_self();
 #endif /* _WIN32 */
 }
+#endif /* CRYPTO_LOCK */
 
 /**
  * Initializes the OpenSSL library.
@@ -62,9 +64,11 @@ void InitializeOpenSSL(void)
 
 	SSL_COMP_get_compression_methods();
 
+#ifdef CRYPTO_LOCK
 	l_Mutexes = new boost::mutex[CRYPTO_num_locks()];
 	CRYPTO_set_locking_callback(&OpenSSLLockingCallback);
 	CRYPTO_set_id_callback(&OpenSSLIDCallback);
+#endif /* CRYPTO_LOCK */
 
 	l_SSLInitialized = true;
 }
@@ -85,7 +89,7 @@ boost::shared_ptr<SSL_CTX> MakeSSLContext(const String& pubkey, const String& pr
 
 	boost::shared_ptr<SSL_CTX> sslContext = boost::shared_ptr<SSL_CTX>(SSL_CTX_new(SSLv23_method()), SSL_CTX_free);
 
-	long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
+	long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_CIPHER_SERVER_PREFERENCE;
 
 #ifdef SSL_OP_NO_COMPRESSION
 	flags |= SSL_OP_NO_COMPRESSION;
@@ -152,6 +156,56 @@ boost::shared_ptr<SSL_CTX> MakeSSLContext(const String& pubkey, const String& pr
 	}
 
 	return sslContext;
+}
+
+/**
+ * Set the cipher list to the specified SSL context.
+ * @param context The ssl context.
+ * @param cipherList The ciper list.
+ **/
+void SetCipherListToSSLContext(const boost::shared_ptr<SSL_CTX>& context, const String& cipherList)
+{
+	char errbuf[256];
+
+	if (SSL_CTX_set_cipher_list(context.get(), cipherList.CStr()) == 0) {
+		Log(LogCritical, "SSL")
+		    << "Cipher list '"
+		    << cipherList
+		    << "' does not specify any usable ciphers: "
+		    << ERR_peek_error() << ", \""
+		    << ERR_error_string(ERR_peek_error(), errbuf) << "\"";
+
+		BOOST_THROW_EXCEPTION(openssl_error()
+		    << boost::errinfo_api_function("SSL_CTX_set_cipher_list")
+		    << errinfo_openssl_error(ERR_peek_error()));
+	}
+}
+
+/**
+ * Set the minimum TLS protocol version to the specified SSL context.
+ *
+ * @param context The ssl context.
+ * @param tlsProtocolmin The minimum TLS protocol version.
+ */
+void SetTlsProtocolminToSSLContext(const boost::shared_ptr<SSL_CTX>& context, const String& tlsProtocolmin)
+{
+	long flags = SSL_CTX_get_options(context.get());
+
+	flags |= SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
+
+#ifdef SSL_TXT_TLSV1_1
+	if (tlsProtocolmin == SSL_TXT_TLSV1_1)
+		flags |= SSL_OP_NO_TLSv1;
+	else
+#elif defined(SSL_TXT_TLSV1_2)
+	if (tlsProtocolmin == SSL_TXT_TLSV1_2)
+		flags |= SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1;
+	else
+#endif /* SSL_TXT_TLSV1_2 */
+	if (tlsProtocolmin != SSL_TXT_TLSV1)
+		BOOST_THROW_EXCEPTION(std::invalid_argument("Invalid TLS protocol version specified."));
+
+	SSL_CTX_set_options(context.get(), flags);
 }
 
 /**
@@ -264,7 +318,7 @@ boost::shared_ptr<X509> GetX509Certificate(const String& pemfile)
 	return boost::shared_ptr<X509>(cert, X509_free);
 }
 
-int MakeX509CSR(const String& cn, const String& keyfile, const String& csrfile, const String& certfile, const String& serialfile, bool ca)
+int MakeX509CSR(const String& cn, const String& keyfile, const String& csrfile, const String& certfile, bool ca)
 {
 	char errbuf[120];
 
@@ -308,7 +362,7 @@ int MakeX509CSR(const String& cn, const String& keyfile, const String& csrfile, 
 		X509_NAME *subject = X509_NAME_new();
 		X509_NAME_add_entry_by_txt(subject, "CN", MBSTRING_ASC, (unsigned char *)cn.CStr(), -1, -1, 0);
 
-		boost::shared_ptr<X509> cert = CreateCert(key, subject, subject, key, ca, serialfile);
+		boost::shared_ptr<X509> cert = CreateCert(key, subject, subject, key, ca);
 
 		X509_NAME_free(subject);
 
@@ -385,7 +439,7 @@ int MakeX509CSR(const String& cn, const String& keyfile, const String& csrfile, 
 	return 1;
 }
 
-boost::shared_ptr<X509> CreateCert(EVP_PKEY *pubkey, X509_NAME *subject, X509_NAME *issuer, EVP_PKEY *cakey, bool ca, const String& serialfile)
+boost::shared_ptr<X509> CreateCert(EVP_PKEY *pubkey, X509_NAME *subject, X509_NAME *issuer, EVP_PKEY *cakey, bool ca)
 {
 	X509 *cert = X509_new();
 	X509_set_version(cert, 2);
@@ -396,29 +450,40 @@ boost::shared_ptr<X509> CreateCert(EVP_PKEY *pubkey, X509_NAME *subject, X509_NA
 	X509_set_subject_name(cert, subject);
 	X509_set_issuer_name(cert, issuer);
 
-	int serial = 1;
+	String id = Utility::NewUniqueID();
 
-	if (!serialfile.IsEmpty()) {
-		if (Utility::PathExists(serialfile)) {
-			std::ifstream ifp;
-			ifp.open(serialfile.CStr());
-			ifp >> std::hex >> serial;
-			ifp.close();
+	char errbuf[120];
+	SHA_CTX context;
+	unsigned char digest[SHA_DIGEST_LENGTH];
 
-			if (ifp.fail())
-				BOOST_THROW_EXCEPTION(std::runtime_error("Could not read serial file."));
-		}
-
-		std::ofstream ofp;
-		ofp.open(serialfile.CStr());
-		ofp << std::hex << std::setw(2) << std::setfill('0') << serial + 1;
-		ofp.close();
-
-		if (ofp.fail())
-			BOOST_THROW_EXCEPTION(std::runtime_error("Could not update serial file."));
+	if (!SHA1_Init(&context)) {
+		Log(LogCritical, "SSL")
+		    << "Error on SHA1 Init: " << ERR_peek_error() << ", \"" << ERR_error_string(ERR_peek_error(), errbuf) << "\"";
+		BOOST_THROW_EXCEPTION(openssl_error()
+		    << boost::errinfo_api_function("SHA1_Init")
+		    << errinfo_openssl_error(ERR_peek_error()));
 	}
 
-	ASN1_INTEGER_set(X509_get_serialNumber(cert), serial);
+	if (!SHA1_Update(&context, (unsigned char*)id.CStr(), id.GetLength())) {
+		Log(LogCritical, "SSL")
+		    << "Error on SHA1 Update: " << ERR_peek_error() << ", \"" << ERR_error_string(ERR_peek_error(), errbuf) << "\"";
+		BOOST_THROW_EXCEPTION(openssl_error()
+		    << boost::errinfo_api_function("SHA1_Update")
+		    << errinfo_openssl_error(ERR_peek_error()));
+	}
+
+	if (!SHA1_Final(digest, &context)) {
+		Log(LogCritical, "SSL")
+		    << "Error on SHA1 Final: " << ERR_peek_error() << ", \"" << ERR_error_string(ERR_peek_error(), errbuf) << "\"";
+		BOOST_THROW_EXCEPTION(openssl_error()
+		    << boost::errinfo_api_function("SHA1_Final")
+		    << errinfo_openssl_error(ERR_peek_error()));
+	}
+
+	BIGNUM *bn = BN_new();
+	BN_bin2bn(digest, sizeof(digest), bn);
+	BN_to_ASN1_INTEGER(bn, X509_get_serialNumber(cert));
+	BN_free(bn);
 
 	X509V3_CTX ctx;
 	X509V3_set_ctx_nodb(&ctx);
@@ -494,7 +559,7 @@ boost::shared_ptr<X509> CreateCertIcingaCA(EVP_PKEY *pubkey, X509_NAME *subject)
 	EVP_PKEY *privkey = EVP_PKEY_new();
 	EVP_PKEY_assign_RSA(privkey, rsa);
 
-	return CreateCert(pubkey, subject, X509_get_subject_name(cacert.get()), privkey, false, cadir + "/serial.txt");
+	return CreateCert(pubkey, subject, X509_get_subject_name(cacert.get()), privkey, false);
 }
 
 String CertificateToString(const boost::shared_ptr<X509>& cert)

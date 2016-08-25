@@ -92,14 +92,27 @@ int TlsStream::ValidateCertificate(int preverify_ok, X509_STORE_CTX *ctx)
 {
 	SSL *ssl = static_cast<SSL *>(X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx()));
 	TlsStream *stream = static_cast<TlsStream *>(SSL_get_ex_data(ssl, m_SSLIndex));
-	if (!preverify_ok)
+
+	if (!preverify_ok) {
 		stream->m_VerifyOK = false;
+
+		std::ostringstream msgbuf;
+		int err = X509_STORE_CTX_get_error(ctx);
+		msgbuf << "code " << err << ": " << X509_verify_cert_error_string(err);
+		stream->m_VerifyError = msgbuf.str();
+	}
+
 	return 1;
 }
 
 bool TlsStream::IsVerifyOK(void) const
 {
 	return m_VerifyOK;
+}
+
+String TlsStream::GetVerifyError(void) const
+{
+	return m_VerifyError;
 }
 
 /**
@@ -148,6 +161,11 @@ void TlsStream::OnEvent(int revents)
 	}
 
 	bool success = false;
+
+	/* Clear error queue for this thread before using SSL_{read,write,do_handshake}.
+	 * Otherwise SSL_*_error() does not work reliably.
+	 */
+	ERR_clear_error();
 
 	switch (m_CurrentAction) {
 		case TlsActionRead:
@@ -372,4 +390,9 @@ bool TlsStream::IsDataAvailable(void) const
 	boost::mutex::scoped_lock lock(m_Mutex);
 
 	return m_RecvQ->GetAvailableBytes() > 0;
+}
+
+Socket::Ptr TlsStream::GetSocket(void) const
+{
+	return m_Socket;
 }
