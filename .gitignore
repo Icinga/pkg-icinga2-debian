@@ -1,5 +1,8 @@
 .vagrant
+.idea
+*.patch
 *.komodoproject
+*.playground
 .*.swp
 .*.swo
 build/

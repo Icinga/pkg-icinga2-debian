@@ -32,6 +32,12 @@ class ApiListener : ConfigObject
 	[config, required] String key_path;
 	[config, required] String ca_path;
 	[config] String crl_path;
+	[config] String cipher_list {
+		default {{{ return "ALL:!LOW:!WEAK:!MEDIUM:!EXP:!NULL"; }}}
+	};
+	[config] String tls_protocolmin {
+		default {{{ return "TLSv1"; }}}
+	};
 
 	[config] String bind_host;
 	[config] String bind_port {
@@ -43,7 +49,7 @@ class ApiListener : ConfigObject
 
 	[config] String ticket_salt;
 
-	[state, no_user_modify] double log_message_timestamp;
+	[state, no_user_modify] Timestamp log_message_timestamp;
 
 	[no_user_modify] String identity;
 };

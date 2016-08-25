@@ -44,11 +44,13 @@ public:
 	virtual Dictionary::Ptr GetConfigFields(void) const override;
 	virtual Dictionary::Ptr GetStatusFields(void) const override;
 
-protected:
-	virtual bool IsStatusAttribute(const String& attribute) const override;
+	virtual void OnConfigUpdateHeavy(void) override;
+	virtual void OnConfigUpdateLight(void) override;
 
-	virtual void OnConfigUpdate(void) override;
-	virtual void OnStatusUpdate(void) override;
+	virtual String CalculateConfigHash(const Dictionary::Ptr& configFields) const;
+
+private:
+	void DoCommonConfigUpdate(void);
 };
 
 }

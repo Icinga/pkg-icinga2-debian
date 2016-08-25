@@ -17,122 +17,63 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
-#ifndef DYNAMICTYPE_H
-#define DYNAMICTYPE_H
+#ifndef CONFIGTYPE_H
+#define CONFIGTYPE_H
 
 #include "base/i2-base.hpp"
-#include "base/configobject.hpp"
-#include "base/objectlock.hpp"
-#include <map>
-# include <boost/iterator/iterator_facade.hpp>
+#include "base/object.hpp"
+#include "base/type.hpp"
+#include "base/dictionary.hpp"
+#include <boost/foreach.hpp>
 
 namespace icinga
 {
 
-template<typename T>
-class ConfigTypeIterator;
+class ConfigObject;
 
-class I2_BASE_API ConfigType : public Object
+class I2_BASE_API ConfigType
 {
 public:
-	DECLARE_PTR_TYPEDEFS(ConfigType);
+	virtual ~ConfigType(void);
 
-	ConfigType(const String& name);
+	intrusive_ptr<ConfigObject> GetObject(const String& name) const;
 
-	String GetName(void) const;
+	void RegisterObject(const intrusive_ptr<ConfigObject>& object);
+	void UnregisterObject(const intrusive_ptr<ConfigObject>& object);
 
-	static ConfigType::Ptr GetByName(const String& name);
-
-	ConfigObject::Ptr GetObject(const String& name) const;
-
-	void RegisterObject(const ConfigObject::Ptr& object);
-	void UnregisterObject(const ConfigObject::Ptr& object);
-
-	static std::vector<ConfigType::Ptr> GetTypes(void);
-	std::pair<ConfigTypeIterator<ConfigObject>, ConfigTypeIterator<ConfigObject> > GetObjects(void);
+	std::vector<intrusive_ptr<ConfigObject> > GetObjects(void) const;
 
 	template<typename T>
-	static std::pair<ConfigTypeIterator<T>, ConfigTypeIterator<T> > GetObjectsByType(void)
+	static TypeImpl<T> *Get(void)
 	{
-		ConfigType::Ptr type = GetByName(T::GetTypeName());
-		return std::make_pair(
-		    ConfigTypeIterator<T>(type, 0),
-		    ConfigTypeIterator<T>(type, UINT_MAX)
-		);
+		typedef TypeImpl<T> ObjType;
+		return static_cast<ObjType *>(T::TypeInstance.get());
 	}
 
+	template<typename T>
+	static std::vector<intrusive_ptr<T> > GetObjectsByType(void)
+	{
+		std::vector<intrusive_ptr<ConfigObject> > objects = GetObjectsHelper(T::TypeInstance.get());
+		std::vector<intrusive_ptr<T> > result;
+		BOOST_FOREACH(const intrusive_ptr<ConfigObject>& object, objects) {
+			result.push_back(static_pointer_cast<T>(object));
+		}
+		return result;
+	}
+
+	int GetObjectCount(void) const;
+
 private:
-	template<typename T> friend class ConfigTypeIterator;
+	typedef std::map<String, intrusive_ptr<ConfigObject> > ObjectMap;
+	typedef std::vector<intrusive_ptr<ConfigObject> > ObjectVector;
 
-	String m_Name;
-
-	typedef std::map<String, ConfigObject::Ptr> ObjectMap;
-	typedef std::vector<ConfigObject::Ptr> ObjectVector;
-
+	mutable boost::mutex m_Mutex;
 	ObjectMap m_ObjectMap;
 	ObjectVector m_ObjectVector;
 
-	typedef std::map<String, ConfigType::Ptr> TypeMap;
-	typedef std::vector<ConfigType::Ptr> TypeVector;
-
-	static TypeMap& InternalGetTypeMap(void);
-	static TypeVector& InternalGetTypeVector(void);
-	static boost::mutex& GetStaticMutex(void);
-};
-
-template<typename T>
-class ConfigTypeIterator : public boost::iterator_facade<ConfigTypeIterator<T>, const intrusive_ptr<T>, boost::forward_traversal_tag>
-{
-public:
-	ConfigTypeIterator(const ConfigType::Ptr& type, int index)
-		: m_Type(type), m_Index(index)
-	{ }
-
-private:
-	friend class boost::iterator_core_access;
-
-	ConfigType::Ptr m_Type;
-	ConfigType::ObjectVector::size_type m_Index;
-	mutable intrusive_ptr<T> m_Current;
-
-	void increment(void)
-	{
-		m_Index++;
-	}
-
-	void decrement(void)
-	{
-		m_Index--;
-	}
-
-	void advance(int n)
-	{
-		m_Index += n;
-	}
-
-	bool equal(const ConfigTypeIterator<T>& other) const
-	{
-		ASSERT(other.m_Type == m_Type);
-
-		{
-			ObjectLock olock(m_Type);
-
-			if ((other.m_Index == UINT_MAX || other.m_Index >= other.m_Type->m_ObjectVector.size()) &&
-			    (m_Index == UINT_MAX || m_Index >= m_Type->m_ObjectVector.size()))
-				return true;
-		}
-
-		return (other.m_Index == m_Index);
-	}
-
-	const intrusive_ptr<T>& dereference(void) const
-	{
-		ObjectLock olock(m_Type);
-		m_Current = static_pointer_cast<T>(*(m_Type->m_ObjectVector.begin() + m_Index));
-		return m_Current;
-	}
+	static std::vector<intrusive_ptr<ConfigObject> > GetObjectsHelper(Type *type);
 };
 
 }
 
-#endif /* DYNAMICTYPE_H */
+#endif /* CONFIGTYPE_H */

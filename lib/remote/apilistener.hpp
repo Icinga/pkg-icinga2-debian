@@ -100,10 +100,14 @@ public:
 
 	static void UpdateObjectAuthority(void);
 
+	static bool IsHACluster(void);
+
 protected:
 	virtual void OnConfigLoaded(void) override;
 	virtual void OnAllConfigLoaded(void) override;
 	virtual void Start(bool runtimeCreated) override;
+
+	virtual void ValidateTlsProtocolmin(const String& value, const ValidationUtils& utils) override;
 
 private:
 	boost::shared_ptr<SSL_CTX> m_SSLContext;
@@ -111,11 +115,14 @@ private:
 	std::set<JsonRpcConnection::Ptr> m_AnonymousClients;
 	std::set<HttpServerConnection::Ptr> m_HttpClients;
 	Timer::Ptr m_Timer;
+	Timer::Ptr m_ReconnectTimer;
+	Timer::Ptr m_AuthorityTimer;
 	Endpoint::Ptr m_LocalEndpoint;
 
 	static ApiListener::Ptr m_Instance;
 
 	void ApiTimerHandler(void);
+	void ApiReconnectTimerHandler(void);
 
 	bool AddListener(const String& node, const String& service);
 	void AddConnection(const Endpoint::Ptr& endpoint);

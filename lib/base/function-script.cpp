@@ -33,9 +33,8 @@ static Value FunctionCall(const std::vector<Value>& args)
 	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
 	Function::Ptr self = static_cast<Function::Ptr>(vframe->Self);
 
-	ScriptFrame uframe(args[0]);
 	std::vector<Value> uargs(args.begin() + 1, args.end());
-	return self->Invoke(uargs);
+	return self->Invoke(args[0], uargs);
 }
 
 static Value FunctionCallV(const Value& thisArg, const Array::Ptr& args)
@@ -43,7 +42,6 @@ static Value FunctionCallV(const Value& thisArg, const Array::Ptr& args)
 	ScriptFrame *vframe = ScriptFrame::GetCurrentFrame();
 	Function::Ptr self = static_cast<Function::Ptr>(vframe->Self);
 
-	ScriptFrame uframe(thisArg);
 	std::vector<Value> uargs;
 
 	{
@@ -51,7 +49,7 @@ static Value FunctionCallV(const Value& thisArg, const Array::Ptr& args)
 		uargs = std::vector<Value>(args->Begin(), args->End());
 	}
 
-	return self->Invoke(uargs);
+	return self->Invoke(thisArg, uargs);
 }
 
 
@@ -61,8 +59,8 @@ Object::Ptr Function::GetPrototype(void)
 
 	if (!prototype) {
 		prototype = new Dictionary();
-		prototype->Set("call", new Function(WrapFunction(FunctionCall)));
-		prototype->Set("callv", new Function(WrapFunction(FunctionCallV)));
+		prototype->Set("call", new Function("Function#call", WrapFunction(FunctionCall)));
+		prototype->Set("callv", new Function("Function#callv", WrapFunction(FunctionCallV)));
 	}
 
 	return prototype;

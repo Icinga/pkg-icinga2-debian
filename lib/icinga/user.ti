@@ -19,6 +19,7 @@
 
 #include "icinga/customvarobject.hpp"
 #include "base/array.hpp"
+#impl_include "icinga/usergroup.hpp"
 
 library icinga;
 
@@ -44,10 +45,10 @@ class User : CustomVarObject
 		}}}
 	};
 
-	[config] array(double) types;
-	int type_filter_real (TypeFilter);
-	[config] array(double) states;
-	int state_filter_real (StateFilter);
+	[config] array(Value) types;
+	[no_user_view, no_user_modify] int type_filter_real (TypeFilter);
+	[config] array(Value) states;
+	[no_user_view, no_user_modify] int state_filter_real (StateFilter);
 
 	[config] String email;
 	[config] String pager;
@@ -56,7 +57,7 @@ class User : CustomVarObject
 		default {{{ return true; }}}
 	};
 
-	[state] double last_notification;
+	[state] Timestamp last_notification;
 };
 
 }

@@ -21,6 +21,7 @@
 #include "remote/zone.tcpp"
 #include "remote/jsonrpcconnection.hpp"
 #include "base/objectlock.hpp"
+#include "base/logger.hpp"
 #include <boost/foreach.hpp>
 
 using namespace icinga;
@@ -29,14 +30,30 @@ REGISTER_TYPE(Zone);
 
 void Zone::OnAllConfigLoaded(void)
 {
+	ObjectImpl<Zone>::OnAllConfigLoaded();
+
 	m_Parent = Zone::GetByName(GetParentRaw());
 
 	Zone::Ptr zone = m_Parent;
+	int levels = 0;
+
+	Array::Ptr endpoints = GetEndpointsRaw();
+
+	if (endpoints) {
+		ObjectLock olock(endpoints);
+		BOOST_FOREACH(const String& endpoint, endpoints) {
+			Endpoint::GetByName(endpoint)->SetCachedZone(this);
+		}
+	}
 
 	while (zone) {
 		m_AllParents.push_back(zone);
 
 		zone = Zone::GetByName(zone->GetParentRaw());
+		levels++;
+
+		if (levels > 32)
+			BOOST_THROW_EXCEPTION(ScriptError("Infinite recursion detected while resolving zone graph. Check your zone hierarchy.", GetDebugInfo()));
 	}
 }
 
@@ -106,6 +123,12 @@ bool Zone::IsGlobal(void) const
 	return GetGlobal();
 }
 
+bool Zone::IsSingleInstance(void) const
+{
+	Array::Ptr endpoints = GetEndpointsRaw();
+	return !endpoints || endpoints->GetLength() < 2;
+}
+
 Zone::Ptr Zone::GetLocalZone(void)
 {
 	Endpoint::Ptr local = Endpoint::GetLocalEndpoint();
@@ -116,3 +139,14 @@ Zone::Ptr Zone::GetLocalZone(void)
 	return local->GetZone();
 }
 
+void Zone::ValidateEndpointsRaw(const Array::Ptr& value, const ValidationUtils& utils)
+{
+	ObjectImpl<Zone>::ValidateEndpointsRaw(value, utils);
+
+	if (value && value->GetLength() > 2) {
+		Log(LogWarning, "Zone")
+		    << "The Zone object '" << GetName() << "' has more than two endpoints."
+		    << " Due to a known issue this type of configuration is strongly"
+		    << " discouraged and may cause Icinga to use excessive amounts of CPU time.";
+	}
+}

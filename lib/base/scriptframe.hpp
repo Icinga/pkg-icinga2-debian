@@ -20,8 +20,9 @@
 #ifndef SCRIPTFRAME_H
 #define SCRIPTFRAME_H
 
-#include "config/i2-config.hpp"
+#include "base/i2-base.hpp"
 #include "base/dictionary.hpp"
+#include "base/array.hpp"
 #include <boost/thread/tss.hpp>
 #include <stack>
 
@@ -39,16 +40,24 @@ struct I2_BASE_API ScriptFrame
 	ScriptFrame(const Value& self);
 	~ScriptFrame(void);
 
+	static void StaticInitialize(void);
+
 	void IncreaseStackDepth(void);
 	void DecreaseStackDepth(void);
 
 	static ScriptFrame *GetCurrentFrame(void);
 
+	static Array::Ptr GetImports(void);
+	static void AddImport(const Object::Ptr& import);
+
 private:
 	static boost::thread_specific_ptr<std::stack<ScriptFrame *> > m_ScriptFrames;
+	static Array::Ptr m_Imports;
 
 	inline static void PushFrame(ScriptFrame *frame);
 	inline static ScriptFrame *PopFrame(void);
+
+	void InitializeFrame(void);
 };
 
 }

@@ -45,8 +45,12 @@ public:
 	bool CanAccessObject(const ConfigObject::Ptr& object);
 	bool IsChildOf(const Zone::Ptr& zone);
 	bool IsGlobal(void) const;
+	bool IsSingleInstance(void) const;
 
 	static Zone::Ptr GetLocalZone(void);
+
+protected:
+	virtual void ValidateEndpointsRaw(const Array::Ptr& value, const ValidationUtils& utils) override;
 
 private:
 	Zone::Ptr m_Parent;
