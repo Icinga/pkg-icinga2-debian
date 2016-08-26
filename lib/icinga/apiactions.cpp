@@ -26,6 +26,7 @@
 #include "icinga/eventcommand.hpp"
 #include "icinga/notificationcommand.hpp"
 #include "remote/apiaction.hpp"
+#include "remote/apilistener.hpp"
 #include "remote/httputility.hpp"
 #include "base/utility.hpp"
 #include "base/convert.hpp"
@@ -45,6 +46,7 @@ REGISTER_APIACTION(schedule_downtime, "Service;Host", &ApiActions::ScheduleDownt
 REGISTER_APIACTION(remove_downtime, "Service;Host;Downtime", &ApiActions::RemoveDowntime);
 REGISTER_APIACTION(shutdown_process, "", &ApiActions::ShutdownProcess);
 REGISTER_APIACTION(restart_process, "", &ApiActions::RestartProcess);
+REGISTER_APIACTION(generate_ticket, "", &ApiActions::GenerateTicket);
 
 Dictionary::Ptr ApiActions::CreateResult(int code, const String& status,
     const Dictionary::Ptr& additional)
@@ -156,7 +158,7 @@ Dictionary::Ptr ApiActions::SendCustomNotification(const ConfigObject::Ptr& obje
 		checkable->SetForceNextNotification(true);
 
 	Checkable::OnNotificationsRequested(checkable, NotificationCustom, checkable->GetLastCheckResult(),
-	    HttpUtility::GetLastParameter(params, "author"), HttpUtility::GetLastParameter(params, "comment"));
+	    HttpUtility::GetLastParameter(params, "author"), HttpUtility::GetLastParameter(params, "comment"), MessageOrigin::Ptr());
 
 	return ApiActions::CreateResult(200, "Successfully sent custom notification for object '" + checkable->GetName() + "'.");
 }
@@ -301,15 +303,17 @@ Dictionary::Ptr ApiActions::ScheduleDowntime(const ConfigObject::Ptr& object,
 		return ApiActions::CreateResult(404, "Can't schedule downtime for non-existent object.");
 
 	if (!params->Contains("start_time") || !params->Contains("end_time") ||
-	    !params->Contains("duration") || !params->Contains("author") ||
-	    !params->Contains("comment")) {
+	    !params->Contains("author") || !params->Contains("comment")) {
 
-		return ApiActions::CreateResult(404, "Options 'start_time', 'end_time', 'duration', 'author' and 'comment' are required");
+		return ApiActions::CreateResult(404, "Options 'start_time', 'end_time', 'author' and 'comment' are required");
 	}
 
 	bool fixed = true;
 	if (params->Contains("fixed"))
 		fixed = HttpUtility::GetLastParameter(params, "fixed");
+
+	if (!fixed && !params->Contains("duration"))
+		return ApiActions::CreateResult(404, "Option 'duration' is required for flexible downtime");
 
 	String downtimeName = Downtime::AddDowntime(checkable,
 	    HttpUtility::GetLastParameter(params, "author"),
@@ -372,3 +376,25 @@ Dictionary::Ptr ApiActions::RestartProcess(const ConfigObject::Ptr& object,
 	return ApiActions::CreateResult(200, "Restarting Icinga 2.");
 }
 
+Dictionary::Ptr ApiActions::GenerateTicket(const ConfigObject::Ptr&,
+    const Dictionary::Ptr& params)
+{
+	if (!params->Contains("cn"))
+		return ApiActions::CreateResult(404, "Option 'cn' is required");
+
+	String cn = HttpUtility::GetLastParameter(params, "cn");
+
+	ApiListener::Ptr listener = ApiListener::GetInstance();
+	String salt = listener->GetTicketSalt();
+
+	if (salt.IsEmpty())
+		return ApiActions::CreateResult(500, "Ticket salt is not configured in ApiListener object");
+
+	String ticket = PBKDF2_SHA1(cn, salt, 50000);
+
+	Dictionary::Ptr additional = new Dictionary();
+	additional->Set("ticket", ticket);
+
+	return ApiActions::CreateResult(200, "Generated PKI ticket '" + ticket + "' for common name '"
+	    + cn + "'.", additional);
+}

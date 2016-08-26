@@ -51,6 +51,8 @@ public:
 	TlsStream(const Socket::Ptr& socket, const String& hostname, ConnectionRole role, const boost::shared_ptr<SSL_CTX>& sslContext = MakeSSLContext());
 	~TlsStream(void);
 
+	Socket::Ptr GetSocket(void) const;
+
 	boost::shared_ptr<X509> GetClientCertificate(void) const;
 	boost::shared_ptr<X509> GetPeerCertificate(void) const;
 
@@ -69,6 +71,7 @@ public:
 	virtual bool IsDataAvailable(void) const override;
 
 	bool IsVerifyOK(void) const;
+	String GetVerifyError(void) const;
 
 private:
 	boost::shared_ptr<SSL> m_SSL;
@@ -77,6 +80,7 @@ private:
 	mutable boost::condition_variable m_CV;
 	bool m_HandshakeOK;
 	bool m_VerifyOK;
+	String m_VerifyError;
 	int m_ErrorCode;
 	bool m_ErrorOccurred;
 

@@ -49,7 +49,10 @@ REGISTER_APIFUNCTION(Hello, icinga, &ApiListener::HelloAPIHandler);
 
 ApiListener::ApiListener(void)
 	: m_SyncQueue(0, 4), m_LogMessageCount(0)
-{ }
+{
+	m_RelayQueue.SetName("ApiListener, RelayQueue");
+	m_SyncQueue.SetName("ApiListener, SyncQueue");
+}
 
 void ApiListener::OnConfigLoaded(void)
 {
@@ -92,6 +95,23 @@ void ApiListener::OnConfigLoaded(void)
 			    + GetCrlPath() + "'.", GetDebugInfo()));
 		}
 	}
+
+	if (!GetCipherList().IsEmpty()) {
+		try {
+			SetCipherListToSSLContext(m_SSLContext, GetCipherList());
+		} catch (const std::exception&) {
+			BOOST_THROW_EXCEPTION(ScriptError("Cannot set cipher list to SSL context for cipher list: '"
+			    + GetCipherList() + "'.", GetDebugInfo()));
+		}
+	}
+
+	if (!GetTlsProtocolmin().IsEmpty()){
+		try {
+			SetTlsProtocolminToSSLContext(m_SSLContext, GetTlsProtocolmin());
+		} catch (const std::exception&) {
+			BOOST_THROW_EXCEPTION(ScriptError("Cannot set minimum TLS protocol version to SSL context with tls_protocolmin: '" + GetTlsProtocolmin() + "'.", GetDebugInfo()));
+		}
+	}
 }
 
 void ApiListener::OnAllConfigLoaded(void)
@@ -129,6 +149,17 @@ void ApiListener::Start(bool runtimeCreated)
 	m_Timer->SetInterval(5);
 	m_Timer->Start();
 	m_Timer->Reschedule(0);
+
+	m_ReconnectTimer = new Timer();
+	m_ReconnectTimer->OnTimerExpired.connect(boost::bind(&ApiListener::ApiReconnectTimerHandler, this));
+	m_ReconnectTimer->SetInterval(60);
+	m_ReconnectTimer->Start();
+	m_ReconnectTimer->Reschedule(0);
+
+	m_AuthorityTimer = new Timer();
+	m_AuthorityTimer->OnTimerExpired.connect(boost::bind(&ApiListener::UpdateObjectAuthority));
+	m_AuthorityTimer->SetInterval(30);
+	m_AuthorityTimer->Start();
 
 	OnMasterChanged(true);
 }
@@ -288,6 +319,15 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 {
 	CONTEXT("Handling new API client connection");
 
+	String conninfo;
+
+	if (role == RoleClient)
+		conninfo = "to";
+	else
+		conninfo = "from";
+
+	conninfo += " " + client->GetPeerAddress();
+
 	TlsStream::Ptr tlsStream;
 
 	{
@@ -295,7 +335,8 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 		try {
 			tlsStream = new TlsStream(client, hostname, role, m_SSLContext);
 		} catch (const std::exception&) {
-			Log(LogCritical, "ApiListener", "Cannot create TLS stream from client connection.");
+			Log(LogCritical, "ApiListener")
+			    << "Cannot create TLS stream from client connection (" << conninfo << ")";
 			return;
 		}
 	}
@@ -303,7 +344,8 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 	try {
 		tlsStream->Handshake();
 	} catch (const std::exception& ex) {
-		Log(LogCritical, "ApiListener", "Client TLS handshake failed");
+		Log(LogCritical, "ApiListener")
+		    << "Client TLS handshake failed (" << conninfo << ")";
 		return;
 	}
 
@@ -330,21 +372,28 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 				return;
 			} else if (!verify_ok) {
 				Log(LogWarning, "ApiListener")
-					<< "Peer certificate for endpoint '" << hostname
-					<< "' is not signed by the certificate authority.";
+					<< "Certificate validation failed for endpoint '" << hostname
+					<< "': " << tlsStream->GetVerifyError();
 				return;
 			}
 		}
 
-		Log(LogInformation, "ApiListener")
-		    << "New client connection for identity '" << identity << "'"
-		    << (verify_ok ? "" : " (client certificate not signed by CA)");
-
 		if (verify_ok)
 			endpoint = Endpoint::GetByName(identity);
+
+		{
+			Log log(LogInformation, "ApiListener");
+
+			log << "New client connection for identity '" << identity << "' " << conninfo;
+
+			if (!verify_ok)
+				log << " (certificate validation failed: " << tlsStream->GetVerifyError() << ")";
+			else if (!endpoint)
+				log << " (no Endpoint object found for identity)";
+		}
 	} else {
 		Log(LogInformation, "ApiListener")
-		    << "New client connection (no client certificate)";
+		    << "New client connection " << conninfo << " (no client certificate)";
 	}
 
 	ClientType ctype;
@@ -360,7 +409,8 @@ void ApiListener::NewClientHandlerInternal(const Socket::Ptr& client, const Stri
 		tlsStream->WaitForData(5);
 
 		if (!tlsStream->IsDataAvailable()) {
-			Log(LogWarning, "ApiListener", "No data received on new API connection.");
+			Log(LogWarning, "ApiListener")
+			    << "No data received on new API connection for identity '" << identity << "'. Ensure that the remote endpoints are properly configured in a cluster setup.";
 			return;
 		}
 
@@ -477,6 +527,46 @@ void ApiListener::ApiTimerHandler(void)
 		}
 	}
 
+	BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
+		if (!endpoint->GetConnected())
+			continue;
+
+		double ts = endpoint->GetRemoteLogPosition();
+
+		if (ts == 0)
+			continue;
+
+		Dictionary::Ptr lparams = new Dictionary();
+		lparams->Set("log_position", ts);
+
+		Dictionary::Ptr lmessage = new Dictionary();
+		lmessage->Set("jsonrpc", "2.0");
+		lmessage->Set("method", "log::SetLogPosition");
+		lmessage->Set("params", lparams);
+
+		double maxTs = 0;
+
+		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+			if (client->GetTimestamp() > maxTs)
+				maxTs = client->GetTimestamp();
+		}
+
+		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+			if (client->GetTimestamp() != maxTs)
+				client->Disconnect();
+			else
+				client->SendMessage(lmessage);
+		}
+
+		Log(LogNotice, "ApiListener")
+		    << "Setting log position for identity '" << endpoint->GetName() << "': "
+		    << Utility::FormatDateTime("%Y/%m/%d %H:%M:%S", ts);
+	}
+
+}
+
+void ApiListener::ApiReconnectTimerHandler(void)
+{
 	Zone::Ptr my_zone = Zone::GetLocalZone();
 
 	BOOST_FOREACH(const Zone::Ptr& zone, ConfigType::GetObjectsByType<Zone>()) {
@@ -529,42 +619,6 @@ void ApiListener::ApiTimerHandler(void)
 		}
 	}
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
-		if (!endpoint->GetConnected())
-			continue;
-
-		double ts = endpoint->GetRemoteLogPosition();
-
-		if (ts == 0)
-			continue;
-
-		Dictionary::Ptr lparams = new Dictionary();
-		lparams->Set("log_position", ts);
-
-		Dictionary::Ptr lmessage = new Dictionary();
-		lmessage->Set("jsonrpc", "2.0");
-		lmessage->Set("method", "log::SetLogPosition");
-		lmessage->Set("params", lparams);
-
-		double maxTs = 0;
-
-		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
-			if (client->GetTimestamp() > maxTs)
-				maxTs = client->GetTimestamp();
-		}
-
-		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
-			if (client->GetTimestamp() != maxTs)
-				client->Disconnect();
-			else
-				client->SendMessage(lmessage);
-		}
-
-		Log(LogNotice, "ApiListener")
-		    << "Setting log position for identity '" << endpoint->GetName() << "': "
-		    << Utility::FormatDateTime("%Y/%m/%d %H:%M:%S", ts);
-	}
-
 	Endpoint::Ptr master = GetMaster();
 
 	if (master)
@@ -599,10 +653,13 @@ void ApiListener::PersistMessage(const Dictionary::Ptr& message, const ConfigObj
 	pmessage->Set("timestamp", ts);
 
 	pmessage->Set("message", JsonEncode(message));
-	Dictionary::Ptr secname = new Dictionary();
-	secname->Set("type", secobj->GetType()->GetName());
-	secname->Set("name", secobj->GetName());
-	pmessage->Set("secobj", secname);
+
+	if (secobj) {
+		Dictionary::Ptr secname = new Dictionary();
+		secname->Set("type", secobj->GetReflectionType()->GetName());
+		secname->Set("name", secobj->GetName());
+		pmessage->Set("secobj", secname);
+	}
 
 	boost::mutex::scoped_lock lock(m_LogLock);
 	if (m_LogFile) {
@@ -903,12 +960,7 @@ void ApiListener::ReplayLog(const JsonRpcConnection::Ptr& client)
 				Dictionary::Ptr secname = pmessage->Get("secobj");
 
 				if (secname) {
-					ConfigType::Ptr dtype = ConfigType::GetByName(secname->Get("type"));
-
-					if (!dtype)
-						continue;
-
-					ConfigObject::Ptr secobj = dtype->GetObject(secname->Get("name"));
+					ConfigObject::Ptr secobj = ConfigObject::GetObject(secname->Get("type"), secname->Get("name"));
 
 					if (!secobj)
 						continue;
@@ -1127,3 +1179,33 @@ Endpoint::Ptr ApiListener::GetLocalEndpoint(void) const
 {
 	return m_LocalEndpoint;
 }
+
+void ApiListener::ValidateTlsProtocolmin(const String& value, const ValidationUtils& utils)
+{
+	ObjectImpl<ApiListener>::ValidateTlsProtocolmin(value, utils);
+
+	if (value != SSL_TXT_TLSV1
+#ifdef SSL_TXT_TLSV1_1
+	    && value != SSL_TXT_TLSV1_1 &&
+	    value != SSL_TXT_TLSV1_2
+#endif /* SSL_TXT_TLSV1_1 */
+	    ) {
+		String message = "Invalid TLS version. Must be one of '" SSL_TXT_TLSV1 "'";
+#ifdef SSL_TXT_TLSV1_1
+		message += ", '" SSL_TXT_TLSV1_1 "' or '" SSL_TXT_TLSV1_2 "'";
+#endif /* SSL_TXT_TLSV1_1 */
+
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("tls_protocolmin"), message));
+	}
+}
+
+bool ApiListener::IsHACluster(void)
+{
+	Zone::Ptr zone = Zone::GetLocalZone();
+
+	if (!zone)
+		return false;
+
+	return zone->IsSingleInstance();
+}
+

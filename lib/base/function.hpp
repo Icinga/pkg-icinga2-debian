@@ -21,6 +21,7 @@
 #define SCRIPTFUNCTION_H
 
 #include "base/i2-base.hpp"
+#include "base/function.thpp"
 #include "base/value.hpp"
 #include "base/functionwrapper.hpp"
 #include "base/scriptglobal.hpp"
@@ -35,17 +36,27 @@ namespace icinga
  *
  * @ingroup base
  */
-class I2_BASE_API Function : public Object
+class I2_BASE_API Function : public ObjectImpl<Function>
 {
 public:
 	DECLARE_OBJECT(Function);
 
 	typedef boost::function<Value (const std::vector<Value>& arguments)> Callback;
 
-	Function(const Callback& function, bool side_effect_free = false);
+	Function(const String& name, const Callback& function, bool side_effect_free = false, bool deprecated = false);
 
 	Value Invoke(const std::vector<Value>& arguments = std::vector<Value>());
-	bool IsSideEffectFree(void) const;
+	Value Invoke(const Value& otherThis, const std::vector<Value>& arguments = std::vector<Value>());
+
+	inline bool IsSideEffectFree(void) const
+	{
+		return GetSideEffectFree();
+	}
+
+	inline bool IsDeprecated(void) const
+	{
+		return GetDeprecated();
+	}
 
 	static Object::Ptr GetPrototype(void);
 
@@ -53,25 +64,68 @@ public:
 
 private:
 	Callback m_Callback;
-	bool m_SideEffectFree;
 };
 
-#define REGISTER_SCRIPTFUNCTION(name, callback) \
-	namespace { namespace UNIQUE_NAME(sf) { namespace sf ## name { \
+#define REGISTER_SCRIPTFUNCTION_NS(ns, name, callback) \
+	namespace { namespace UNIQUE_NAME(sf) { namespace sf ## ns ## name { \
 		void RegisterFunction(void) { \
-			Function::Ptr sf = new icinga::Function(WrapFunction(callback)); \
-			ScriptGlobal::Set(#name, sf); \
+			Function::Ptr sf = new icinga::Function(#ns "#" #name, WrapFunction(callback), false); \
+			ScriptGlobal::Set(#ns "." #name, sf); \
 		} \
-		INITIALIZE_ONCE(RegisterFunction); \
+		INITIALIZE_ONCE_WITH_PRIORITY(RegisterFunction, 10); \
 	} } }
 
-#define REGISTER_SAFE_SCRIPTFUNCTION(name, callback) \
-	namespace { namespace UNIQUE_NAME(sf) { namespace sf ## name { \
+#define REGISTER_SCRIPTFUNCTION_NS_PREFIX(ns, name, callback) \
+	namespace { namespace UNIQUE_NAME(sf) { namespace sf ## ns ## name { \
 		void RegisterFunction(void) { \
-			Function::Ptr sf = new icinga::Function(WrapFunction(callback), true); \
-			ScriptGlobal::Set(#name, sf); \
+			Function::Ptr sf = new icinga::Function(#ns "#" #name, WrapFunction(callback), false); \
+			ScriptGlobal::Set(#ns "." #name, sf); \
+			Function::Ptr dsf = new icinga::Function("Deprecated#__" #name " (deprecated)", WrapFunction(callback), false, true); \
+			ScriptGlobal::Set("Deprecated.__" #name, dsf); \
 		} \
-		INITIALIZE_ONCE(RegisterFunction); \
+		INITIALIZE_ONCE_WITH_PRIORITY(RegisterFunction, 10); \
+	} } }
+
+#define REGISTER_SCRIPTFUNCTION_NS_DEPRECATED(ns, name, callback) \
+	namespace { namespace UNIQUE_NAME(sf) { namespace sf ## ns ## name { \
+		void RegisterFunction(void) { \
+			Function::Ptr sf = new icinga::Function(#ns "#" #name, WrapFunction(callback), false); \
+			ScriptGlobal::Set(#ns "." #name, sf); \
+			Function::Ptr dsf = new icinga::Function("Deprecated#" #name " (deprecated)", WrapFunction(callback), false, true); \
+			ScriptGlobal::Set("Deprecated." #name, dsf); \
+		} \
+		INITIALIZE_ONCE_WITH_PRIORITY(RegisterFunction, 10); \
+	} } }
+
+#define REGISTER_SAFE_SCRIPTFUNCTION_NS(ns, name, callback) \
+	namespace { namespace UNIQUE_NAME(sf) { namespace sf ## ns ## name { \
+		void RegisterFunction(void) { \
+			Function::Ptr sf = new icinga::Function(#ns "#" #name, WrapFunction(callback), true); \
+			ScriptGlobal::Set(#ns "." #name, sf); \
+		} \
+		INITIALIZE_ONCE_WITH_PRIORITY(RegisterFunction, 10); \
+	} } }
+
+#define REGISTER_SAFE_SCRIPTFUNCTION_NS_PREFIX(ns, name, callback) \
+	namespace { namespace UNIQUE_NAME(sf) { namespace sf ## ns ## name { \
+		void RegisterFunction(void) { \
+			Function::Ptr sf = new icinga::Function(#ns "#" #name, WrapFunction(callback), true); \
+			ScriptGlobal::Set(#ns "." #name, sf); \
+			Function::Ptr dsf = new icinga::Function("Deprecated#__" #name " (deprecated)", WrapFunction(callback), true, true); \
+			ScriptGlobal::Set("Deprecated.__" #name, dsf); \
+		} \
+		INITIALIZE_ONCE_WITH_PRIORITY(RegisterFunction, 10); \
+	} } }
+
+#define REGISTER_SAFE_SCRIPTFUNCTION_NS_DEPRECATED(ns, name, callback) \
+	namespace { namespace UNIQUE_NAME(sf) { namespace sf ## ns ## name { \
+		void RegisterFunction(void) { \
+			Function::Ptr sf = new icinga::Function(#ns "#" #name, WrapFunction(callback), true); \
+			ScriptGlobal::Set(#ns "." #name, sf); \
+			Function::Ptr dsf = new icinga::Function("Deprecated#" #name " (deprecated)", WrapFunction(callback), true, true); \
+			ScriptGlobal::Set("Deprecated." #name, dsf); \
+		} \
+		INITIALIZE_ONCE_WITH_PRIORITY(RegisterFunction, 10); \
 	} } }
 
 }

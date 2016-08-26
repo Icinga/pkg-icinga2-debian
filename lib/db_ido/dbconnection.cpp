@@ -39,12 +39,25 @@ Timer::Ptr DbConnection::m_ProgramStatusTimer;
 boost::once_flag DbConnection::m_OnceFlag = BOOST_ONCE_INIT;
 
 DbConnection::DbConnection(void)
-	: m_QueryStats(15 * 60), m_PendingQueries(0), m_PendingQueriesTimestamp(0)
+	: m_QueryStats(15 * 60), m_PendingQueries(0), m_PendingQueriesTimestamp(0),
+	  m_IDCacheValid(false), m_ActiveChangedHandler(false)
 { }
 
 void DbConnection::OnConfigLoaded(void)
 {
 	ConfigObject::OnConfigLoaded();
+
+	Value categories = GetCategories();
+
+	//TODO: Remove 'cat1 | cat2' notation in 2.6
+	if (categories.IsNumber()) {
+		SetCategoryFilter(categories);
+		Log(LogWarning, "DbConnection")
+		    << "Specifying flags using '|' for 'categories' for object '" << GetName()
+		    << "' of type '" << GetReflectionType()->GetName() << "'"
+		    << " is deprecated. This functionality will be removed in 2.6.0. Please use an array.";
+	} else
+		SetCategoryFilter(FilterArrayToInt(categories, DbQuery::GetCategoryFilterMap(), DbCatEverything));
 
 	if (!GetEnableHa()) {
 		Log(LogDebug, "DbConnection")
@@ -62,7 +75,14 @@ void DbConnection::Start(bool runtimeCreated)
 
 	DbObject::OnQuery.connect(boost::bind(&DbConnection::ExecuteQuery, this, _1));
 	DbObject::OnMultipleQueries.connect(boost::bind(&DbConnection::ExecuteMultipleQueries, this, _1));
-	ConfigObject::OnActiveChanged.connect(boost::bind(&DbConnection::UpdateObject, this, _1));
+}
+
+void DbConnection::EnableActiveChangedHandler(void)
+{
+	if (!m_ActiveChangedHandler) {
+		ConfigObject::OnActiveChanged.connect(boost::bind(&DbConnection::UpdateObject, this, _1));
+		m_ActiveChangedHandler = true;
+	}
 }
 
 void DbConnection::StatsLoggerTimerHandler(void)
@@ -172,58 +192,52 @@ void DbConnection::UpdateProgramStatus(void)
 
 	DbQuery query1;
 	query1.Table = "programstatus";
-	query1.Type = DbQueryDelete;
+	query1.IdColumn = "programstatus_id";
+	query1.Type = DbQueryInsert | DbQueryUpdate;
 	query1.Category = DbCatProgramStatus;
+
+	query1.Fields = new Dictionary();
+	query1.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
+	query1.Fields->Set("program_version", Application::GetAppVersion());
+	query1.Fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
+	query1.Fields->Set("program_start_time", DbValue::FromTimestamp(Application::GetStartTime()));
+	query1.Fields->Set("is_currently_running", 1);
+	query1.Fields->Set("endpoint_name", IcingaApplication::GetInstance()->GetNodeName());
+	query1.Fields->Set("process_id", Utility::GetPid());
+	query1.Fields->Set("daemon_mode", 1);
+	query1.Fields->Set("last_command_check", DbValue::FromTimestamp(Utility::GetTime()));
+	query1.Fields->Set("notifications_enabled", (IcingaApplication::GetInstance()->GetEnableNotifications() ? 1 : 0));
+	query1.Fields->Set("active_host_checks_enabled", (IcingaApplication::GetInstance()->GetEnableHostChecks() ? 1 : 0));
+	query1.Fields->Set("passive_host_checks_enabled", 1);
+	query1.Fields->Set("active_service_checks_enabled", (IcingaApplication::GetInstance()->GetEnableServiceChecks() ? 1 : 0));
+	query1.Fields->Set("passive_service_checks_enabled", 1);
+	query1.Fields->Set("event_handlers_enabled", (IcingaApplication::GetInstance()->GetEnableEventHandlers() ? 1 : 0));
+	query1.Fields->Set("flap_detection_enabled", (IcingaApplication::GetInstance()->GetEnableFlapping() ? 1 : 0));
+	query1.Fields->Set("process_performance_data", (IcingaApplication::GetInstance()->GetEnablePerfdata() ? 1 : 0));
 	query1.WhereCriteria = new Dictionary();
 	query1.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
+
 	query1.Priority = PriorityHigh;
 	queries.push_back(query1);
 
 	DbQuery query2;
-	query2.Table = "programstatus";
-	query2.IdColumn = "programstatus_id";
-	query2.Type = DbQueryInsert;
-	query2.Category = DbCatProgramStatus;
-
-	query2.Fields = new Dictionary();
-	query2.Fields->Set("instance_id", 0); /* DbConnection class fills in real ID */
-	query2.Fields->Set("program_version", Application::GetAppVersion());
-	query2.Fields->Set("status_update_time", DbValue::FromTimestamp(Utility::GetTime()));
-	query2.Fields->Set("program_start_time", DbValue::FromTimestamp(Application::GetStartTime()));
-	query2.Fields->Set("is_currently_running", 1);
-	query2.Fields->Set("endpoint_name", IcingaApplication::GetInstance()->GetNodeName());
-	query2.Fields->Set("process_id", Utility::GetPid());
-	query2.Fields->Set("daemon_mode", 1);
-	query2.Fields->Set("last_command_check", DbValue::FromTimestamp(Utility::GetTime()));
-	query2.Fields->Set("notifications_enabled", (IcingaApplication::GetInstance()->GetEnableNotifications() ? 1 : 0));
-	query2.Fields->Set("active_host_checks_enabled", (IcingaApplication::GetInstance()->GetEnableHostChecks() ? 1 : 0));
-	query2.Fields->Set("passive_host_checks_enabled", 1);
-	query2.Fields->Set("active_service_checks_enabled", (IcingaApplication::GetInstance()->GetEnableServiceChecks() ? 1 : 0));
-	query2.Fields->Set("passive_service_checks_enabled", 1);
-	query2.Fields->Set("event_handlers_enabled", (IcingaApplication::GetInstance()->GetEnableEventHandlers() ? 1 : 0));
-	query2.Fields->Set("flap_detection_enabled", (IcingaApplication::GetInstance()->GetEnableFlapping() ? 1 : 0));
-	query2.Fields->Set("process_performance_data", (IcingaApplication::GetInstance()->GetEnablePerfdata() ? 1 : 0));
-	query2.Priority = PriorityHigh;
+	query2.Type = DbQueryNewTransaction;
 	queries.push_back(query2);
-
-	DbQuery query3;
-	query3.Type = DbQueryNewTransaction;
-	queries.push_back(query3);
 
 	DbObject::OnMultipleQueries(queries);
 
-	DbQuery query4;
-	query4.Table = "runtimevariables";
-	query4.Type = DbQueryDelete;
-	query4.Category = DbCatProgramStatus;
-	query4.WhereCriteria = new Dictionary();
-	query4.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
-	DbObject::OnQuery(query4);
+	DbQuery query3;
+	query3.Table = "runtimevariables";
+	query3.Type = DbQueryDelete;
+	query3.Category = DbCatProgramStatus;
+	query3.WhereCriteria = new Dictionary();
+	query3.WhereCriteria->Set("instance_id", 0);  /* DbConnection class fills in real ID */
+	DbObject::OnQuery(query3);
 
-	InsertRuntimeVariable("total_services", std::distance(ConfigType::GetObjectsByType<Service>().first, ConfigType::GetObjectsByType<Service>().second));
-	InsertRuntimeVariable("total_scheduled_services", std::distance(ConfigType::GetObjectsByType<Service>().first, ConfigType::GetObjectsByType<Service>().second));
-	InsertRuntimeVariable("total_hosts", std::distance(ConfigType::GetObjectsByType<Host>().first, ConfigType::GetObjectsByType<Host>().second));
-	InsertRuntimeVariable("total_scheduled_hosts", std::distance(ConfigType::GetObjectsByType<Host>().first, ConfigType::GetObjectsByType<Host>().second));
+	InsertRuntimeVariable("total_services", ConfigType::Get<Service>()->GetObjectCount());
+	InsertRuntimeVariable("total_scheduled_services", ConfigType::Get<Service>()->GetObjectCount());
+	InsertRuntimeVariable("total_hosts", ConfigType::Get<Host>()->GetObjectCount());
+	InsertRuntimeVariable("total_scheduled_hosts", ConfigType::Get<Host>()->GetObjectCount());
 }
 
 void DbConnection::CleanUpHandler(void)
@@ -269,6 +283,42 @@ void DbConnection::CleanUpHandler(void)
 void DbConnection::CleanUpExecuteQuery(const String&, const String&, double)
 {
 	/* Default handler does nothing. */
+}
+
+void DbConnection::SetConfigHash(const DbObject::Ptr& dbobj, const String& hash)
+{
+	SetConfigHash(dbobj->GetType(), GetObjectID(dbobj), hash);
+}
+
+void DbConnection::SetConfigHash(const DbType::Ptr& type, const DbReference& objid, const String& hash)
+{
+	if (!objid.IsValid())
+		return;
+
+	if (!hash.IsEmpty())
+		m_ConfigHashes[std::make_pair(type, objid)] = hash;
+	else
+		m_ConfigHashes.erase(std::make_pair(type, objid));
+}
+
+String DbConnection::GetConfigHash(const DbObject::Ptr& dbobj) const
+{
+	return GetConfigHash(dbobj->GetType(), GetObjectID(dbobj));
+}
+
+String DbConnection::GetConfigHash(const DbType::Ptr& type, const DbReference& objid) const
+{
+	if (!objid.IsValid())
+		return String();
+
+	std::map<std::pair<DbType::Ptr, DbReference>, String>::const_iterator it;
+
+	it = m_ConfigHashes.find(std::make_pair(type, objid));
+
+	if (it == m_ConfigHashes.end())
+		return String();
+
+	return it->second;
 }
 
 void DbConnection::SetObjectID(const DbObject::Ptr& dbobj, const DbReference& dbref)
@@ -342,11 +392,14 @@ bool DbConnection::GetObjectActive(const DbObject::Ptr& dbobj) const
 
 void DbConnection::ClearIDCache(void)
 {
+	SetIDCacheValid(false);
+
 	m_ObjectIDs.clear();
 	m_InsertIDs.clear();
 	m_ActiveObjects.clear();
 	m_ConfigUpdates.clear();
 	m_StatusUpdates.clear();
+	m_ConfigHashes.clear();
 }
 
 void DbConnection::SetConfigUpdate(const DbObject::Ptr& dbobj, bool hasupdate)
@@ -377,7 +430,7 @@ bool DbConnection::GetStatusUpdate(const DbObject::Ptr& dbobj) const
 
 void DbConnection::UpdateObject(const ConfigObject::Ptr& object)
 {
-	if (!GetConnected())
+	if (!GetConnected() || Application::IsShuttingDown())
 		return;
 
 	DbObject::Ptr dbobj = DbObject::GetOrCreateByObject(object);
@@ -386,10 +439,23 @@ void DbConnection::UpdateObject(const ConfigObject::Ptr& object)
 		bool dbActive = GetObjectActive(dbobj);
 		bool active = object->IsActive();
 
-		if (active && !dbActive) {
-			ActivateObject(dbobj);
-			dbobj->SendConfigUpdate();
-			dbobj->SendStatusUpdate();
+		if (active) {
+			if (!dbActive)
+				ActivateObject(dbobj);
+
+			Dictionary::Ptr configFields = dbobj->GetConfigFields();
+			String configHash = dbobj->CalculateConfigHash(configFields);
+			ASSERT(configHash.GetLength() <= 64);
+			configFields->Set("config_hash", configHash);
+
+			String cachedHash = GetConfigHash(dbobj);
+
+			if (cachedHash != configHash) {
+				dbobj->SendConfigUpdateHeavy(configFields);
+				dbobj->SendStatusUpdate();
+			} else {
+				dbobj->SendConfigUpdateLight();
+			}
 		} else if (!active) {
 			/* Deactivate the deleted object no matter
 			 * which state it had in the database.
@@ -401,9 +467,13 @@ void DbConnection::UpdateObject(const ConfigObject::Ptr& object)
 
 void DbConnection::UpdateAllObjects(void)
 {
-	ConfigType::Ptr type;
-	BOOST_FOREACH(const ConfigType::Ptr& dt, ConfigType::GetTypes()) {
-		BOOST_FOREACH(const ConfigObject::Ptr& object, dt->GetObjects()) {
+	BOOST_FOREACH(const Type::Ptr& type, Type::GetAllTypes()) {
+		ConfigType *dtype = dynamic_cast<ConfigType *>(type.get());
+
+		if (!dtype)
+			continue;
+
+		BOOST_FOREACH(const ConfigObject::Ptr& object, dtype->GetObjects()) {
 			UpdateObject(object);
 		}
 	}
@@ -411,43 +481,6 @@ void DbConnection::UpdateAllObjects(void)
 
 void DbConnection::PrepareDatabase(void)
 {
-	/*
-	 * only clear tables on reconnect which
-	 * cannot be updated by their existing ids
-	 * for details check https://dev.icinga.org/issues/5565
-	 */
-
-	//ClearConfigTable("commands");
-	//ClearConfigTable("comments");
-	ClearConfigTable("contact_addresses");
-	ClearConfigTable("contact_notificationcommands");
-	ClearConfigTable("contactgroup_members");
-	//ClearConfigTable("contactgroups");
-	//ClearConfigTable("contacts");
-	//ClearConfigTable("contactstatus");
-	//ClearConfigTable("customvariables");
-	//ClearConfigTable("customvariablestatus");
-	//ClearConfigTable("endpoints");
-	//ClearConfigTable("endpointstatus");
-	ClearConfigTable("host_contactgroups");
-	ClearConfigTable("host_contacts");
-	ClearConfigTable("host_parenthosts");
-	ClearConfigTable("hostdependencies");
-	ClearConfigTable("hostgroup_members");
-	//ClearConfigTable("hostgroups");
-	//ClearConfigTable("hosts");
-	//ClearConfigTable("hoststatus");
-	//ClearConfigTable("scheduleddowntime");
-	ClearConfigTable("service_contactgroups");
-	ClearConfigTable("service_contacts");
-	ClearConfigTable("servicedependencies");
-	ClearConfigTable("servicegroup_members");
-	//ClearConfigTable("servicegroups");
-	//ClearConfigTable("services");
-	//ClearConfigTable("servicestatus");
-	ClearConfigTable("timeperiod_timeranges");
-	//ClearConfigTable("timeperiods");
-
 	BOOST_FOREACH(const DbType::Ptr& type, DbType::GetAllTypes()) {
 		FillIDCache(type);
 	}
@@ -473,4 +506,19 @@ int DbConnection::GetQueryCount(RingBuffer::SizeType span) const
 {
 	boost::mutex::scoped_lock lock(m_StatsMutex);
 	return m_QueryStats.GetValues(span);
+}
+
+bool DbConnection::IsIDCacheValid(void) const
+{
+	return m_IDCacheValid;
+}
+
+void DbConnection::SetIDCacheValid(bool valid)
+{
+	m_IDCacheValid = valid;
+}
+
+int DbConnection::GetSessionToken(void)
+{
+	return Application::GetStartTime();
 }

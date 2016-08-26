@@ -20,6 +20,7 @@
 #include "icinga/downtime.hpp"
 #include "icinga/downtime.tcpp"
 #include "icinga/host.hpp"
+#include "icinga/scheduleddowntime.hpp"
 #include "remote/configobjectutility.hpp"
 #include "base/configtype.hpp"
 #include "base/utility.hpp"
@@ -180,7 +181,26 @@ bool Downtime::IsTriggered(void) const
 
 bool Downtime::IsExpired(void) const
 {
-	return (GetEndTime() < Utility::GetTime());
+	double now = Utility::GetTime();
+
+	if (GetFixed())
+		return (GetEndTime() < now);
+	else {
+		/* triggered flexible downtime not in effect anymore */
+		if (IsTriggered() && !IsInEffect())
+			return true;
+		/* flexible downtime never triggered */
+		else if (!IsTriggered() && (GetEndTime() < now))
+			return true;
+		else
+			return false;
+	}
+}
+
+bool Downtime::HasValidConfigOwner(void) const
+{
+	String configOwner = GetConfigOwner();
+	return configOwner.IsEmpty() || GetObject<ScheduledDowntime>(configOwner);
 }
 
 int Downtime::GetNextDowntimeID(void)
@@ -214,6 +234,7 @@ String Downtime::AddDowntime(const Checkable::Ptr& checkable, const String& auth
 	attrs->Set("triggered_by", triggeredBy);
 	attrs->Set("scheduled_by", scheduledBy);
 	attrs->Set("config_owner", scheduledDowntime);
+	attrs->Set("entry_time", Utility::GetTime());
 
 	Host::Ptr host;
 	Service::Ptr service;
@@ -361,12 +382,12 @@ void Downtime::DowntimesExpireTimerHandler(void)
 
 	BOOST_FOREACH(const Downtime::Ptr& downtime, downtimes) {
 		/* Only remove downtimes which are activated after daemon start. */
-		if (downtime->IsActive() && downtime->IsExpired())
+		if (downtime->IsActive() && (downtime->IsExpired() || !downtime->HasValidConfigOwner()))
 			RemoveDowntime(downtime->GetName(), false, true);
 	}
 }
 
-void Downtime::ValidateStartTime(double value, const ValidationUtils& utils)
+void Downtime::ValidateStartTime(const Timestamp& value, const ValidationUtils& utils)
 {
 	ObjectImpl<Downtime>::ValidateStartTime(value, utils);
 
@@ -374,7 +395,7 @@ void Downtime::ValidateStartTime(double value, const ValidationUtils& utils)
 		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("start_time"), "Start time must be greater than 0."));
 }
 
-void Downtime::ValidateEndTime(double value, const ValidationUtils& utils)
+void Downtime::ValidateEndTime(const Timestamp& value, const ValidationUtils& utils)
 {
 	ObjectImpl<Downtime>::ValidateEndTime(value, utils);
 

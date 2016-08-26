@@ -89,7 +89,7 @@ public:
 	static void QueueAsyncCallback(const boost::function<void (void)>& callback, SchedulerPolicy policy = DefaultScheduler);
 
 	static String NaturalJoin(const std::vector<String>& tokens);
-	static String Join(const Array::Ptr& tokens, char separator);
+	static String Join(const Array::Ptr& tokens, char separator, bool escapeSeparator = true);
 
 	static String FormatDuration(double duration);
 	static String FormatDateTime(const char *format, double ts);
@@ -148,6 +148,11 @@ public:
 	static String GetIcingaDataPath(void);
 #endif /* _WIN32 */
 
+#ifdef I2_DEBUG
+	static void SetTime(double);
+	static void IncrementTime(double);
+#endif /* I2_DEBUG */
+
 private:
 	Utility(void);
 	static void CollectPaths(const String& path, std::vector<String>& paths);
@@ -155,6 +160,10 @@ private:
 #ifdef _WIN32
 	static int MksTemp (char *tmpl);
 #endif /* _WIN32 */
+
+#ifdef I2_DEBUG
+	static double m_DebugTime;
+#endif /* I2_DEBUG */
 
 	static boost::thread_specific_ptr<String> m_ThreadName;
 	static boost::thread_specific_ptr<unsigned int> m_RandSeed;

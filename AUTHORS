@@ -10,15 +10,21 @@ Assaf Flatto <assaf@aikilinux.com>
 Bastian Guse <bguse@nocopy.de>
 Benedikt Heine <bebe@bebehei.de>
 Bernd Erk <bernd.erk@icinga.org>
+Berthold Cogel <cogel@uni-koeln.de>
 Blerim Sheqa <blerim.sheqa@netways.de>
 Brian De Wolf <git@bldewolf.com>
 Brian Dockter <specus@gmail.com>
 Bruno Lingner <mail@hugo.ro>
+Bård Dahlmo-Lerbæk <bard.dahlmo-lerbaek@skatteetaten.no>
 Carlos Cesario <carloscesario@gmail.com>
+Carsten Köbke <carsten.koebke@gmx.de>
+Christian Birk <mail@birkc.de>
 Christian Harke <ch.harke@gmail.com>
 Christian Jonak <christian@jonak.org>
 Christian Lehmann <christian_lehmann@gmx.de>
 Claudio Kuenzler <ck@claudiokuenzler.com>
+Conrad Clement <cclement@printeron.com>
+Daniil Yaroslavtsev <dyaroslavtsev@confyrm.com>
 David Beck <techiscool@gmail.com>
 Dinesh Majrekar <dinesh.majrekar@serverchoice.com>
 Dirk Goetz <dirk.goetz@netways.de>
@@ -26,11 +32,13 @@ Dolf Schimmel <dolf@transip.nl>
 Eduard Güldner <eduard.gueldner@gmail.com>
 Edvin Seferovic <edvin@seferovic.net>
 Eric Lippmann <eric.lippmann@netways.de>
+Evgeni Golov <evgeni@golov.de>
 Ferdi Gueran <ferdi.gueran@nextevolution.de>
 Gaël Beaudoin <gaboo@gaboo.org>
 Gerd von Egidy <gerd@egidy.de>
 Gunnar Beutner <gunnar.beutner@netways.de>
 Hannes Van de Vel <h@nnes.be>
+Heike Jurzik <icinga@huhnix.org>
 Hendrik Röder <hendrik.biz@gmail.com>
 Ian Kelling <ian@iankelling.org>
 Ildar Hizbulin <hizel@vyborg.ru>
@@ -38,7 +46,10 @@ James Pharaoh <james@pharaoh.uk>
 Jan Andres <jan.andres@berenberg.de>
 Jan Wagner <waja@cyconet.org>
 Jason Young <jason.young@velaspan.com>
+Jean-Louis Dupond <jean-louis@dupond.be>
 Jean-Marcel Flach <jean-marcel.flach@netways.de>
+Jens Schanz <mail@jensschanz.de>
+Jeremy Armstrong <lepubel@gmail.com>
 Jesse Morgan <morgajel@gmail.com>
 Jo Goossens <jo.goossens@hosted-power.com>
 Johannes Meyer <johannes.meyer@netways.de>
@@ -52,8 +63,9 @@ Lennart Betz <lennart.betz@netways.de>
 Louis Sautier <sautier.louis@gmail.com>
 Luca Lesinigo <luca@lm-net.it>
 Malte Rabenseifner <mail@malte-rabenseifner.de>
+Manuel Reiter <reiter@csc.uni-frankfurt.de>
 Marcus van Dam <marcus@marcusvandam.nl>
-Marius Sturm <marius@torch.sh>
+Marius Sturm <marius@graylog.com>
 Markus Frosch <lazyfrosch@icinga.org>
 Markus Waldmüller <markus.waldmueller@netways.de>
 Martin Stiborsky <martin.stiborsky@gmail.com>
@@ -63,12 +75,15 @@ Max Zhang <zhenzhan@tibco.com>
 Mhd Sulhan <ms@kilabit.info>
 Michael Friedrich <michael.friedrich@netways.de>
 Michael Kraus <michael.kraus@consol.de>
+Mirco Bauer <meebey@meebey.net>
+Mirko Nardin <mirko.nardin@gmx.net>
 Nicolas Limage <github@xephon.org>
 Pall Sigurdsson <palli-github@minor.is>
 Paul Richards <paul@minimoo.org>
 Per von Zweigbergk <pvz@itassistans.se>
 Petr Ruzicka <petr.ruzicka@gmail.com>
 Phil Hutchinson <phil@volumedia.co.uk>
+Philipp Dallig <philipp.dallig@gmail.com>
 Ralph Breier <ralph.breier@roedl.com>
 Reto Zeder <reto.zeder@arcade.ch>
 Ricardo Bartels <ricardo@bitchbrothers.com>
@@ -76,20 +91,25 @@ Rune Darrud <theflyingcorpse@gmail.com>
 Sam Kottler <shk@linux.com>
 Sebastian Brückner <mail@invlid.com>
 Sebastian Chrostek <sebastian@chrostek.net>
+Simon Murray <spjmurray@yahoo.co.uk>
 Simon Ruderich <simon@ruderich.org>
 Siyalrach Anton Thomas <sat@level8.dk>
 Stefan Triep <stefan@triep.net>
 Stephan Platz <github@paalsteek.de>
+Stephan Tesch <stephan@tesch.cx>
 Steve McMaster <mcmaster@hurricanelabs.com>
 Thomas Gelf <thomas@gelf.net>
 Thomas Widhalm <thomas.widhalm@netways.de>
 Tim Hardeck <thardeck@suse.de>
+Timo Buhrmester <van.fstd@gmail.com>
 Tobias Birnbaum <osterd@gmx.de>
 Tobias von der Krone <tobias.vonderkrone@profitbricks.com>
 Tom Geissler <Tom@d7031.de>
+Uwe Ebel <kobmaki@aol.com>
 Valentin Hoebel <valentin@xenuser.org>
 Vytenis Darulis <vytenis@uber.com>
 Wolfgang Nieder <wnd@gmx.net>
+Yannick Charton <tontonitch-pro@yahoo.fr>
 Yohan Jarosz <yohanjarosz@yahoo.fr>
 Zoltan Nagy <abesto@abesto.net>
 Élie Bouttier <elie@bouttier.eu>

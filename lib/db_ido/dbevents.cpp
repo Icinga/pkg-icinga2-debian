@@ -303,18 +303,7 @@ void DbEvents::AddComments(const Checkable::Ptr& checkable)
 {
 	std::set<Comment::Ptr> comments = checkable->GetComments();
 
-	if (comments.empty())
-		return;
-
 	std::vector<DbQuery> queries;
-
-	DbQuery query1;
-	query1.Table = "comments";
-	query1.Type = DbQueryDelete;
-	query1.Category = DbCatComment;
-	query1.WhereCriteria = new Dictionary();
-	query1.WhereCriteria->Set("object_id", checkable);
-	queries.push_back(query1);
 
 	BOOST_FOREACH(const Comment::Ptr& comment, comments) {
 		AddCommentInternal(queries, comment, false);
@@ -326,7 +315,6 @@ void DbEvents::AddComments(const Checkable::Ptr& checkable)
 void DbEvents::AddComment(const Comment::Ptr& comment)
 {
 	std::vector<DbQuery> queries;
-	RemoveCommentInternal(queries, comment);
 	AddCommentInternal(queries, comment, false);
 	DbObject::OnMultipleQueries(queries);
 }
@@ -351,11 +339,11 @@ void DbEvents::AddCommentInternal(std::vector<DbQuery>& queries, const Comment::
 	fields1->Set("entry_type", comment->GetEntryType());
 	fields1->Set("object_id", checkable);
 
-	if (checkable->GetType() == ConfigType::GetByName("Host")) {
+	if (checkable->GetReflectionType() == Host::TypeInstance) {
 		fields1->Set("comment_type", 2);
 		/* requires idoutils 1.10 schema fix */
 		fields1->Set("internal_comment_id", comment->GetLegacyId());
-	} else if (checkable->GetType() == ConfigType::GetByName("Service")) {
+	} else if (checkable->GetReflectionType() == Service::TypeInstance) {
 		fields1->Set("comment_type", 1);
 		fields1->Set("internal_comment_id", comment->GetLegacyId());
 	} else {
@@ -382,10 +370,19 @@ void DbEvents::AddCommentInternal(std::vector<DbQuery>& queries, const Comment::
 	DbQuery query1;
 	if (!historical) {
 		query1.Table = "comments";
+		query1.Type = DbQueryInsert | DbQueryUpdate;
+
+		fields1->Set("session_token", 0); /* DbConnection class fills in real ID */
+
+		query1.WhereCriteria = new Dictionary();
+		query1.WhereCriteria->Set("internal_comment_id", comment->GetLegacyId());
+		query1.WhereCriteria->Set("object_id", checkable);
+		query1.WhereCriteria->Set("comment_time", DbValue::FromTimestamp(entry_time));
+		query1.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	} else {
 		query1.Table = "commenthistory";
+		query1.Type = DbQueryInsert;
 	}
-	query1.Type = DbQueryInsert;
 	query1.Category = DbCatComment;
 	query1.Fields = fields1;
 
@@ -403,19 +400,21 @@ void DbEvents::RemoveCommentInternal(std::vector<DbQuery>& queries, const Commen
 {
 	Checkable::Ptr checkable = comment->GetCheckable();
 
+	unsigned long entry_time = static_cast<long>(comment->GetEntryTime());
+
 	/* Status */
 	DbQuery query1;
 	query1.Table = "comments";
 	query1.Type = DbQueryDelete;
 	query1.Category = DbCatComment;
 	query1.WhereCriteria = new Dictionary();
-	query1.WhereCriteria->Set("object_id", checkable);
 	query1.WhereCriteria->Set("internal_comment_id", comment->GetLegacyId());
+	query1.WhereCriteria->Set("object_id", checkable);
+	query1.WhereCriteria->Set("comment_time", DbValue::FromTimestamp(entry_time));
+	query1.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	queries.push_back(query1);
 
 	/* History - update deletion time for service/host */
-	unsigned long entry_time = static_cast<long>(comment->GetEntryTime());
-
 	double now = Utility::GetTime();
 	std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(now);
 
@@ -442,18 +441,7 @@ void DbEvents::AddDowntimes(const Checkable::Ptr& checkable)
 {
 	std::set<Downtime::Ptr> downtimes = checkable->GetDowntimes();
 
-	if (downtimes.empty())
-		return;
-
 	std::vector<DbQuery> queries;
-
-	DbQuery query1;
-	query1.Table = "scheduleddowntime";
-	query1.Type = DbQueryDelete;
-	query1.Category = DbCatDowntime;
-	query1.WhereCriteria = new Dictionary();
-	query1.WhereCriteria->Set("object_id", checkable);
-	queries.push_back(query1);
 
 	BOOST_FOREACH(const Downtime::Ptr& downtime, downtimes) {
 		AddDowntimeInternal(queries, downtime, false);
@@ -465,7 +453,6 @@ void DbEvents::AddDowntimes(const Checkable::Ptr& checkable)
 void DbEvents::AddDowntime(const Downtime::Ptr& downtime)
 {
 	std::vector<DbQuery> queries;
-	RemoveDowntimeInternal(queries, downtime);
 	AddDowntimeInternal(queries, downtime, false);
 	DbObject::OnMultipleQueries(queries);
 }
@@ -485,11 +472,11 @@ void DbEvents::AddDowntimeInternal(std::vector<DbQuery>& queries, const Downtime
 	fields1->Set("entry_time", DbValue::FromTimestamp(downtime->GetEntryTime()));
 	fields1->Set("object_id", checkable);
 
-	if (checkable->GetType() == ConfigType::GetByName("Host")) {
+	if (checkable->GetReflectionType() == Host::TypeInstance) {
 		fields1->Set("downtime_type", 2);
 		/* requires idoutils 1.10 schema fix */
 		fields1->Set("internal_downtime_id", downtime->GetLegacyId());
-	} else if (checkable->GetType() == ConfigType::GetByName("Service")) {
+	} else if (checkable->GetReflectionType() == Service::TypeInstance) {
 		fields1->Set("downtime_type", 1);
 		fields1->Set("internal_downtime_id", downtime->GetLegacyId());
 	} else {
@@ -505,7 +492,15 @@ void DbEvents::AddDowntimeInternal(std::vector<DbQuery>& queries, const Downtime
 	fields1->Set("duration", downtime->GetDuration());
 	fields1->Set("scheduled_start_time", DbValue::FromTimestamp(downtime->GetStartTime()));
 	fields1->Set("scheduled_end_time", DbValue::FromTimestamp(downtime->GetEndTime()));
-	fields1->Set("was_started", ((downtime->GetStartTime() <= Utility::GetTime()) ? 1 : 0));
+
+	/* flexible downtimes are started at trigger time */
+	if (downtime->GetFixed()) {
+		std::pair<unsigned long, unsigned long> time_bag = CompatUtility::ConvertTimestamp(downtime->GetStartTime());
+		fields1->Set("actual_start_time", DbValue::FromTimestamp(time_bag.first));
+		fields1->Set("actual_start_time_usec", time_bag.second);
+		fields1->Set("was_started", ((downtime->GetStartTime() <= Utility::GetTime()) ? 1 : 0));
+	}
+
 	fields1->Set("is_in_effect", (downtime->IsInEffect() ? 1 : 0));
 	fields1->Set("trigger_time", DbValue::FromTimestamp(downtime->GetTriggerTime()));
 	fields1->Set("instance_id", 0); /* DbConnection class fills in real ID */
@@ -518,12 +513,22 @@ void DbEvents::AddDowntimeInternal(std::vector<DbQuery>& queries, const Downtime
 
 	DbQuery query1;
 
-	if (!historical)
+	if (!historical) {
 		query1.Table = "scheduleddowntime";
-	else
-		query1.Table = "downtimehistory";
+		query1.Type = DbQueryInsert | DbQueryUpdate;
 
-	query1.Type = DbQueryInsert;
+		fields1->Set("session_token", 0); /* DbConnection class fills in real ID */
+
+		query1.WhereCriteria = new Dictionary();
+		query1.WhereCriteria->Set("object_id", checkable);
+		query1.WhereCriteria->Set("internal_downtime_id", downtime->GetLegacyId());
+		query1.WhereCriteria->Set("entry_time", DbValue::FromTimestamp(downtime->GetEntryTime()));
+		query1.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
+	} else {
+		query1.Table = "downtimehistory";
+		query1.Type = DbQueryInsert;
+	}
+
 	query1.Category = DbCatDowntime;
 	query1.Fields = fields1;
 
@@ -582,6 +587,7 @@ void DbEvents::RemoveDowntimeInternal(std::vector<DbQuery>& queries, const Downt
 	query1.WhereCriteria = new Dictionary();
 	query1.WhereCriteria->Set("object_id", checkable);
 	query1.WhereCriteria->Set("internal_downtime_id", downtime->GetLegacyId());
+	query1.WhereCriteria->Set("entry_time", DbValue::FromTimestamp(downtime->GetEntryTime()));
 	query1.WhereCriteria->Set("instance_id", 0); /* DbConnection class fills in real ID */
 	queries.push_back(query1);
 

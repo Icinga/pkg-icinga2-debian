@@ -20,6 +20,7 @@
 #include "cli/daemoncommand.hpp"
 #include "cli/daemonutility.hpp"
 #include "remote/apilistener.hpp"
+#include "remote/configobjectutility.hpp"
 #include "config/configcompiler.hpp"
 #include "config/configcompilercontext.hpp"
 #include "config/configitembuilder.hpp"
@@ -238,6 +239,8 @@ int DaemonCommand::Run(const po::variables_map& vm, const std::vector<std::strin
 	else if (!vm.count("no-config"))
 		configs.push_back(Application::GetSysconfDir() + "/icinga2/icinga2.conf");
 
+	Log(LogInformation, "cli", "Loading configuration file(s).");
+
 	std::vector<ConfigItem::Ptr> newItems;
 
 	if (!DaemonUtility::LoadConfigFiles(configs, newItems, Application::GetObjectsPath(), Application::GetVarsPath()))
@@ -279,6 +282,7 @@ int DaemonCommand::Run(const po::variables_map& vm, const std::vector<std::strin
 
 	{
 		WorkQueue upq(25000, Application::GetConcurrency());
+		upq.SetName("DaemonCommand::Run");
 
 		// activate config only after daemonization: it starts threads and that is not compatible with fork()
 		if (!ConfigItem::ActivateItems(upq, newItems)) {
@@ -295,6 +299,9 @@ int DaemonCommand::Run(const po::variables_map& vm, const std::vector<std::strin
 		SetDaemonIO(errorLog);
 		Logger::DisableConsoleLog();
 	}
+
+	/* Remove ignored Downtime/Comment objects. */
+	ConfigItem::RemoveIgnoredItems(ConfigObjectUtility::GetConfigDir());
 
 #ifndef _WIN32
 	struct sigaction sa;

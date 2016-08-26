@@ -33,6 +33,8 @@
 #include "base/networkstream.hpp"
 #include "base/json.hpp"
 #include "base/context.hpp"
+#include <boost/foreach.hpp>
+#include <boost/algorithm/string/replace.hpp>
 
 using namespace icinga;
 
@@ -87,6 +89,7 @@ void GelfWriter::CheckResultHandler(const Checkable::Ptr& checkable, const Check
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
+	double ts = cr->GetExecutionEnd();
 
 	Dictionary::Ptr fields = new Dictionary();
 
@@ -107,13 +110,57 @@ void GelfWriter::CheckResultHandler(const Checkable::Ptr& checkable, const Check
 	fields->Set("_current_check_attempt", checkable->GetCheckAttempt());
 	fields->Set("_max_check_attempts", checkable->GetMaxCheckAttempts());
 
+	fields->Set("_latency", cr->CalculateLatency());
+	fields->Set("_execution_time", cr->CalculateExecutionTime());
+	fields->Set("_reachable",  checkable->IsReachable());
+
 	if (cr) {
 		fields->Set("short_message", CompatUtility::GetCheckResultOutput(cr));
-		fields->Set("full_message", CompatUtility::GetCheckResultLongOutput(cr));
+		fields->Set("full_message", cr->GetOutput());
 		fields->Set("_check_source", cr->GetCheckSource());
 	}
 
-	SendLogMessage(ComposeGelfMessage(fields, GetSource()));
+	if (GetEnableSendPerfdata()) {
+		Array::Ptr perfdata = cr->GetPerformanceData();
+
+		if (perfdata) {
+			ObjectLock olock(perfdata);
+			BOOST_FOREACH(const Value& val, perfdata) {
+				PerfdataValue::Ptr pdv;
+
+				if (val.IsObjectType<PerfdataValue>())
+					pdv = val;
+				else {
+					try {
+						pdv = PerfdataValue::Parse(val);
+
+						String escaped_key = pdv->GetLabel();
+						boost::replace_all(escaped_key, " ", "_");
+						boost::replace_all(escaped_key, ".", "_");
+						boost::replace_all(escaped_key, "\\", "_");
+						boost::algorithm::replace_all(escaped_key, "::", ".");
+
+						fields->Set("_" + escaped_key, pdv->GetValue());
+
+						if (pdv->GetMin())
+							fields->Set("_" + escaped_key + "_min", pdv->GetMin());
+						if (pdv->GetMax())
+							fields->Set("_" + escaped_key + "_max", pdv->GetMax());
+						if (pdv->GetWarn())
+							fields->Set("_" + escaped_key + "_warn", pdv->GetWarn());
+						if (pdv->GetCrit())
+							fields->Set("_" + escaped_key + "_crit", pdv->GetCrit());
+					} catch (const std::exception&) {
+						Log(LogWarning, "GelfWriter")
+						    << "Ignoring invalid perfdata value: '" << val << "' for object '"
+						    << checkable-GetName() << "'.";
+					}
+				}
+			}
+		}
+	}
+
+	SendLogMessage(ComposeGelfMessage(fields, GetSource(), ts));
 }
 
 void GelfWriter::NotificationToUserHandler(const Notification::Ptr& notification, const Checkable::Ptr& checkable,
@@ -128,6 +175,7 @@ void GelfWriter::NotificationToUserHandler(const Notification::Ptr& notification
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
+	double ts = cr->GetExecutionEnd();
 
 	String notification_type_str = Notification::NotificationTypeToString(notification_type);
 
@@ -160,7 +208,7 @@ void GelfWriter::NotificationToUserHandler(const Notification::Ptr& notification
 	fields->Set("_notification_type", notification_type_str);
 	fields->Set("_comment", author_comment);
 
-	SendLogMessage(ComposeGelfMessage(fields, GetSource()));
+	SendLogMessage(ComposeGelfMessage(fields, GetSource(), ts));
 }
 
 void GelfWriter::StateChangeHandler(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, StateType type)
@@ -173,6 +221,7 @@ void GelfWriter::StateChangeHandler(const Checkable::Ptr& checkable, const Check
 	Host::Ptr host;
 	Service::Ptr service;
 	tie(host, service) = GetHostService(checkable);
+	double ts = cr->GetExecutionEnd();
 
 	Dictionary::Ptr fields = new Dictionary();
 
@@ -194,18 +243,18 @@ void GelfWriter::StateChangeHandler(const Checkable::Ptr& checkable, const Check
 
 	if (cr) {
 		fields->Set("short_message", CompatUtility::GetCheckResultOutput(cr));
-		fields->Set("full_message", CompatUtility::GetCheckResultLongOutput(cr));
+		fields->Set("full_message", cr->GetOutput());
 		fields->Set("_check_source", cr->GetCheckSource());
 	}
 
-	SendLogMessage(ComposeGelfMessage(fields, GetSource()));
+	SendLogMessage(ComposeGelfMessage(fields, GetSource(), ts));
 }
 
-String GelfWriter::ComposeGelfMessage(const Dictionary::Ptr& fields, const String& source)
+String GelfWriter::ComposeGelfMessage(const Dictionary::Ptr& fields, const String& source, double ts)
 {
 	fields->Set("version", "1.1");
 	fields->Set("host", source);
-	fields->Set("timestamp", Utility::GetTime());
+	fields->Set("timestamp", ts);
 
 	return JsonEncode(fields);
 }
