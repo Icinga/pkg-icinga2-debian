@@ -41,6 +41,8 @@ HttpServerConnection::HttpServerConnection(const String& identity, bool authenti
 {
 	boost::call_once(l_HttpServerConnectionOnceFlag, &HttpServerConnection::StaticInitialize);
 
+	m_RequestQueue.SetName("HttpServerConnection");
+
 	if (authenticated)
 		m_ApiUser = ApiUser::GetByClientCN(identity);
 }
@@ -78,7 +80,10 @@ void HttpServerConnection::Disconnect(void)
 	ApiListener::Ptr listener = ApiListener::GetInstance();
 	listener->RemoveHttpClient(this);
 
-	m_Stream->Shutdown();
+	m_CurrentRequest.~HttpRequest();
+	new (&m_CurrentRequest) HttpRequest(Stream::Ptr());
+
+	m_Stream->Close();
 }
 
 bool HttpServerConnection::ProcessMessage(void)
@@ -161,7 +166,7 @@ void HttpServerConnection::ProcessMessageAsync(HttpRequest& request)
 
 	Log(LogInformation, "HttpServerConnection")
 	    << "Request: " << request.RequestMethod << " " << requestUrl
-	    << " (" << (user ? user->GetName() : "<unauthenticated>") << ")";
+	    << " (from " << m_Stream->GetSocket()->GetPeerAddress() << ", user: " << (user ? user->GetName() : "<unauthenticated>") << ")";
 
 	HttpResponse response(m_Stream, request);
 

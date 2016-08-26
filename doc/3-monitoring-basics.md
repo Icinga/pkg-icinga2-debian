@@ -2,8 +2,8 @@
 
 This part of the Icinga 2 documentation provides an overview of all the basic
 monitoring concepts you need to know to run Icinga 2.
-Keep in mind these examples are made with a linux server in mind, if you are
-using Windows you will need to change the services accordingly. See the [ITL reference](7-icinga-template-library.md#windows-plugins)
+Keep in mind these examples are made with a Linux server in mind. If you are
+using Windows, you will need to change the services accordingly. See the [ITL reference](10-icinga-template-library.md#windows-plugins)
  for further information.
 
 ## <a id="hosts-services"></a> Hosts and Services
@@ -13,7 +13,7 @@ and services can be virtually anything which can be checked in some way:
 
 * Network services (HTTP, SMTP, SNMP, SSH, etc.)
 * Printers
-* Switches / routers
+* Switches or routers
 * Temperature sensors
 * Other local or network-accessible services
 
@@ -46,7 +46,7 @@ check command.
 The `address` attribute is used by check commands to determine which network
 address is associated with the host object.
 
-Details on troubleshooting check problems can be found [here](16-troubleshooting.md#troubleshooting).
+Details on troubleshooting check problems can be found [here](15-troubleshooting.md#troubleshooting).
 
 ### <a id="host-states"></a> Host States
 
@@ -96,7 +96,7 @@ The `hostalive` command is one of several built-in check commands. It sends ICMP
 echo requests to the IP address specified in the `address` attribute to determine
 whether a host is online.
 
-A number of other [built-in check commands](7-icinga-template-library.md#plugin-check-commands) are also
+A number of other [built-in check commands](10-icinga-template-library.md#plugin-check-commands) are also
 available. In addition to these commands the next few chapters will explain in
 detail how to set up your own check commands.
 
@@ -152,13 +152,13 @@ In addition to built-in attributes you can define your own attributes:
 
 Valid values for custom attributes include:
 
-* [Strings](18-language-reference.md#string-literals), [numbers](18-language-reference.md#numeric-literals) and [booleans](18-language-reference.md#boolean-literals)
-* [Arrays](18-language-reference.md#array) and [dictionaries](18-language-reference.md#dictionary)
+* [Strings](17-language-reference.md#string-literals), [numbers](17-language-reference.md#numeric-literals) and [booleans](17-language-reference.md#boolean-literals)
+* [Arrays](17-language-reference.md#array) and [dictionaries](17-language-reference.md#dictionary)
 * [Functions](3-monitoring-basics.md#custom-attributes-functions)
 
 ### <a id="custom-attributes-functions"></a> Functions as Custom Attributes
 
-Icinga 2 lets you specify [functions](18-language-reference.md#functions) for custom attributes.
+Icinga 2 lets you specify [functions](17-language-reference.md#functions) for custom attributes.
 The special case here is that whenever Icinga 2 needs the value for such a custom attribute it runs
 the function and uses whatever value the function returns:
 
@@ -170,7 +170,7 @@ the function and uses whatever value the function returns:
       vars.text = {{ Math.random() * 100 }}
     }
 
-This example uses the [abbreviated lambda syntax](18-language-reference.md#nullary-lambdas).
+This example uses the [abbreviated lambda syntax](17-language-reference.md#nullary-lambdas).
 
 These functions have access to a number of variables:
 
@@ -220,7 +220,7 @@ command and arguments that should be executed via SSH:
     }
 
 Acessing object attributes at runtime inside these functions is described in the
-[advanced topics](5-advanced-topics.md#access-object-attributes-at-runtime) chapter.
+[advanced topics](8-advanced-topics.md#access-object-attributes-at-runtime) chapter.
 
 ## <a id="runtime-macros"></a> Runtime Macros
 
@@ -292,11 +292,11 @@ example:
       vars.ping_packets = 10 // Overrides the default value of 5 given in the command
     }
 
-If a custom attribute isn't defined anywhere an empty value is used and a warning is
+If a custom attribute isn't defined anywhere, an empty value is used and a warning is
 written to the Icinga 2 log.
 
-You can also directly refer to a specific attribute - thereby ignoring these evaluation
-rules - by specifying the full attribute name:
+You can also directly refer to a specific attribute -- thereby ignoring these evaluation
+rules -- by specifying the full attribute name:
 
     $service.vars.ping_wrta$
 
@@ -388,8 +388,8 @@ users:
   Name                   | Description
   -----------------------|--------------
   notification.type      | The type of the notification.
-  notification.author    | The author of the notification comment, if existing.
-  notification.comment   | The comment of the notification, if existing.
+  notification.author    | The author of the notification comment if existing.
+  notification.comment   | The comment of the notification if existing.
 
 ### <a id="global-runtime-macros"></a> Global Runtime Macros
 
@@ -428,18 +428,18 @@ The following macros provide global statistics:
 
 ## <a id="using-apply"></a> Apply Rules
 
-Instead of assigning each object ([Service](6-object-types.md#objecttype-service),
-[Notification](6-object-types.md#objecttype-notification), [Dependency](6-object-types.md#objecttype-dependency),
-[ScheduledDowntime](6-object-types.md#objecttype-scheduleddowntime))
-based on attribute identifiers for example `host_name` objects can be [applied](18-language-reference.md#apply).
+Instead of assigning each object ([Service](9-object-types.md#objecttype-service),
+[Notification](9-object-types.md#objecttype-notification), [Dependency](9-object-types.md#objecttype-dependency),
+[ScheduledDowntime](9-object-types.md#objecttype-scheduleddowntime))
+based on attribute identifiers for example `host_name` objects can be [applied](17-language-reference.md#apply).
 
 Before you start using the apply rules keep the following in mind:
 
 * Define the best match.
     * A set of unique [custom attributes](3-monitoring-basics.md#custom-attributes) for these hosts/services?
     * Or [group](3-monitoring-basics.md#groups) memberships, e.g. a host being a member of a hostgroup, applying services to it?
-    * A generic pattern [match](18-language-reference.md#function-calls) on the host/service name?
-    * [Multiple expressions combined](3-monitoring-basics.md#using-apply-expressions) with `&&` or `||` [operators](18-language-reference.md#expression-operators)
+    * A generic pattern [match](17-language-reference.md#function-calls) on the host/service name?
+    * [Multiple expressions combined](3-monitoring-basics.md#using-apply-expressions) with `&&` or `||` [operators](17-language-reference.md#expression-operators)
 * All expressions must return a boolean value (an empty string is equal to `false` e.g.)
 
 > **Note**
@@ -463,8 +463,8 @@ dictionaries](3-monitoring-basics.md#using-apply-for) for example provided by
 > **Tip**
 >
 > Building configuration in that dynamic way requires detailed information
-> of the generated objects. Use the `object list` [CLI command](8-cli-commands.md#cli-command-object)
-> after successful [configuration validation](8-cli-commands.md#config-validation).
+> of the generated objects. Use the `object list` [CLI command](11-cli-commands.md#cli-command-object)
+> after successful [configuration validation](11-cli-commands.md#config-validation).
 
 
 ### <a id="using-apply-expressions"></a> Apply Rules Expressions
@@ -499,11 +499,11 @@ should be ignored, or any host name ending with `*internal` pattern.
 
 Similar example for advanced notification apply rule filters: If the service
 attribute `notes` contains the `has gold support 24x7` string `AND` one of the
-two condition passes: Either the `customer` host custom attribute is set to `customer-xy`
+two condition passes, either the `customer` host custom attribute is set to `customer-xy`
 `OR` the host custom attribute `always_notify` is set to `true`.
 
 The notification is ignored for services whose host name ends with `*internal`
-`OR` the `priority` custom attribute is [less than](18-language-reference.md#expression-operators) `2`.
+`OR` the `priority` custom attribute is [less than](17-language-reference.md#expression-operators) `2`.
 
     template Notification "cust-xy-notification" {
       users = [ "noc-xy", "mgmt-xy" ]
@@ -517,7 +517,7 @@ The notification is ignored for services whose host name ends with `*internal`
       ignore where match("*internal", host.name) || (service.vars.priority < 2 && host.vars.is_clustered == true)
     }
 
-More advanced examples are covered [here](5-advanced-topics.md#use-functions-assign-where).
+More advanced examples are covered [here](8-advanced-topics.md#use-functions-assign-where).
 
 ### <a id="using-apply-services"></a> Apply Services to Hosts
 
@@ -536,7 +536,7 @@ attribute being defined and the custom attribute `os` set to the string `Linux` 
     }
 
 
-Other detailed scenario examples are used in their respective chapters, for example
+Other detailed examples are used in their respective chapters, for example
 [apply services with custom command arguments](3-monitoring-basics.md#command-passing-parameters).
 
 ### <a id="using-apply-notifications"></a> Apply Notifications to Hosts and Services
@@ -559,7 +559,7 @@ In this example the `mail-noc` notification will be created as object for all se
 and all members of the user group `noc` will get notified.
 
 It is also possible to generally apply a notification template and dynamically overwrite values from
-the template by checking for custom attributes. This can be achieved by using [conditional statements](18-language-reference.md#conditional-statements):
+the template by checking for custom attributes. This can be achieved by using [conditional statements](17-language-reference.md#conditional-statements):
 
     apply Notification "host-mail-noc" to Host {
       import "mail-host-notification"
@@ -593,7 +593,7 @@ Each host object is then checked for custom attributes (`host.vars.notification_
 attibute is set or which value it has, the value from the notification template is dynamically
 overwritten.
 
-The corresponding Host object could look like this:
+The corresponding host object could look like this:
 
     object Host "host1" {
       import "host-linux-prod"
@@ -612,14 +612,14 @@ Detailed examples can be found in the [dependencies](3-monitoring-basics.md#depe
 
 The sample configuration includes an example in [downtimes.conf](4-configuring-icinga-2.md#downtimes-conf).
 
-Detailed examples can be found in the [recurring downtimes](5-advanced-topics.md#recurring-downtimes) chapter.
+Detailed examples can be found in the [recurring downtimes](8-advanced-topics.md#recurring-downtimes) chapter.
 
 
 ### <a id="using-apply-for"></a> Using Apply For Rules
 
 Next to the standard way of using [apply rules](3-monitoring-basics.md#using-apply)
 there is the requirement of applying objects based on a set (array or
-dictionary) using [apply for](18-language-reference.md#apply-for) expressions.
+dictionary) using [apply for](17-language-reference.md#apply-for) expressions.
 
 The sample configuration already includes a detailed example in [hosts.conf](4-configuring-icinga-2.md#hosts-conf)
 and [services.conf](4-configuring-icinga-2.md#services-conf) for this use case.
@@ -636,10 +636,10 @@ types. This could look like the following example:
       vars.oids["bgp"] = "1.1.1.1.5"
     }
 
-Now we want to create service checks for `if01` and `temp` but not `bgp`.
+Now we want to create service checks for `if01` and `temp`, but not `bgp`.
 Furthermore we want to pass the snmp oid stored as dictionary value to the
-custom attribute called `vars.snmp_oid` - this is the command argument required
-by the [snmp](7-icinga-template-library.md#plugin-check-command-snmp) check command.
+custom attribute called `vars.snmp_oid` -- this is the command argument required
+by the [snmp](10-icinga-template-library.md#plugin-check-command-snmp) check command.
 The service's `display_name` should be set to the identifier inside the dictionary.
 
     apply Service for (identifier => oid in host.vars.oids) {
@@ -672,7 +672,7 @@ generic `apply for` rule generating the object name with or without a prefix.
 Imagine a different more advanced example: You are monitoring your network device (host)
 with many interfaces (services). The following requirements/problems apply:
 
-* Each interface service check should be named with a prefix and a name defined in your host object (which could be generated from your CMDB, etc)
+* Each interface service check should be named with a prefix and a name defined in your host object (which could be generated from your CMDB, etc.)
 * Each interface has its own vlan tag
 * Some interfaces have QoS enabled
 * Additional attributes such as `display_name` or `notes`, `notes_url` and `action_url` must be
@@ -735,13 +735,12 @@ After `vars` is fully populated, all object attributes can be set calculated fro
 provided host attributes. For strings, you can use string concatention with the `+` operator.
 
 You can also specifiy the display_name, check command, interval, notes, notes_url, action_url, etc.
-attributes that way. Attribute strings can be [concatenated](18-language-reference.md#expression-operators),
+attributes that way. Attribute strings can be [concatenated](17-language-reference.md#expression-operators),
 for example for adding a more detailed service `display_name`.
 
-This example also uses [if conditions](18-language-reference.md#conditional-statements)
+This example also uses [if conditions](17-language-reference.md#conditional-statements)
 if specific values are not set, adding a local default value.
-The other way around you can override specific custom attributes inherited from a service template,
-if set.
+The other way around you can override specific custom attributes inherited from a service template if set.
 
     /* loop over the host.vars.interfaces dictionary
      * for (key => value in dict) means `interface_name` as key
@@ -797,15 +796,15 @@ if set.
 
 This example makes use of the [check_iftraffic](https://exchange.icinga.org/exchange/iftraffic) plugin.
 The `CheckCommand` definition can be found in the
-[contributed plugin check commands](7-icinga-template-library.md#plugins-contrib-command-iftraffic)
-- make sure to include them in your [icinga2 configuration file](4-configuring-icinga-2.md#icinga2-conf).
+[contributed plugin check commands](10-icinga-template-library.md#plugin-contrib-command-iftraffic)
+-- make sure to include them in your [icinga2 configuration file](4-configuring-icinga-2.md#icinga2-conf).
 
 
 > **Tip**
 >
 > Building configuration in that dynamic way requires detailed information
-> of the generated objects. Use the `object list` [CLI command](8-cli-commands.md#cli-command-object)
-> after successful [configuration validation](8-cli-commands.md#config-validation).
+> of the generated objects. Use the `object list` [CLI command](11-cli-commands.md#cli-command-object)
+> after successful [configuration validation](11-cli-commands.md#config-validation).
 
 Verify that the apply-for-rule successfully created the service objects with the
 inherited custom attributes:
@@ -977,7 +976,7 @@ hosts or with the `test_server` attribute set to `true` are not added to this
 group.
 
 Details on the `assign where` syntax can be found in the
-[Language Reference](18-language-reference.md#apply)
+[Language Reference](17-language-reference.md#apply).
 
 ## <a id="notifications"></a> Notifications
 
@@ -989,10 +988,10 @@ the dependency logic determined that the host/service is unreachable, no
 notifications are sent. You can configure additional type and state filters
 refining the notifications being actually sent.
 
-There are many ways of sending notifications, e.g. by e-mail, XMPP,
+There are many ways of sending notifications, e.g. by email, XMPP,
 IRC, Twitter, etc. On its own Icinga 2 does not know how to send notifications.
 Instead it relies on external mechanisms such as shell scripts to notify users.
-More notification methods are listed in the [addons and plugins](14-addons-plugins.md#notification-scripts-interfaces)
+More notification methods are listed in the [addons and plugins](13-addons.md#notification-scripts-interfaces)
 chapter.
 
 A notification specification requires one or more users (and/or user groups)
@@ -1013,11 +1012,11 @@ The user `icingaadmin` in the example below will get notified only on `WARNING` 
 If you don't set the `states` and `types` configuration attributes for the `User`
 object, notifications for all states and types will be sent.
 
-Details on troubleshooting notification problems can be found [here](16-troubleshooting.md#troubleshooting).
+Details on troubleshooting notification problems can be found [here](15-troubleshooting.md#troubleshooting).
 
 > **Note**
 >
-> Make sure that the [notification](8-cli-commands.md#enable-features) feature is enabled
+> Make sure that the [notification](11-cli-commands.md#enable-features) feature is enabled
 > in order to execute notification commands.
 
 You should choose which information you (and your notified users) are interested in
@@ -1098,7 +1097,7 @@ Define an additional [NotificationCommand](3-monitoring-basics.md#notification-c
 >
 > The example is not complete as there are many different SMS providers.
 > Please note that sending SMS notifications will require an SMS provider
-> or local hardware with a SIM card active.
+> or local hardware with an active SIM card.
 
     object NotificationCommand "sms-notification" {
        command = [
@@ -1119,7 +1118,7 @@ command) after `30m` until `1h`.
 > template or by overriding the attribute directly in the `notifications` array
 > position for `escalation-sms-2nd-level`.
 
-If the problem does not get resolved nor acknowledged preventing further notifications
+If the problem does not get resolved nor acknowledged preventing further notifications,
 the `escalation-sms-1st-level` user will be escalated `1h` after the initial problem was
 notified, but only for one hour (`2h` as `end` key for the `times` dictionary).
 
@@ -1162,10 +1161,10 @@ notified, but only for one hour (`2h` as `end` key for the `times` dictionary).
 
 ### <a id="notification-delay"></a> Notification Delay
 
-Sometimes the problem in question should not be notified when the notification is due
-(the object reaching the `HARD` state) but a defined time duration afterwards. In Icinga 2
+Sometimes the problem in question should not be announced when the notification is due
+(the object reaching the `HARD` state), but after a certain period. In Icinga 2
 you can use the `times` dictionary and set `begin = 15m` as key and value if you want to
-postpone the notification window for 15 minutes. Leave out the `end` key - if not set,
+postpone the notification window for 15 minutes. Leave out the `end` key -- if not set,
 Icinga 2 will not check against any end time for this notification. Make sure to
 specify a relatively low notification `interval` to get notified soon enough again.
 
@@ -1201,7 +1200,7 @@ If you prefer to be notified only once, you can disable re-notifications by sett
 ### <a id="notification-filters-state-type"></a> Notification Filters by State and Type
 
 If there are no notification state and type filter attributes defined at the `Notification`
-or `User` object Icinga 2 assumes that all states and types are being notified.
+or `User` object, Icinga 2 assumes that all states and types are being notified.
 
 Available state and type filters for notifications are:
 
@@ -1212,7 +1211,7 @@ Available state and type filters for notifications are:
                 FlappingEnd, DowntimeStart, DowntimeEnd, DowntimeRemoved ]
     }
 
-If you are familiar with Icinga 1.x `notification_options` please note that they have been split
+If you are familiar with Icinga 1.x `notification_options`, please note that they have been split
 into type and state to allow more fine granular filtering for example on downtimes and flapping.
 You can filter for acknowledgements and custom notifications too.
 
@@ -1225,21 +1224,21 @@ events should be handled.
 
 ### <a id="check-commands"></a> Check Commands
 
-[CheckCommand](6-object-types.md#objecttype-checkcommand) objects define the command line how
+[CheckCommand](9-object-types.md#objecttype-checkcommand) objects define the command line how
 a check is called.
 
-[CheckCommand](6-object-types.md#objecttype-checkcommand) objects are referenced by
-[Host](6-object-types.md#objecttype-host) and [Service](6-object-types.md#objecttype-service) objects
+[CheckCommand](9-object-types.md#objecttype-checkcommand) objects are referenced by
+[Host](9-object-types.md#objecttype-host) and [Service](9-object-types.md#objecttype-service) objects
 using the `check_command` attribute.
 
 > **Note**
 >
-> Make sure that the [checker](8-cli-commands.md#enable-features) feature is enabled in order to
+> Make sure that the [checker](11-cli-commands.md#enable-features) feature is enabled in order to
 > execute checks.
 
 #### <a id="command-plugin-integration"></a> Integrate the Plugin with a CheckCommand Definition
 
-[CheckCommand](6-object-types.md#objecttype-checkcommand) objects require the [ITL template](7-icinga-template-library.md#itl-plugin-check-command)
+[CheckCommand](9-object-types.md#objecttype-checkcommand) objects require the [ITL template](10-icinga-template-library.md#itl-plugin-check-command)
 `plugin-check-command` to support native plugin based check methods.
 
 Unless you have done so already, download your check plugin and put it
@@ -1254,21 +1253,20 @@ all available options. Our example defines warning (`-w`) and
 critical (`-c`) thresholds for the disk usage. Without any
 partition defined (`-p`) it will check all local partitions.
 
-   icinga@icinga2 $ /usr/lib64/nagios/plugins/check_mysql --help
-   ...
-
+    icinga@icinga2 $ /usr/lib64/nagios/plugins/check_mysql --help
+    ...
     This program tests connections to a MySQL server
-
-   Usage:
-     check_mysql [-d database] [-H host] [-P port] [-s socket]
-           [-u user] [-p password] [-S] [-l] [-a cert] [-k key]
-           [-C ca-cert] [-D ca-dir] [-L ciphers] [-f optfile] [-g group]
+        
+    Usage:
+    check_mysql [-d database] [-H host] [-P port] [-s socket]
+    [-u user] [-p password] [-S] [-l] [-a cert] [-k key]
+    [-C ca-cert] [-D ca-dir] [-L ciphers] [-f optfile] [-g group]
 
 Next step is to understand how [command parameters](3-monitoring-basics.md#command-passing-parameters)
-are being passed from a host or service object, and add a [CheckCommand](6-object-types.md#objecttype-checkcommand)
+are being passed from a host or service object, and add a [CheckCommand](9-object-types.md#objecttype-checkcommand)
 definition based on these required parameters and/or default values.
 
-Please continue reading in the [plugins section](14-addons-plugins.md#plugins) for additional integration examples.
+Please continue reading in the [plugins section](5-service-monitoring.md#service-monitoring-plugins) for additional integration examples.
 
 #### <a id="command-passing-parameters"></a> Passing Check Command Parameters from Host or Service
 
@@ -1276,8 +1274,8 @@ Check command parameters are defined as custom attributes which can be accessed 
 by the executed check command.
 
 The check command parameters for ITL provided plugin check command definitions are documented
-[here](7-icinga-template-library.md#plugin-check-commands), for example
-[disk](7-icinga-template-library.md#plugin-check-command-disk).
+[here](10-icinga-template-library.md#plugin-check-commands), for example
+[disk](10-icinga-template-library.md#plugin-check-command-disk).
 
 In order to practice passing command parameters you should [integrate your own plugin](3-monitoring-basics.md#command-plugin-integration).
 
@@ -1379,10 +1377,10 @@ inside [services.conf](4-configuring-icinga-2.md#services-conf):
 If you prefer this being configured at the host instead of the service, modify the host configuration
 object instead. The runtime macro resolving order is described [here](3-monitoring-basics.md#macro-evaluation-order).
 
-   object Host NodeName {
-   ...
-     vars.ssh_port = 2022
-   }
+    object Host NodeName {
+    ...
+      vars.ssh_port = 2022
+    }
 
 #### <a id="command-passing-parameters-apply-for"></a> Passing Check Command Parameters Using Apply For
 
@@ -1424,7 +1422,7 @@ More details on using arrays in custom attributes can be found in
 By defining a check command line using the `command` attribute Icinga 2
 will resolve all macros in the static string or array. Sometimes it is
 required to extend the arguments list based on a met condition evaluated
-at command execution. Or making arguments optional - only set if the
+at command execution. Or making arguments optional -- only set if the
 macro value can be resolved by Icinga 2.
 
     object CheckCommand "check_http" {
@@ -1463,7 +1461,7 @@ macro value can be resolved by Icinga 2.
 
 The example shows the `check_http` check command defining the most common
 arguments. Each of them is optional by default and will be omitted if
-the value is not set. For example if the service calling the check command
+the value is not set. For example, if the service calling the check command
 does not have `vars.http_port` set, it won't get added to the command
 line.
 
@@ -1479,7 +1477,7 @@ That way you can use the `check_http` command definition for both, with and
 without SSL enabled checks saving you duplicated command definitions.
 
 Details on all available options can be found in the
-[CheckCommand object definition](6-object-types.md#objecttype-checkcommand).
+[CheckCommand object definition](9-object-types.md#objecttype-checkcommand).
 
 
 #### <a id="command-environment-variables"></a> Environment Variables
@@ -1516,18 +1514,18 @@ when passing credentials to database checks:
 
 ### <a id="notification-commands"></a> Notification Commands
 
-[NotificationCommand](6-object-types.md#objecttype-notificationcommand) objects define how notifications are delivered to external
-interfaces (E-Mail, XMPP, IRC, Twitter, etc).
+[NotificationCommand](9-object-types.md#objecttype-notificationcommand) objects define how notifications are delivered to external
+interfaces (email, XMPP, IRC, Twitter, etc.).
 
-[NotificationCommand](6-object-types.md#objecttype-notificationcommand) objects are referenced by
-[Notification](6-object-types.md#objecttype-notification) objects using the `command` attribute.
+[NotificationCommand](9-object-types.md#objecttype-notificationcommand) objects are referenced by
+[Notification](9-object-types.md#objecttype-notification) objects using the `command` attribute.
 
-`NotificationCommand` objects require the [ITL template](7-icinga-template-library.md#itl-plugin-notification-command)
+`NotificationCommand` objects require the [ITL template](10-icinga-template-library.md#itl-plugin-notification-command)
 `plugin-notification-command` to support native plugin-based notifications.
 
 > **Note**
 >
-> Make sure that the [notification](8-cli-commands.md#enable-features) feature is enabled
+> Make sure that the [notification](11-cli-commands.md#enable-features) feature is enabled
 > in order to execute notification commands.
 
 Below is an example using runtime macros from Icinga 2 (such as `$service.output$` for
@@ -1596,14 +1594,14 @@ NotificationCommand object refer to that.
 ### <a id="event-commands"></a> Event Commands
 
 Unlike notifications, event commands for hosts/services are called on every
-check execution if one of these conditions match:
+check execution if one of these conditions matches:
 
 * The host/service is in a [soft state](3-monitoring-basics.md#hard-soft-states)
 * The host/service state changes into a [hard state](3-monitoring-basics.md#hard-soft-states)
 * The host/service state recovers from a [soft or hard state](3-monitoring-basics.md#hard-soft-states) to [OK](3-monitoring-basics.md#service-states)/[Up](3-monitoring-basics.md#host-states)
 
-[EventCommand](6-object-types.md#objecttype-eventcommand) objects are referenced by
-[Host](6-object-types.md#objecttype-host) and [Service](6-object-types.md#objecttype-service) objects
+[EventCommand](9-object-types.md#objecttype-eventcommand) objects are referenced by
+[Host](9-object-types.md#objecttype-host) and [Service](9-object-types.md#objecttype-service) objects
 using the `event_command` attribute.
 
 Therefore the `EventCommand` object should define a command line
@@ -1612,7 +1610,7 @@ available through runtime vars. Runtime macros such as `$service.state_type$`
 and `$service.state$` will be processed by Icinga 2 helping on fine-granular
 events being triggered.
 
-If you are using a client as [command execution bridge](11-icinga2-client.md#icinga2-client-configuration-command-bridge)
+If you are using a client as [command endpoint](6-distributed-monitoring.md#distributed-monitoring-top-down-command-endpoint)
 the event command will be executed on the client itself (similar to the check
 command).
 
@@ -1644,7 +1642,7 @@ Example on Debian:
     icinga  ALL=(ALL) NOPASSWD: /etc/init.d/apache2 restart
 
 
-Define a generic [EventCommand](6-object-types.md#objecttype-eventcommand) object `event_by_ssh`
+Define a generic [EventCommand](9-object-types.md#objecttype-eventcommand) object `event_by_ssh`
 which can be used for all event commands triggered using ssh:
 
     /* pass event commands through ssh */
@@ -1743,7 +1741,7 @@ Remote Host Terminal:
 
 ## <a id="dependencies"></a> Dependencies
 
-Icinga 2 uses host and service [Dependency](6-object-types.md#objecttype-dependency) objects
+Icinga 2 uses host and service [Dependency](9-object-types.md#objecttype-dependency) objects
 for determing their network reachability.
 
 A service can depend on a host, and vice versa. A service has an implicit
@@ -1848,7 +1846,7 @@ be suppressed. This is achieved by setting the `disable_checks` attribute to `tr
 ### <a id="dependencies-apply-custom-attributes"></a> Apply Dependencies based on Custom Attributes
 
 You can use [apply rules](3-monitoring-basics.md#using-apply) to set parent or
-child attributes e.g. `parent_host_name` to other object's
+child attributes, e.g. `parent_host_name` to other objects'
 attributes.
 
 A common example are virtual machines hosted on a master. The object

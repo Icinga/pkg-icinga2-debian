@@ -215,6 +215,47 @@ static void AddSuggestion(std::vector<String>& matches, const String& word, cons
 	matches.push_back(suggestion);
 }
 
+static void AddSuggestions(std::vector<String>& matches, const String& word, const String& pword, bool withFields, const Value& value)
+{
+	String prefix;
+
+	if (!pword.IsEmpty())
+		prefix = pword + ".";
+
+	if (value.IsObjectType<Dictionary>()) {
+		Dictionary::Ptr dict = value;
+
+		ObjectLock olock(dict);
+		BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+			AddSuggestion(matches, word, prefix + kv.first);
+		}
+	}
+
+	if (withFields) {
+		Type::Ptr type = value.GetReflectionType();
+
+		for (int i = 0; i < type->GetFieldCount(); i++) {
+			Field field = type->GetFieldInfo(i);
+
+			AddSuggestion(matches, word, prefix + field.Name);
+		}
+
+		while (type) {
+			Object::Ptr prototype = type->GetPrototype();
+			Dictionary::Ptr dict = dynamic_pointer_cast<Dictionary>(prototype);
+
+			if (dict) {
+				ObjectLock olock(dict);
+				BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+					AddSuggestion(matches, word, prefix + kv.first);
+				}
+			}
+
+			type = type->GetBaseType();
+		}
+	}
+}
+
 std::vector<String> ConsoleHandler::GetAutocompletionSuggestions(const String& word, ScriptFrame& frame)
 {	
 	std::vector<String> matches;
@@ -237,6 +278,14 @@ std::vector<String> ConsoleHandler::GetAutocompletionSuggestions(const String& w
 		}
 	}
 
+	{
+		Array::Ptr imports = ScriptFrame::GetImports();
+		ObjectLock olock(imports);
+		BOOST_FOREACH(const Value& import, imports) {
+			AddSuggestions(matches, word, "", false, import);
+		}
+	}
+
 	String::SizeType cperiod = word.RFind(".");
 
 	if (cperiod != String::NPos) {
@@ -250,36 +299,8 @@ std::vector<String> ConsoleHandler::GetAutocompletionSuggestions(const String& w
 			if (expr)
 				value = expr->Evaluate(frame);
 
-			if (value.IsObjectType<Dictionary>()) {
-				Dictionary::Ptr dict = value;
+			AddSuggestions(matches, word, pword, true, value);
 
-				ObjectLock olock(dict);
-				BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
-					AddSuggestion(matches, word, pword + "." + kv.first);
-				}
-			}
-
-			Type::Ptr type = value.GetReflectionType();
-
-			for (int i = 0; i < type->GetFieldCount(); i++) {
-				Field field = type->GetFieldInfo(i);
-
-				AddSuggestion(matches, word, pword + "." + field.Name);
-			}
-
-			while (type) {
-				Object::Ptr prototype = type->GetPrototype();
-				Dictionary::Ptr dict = dynamic_pointer_cast<Dictionary>(prototype);
-
-				if (dict) {
-					ObjectLock olock(dict);
-					BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
-						AddSuggestion(matches, word, pword + "." + kv.first);
-					}
-				}
-
-				type = type->GetBaseType();
-			}
 		} catch (...) { /* Ignore the exception */ }
 	}
 

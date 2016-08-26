@@ -33,7 +33,7 @@
 
 using namespace icinga;
 
-REGISTER_SCRIPTFUNCTION(IdoCheck, &IdoCheckTask::ScriptFunc);
+REGISTER_SCRIPTFUNCTION_NS_DEPRECATED(Internal, IdoCheck, &IdoCheckTask::ScriptFunc);
 
 void IdoCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr,
     const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)
@@ -55,6 +55,9 @@ void IdoCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult
 	String idoType = MacroProcessor::ResolveMacros("$ido_type$", resolvers, checkable->GetLastCheckResult(),
 	    NULL, MacroProcessor::EscapeCallback(), resolvedMacros, useResolvedMacros);
 
+	String idoName = MacroProcessor::ResolveMacros("$ido_name$", resolvers, checkable->GetLastCheckResult(),
+	    NULL, MacroProcessor::EscapeCallback(), resolvedMacros, useResolvedMacros);
+
 	if (resolvedMacros && !useResolvedMacros)
 		return;
 
@@ -64,12 +67,6 @@ void IdoCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult
 		checkable->ProcessCheckResult(cr);
 		return;
 	}
-
-	String idoName = MacroProcessor::ResolveMacros("$ido_name$", resolvers, checkable->GetLastCheckResult(),
-	    NULL, MacroProcessor::EscapeCallback(), resolvedMacros, useResolvedMacros);
-
-	if (resolvedMacros && !useResolvedMacros)
-		return;
 
 	if (idoName.IsEmpty()) {
 		cr->SetOutput("Macro 'ido_name' must be set.");
@@ -87,7 +84,7 @@ void IdoCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult
 		return;
 	}
 
-	ConfigType::Ptr dtype = ConfigType::GetByName(idoType);
+	ConfigType *dtype = dynamic_cast<ConfigType *>(type.get());
 	VERIFY(dtype);
 
 	DbConnection::Ptr conn = static_pointer_cast<DbConnection>(dtype->GetObject(idoName));
@@ -101,6 +98,13 @@ void IdoCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult
 
 	double qps = conn->GetQueryCount(60) / 60.0;
 
+	if (conn->IsPaused()) {
+		cr->SetOutput("IDO connection is temporarily disabled on this cluster instance.");
+		cr->SetState(ServiceOK);
+		checkable->ProcessCheckResult(cr);
+		return;
+	}
+
 	if (!conn->GetConnected()) {
 		if (conn->GetShouldConnect()) {
 			cr->SetOutput("Could not connect to the database server.");
@@ -111,16 +115,19 @@ void IdoCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult
 		}
 	} else {
 		String schema_version = conn->GetSchemaVersion();
+		std::ostringstream msgbuf;
 
 		if (Utility::CompareVersion(IDO_CURRENT_SCHEMA_VERSION, schema_version) < 0) {
-			cr->SetOutput("Outdated schema version: " + schema_version + "; Latest version: "  IDO_CURRENT_SCHEMA_VERSION);
+			msgbuf << "Outdated schema version: '" << schema_version << "'. Latest version: '" << IDO_CURRENT_SCHEMA_VERSION << "'.";
 			cr->SetState(ServiceWarning);
 		} else {
-			std::ostringstream msgbuf;
-			msgbuf << "Connected to the database server; queries per second: "  << std::fixed << std::setprecision(3) << qps;
-			cr->SetOutput(msgbuf.str());
+			msgbuf << "Connected to the database server (Schema version: '" << schema_version << "').";
 			cr->SetState(ServiceOK);
 		}
+
+		msgbuf << " Queries per second: " << std::fixed << std::setprecision(3) << qps;
+
+		cr->SetOutput(msgbuf.str());
 	}
 
 	Array::Ptr perfdata = new Array();

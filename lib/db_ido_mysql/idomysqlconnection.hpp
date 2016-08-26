@@ -57,6 +57,7 @@ public:
 	virtual int GetPendingQueryCount(void) const override;
 
 protected:
+	virtual void OnConfigLoaded(void) override;
 	virtual void Resume(void) override;
 	virtual void Pause(void) override;
 
@@ -70,7 +71,6 @@ protected:
 
 private:
 	DbReference m_InstanceID;
-	int m_SessionToken;
 
 	WorkQueue m_QueryQueue;
 
@@ -107,15 +107,15 @@ private:
 
 	bool CanExecuteQuery(const DbQuery& query);
 
-	void InternalExecuteQuery(const DbQuery& query, DbQueryType *typeOverride = NULL);
+	void InternalExecuteQuery(const DbQuery& query, int typeOverride = -1);
 	void InternalExecuteMultipleQueries(const std::vector<DbQuery>& queries);
 
 	void FinishExecuteQuery(const DbQuery& query, int type, bool upsert);
 	void InternalCleanUpExecuteQuery(const String& table, const String& time_key, double time_value);
 	void InternalNewTransaction(void);
 
-	virtual void ClearConfigTable(const String& table) override;
-	void ClearCustomVarTable(const String& table);
+	void ClearTableBySession(const String& table);
+	void ClearTablesBySession(void);
 
 	void ExceptionHandler(boost::exception_ptr exp);
 

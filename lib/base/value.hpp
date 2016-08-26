@@ -28,6 +28,8 @@
 namespace icinga
 {
 
+typedef double Timestamp;
+
 /**
  * The type of a Value.
  *
@@ -142,13 +144,13 @@ public:
 	template<typename T>
 	operator intrusive_ptr<T>(void) const
 	{
-		if (IsEmpty())
+		if (IsEmpty() && !IsString())
 			return intrusive_ptr<T>();
 
 		if (!IsObject())
 			BOOST_THROW_EXCEPTION(std::runtime_error("Cannot convert value of type '" + GetTypeName() + "' to an object."));
 
-		Object::Ptr object = boost::get<Object::Ptr>(m_Value);
+		const Object::Ptr& object = boost::get<Object::Ptr>(m_Value);
 
 		ASSERT(object);
 

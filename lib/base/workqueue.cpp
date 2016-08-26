@@ -49,6 +49,16 @@ WorkQueue::~WorkQueue(void)
 	Join(true);
 }
 
+void WorkQueue::SetName(const String& name)
+{
+	m_Name = name;
+}
+
+String WorkQueue::GetName(void) const
+{
+	return m_Name;
+}
+
 /**
  * Enqueues a task. Tasks are guaranteed to be executed in the order
  * they were enqueued in except if there is more than one worker thread or when
@@ -69,6 +79,9 @@ void WorkQueue::Enqueue(const boost::function<void (void)>& function, WorkQueueP
 	boost::mutex::scoped_lock lock(m_Mutex);
 
 	if (!m_Spawned) {
+		Log(LogNotice, "WorkQueue")
+		    << "Spawning WorkQueue threads for '" << m_Name << "'";
+
 		for (int i = 0; i < m_ThreadCount; i++) {
 			m_Threads.create_thread(boost::bind(&WorkQueue::WorkerThreadProc, this));
 		}
@@ -106,6 +119,9 @@ void WorkQueue::Join(bool stop)
 
 		m_Threads.join_all();
 		m_Spawned = false;
+
+		Log(LogNotice, "WorkQueue")
+		    << "Stopped WorkQueue threads for '" << m_Name << "'";
 	}
 }
 
@@ -177,8 +193,14 @@ void WorkQueue::StatusTimerHandler(void)
 {
 	boost::mutex::scoped_lock lock(m_Mutex);
 
-	Log(LogNotice, "WorkQueue")
-	    << "#" << m_ID << " tasks: " << m_Tasks.size();
+	Log log(LogNotice, "WorkQueue");
+
+	log << "#" << m_ID;
+
+	if (!m_Name.IsEmpty())
+		log << " (" << m_Name << ")";
+
+	log << " tasks: " << m_Tasks.size();
 }
 
 void WorkQueue::WorkerThreadProc(void)

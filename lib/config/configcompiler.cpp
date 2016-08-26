@@ -113,7 +113,14 @@ String ConfigCompiler::GetPackage(void) const
 void ConfigCompiler::CollectIncludes(std::vector<Expression *>& expressions,
     const String& file, const String& zone, const String& package)
 {
-	expressions.push_back(CompileFile(file, zone, package));
+	try {
+		Expression *expr = CompileFile(file, zone, package);
+		expressions.push_back(expr);
+	} catch (const std::exception& ex) {
+		Log(LogWarning, "ConfigCompiler")
+		    << "Cannot compile file '"
+		    << file << "': " << DiagnosticInformation(ex);
+	}
 }
 
 /**
@@ -180,7 +187,10 @@ Expression *ConfigCompiler::HandleIncludeRecursive(const String& relativeBase, c
 
 	std::vector<Expression *> expressions;
 	Utility::GlobRecursive(ppath, pattern, boost::bind(&ConfigCompiler::CollectIncludes, boost::ref(expressions), _1, zone, package), GlobFile);
-	return new DictExpression(expressions);
+
+	DictExpression *dict = new DictExpression(expressions);
+	dict->MakeInline();
+	return dict;
 }
 
 void ConfigCompiler::HandleIncludeZone(const String& relativeBase, const String& tag, const String& path, const String& pattern, const String& package, std::vector<Expression *>& expressions)
@@ -270,7 +280,7 @@ Expression *ConfigCompiler::CompileFile(const String& path, const String& zone,
 			<< boost::errinfo_errno(errno)
 			<< boost::errinfo_file_name(path));
 
-	Log(LogInformation, "ConfigCompiler")
+	Log(LogNotice, "ConfigCompiler")
 	    << "Compiling config file: " << path;
 
 	return CompileStream(path, &stream, zone, package);

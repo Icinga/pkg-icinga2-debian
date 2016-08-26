@@ -30,8 +30,6 @@ static void InvokeAttributeHandlerHelper(const Function::Ptr& callback,
 {
 	std::vector<Value> arguments;
 	arguments.push_back(object);
-	
-	ScriptFrame frame;
 	callback->Invoke(arguments);
 }
 
@@ -50,7 +48,7 @@ Object::Ptr TypeType::GetPrototype(void)
 
 	if (!prototype) {
 		prototype = new Dictionary();
-		prototype->Set("register_attribute_handler", new Function(WrapFunction(TypeRegisterAttributeHandler), false));
+		prototype->Set("register_attribute_handler", new Function("Type#register_attribute_handler", WrapFunction(TypeRegisterAttributeHandler), false));
 	}
 
 	return prototype;

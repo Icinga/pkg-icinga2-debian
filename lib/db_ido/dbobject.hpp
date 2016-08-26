@@ -81,21 +81,25 @@ public:
 	static boost::signals2::signal<void (const DbQuery&)> OnQuery;
 	static boost::signals2::signal<void (const std::vector<DbQuery>&)> OnMultipleQueries;
 
-	void SendConfigUpdate(void);
+	void SendConfigUpdateHeavy(const Dictionary::Ptr& configFields);
+	void SendConfigUpdateLight(void);
 	void SendStatusUpdate(void);
-	void SendVarsConfigUpdate(void);
+	void SendVarsConfigUpdateHeavy(void);
 	void SendVarsStatusUpdate(void);
 
 	double GetLastConfigUpdate(void) const;
 	double GetLastStatusUpdate(void) const;
 
+	virtual String CalculateConfigHash(const Dictionary::Ptr& configFields) const;
+
 protected:
 	DbObject(const intrusive_ptr<DbType>& type, const String& name1, const String& name2);
 
-	virtual bool IsStatusAttribute(const String& attribute) const;
-
-	virtual void OnConfigUpdate(void);
+	virtual void OnConfigUpdateHeavy(void);
+	virtual void OnConfigUpdateLight(void);
 	virtual void OnStatusUpdate(void);
+
+	static String HashValue(const Value& value);
 
 private:
 	String m_Name1;

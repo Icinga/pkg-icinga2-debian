@@ -46,7 +46,7 @@ ConfigItem::TypeMap ConfigItem::m_Items;
 ConfigItem::ItemList ConfigItem::m_UnnamedItems;
 ConfigItem::IgnoredItemList ConfigItem::m_IgnoredItems;
 
-REGISTER_SCRIPTFUNCTION(__run_with_activation_context, &ConfigItem::RunWithActivationContext);
+REGISTER_SCRIPTFUNCTION_NS_PREFIX(Internal, run_with_activation_context, &ConfigItem::RunWithActivationContext);
 
 /**
  * Constructor for the ConfigItem class.
@@ -175,7 +175,7 @@ ConfigObject::Ptr ConfigItem::Commit(bool discard)
 	if (IsAbstract())
 		return ConfigObject::Ptr();
 
-	ConfigObject::Ptr dobj = static_pointer_cast<ConfigObject>(type->Instantiate());
+	ConfigObject::Ptr dobj = static_pointer_cast<ConfigObject>(type->Instantiate(std::vector<Value>()));
 
 	dobj->SetDebugInfo(m_DebugInfo);
 	dobj->SetZoneName(m_Zone);
@@ -453,18 +453,7 @@ bool ConfigItem::CommitNewItems(const ActivationContext::Ptr& context, WorkQueue
 
 	std::set<String> types;
 
-	std::vector<Type::Ptr> all_types;
-	Dictionary::Ptr globals = ScriptGlobal::GetGlobals();
-
-	{
-		ObjectLock olock(globals);
-		BOOST_FOREACH(const Dictionary::Pair& kv, globals) {
-			if (kv.second.IsObjectType<Type>())
-				all_types.push_back(kv.second);
-		}
-	}
-
-	BOOST_FOREACH(const Type::Ptr& type, all_types) {
+	BOOST_FOREACH(const Type::Ptr& type, Type::GetAllTypes()) {
 		if (ConfigObject::TypeInstance->IsAssignableFrom(type))
 			types.insert(type->GetName());
 	}
@@ -532,9 +521,10 @@ bool ConfigItem::CommitNewItems(const ActivationContext::Ptr& context, WorkQueue
 	return true;
 }
 
-bool ConfigItem::CommitItems(const ActivationContext::Ptr& context, WorkQueue& upq, std::vector<ConfigItem::Ptr>& newItems)
+bool ConfigItem::CommitItems(const ActivationContext::Ptr& context, WorkQueue& upq, std::vector<ConfigItem::Ptr>& newItems, bool silent)
 {
-	Log(LogInformation, "ConfigItem", "Committing config items");
+	if (!silent)
+		Log(LogInformation, "ConfigItem", "Committing config item(s).");
 
 	if (!CommitNewItems(context, upq, newItems)) {
 		upq.ReportExceptions("config");
@@ -548,30 +538,33 @@ bool ConfigItem::CommitItems(const ActivationContext::Ptr& context, WorkQueue& u
 
 	ApplyRule::CheckMatches();
 
-	/* log stats for external parsers */
-	typedef std::map<Type::Ptr, int> ItemCountMap;
-	ItemCountMap itemCounts;
-	BOOST_FOREACH(const ConfigItem::Ptr& item, newItems) {
-		if (!item->m_Object)
-			continue;
+	if (!silent) {
+		/* log stats for external parsers */
+		typedef std::map<Type::Ptr, int> ItemCountMap;
+		ItemCountMap itemCounts;
+		BOOST_FOREACH(const ConfigItem::Ptr& item, newItems) {
+			if (!item->m_Object)
+				continue;
 
-		itemCounts[item->m_Object->GetReflectionType()]++;
-	}
+			itemCounts[item->m_Object->GetReflectionType()]++;
+		}
 
-	BOOST_FOREACH(const ItemCountMap::value_type& kv, itemCounts) {
-		Log(LogInformation, "ConfigItem")
-		    << "Instantiated " << kv.second << " " << (kv.second != 1 ? kv.first->GetPluralName() : kv.first->GetName()) << ".";
+		BOOST_FOREACH(const ItemCountMap::value_type& kv, itemCounts) {
+			Log(LogInformation, "ConfigItem")
+			    << "Instantiated " << kv.second << " " << (kv.second != 1 ? kv.first->GetPluralName() : kv.first->GetName()) << ".";
+		}
 	}
 
 	return true;
 }
 
-bool ConfigItem::ActivateItems(WorkQueue& upq, const std::vector<ConfigItem::Ptr>& newItems, bool runtimeCreated)
+bool ConfigItem::ActivateItems(WorkQueue& upq, const std::vector<ConfigItem::Ptr>& newItems, bool runtimeCreated, bool silent)
 {
 	static boost::mutex mtx;
 	boost::mutex::scoped_lock lock(mtx);
 
-	Log(LogInformation, "ConfigItem", "Triggering Start signal for config items");
+	if (!silent)
+		Log(LogInformation, "ConfigItem", "Triggering Start signal for config items");
 
 	BOOST_FOREACH(const ConfigItem::Ptr& item, newItems) {
 		if (!item->m_Object)
@@ -584,7 +577,7 @@ bool ConfigItem::ActivateItems(WorkQueue& upq, const std::vector<ConfigItem::Ptr
 
 #ifdef I2_DEBUG
 		Log(LogDebug, "ConfigItem")
-		    << "Activating object '" << object->GetName() << "' of type '" << object->GetType()->GetName() << "'";
+		    << "Activating object '" << object->GetName() << "' of type '" << object->GetReflectionType()->GetName() << "'";
 #endif /* I2_DEBUG */
 		upq.Enqueue(boost::bind(&ConfigObject::Activate, object, runtimeCreated));
 	}
@@ -607,7 +600,8 @@ bool ConfigItem::ActivateItems(WorkQueue& upq, const std::vector<ConfigItem::Ptr
 	}
 #endif /* I2_DEBUG */
 
-	Log(LogInformation, "ConfigItem", "Activated all objects.");
+	if (!silent)
+		Log(LogInformation, "ConfigItem", "Activated all objects.");
 
 	return true;
 }
@@ -619,18 +613,17 @@ bool ConfigItem::RunWithActivationContext(const Function::Ptr& function)
 	if (!function)
 		BOOST_THROW_EXCEPTION(ScriptError("'function' argument must not be null."));
 
-	{
-		ScriptFrame frame;
-		function->Invoke();
-	}
+	function->Invoke();
 
 	WorkQueue upq(25000, Application::GetConcurrency());
+	upq.SetName("ConfigItem::RunWithActivationContext");
+
 	std::vector<ConfigItem::Ptr> newItems;
 
-	if (!CommitItems(scope.GetContext(), upq, newItems))
+	if (!CommitItems(scope.GetContext(), upq, newItems, true))
 		return false;
 
-	if (!ActivateItems(upq, newItems))
+	if (!ActivateItems(upq, newItems, false, true))
 		return false;
 
 	return true;
