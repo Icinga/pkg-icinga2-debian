@@ -26,7 +26,7 @@ Build-Depends: bash-completion,
                libwxgtk3.0-dev,
                make (>= 3.81),
                po-debconf
-Standards-Version: 3.9.7
+Standards-Version: 3.9.8
 Homepage: http://www.icinga.org
 Vcs-Browser: https://anonscm.debian.org/cgit/pkg-nagios/pkg-icinga2.git
 Vcs-Git: https://anonscm.debian.org/git/pkg-nagios/pkg-icinga2.git
@@ -36,7 +36,7 @@ Architecture: any
 Depends: icinga2-bin (= ${binary:Version}),
          icinga2-common (= ${source:Version}),
          ${misc:Depends}
-Recommends: icinga2-doc, monitoring-plugins-basic | nagios-plugins-basic, libreadline6
+Recommends: icinga2-doc (= ${binary:Version}), monitoring-plugins-basic | nagios-plugins-basic, libreadline6
 Suggests: icinga2-studio, vim-icinga2
 Description: host and network monitoring system
  Icinga 2 is a general-purpose monitoring application to fit the needs of
