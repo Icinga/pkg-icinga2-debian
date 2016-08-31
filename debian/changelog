@@ -1,8 +1,15 @@
-icinga2 (2.5.3-1~debmon70+1) debmon-wheezy; urgency=medium
+icinga2 (2.5.4-1~debmon70+1) debmon-wheezy; urgency=medium
 
   * Rebuild for debmon-wheezy.
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 19 May 2016 13:56:16 +0200
+
+icinga2 (2.5.4-1) unstable; urgency=medium
+
+  * [7cf17d9] Recommend specific icinga-doc version
+  * [d2c5d89] New upstream version 2.5.4
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 31 Aug 2016 10:31:34 +0200
 
 icinga2 (2.5.3-1) unstable; urgency=medium
 
