@@ -1,3 +1,9 @@
+icinga2 (2.5.4-1~debmon8+3) debmon-jessie; urgency=medium
+
+  * Update deps for jessie 
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 06 Sep 2016 09:12:29 +0200
+
 icinga2 (2.5.4-1~debmon8+2) debmon-jessie; urgency=medium
 
   * Rebuild for debmon-jessie.
