@@ -1,3 +1,9 @@
+icinga2 (2.5.4-1~debmon70+2) debmon-wheezy; urgency=medium
+
+  * [014226b] Disable unity builds for arm
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 07 Sep 2016 15:27:49 +0200
+
 icinga2 (2.5.4-1~debmon70+1) debmon-wheezy; urgency=medium
 
   * Rebuild for debmon-wheezy.
