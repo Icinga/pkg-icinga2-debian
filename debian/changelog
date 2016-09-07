@@ -1,3 +1,9 @@
+icinga2 (2.5.4-1~debmon70+3) debmon-wheezy; urgency=medium
+
+  * [d7399de] Fix deps
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 07 Sep 2016 15:34:10 +0200
+
 icinga2 (2.5.4-1~debmon70+2) debmon-wheezy; urgency=medium
 
   * [014226b] Disable unity builds for arm
