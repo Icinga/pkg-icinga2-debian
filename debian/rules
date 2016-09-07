@@ -2,6 +2,12 @@
 
 #export DH_VERBOSE=1
 
+DEB_HOST_ARCH = $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+ifneq ($(findstring $(DEB_HOST_ARCH), armhf),)
+	UNITY_BUILD = -DICINGA2_UNITY_BUILD=Off
+endif
+
 %:
 	dh $@ --with bash_completion
 
@@ -28,7 +34,8 @@ override_dh_auto_configure:
 		-DICINGA2_COMMAND_GROUP=www-data \
 		-DICINGA2_GIT_VERSION_INFO=false \
 		-DICINGA2_PLUGINDIR=/usr/lib/nagios/plugins \
-		-DICINGA2_WITH_STUDIO=true
+		-DICINGA2_WITH_STUDIO=true \
+		$(UNITY_BUILD)
 
 override_dh_auto_install:
 	dh_auto_install
