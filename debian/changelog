@@ -1,3 +1,9 @@
+icinga2 (2.5.4-1~debmon8+4) debmon-jessie; urgency=medium
+
+  * [5b5f888] Disable unity builds for arm
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 07 Sep 2016 07:59:29 +0200
+
 icinga2 (2.5.4-1~debmon8+3) debmon-jessie; urgency=medium
 
   * Update deps for jessie 
