@@ -1,3 +1,9 @@
+icinga2 (2.5.4-3) unstable; urgency=medium
+
+  * [e09f7d4] Link against libmysqlclient (Closes: #825079)
+
+ -- Alexander Wirt <formorer@debian.org>  Sat, 26 Nov 2016 17:00:09 +0100
+
 icinga2 (2.5.4-2) unstable; urgency=medium
 
   * [f749f15] Disable unity builds for arm
