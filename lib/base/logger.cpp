@@ -26,13 +26,11 @@
 #include "base/objectlock.hpp"
 #include "base/context.hpp"
 #include "base/scriptglobal.hpp"
-#include <boost/foreach.hpp>
 #include <iostream>
 
 using namespace icinga;
 
 REGISTER_TYPE(Logger);
-INITIALIZE_ONCE(&Logger::StaticInitialize);
 
 std::set<Logger::Ptr> Logger::m_Loggers;
 boost::mutex Logger::m_Mutex;
@@ -40,14 +38,13 @@ bool Logger::m_ConsoleLogEnabled = true;
 bool Logger::m_TimestampEnabled = true;
 LogSeverity Logger::m_ConsoleLogSeverity = LogInformation;
 
-void Logger::StaticInitialize(void)
-{
+INITIALIZE_ONCE([]() {
 	ScriptGlobal::Set("LogDebug", LogDebug);
 	ScriptGlobal::Set("LogNotice", LogNotice);
 	ScriptGlobal::Set("LogInformation", LogInformation);
 	ScriptGlobal::Set("LogWarning", LogWarning);
 	ScriptGlobal::Set("LogCritical", LogCritical);
-}
+});
 
 /**
  * Constructor for the Logger class.
@@ -102,7 +99,7 @@ void icinga::IcingaLog(LogSeverity severity, const String& facility,
 		}
 	}
 
-	BOOST_FOREACH(const Logger::Ptr& logger, Logger::GetLoggers()) {
+	for (const Logger::Ptr& logger : Logger::GetLoggers()) {
 		ObjectLock llock(logger);
 
 		if (!logger->IsActive())

@@ -28,7 +28,7 @@ if(PostgreSQL_FOUND)
   )
 
   if(ICINGA2_UNITY_BUILD)
-      mkunity_target(db_ido_pgsql db_ido_pgsql_SOURCES)
+      mkunity_target(db_ido_pgsql db_ido_pgsql db_ido_pgsql_SOURCES)
   endif()
 
   add_library(db_ido_pgsql SHARED ${db_ido_pgsql_SOURCES})
@@ -40,6 +40,7 @@ if(PostgreSQL_FOUND)
     INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
     DEFINE_SYMBOL I2_DB_IDO_PGSQL_BUILD
     FOLDER Components
+    VERSION ${SPEC_VERSION}
   )
 
   install_if_not_exists(

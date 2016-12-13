@@ -22,7 +22,6 @@
 #include "base/logger.hpp"
 #include "base/application.hpp"
 #include "base/utility.hpp"
-#include <boost/foreach.hpp>
 #include <fstream>
 #include <iostream>
 
@@ -96,6 +95,11 @@ String RepositoryObjectCommand::GetShortDescription(void) const
 	return description;
 }
 
+bool RepositoryObjectCommand::IsDeprecated(void) const
+{
+	return true;
+}
+
 void RepositoryObjectCommand::InitParameters(boost::program_options::options_description& visibleDesc,
     boost::program_options::options_description& hiddenDesc) const
 {
@@ -164,7 +168,7 @@ int RepositoryObjectCommand::Run(const boost::program_options::variables_map& vm
 	if (vm.count("import")) {
 		Array::Ptr imports = new Array();
 
-		BOOST_FOREACH(const String& import, vm["import"].as<std::vector<std::string> >()) {
+		for (const String& import : vm["import"].as<std::vector<std::string> >()) {
 			imports->Add(import);
 		}
 

@@ -196,8 +196,36 @@ create a new timeperiod named `workhours` defining a work day from
       }
     }
 
-Use the `period` attribute to assign time periods to
-`Notification` and `Dependency` objects:
+Furthermore if you wish to specify a notification period across midnight,
+you can define it the following way:
+
+    object Timeperiod "across-midnight" {
+      import "legacy-timeperiod"
+
+      display_name = "Nightly Notification"
+      ranges = {
+        "saturday" = "22:00-24:00"
+        "sunday" = "00:00-03:00"
+      }
+    }
+
+Below you can see another example for configuring timeperiods across several
+days, weeks or months. This can be useful when taking components offline
+for a distinct period of time.
+
+    object Timeperiod "standby" {
+      import "legacy-timeperiod"
+
+      display_name = "Standby"
+      ranges = {
+        "2016-09-30 - 2016-10-30" = "00:00-24:00"
+      }
+    }
+
+Please note that the spaces before and after the dash are mandatory.
+
+Once your time period is configured you can Use the `period` attribute
+to assign time periods to `Notification` and `Dependency` objects:
 
     object Notification "mail" {
       import "generic-notification"
@@ -289,7 +317,7 @@ The other way around you can create objects dynamically using your own global fu
 
 Tips when implementing functions:
 
-* Use [log()](18-library-reference.md#global-functions) to dump variables. You can see the output
+* Use [log()](18-library-reference.md#global-functions-log) to dump variables. You can see the output
 inside the `icinga2.log` file depending in your log severity
 * Use the `icinga2 console` to test basic functionality (e.g. iterating over a dictionary)
 * Build them step-by-step. You can always refactor your code later on.
@@ -323,7 +351,6 @@ and evaluating the host custom attribute `compellent` containing the `disks` thi
 solved like this:
 
     object CheckCommand "check_compellent" {
-      import "plugin-check-command"
       command   = [ "/usr/bin/check_compellent" ]
       arguments   = {
         "--disks"  = {
@@ -410,7 +437,6 @@ returned.
 You can omit the `log()` calls, they only help debugging.
 
     object NotificationCommand "mail-host-notification-test" {
-      import "plugin-notification-command"
       command = {{
         log("command as function")
         var mailscript = "mail-host-notification-long.sh"
@@ -464,7 +490,7 @@ writing your own global [functions](17-language-reference.md#functions).
 You can call them inside `assign where` and `ignore where` expressions
 for [apply rules](3-monitoring-basics.md#using-apply-expressions) or
 [group assignments](3-monitoring-basics.md#group-assign-intro) just like
-any other global functions for example [match](18-library-reference.md#global-functions).
+any other global functions for example [match](18-library-reference.md#global-functions-match).
 
 The following example requires the host `myprinter` being added
 to the host group `printers-lexmark` but only if the host uses

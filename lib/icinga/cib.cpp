@@ -25,7 +25,6 @@
 #include "base/utility.hpp"
 #include "base/configtype.hpp"
 #include "base/statsfunction.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -82,7 +81,7 @@ CheckableCheckStatistics CIB::CalculateHostCheckStats(void)
 	int count_execution_time = 0;
 	bool checkresult = false;
 
-	BOOST_FOREACH(const Host::Ptr& host, ConfigType::GetObjectsByType<Host>()) {
+	for (const Host::Ptr& host : ConfigType::GetObjectsByType<Host>()) {
 		ObjectLock olock(host);
 
 		CheckResult::Ptr cr = host->GetLastCheckResult();
@@ -143,7 +142,7 @@ CheckableCheckStatistics CIB::CalculateServiceCheckStats(void)
 	int count_execution_time = 0;
 	bool checkresult = false;
 
-	BOOST_FOREACH(const Service::Ptr& service, ConfigType::GetObjectsByType<Service>()) {
+	for (const Service::Ptr& service : ConfigType::GetObjectsByType<Service>()) {
 		ObjectLock olock(service);
 
 		CheckResult::Ptr cr = service->GetLastCheckResult();
@@ -198,9 +197,9 @@ CheckableCheckStatistics CIB::CalculateServiceCheckStats(void)
 
 ServiceStatistics CIB::CalculateServiceStats(void)
 {
-	ServiceStatistics ss = {0};
+	ServiceStatistics ss = {};
 
-	BOOST_FOREACH(const Service::Ptr& service, ConfigType::GetObjectsByType<Service>()) {
+	for (const Service::Ptr& service : ConfigType::GetObjectsByType<Service>()) {
 		ObjectLock olock(service);
 
 		CheckResult::Ptr cr = service->GetLastCheckResult();
@@ -232,9 +231,9 @@ ServiceStatistics CIB::CalculateServiceStats(void)
 
 HostStatistics CIB::CalculateHostStats(void)
 {
-	HostStatistics hs = {0};
+	HostStatistics hs = {};
 
-	BOOST_FOREACH(const Host::Ptr& host, ConfigType::GetObjectsByType<Host>()) {
+	for (const Host::Ptr& host : ConfigType::GetObjectsByType<Host>()) {
 		ObjectLock olock(host);
 
 		if (host->IsReachable()) {
@@ -269,13 +268,8 @@ std::pair<Dictionary::Ptr, Array::Ptr> CIB::GetFeatureStats(void)
 	Array::Ptr perfdata = new Array();
 
 	String name;
-	BOOST_FOREACH(tie(name, boost::tuples::ignore), StatsFunctionRegistry::GetInstance()->GetItems()) {
-		StatsFunction::Ptr func = StatsFunctionRegistry::GetInstance()->GetItem(name);
-
-		if (!func)
-			BOOST_THROW_EXCEPTION(std::invalid_argument("Function '" + name + "' does not exist."));
-
-		func->Invoke(status, perfdata);
+	for (const auto& kv : StatsFunctionRegistry::GetInstance()->GetItems()) {
+		kv.second->Invoke(status, perfdata);
 	}
 
 	return std::make_pair(status, perfdata);

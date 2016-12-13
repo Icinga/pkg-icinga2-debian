@@ -15,6 +15,8 @@
 # along with this program; if not, write to the Free Software Foundation
 # Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
+set(Boost_USE_STATIC_LIBS OFF)
+
 include(BoostTestTargets)
 
 set(base_test_SOURCES
@@ -22,24 +24,17 @@ set(base_test_SOURCES
   base-json.cpp base-match.cpp base-netstring.cpp base-object.cpp
   base-serialize.cpp base-shellescape.cpp base-stacktrace.cpp
   base-stream.cpp base-string.cpp base-timer.cpp base-type.cpp
-  base-value.cpp config-ops.cpp icinga-macros.cpp
-  icinga-perfdata.cpp base-test.cpp 
-  remote-base64.cpp remote-url.cpp
+  base-value.cpp config-ops.cpp icinga-checkresult.cpp icinga-macros.cpp
+  icinga-notification.cpp
+  icinga-perfdata.cpp remote-base64.cpp remote-url.cpp
 )
-
-set(livestatus_test_SOURCES
-  livestatus.cpp
-  livestatus-test.cpp
-)
-
-set_property(SOURCE test.cpp PROPERTY EXCLUDE_UNITY_BUILD TRUE)
 
 if(ICINGA2_UNITY_BUILD)
-    mkunity_target(test base_test_SOURCES)
+    mkunity_target(base test base_test_SOURCES)
 endif()
 
 add_boost_test(base
-  SOURCES base-test.cpp ${base_test_SOURCES}
+  SOURCES test-runner.cpp ${base_test_SOURCES}
   LIBRARIES base config icinga
   TESTS base_array/construct
         base_array/getset
@@ -97,6 +92,16 @@ add_boost_test(base
         base_value/format
         config_ops/simple
         config_ops/advanced
+        icinga_checkresult/host_1attempt
+        icinga_checkresult/host_2attempts
+        icinga_checkresult/host_3attempts
+        icinga_checkresult/service_1attempt
+        icinga_checkresult/service_2attempts
+        icinga_checkresult/service_3attempts
+	icinga_checkresult/host_flapping_notification
+	icinga_checkresult/service_flapping_notification
+	icinga_notification/state_filter
+	icinga_notification/type_filter
         icinga_macros/simple
         icinga_perfdata/empty
         icinga_perfdata/simple
@@ -116,9 +121,17 @@ add_boost_test(base
 )
 
 if(ICINGA2_WITH_LIVESTATUS)
+  set(livestatus_test_SOURCES
+    livestatus.cpp
+  )
+
+  if(ICINGA2_UNITY_BUILD)
+      mkunity_target(livestatus test livestatus_test_SOURCES)
+  endif()
+
   add_boost_test(livestatus
-    SOURCES livestatus-test.cpp ${livestatus_test_SOURCES}
-    LIBRARIES base config icinga cli livestatus
+    SOURCES test-runner.cpp livestatus-fixture.cpp ${livestatus_test_SOURCES}
+    LIBRARIES base config icinga livestatus
     DEPENDENCIES methods
     TESTS livestatus/hosts livestatus/services
   )

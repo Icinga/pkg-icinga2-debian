@@ -22,7 +22,6 @@
 #include "base/logger.hpp"
 #include "base/application.hpp"
 #include "base/console.hpp"
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <iostream>
@@ -42,6 +41,11 @@ String NodeListCommand::GetDescription(void) const
 String NodeListCommand::GetShortDescription(void) const
 {
 	return "lists all nodes";
+}
+
+bool NodeListCommand::IsDeprecated(void) const
+{
+	return true;
 }
 
 void NodeListCommand::InitParameters(boost::program_options::options_description& visibleDesc,

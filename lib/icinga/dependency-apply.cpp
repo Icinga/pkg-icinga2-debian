@@ -27,19 +27,15 @@
 #include "base/context.hpp"
 #include "base/workqueue.hpp"
 #include "base/exception.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
-INITIALIZE_ONCE(&Dependency::RegisterApplyRuleHandler);
-
-void Dependency::RegisterApplyRuleHandler(void)
-{
+INITIALIZE_ONCE([]() {
 	std::vector<String> targets;
 	targets.push_back("Host");
 	targets.push_back("Service");
 	ApplyRule::RegisterType("Dependency", targets);
-}
+});
 
 bool Dependency::EvaluateApplyRuleInstance(const Checkable::Ptr& checkable, const String& name, ScriptFrame& frame, const ApplyRule& rule)
 {
@@ -48,8 +44,10 @@ bool Dependency::EvaluateApplyRuleInstance(const Checkable::Ptr& checkable, cons
 
 	DebugInfo di = rule.GetDebugInfo();
 
+#ifdef _DEBUG
 	Log(LogDebug, "Dependency")
 		<< "Applying dependency '" << name << "' to object '" << checkable->GetName() << "' for rule " << di;
+#endif /* _DEBUG */
 
 	ConfigItemBuilder::Ptr builder = new ConfigItemBuilder(di);
 	builder->SetType("Dependency");
@@ -73,7 +71,9 @@ bool Dependency::EvaluateApplyRuleInstance(const Checkable::Ptr& checkable, cons
 		builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "zone"), OpSetLiteral, MakeLiteral(zone), di));
 
 	builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "package"), OpSetLiteral, MakeLiteral(rule.GetPackage()), di));
-	
+
+	builder->AddExpression(new ImportDefaultTemplatesExpression());
+
 	builder->AddExpression(new OwnedExpression(rule.GetExpression()));
 
 	ConfigItem::Ptr dependencyItem = builder->Compile();
@@ -123,10 +123,9 @@ bool Dependency::EvaluateApplyRule(const Checkable::Ptr& checkable, const ApplyR
 			BOOST_THROW_EXCEPTION(ScriptError("Dictionary iterator requires value to be a dictionary.", di));
 
 		Array::Ptr arr = vinstances;
-		Array::Ptr arrclone = arr->ShallowClone();
 
-		ObjectLock olock(arrclone);
-		BOOST_FOREACH(const Value& instance, arrclone) {
+		ObjectLock olock(arr);
+		for (const Value& instance : arr) {
 			String name = rule.GetName();
 
 			if (!rule.GetFKVar().IsEmpty()) {
@@ -143,7 +142,7 @@ bool Dependency::EvaluateApplyRule(const Checkable::Ptr& checkable, const ApplyR
 	
 		Dictionary::Ptr dict = vinstances;
 
-		BOOST_FOREACH(const String& key, dict->GetKeys()) {
+		for (const String& key : dict->GetKeys()) {
 			frame.Locals->Set(rule.GetFKVar(), key);
 			frame.Locals->Set(rule.GetFVVar(), dict->Get(key));
 
@@ -159,7 +158,7 @@ void Dependency::EvaluateApplyRules(const Host::Ptr& host)
 {
 	CONTEXT("Evaluating 'apply' rules for host '" + host->GetName() + "'");
 
-	BOOST_FOREACH(ApplyRule& rule, ApplyRule::GetRules("Dependency")) {
+	for (ApplyRule& rule : ApplyRule::GetRules("Dependency")) {
 		if (rule.GetTargetType() != "Host")
 			continue;
 
@@ -172,7 +171,7 @@ void Dependency::EvaluateApplyRules(const Service::Ptr& service)
 {
 	CONTEXT("Evaluating 'apply' rules for service '" + service->GetName() + "'");
 
-	BOOST_FOREACH(ApplyRule& rule, ApplyRule::GetRules("Dependency")) {
+	for (ApplyRule& rule : ApplyRule::GetRules("Dependency")) {
 		if (rule.GetTargetType() != "Service")
 			continue;
 

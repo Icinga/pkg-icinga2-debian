@@ -26,18 +26,14 @@
 #include "base/context.hpp"
 #include "base/workqueue.hpp"
 #include "base/exception.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
-INITIALIZE_ONCE(&Service::RegisterApplyRuleHandler);
-
-void Service::RegisterApplyRuleHandler(void)
-{
+INITIALIZE_ONCE([]() {
 	std::vector<String> targets;
 	targets.push_back("Host");
 	ApplyRule::RegisterType("Service", targets);
-}
+});
 
 bool Service::EvaluateApplyRuleInstance(const Host::Ptr& host, const String& name, ScriptFrame& frame, const ApplyRule& rule)
 {
@@ -46,8 +42,10 @@ bool Service::EvaluateApplyRuleInstance(const Host::Ptr& host, const String& nam
 
 	DebugInfo di = rule.GetDebugInfo();
 
+#ifdef _DEBUG
 	Log(LogDebug, "Service")
 	    << "Applying service '" << name << "' to host '" << host->GetName() << "' for rule " << di;
+#endif /* _DEBUG */
 
 	ConfigItemBuilder::Ptr builder = new ConfigItemBuilder(di);
 	builder->SetType("Service");
@@ -67,6 +65,8 @@ bool Service::EvaluateApplyRuleInstance(const Host::Ptr& host, const String& nam
 	builder->AddExpression(new SetExpression(MakeIndexer(ScopeThis, "package"), OpSetLiteral, MakeLiteral(rule.GetPackage()), di));
 
 	builder->AddExpression(new OwnedExpression(rule.GetExpression()));
+
+	builder->AddExpression(new ImportDefaultTemplatesExpression());
 
 	ConfigItem::Ptr serviceItem = builder->Compile();
 	serviceItem->Register();
@@ -109,10 +109,9 @@ bool Service::EvaluateApplyRule(const Host::Ptr& host, const ApplyRule& rule)
 			BOOST_THROW_EXCEPTION(ScriptError("Dictionary iterator requires value to be a dictionary.", di));
 
 		Array::Ptr arr = vinstances;
-		Array::Ptr arrclone = arr->ShallowClone();
 
-		ObjectLock olock(arrclone);
-		BOOST_FOREACH(const Value& instance, arrclone) {
+		ObjectLock olock(arr);
+		for (const Value& instance : arr) {
 			String name = rule.GetName();
 
 			if (!rule.GetFKVar().IsEmpty()) {
@@ -129,7 +128,7 @@ bool Service::EvaluateApplyRule(const Host::Ptr& host, const ApplyRule& rule)
 	
 		Dictionary::Ptr dict = vinstances;
 
-		BOOST_FOREACH(const String& key, dict->GetKeys()) {
+		for (const String& key : dict->GetKeys()) {
 			frame.Locals->Set(rule.GetFKVar(), key);
 			frame.Locals->Set(rule.GetFVVar(), dict->Get(key));
 
@@ -143,7 +142,7 @@ bool Service::EvaluateApplyRule(const Host::Ptr& host, const ApplyRule& rule)
 
 void Service::EvaluateApplyRules(const Host::Ptr& host)
 {
-	BOOST_FOREACH(ApplyRule& rule, ApplyRule::GetRules("Service")) {
+	for (ApplyRule& rule : ApplyRule::GetRules("Service")) {
 		CONTEXT("Evaluating 'apply' rules for host '" + host->GetName() + "'");
 
 		if (EvaluateApplyRule(host, rule))

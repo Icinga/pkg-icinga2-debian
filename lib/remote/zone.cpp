@@ -22,7 +22,6 @@
 #include "remote/jsonrpcconnection.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -41,8 +40,11 @@ void Zone::OnAllConfigLoaded(void)
 
 	if (endpoints) {
 		ObjectLock olock(endpoints);
-		BOOST_FOREACH(const String& endpoint, endpoints) {
-			Endpoint::GetByName(endpoint)->SetCachedZone(this);
+		for (const String& endpoint : endpoints) {
+			Endpoint::Ptr ep = Endpoint::GetByName(endpoint);
+
+			if (ep)
+				ep->SetCachedZone(this);
 		}
 	}
 
@@ -71,7 +73,7 @@ std::set<Endpoint::Ptr> Zone::GetEndpoints(void) const
 	if (endpoints) {
 		ObjectLock olock(endpoints);
 
-		BOOST_FOREACH(const String& name, endpoints) {
+		for (const String& name : endpoints) {
 			Endpoint::Ptr endpoint = Endpoint::GetByName(name);
 
 			if (!endpoint)
@@ -100,6 +102,9 @@ bool Zone::CanAccessObject(const ConfigObject::Ptr& object)
 
 	if (!object_zone)
 		object_zone = Zone::GetLocalZone();
+
+	if (object_zone->GetGlobal())
+		return true;
 
 	return object_zone->IsChildOf(this);
 }

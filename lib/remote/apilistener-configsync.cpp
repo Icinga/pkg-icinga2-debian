@@ -25,24 +25,19 @@
 #include "base/json.hpp"
 #include "base/convert.hpp"
 #include "config/vmops.hpp"
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <fstream>
 
 using namespace icinga;
 
-INITIALIZE_ONCE(&ApiListener::StaticInitialize);
-
 REGISTER_APIFUNCTION(UpdateObject, config, &ApiListener::ConfigUpdateObjectAPIHandler);
 REGISTER_APIFUNCTION(DeleteObject, config, &ApiListener::ConfigDeleteObjectAPIHandler);
 
-
-void ApiListener::StaticInitialize(void)
-{
+INITIALIZE_ONCE([]() {
 	ConfigObject::OnActiveChanged.connect(&ApiListener::ConfigUpdateObjectHandler);
 	ConfigObject::OnVersionChanged.connect(&ApiListener::ConfigUpdateObjectHandler);
-}
+});
 
 void ApiListener::ConfigUpdateObjectHandler(const ConfigObject::Ptr& object, const Value& cookie)
 {
@@ -76,7 +71,7 @@ Value ApiListener::ConfigUpdateObjectAPIHandler(const MessageOrigin::Ptr& origin
 
 	if (!listener->GetAcceptConfig()) {
 		Log(LogWarning, "ApiListener")
-		    << "Ignoring config update for object '" << objName << "' of type '" << objType << "'. '" << listener->GetName() << "' does not accept config.";
+		    << "Ignoring config update from '" << origin->FromClient->GetIdentity() << "' for object '" << objName << "' of type '" << objType << "'. '" << listener->GetName() << "' does not accept config.";
 		return Empty;
 	}
 
@@ -112,7 +107,11 @@ Value ApiListener::ConfigUpdateObjectAPIHandler(const MessageOrigin::Ptr& origin
 
 	String config = params->Get("config");
 
+	bool newObject = false;
+
 	if (!object && !config.IsEmpty()) {
+		newObject = true;
+
 		/* object does not exist, create it through the API */
 		Array::Ptr errors = new Array();
 
@@ -122,7 +121,7 @@ Value ApiListener::ConfigUpdateObjectAPIHandler(const MessageOrigin::Ptr& origin
 			    << "Could not create object '" << objName << "':";
 
 		    	ObjectLock olock(errors);
-		    	BOOST_FOREACH(const String& error, errors) {
+			for (const String& error : errors) {
 		    		Log(LogCritical, "ApiListener", error);
 		    	}
 
@@ -141,8 +140,8 @@ Value ApiListener::ConfigUpdateObjectAPIHandler(const MessageOrigin::Ptr& origin
 	if (!object)
 		return Empty;
 
-	/* update object attributes if version was changed */
-	if (objVersion <= object->GetVersion()) {
+	/* update object attributes if version was changed or if this is a new object */
+	if (newObject || objVersion <= object->GetVersion()) {
 		Log(LogNotice, "ApiListener")
 		    << "Discarding config update for object '" << object->GetName()
 		    << "': Object version " << std::fixed << object->GetVersion()
@@ -160,7 +159,7 @@ Value ApiListener::ConfigUpdateObjectAPIHandler(const MessageOrigin::Ptr& origin
 
 	if (modified_attributes) {
 		ObjectLock olock(modified_attributes);
-		BOOST_FOREACH(const Dictionary::Pair& kv, modified_attributes) {
+		for (const Dictionary::Pair& kv : modified_attributes) {
 			/* update all modified attributes
 			 * but do not update the object version yet.
 			 * This triggers cluster events otherwise.
@@ -178,14 +177,14 @@ Value ApiListener::ConfigUpdateObjectAPIHandler(const MessageOrigin::Ptr& origin
 
 		{
 			ObjectLock xlock(objOriginalAttributes);
-			BOOST_FOREACH(const Dictionary::Pair& kv, objOriginalAttributes) {
+			for (const Dictionary::Pair& kv : objOriginalAttributes) {
 				/* original attribute was removed, restore it */
 				if (!newOriginalAttributes->Contains(kv.first))
 					restoreAttrs.push_back(kv.first);
 			}
 		}
 
-		BOOST_FOREACH(const String& key, restoreAttrs) {
+		for (const String& key : restoreAttrs) {
 			/* do not update the object version yet. */
 			object->RestoreAttribute(key, false);
 		}
@@ -244,7 +243,7 @@ Value ApiListener::ConfigDeleteObjectAPIHandler(const MessageOrigin::Ptr& origin
 
 	if (!object) {
 		Log(LogNotice, "ApiListener")
-		    << "Could not delete non-existent object '" << params->Get("name") << "'.";
+		    << "Could not delete non-existent object '" << params->Get("name") << "' with type '" << params->Get("type") << "'.";
 		return Empty;
 	}
 
@@ -260,7 +259,7 @@ Value ApiListener::ConfigDeleteObjectAPIHandler(const MessageOrigin::Ptr& origin
 		Log(LogCritical, "ApiListener", "Could not delete object:");
 
 		ObjectLock olock(errors);
-		BOOST_FOREACH(const String& error, errors) {
+		for (const String& error : errors) {
 			Log(LogCritical, "ApiListener", error);
 		}
 	}
@@ -313,12 +312,12 @@ void ApiListener::UpdateConfigObject(const ConfigObject::Ptr& object, const Mess
 
 	if (original_attributes) {
 		ObjectLock olock(original_attributes);
-		BOOST_FOREACH(const Dictionary::Pair& kv, original_attributes) {
+		for (const Dictionary::Pair& kv : original_attributes) {
 			std::vector<String> tokens;
 			boost::algorithm::split(tokens, kv.first, boost::is_any_of("."));
 
 			Value value = object;
-			BOOST_FOREACH(const String& token, tokens) {
+			for (const String& token : tokens) {
 				value = VMOps::GetField(value, token);
 			}
 
@@ -342,8 +341,14 @@ void ApiListener::UpdateConfigObject(const ConfigObject::Ptr& object, const Mess
 
 	if (client)
 		JsonRpc::SendMessage(client->GetStream(), message);
-	else
-		RelayMessage(origin, object, message, false);
+	else {
+		Zone::Ptr target = static_pointer_cast<Zone>(object->GetZone());
+
+		if (!target)
+			target = Zone::GetLocalZone();
+
+		RelayMessage(origin, target, message, false);
+	}
 }
 
 
@@ -384,8 +389,14 @@ void ApiListener::DeleteConfigObject(const ConfigObject::Ptr& object, const Mess
 
 	if (client)
 		JsonRpc::SendMessage(client->GetStream(), message);
-	else
-		RelayMessage(origin, object, message, false);
+	else {
+		Zone::Ptr target = static_pointer_cast<Zone>(object->GetZone());
+
+		if (!target)
+			target = Zone::GetLocalZone();
+
+		RelayMessage(origin, target, message, false);
+	}
 }
 
 /* Initial sync on connect for new endpoints */
@@ -399,17 +410,13 @@ void ApiListener::SendRuntimeConfigObjects(const JsonRpcConnection::Ptr& aclient
 	Log(LogInformation, "ApiListener")
 	    << "Syncing runtime objects to endpoint '" << endpoint->GetName() << "'.";
 
-	BOOST_FOREACH(const Type::Ptr& type, Type::GetAllTypes()) {
+	for (const Type::Ptr& type : Type::GetAllTypes()) {
 		ConfigType *dtype = dynamic_cast<ConfigType *>(type.get());
 
 		if (!dtype)
 			continue;
 
-		BOOST_FOREACH(const ConfigObject::Ptr& object, dtype->GetObjects()) {
-			/* don't sync objects with an older version time than the endpoint's log position */
-			if (object->GetVersion() < endpoint->GetLocalLogPosition())
-				continue;
-
+		for (const ConfigObject::Ptr& object : dtype->GetObjects()) {
 			/* don't sync objects for non-matching parent-child zones */
 			if (!azone->CanAccessObject(object))
 				continue;
@@ -418,4 +425,7 @@ void ApiListener::SendRuntimeConfigObjects(const JsonRpcConnection::Ptr& aclient
 			UpdateConfigObject(object, MessageOrigin::Ptr(), aclient);
 		}
 	}
+
+	Log(LogInformation, "ApiListener")
+	    << "Finished syncing runtime objects to endpoint '" << endpoint->GetName() << "'.";
 }
