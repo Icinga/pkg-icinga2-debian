@@ -47,7 +47,7 @@ public:
 
 	typedef std::map<String, Value>::size_type SizeType;
 
-	typedef std::pair<String, Value> Pair;
+	typedef std::map<String, Value>::value_type Pair;
 
 	inline Dictionary(void)
 	{ }
@@ -58,6 +58,7 @@ public:
 	Value Get(const String& key) const;
 	bool Get(const String& key, Value *result) const;
 	void Set(const String& key, const Value& value);
+	void Set(const String& key, Value&& value);
 	bool Contains(const String& key) const;
 
 	/**
@@ -120,37 +121,21 @@ public:
 	virtual Value GetFieldByName(const String& field, bool sandboxed, const DebugInfo& debugInfo) const override;
 	virtual void SetFieldByName(const String& field, const Value& value, const DebugInfo& debugInfo) override;
 	virtual bool HasOwnField(const String& field) const override;
+	virtual bool GetOwnField(const String& field, Value *result) const override;
 
 private:
 	std::map<String, Value> m_Data; /**< The data for the dictionary. */
 };
 
-inline Dictionary::Iterator range_begin(Dictionary::Ptr x)
+inline Dictionary::Iterator begin(Dictionary::Ptr x)
 {
 	return x->Begin();
 }
 
-inline Dictionary::Iterator range_end(Dictionary::Ptr x)
+inline Dictionary::Iterator end(Dictionary::Ptr x)
 {
 	return x->End();
 }
-
-}
-
-namespace boost
-{
-
-template<>
-struct range_mutable_iterator<icinga::Dictionary::Ptr>
-{
-	typedef icinga::Dictionary::Iterator type;
-};
-
-template<>
-struct range_const_iterator<icinga::Dictionary::Ptr>
-{
-	typedef icinga::Dictionary::Iterator type;
-};
 
 }
 

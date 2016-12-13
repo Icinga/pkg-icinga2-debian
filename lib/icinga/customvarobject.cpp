@@ -36,7 +36,7 @@ void CustomVarObject::ValidateVars(const Dictionary::Ptr& value, const Validatio
 
 int icinga::FilterArrayToInt(const Array::Ptr& typeFilters, const std::map<String, int>& filterMap, int defaultValue)
 {
-	Value resultTypeFilter;
+	int resultTypeFilter;
 
 	if (!typeFilters)
 		return defaultValue;
@@ -44,7 +44,7 @@ int icinga::FilterArrayToInt(const Array::Ptr& typeFilters, const std::map<Strin
 	resultTypeFilter = 0;
 
 	ObjectLock olock(typeFilters);
-	BOOST_FOREACH(const Value& typeFilter, typeFilters) {
+	for (const Value& typeFilter : typeFilters) {
 		if (typeFilter.IsNumber()) {
 			resultTypeFilter = resultTypeFilter | typeFilter;
 			continue;
@@ -53,7 +53,7 @@ int icinga::FilterArrayToInt(const Array::Ptr& typeFilters, const std::map<Strin
 		if (!typeFilter.IsString())
 			return -1;
 
-		std::map<String, int>::const_iterator it = filterMap.find(typeFilter);
+		auto it = filterMap.find(typeFilter);
 
 		if (it == filterMap.end())
 			return -1;

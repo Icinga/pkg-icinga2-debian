@@ -25,8 +25,8 @@ flex_target(config_lexer config_lexer.ll ${CMAKE_CURRENT_BINARY_DIR}/config_lexe
 set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_lexer.cc PROPERTY EXCLUDE_UNITY_BUILD TRUE)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_parser.cc PROPERTY COMPILE_FLAGS "-Wno-deprecated-register")
-  set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_lexer.cc PROPERTY COMPILE_FLAGS "-Wno-deprecated-register")
+  set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_parser.cc PROPERTY COMPILE_FLAGS "-Wno-deprecated-register -Wno-parentheses-equality -Wno-unused-function")
+  set_property(SOURCE ${CMAKE_CURRENT_BINARY_DIR}/config_lexer.cc PROPERTY COMPILE_FLAGS "-Wno-deprecated-register -Wno-null-conversion")
 endif()
 
 add_flex_bison_dependency(config_lexer config_parser)
@@ -41,7 +41,7 @@ set(config_SOURCES
 )
 
 if(ICINGA2_UNITY_BUILD)
-    mkunity_target(config config_SOURCES)
+    mkunity_target(config config config_SOURCES)
 endif()
 
 add_library(config SHARED ${config_SOURCES})
@@ -53,6 +53,7 @@ set_target_properties (
   INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
   DEFINE_SYMBOL I2_CONFIG_BUILD
   FOLDER Lib
+  VERSION ${SPEC_VERSION}
 )
 
 install(

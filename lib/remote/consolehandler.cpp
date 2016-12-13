@@ -48,24 +48,21 @@ static void ScriptFrameCleanupHandler(void)
 
 	typedef std::pair<String, ApiScriptFrame> KVPair;
 
-	BOOST_FOREACH(const KVPair& kv, l_ApiScriptFrames) {
+	for (const KVPair& kv : l_ApiScriptFrames) {
 		if (kv.second.Seen < Utility::GetTime() - 1800)
 			cleanup_keys.push_back(kv.first);
 	}
 
-	BOOST_FOREACH(const String& key, cleanup_keys)
+	for (const String& key : cleanup_keys)
 		l_ApiScriptFrames.erase(key);
 }
 
-static void InitScriptFrameCleanup(void)
-{
+INITIALIZE_ONCE([]() {
 	l_FrameCleanupTimer = new Timer();
 	l_FrameCleanupTimer->OnTimerExpired.connect(boost::bind(ScriptFrameCleanupHandler));
 	l_FrameCleanupTimer->SetInterval(30);
 	l_FrameCleanupTimer->Start();
-}
-
-INITIALIZE_ONCE(InitScriptFrameCleanup);
+});
 
 bool ConsoleHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& request, HttpResponse& response, const Dictionary::Ptr& params)
 {
@@ -102,7 +99,7 @@ bool ConsoleHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& reques
 bool ConsoleHandler::ExecuteScriptHelper(HttpRequest& request, HttpResponse& response,
     const String& command, const String& session, bool sandboxed)
 {
-	Log(LogInformation, "Console")
+	Log(LogNotice, "Console")
 	    << "Executing expression: " << command;
 
 	ApiScriptFrame& lsf = l_ApiScriptFrames[session];
@@ -226,7 +223,7 @@ static void AddSuggestions(std::vector<String>& matches, const String& word, con
 		Dictionary::Ptr dict = value;
 
 		ObjectLock olock(dict);
-		BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+		for (const Dictionary::Pair& kv : dict) {
 			AddSuggestion(matches, word, prefix + kv.first);
 		}
 	}
@@ -246,7 +243,7 @@ static void AddSuggestions(std::vector<String>& matches, const String& word, con
 
 			if (dict) {
 				ObjectLock olock(dict);
-				BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+				for (const Dictionary::Pair& kv : dict) {
 					AddSuggestion(matches, word, prefix + kv.first);
 				}
 			}
@@ -260,20 +257,20 @@ std::vector<String> ConsoleHandler::GetAutocompletionSuggestions(const String& w
 {	
 	std::vector<String> matches;
 
-	BOOST_FOREACH(const String& keyword, ConfigWriter::GetKeywords()) {
+	for (const String& keyword : ConfigWriter::GetKeywords()) {
 		AddSuggestion(matches, word, keyword);
 	}
 
 	{
 		ObjectLock olock(frame.Locals);
-		BOOST_FOREACH(const Dictionary::Pair& kv, frame.Locals) {
+		for (const Dictionary::Pair& kv : frame.Locals) {
 			AddSuggestion(matches, word, kv.first);
 		}
 	}
 
 	{
 		ObjectLock olock(ScriptGlobal::GetGlobals());
-		BOOST_FOREACH(const Dictionary::Pair& kv, ScriptGlobal::GetGlobals()) {
+		for (const Dictionary::Pair& kv : ScriptGlobal::GetGlobals()) {
 			AddSuggestion(matches, word, kv.first);
 		}
 	}
@@ -281,7 +278,7 @@ std::vector<String> ConsoleHandler::GetAutocompletionSuggestions(const String& w
 	{
 		Array::Ptr imports = ScriptFrame::GetImports();
 		ObjectLock olock(imports);
-		BOOST_FOREACH(const Value& import, imports) {
+		for (const Value& import : imports) {
 			AddSuggestions(matches, word, "", false, import);
 		}
 	}

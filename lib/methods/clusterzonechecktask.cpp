@@ -26,11 +26,10 @@
 #include "remote/zone.hpp"
 #include "base/function.hpp"
 #include "base/utility.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
-REGISTER_SCRIPTFUNCTION_NS_DEPRECATED(Internal, ClusterZoneCheck, &ClusterZoneCheckTask::ScriptFunc);
+REGISTER_SCRIPTFUNCTION_NS(Internal, ClusterZoneCheck, &ClusterZoneCheckTask::ScriptFunc);
 
 void ClusterZoneCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr,
     const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)
@@ -92,7 +91,7 @@ void ClusterZoneCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const Che
 	bool connected = false;
 	double zoneLag = 0;
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
+	for (const Endpoint::Ptr& endpoint : zone->GetEndpoints()) {
 		if (endpoint->GetConnected())
 			connected = true;
 

@@ -30,11 +30,10 @@
 #include "base/convert.hpp"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
-REGISTER_SCRIPTFUNCTION_NS_DEPRECATED(Internal, PluginCheck,  &PluginCheckTask::ScriptFunc);
+REGISTER_SCRIPTFUNCTION_NS(Internal, PluginCheck,  &PluginCheckTask::ScriptFunc);
 
 void PluginCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr,
     const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)

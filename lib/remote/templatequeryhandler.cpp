@@ -41,13 +41,23 @@ public:
 		Dictionary::Ptr target = new Dictionary();
 		target->Set("name", item->GetName());
 		target->Set("type", item->GetType());
+
+		DebugInfo di = item->GetDebugInfo();
+		Dictionary::Ptr dinfo = new Dictionary();
+		dinfo->Set("path", di.Path);
+		dinfo->Set("first_line", di.FirstLine);
+		dinfo->Set("first_column", di.FirstColumn);
+		dinfo->Set("last_line", di.LastLine);
+		dinfo->Set("last_column", di.LastColumn);
+		target->Set("location", dinfo);
+
 		return target;
 	}
 
 	virtual void FindTargets(const String& type,
 	    const boost::function<void (const Value&)>& addTarget) const override
 	{
-		BOOST_FOREACH(const ConfigItem::Ptr& item, ConfigItem::GetItems(type)) {
+		for (const ConfigItem::Ptr& item : ConfigItem::GetItems(type)) {
 			if (item->IsAbstract())
 				addTarget(GetTargetForTemplate(item));
 		}
@@ -120,7 +130,7 @@ bool TemplateQueryHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& 
 
 	Array::Ptr results = new Array();
 
-	BOOST_FOREACH(const Dictionary::Ptr& obj, objs) {
+	for (const Dictionary::Ptr& obj : objs) {
 		results->Add(obj);
 	}
 

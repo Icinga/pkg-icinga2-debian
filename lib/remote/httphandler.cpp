@@ -34,7 +34,7 @@ void HttpHandler::Register(const Url::Ptr& url, const HttpHandler::Ptr& handler)
 
 	Dictionary::Ptr node = m_UrlTree;
 
-	BOOST_FOREACH(const String& elem, url->GetPath()) {
+	for (const String& elem : url->GetPath()) {
 		Dictionary::Ptr children = node->Get("children");
 
 		if (!children) {
@@ -67,12 +67,12 @@ void HttpHandler::ProcessRequest(const ApiUser::Ptr& user, HttpRequest& request,
 	std::vector<HttpHandler::Ptr> handlers;
 	const std::vector<String>& path = request.RequestUrl->GetPath();
 
-	for (int i = 0; i <= path.size(); i++) {
+	for (std::vector<String>::size_type i = 0; i <= path.size(); i++) {
 		Array::Ptr current_handlers = node->Get("handlers");
 
 		if (current_handlers) {
 			ObjectLock olock(current_handlers);
-			BOOST_FOREACH(const HttpHandler::Ptr current_handler, current_handlers) {
+			for (const HttpHandler::Ptr current_handler : current_handlers) {
 				handlers.push_back(current_handler);
 			}
 		}
@@ -105,7 +105,7 @@ void HttpHandler::ProcessRequest(const ApiUser::Ptr& user, HttpRequest& request,
 	}
 
 	bool processed = false;
-	BOOST_FOREACH(const HttpHandler::Ptr& handler, handlers) {
+	for (const HttpHandler::Ptr& handler : handlers) {
 		if (handler->HandleRequest(user, request, response, params)) {
 			processed = true;
 			break;

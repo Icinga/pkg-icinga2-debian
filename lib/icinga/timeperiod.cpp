@@ -26,7 +26,6 @@
 #include "base/logger.hpp"
 #include "base/timer.hpp"
 #include "base/utility.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -51,7 +50,9 @@ void TimePeriod::Start(bool runtimeCreated)
 	/* Pre-fill the time period for the next 24 hours. */
 	double now = Utility::GetTime();
 	UpdateRegion(now, now + 24 * 3600, true);
+#ifdef _DEBUG
 	Dump();
+#endif /* _DEBUG */
 }
 
 void TimePeriod::AddSegment(double begin, double end)
@@ -73,7 +74,7 @@ void TimePeriod::AddSegment(double begin, double end)
 	if (segments) {
 		/* Try to merge the new segment into an existing segment. */
 		ObjectLock dlock(segments);
-		BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
+		for (const Dictionary::Ptr& segment : segments) {
 			if (segment->Get("begin") <= begin && segment->Get("end") >= end)
 				return; /* New segment is fully contained in this segment. */
 
@@ -137,7 +138,7 @@ void TimePeriod::RemoveSegment(double begin, double end)
 
 	/* Try to split or adjust an existing segment. */
 	ObjectLock dlock(segments);
-	BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
+	for (const Dictionary::Ptr& segment : segments) {
 		/* Fully contained in the specified range? */
 		if (segment->Get("begin") >= begin && segment->Get("end") <= end)
 			continue;
@@ -176,7 +177,9 @@ void TimePeriod::RemoveSegment(double begin, double end)
 
 	SetSegments(newSegments);
 
+#ifdef _DEBUG
 	Dump();
+#endif /* _DEBUG */
 }
 
 void TimePeriod::RemoveSegment(const Dictionary::Ptr& segment)
@@ -206,7 +209,7 @@ void TimePeriod::PurgeSegments(double end)
 
 	/* Remove old segments. */
 	ObjectLock dlock(segments);
-	BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
+	for (const Dictionary::Ptr& segment : segments) {
 		if (segment->Get("end") >= end)
 			newSegments->Add(segment);
 	}
@@ -225,7 +228,7 @@ void TimePeriod::Merge(const TimePeriod::Ptr& timeperiod, bool include)
 	if (segments) {
 		ObjectLock dlock(segments);
 		ObjectLock ilock(this);
-		BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
+		for (const Dictionary::Ptr& segment : segments) {
 			include ? AddSegment(segment) : RemoveSegment(segment);
 		}
 	}
@@ -254,7 +257,7 @@ void TimePeriod::UpdateRegion(double begin, double end, bool clearExisting)
 
 		if (segments) {
 			ObjectLock dlock(segments);
-			BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
+			for (const Dictionary::Ptr& segment : segments) {
 				AddSegment(segment);
 			}
 		}
@@ -267,7 +270,7 @@ void TimePeriod::UpdateRegion(double begin, double end, bool clearExisting)
 
 	if (timeranges) {
 		ObjectLock olock(timeranges);
-		BOOST_FOREACH(const String& name, timeranges) {
+		for (const String& name : timeranges) {
 			const TimePeriod::Ptr timeperiod = TimePeriod::GetByName(name);
 
 			if (timeperiod)
@@ -280,7 +283,7 @@ void TimePeriod::UpdateRegion(double begin, double end, bool clearExisting)
 
 	if (timeranges) {
 		ObjectLock olock(timeranges);
-		BOOST_FOREACH(const String& name, timeranges) {
+		for (const String& name : timeranges) {
 			const TimePeriod::Ptr timeperiod = TimePeriod::GetByName(name);
 
 			if (timeperiod)
@@ -305,7 +308,7 @@ bool TimePeriod::IsInside(double ts) const
 
 	if (segments) {
 		ObjectLock dlock(segments);
-		BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
+		for (const Dictionary::Ptr& segment : segments) {
 			if (ts > segment->Get("begin") && ts < segment->Get("end"))
 				return true;
 		}
@@ -324,7 +327,7 @@ double TimePeriod::FindNextTransition(double begin)
 
 	if (segments) {
 		ObjectLock dlock(segments);
-		BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
+		for (const Dictionary::Ptr& segment : segments) {
 			if (segment->Get("begin") > begin && (segment->Get("begin") < closestTransition || closestTransition == -1))
 				closestTransition = segment->Get("begin");
 
@@ -340,7 +343,10 @@ void TimePeriod::UpdateTimerHandler(void)
 {
 	double now = Utility::GetTime();
 
-	BOOST_FOREACH(const TimePeriod::Ptr& tp, ConfigType::GetObjectsByType<TimePeriod>()) {
+	for (const TimePeriod::Ptr& tp : ConfigType::GetObjectsByType<TimePeriod>()) {
+		if (!tp->IsActive())
+			continue;
+
 		double valid_end;
 
 		{
@@ -351,7 +357,9 @@ void TimePeriod::UpdateTimerHandler(void)
 		}
 
 		tp->UpdateRegion(valid_end, now + 24 * 3600, false);
+#ifdef _DEBUG
 		tp->Dump();
+#endif /* _DEBUG */
 	}
 }
 
@@ -368,7 +376,7 @@ void TimePeriod::Dump(void)
 
 	if (segments) {
 		ObjectLock dlock(segments);
-		BOOST_FOREACH(const Dictionary::Ptr& segment, segments) {
+		for (const Dictionary::Ptr& segment : segments) {
 			Log(LogDebug, "TimePeriod")
 			    << "Segment: " << Utility::FormatDateTime("%c", segment->Get("begin")) << " <-> "
 			    << Utility::FormatDateTime("%c", segment->Get("end"));
@@ -389,7 +397,7 @@ void TimePeriod::ValidateRanges(const Dictionary::Ptr& value, const ValidationUt
 	Array::Ptr segments = new Array();
 
 	ObjectLock olock(value);
-	BOOST_FOREACH(const Dictionary::Pair& kv, value) {
+	for (const Dictionary::Pair& kv : value) {
 		try {
 			tm begin_tm, end_tm;
 			int stride;

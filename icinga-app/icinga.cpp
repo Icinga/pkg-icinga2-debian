@@ -31,10 +31,10 @@
 #include "base/scriptglobal.hpp"
 #include "base/context.hpp"
 #include "base/console.hpp"
+#include "base/process.hpp"
 #include "config.h"
 #include <boost/program_options.hpp>
 #include <boost/tuple/tuple.hpp>
-#include <boost/foreach.hpp>
 
 #ifndef _WIN32
 #	include <sys/types.h>
@@ -154,13 +154,6 @@ int Main(void)
 	Application::DeclareRunAsGroup(ICINGA_GROUP);
 	Application::DeclareConcurrency(boost::thread::hardware_concurrency());
 
-	if (!ScriptGlobal::Exists("UseVfork"))
-#ifdef __APPLE__
-		ScriptGlobal::Set("UseVfork", false);
-#else /* __APPLE__ */
-		ScriptGlobal::Set("UseVfork", true);
-#endif /* __APPLE__ */
-
 	ScriptGlobal::Set("AttachDebugger", false);
 
 	ScriptGlobal::Set("PlatformKernel", Utility::GetPlatformKernel());
@@ -243,7 +236,7 @@ int Main(void)
 #endif /* _WIN32 */
 
 	if (vm.count("define")) {
-		BOOST_FOREACH(const String& define, vm["define"].as<std::vector<std::string> >()) {
+		for (const String& define : vm["define"].as<std::vector<std::string> >()) {
 			String key, value;
 			size_t pos = define.FindFirstOf('=');
 			if (pos != String::NPos) {
@@ -269,7 +262,7 @@ int Main(void)
 	ConfigCompiler::AddIncludeSearchDir(Application::GetIncludeConfDir());
 
 	if (!autocomplete && vm.count("include")) {
-		BOOST_FOREACH(const String& includePath, vm["include"].as<std::vector<std::string> >()) {
+		for (const String& includePath : vm["include"].as<std::vector<std::string> >()) {
 			ConfigCompiler::AddIncludeSearchDir(includePath);
 		}
 	}
@@ -293,7 +286,7 @@ int Main(void)
 		}
 
 		if (vm.count("library")) {
-			BOOST_FOREACH(const String& libraryName, vm["library"].as<std::vector<std::string> >()) {
+			for (const String& libraryName : vm["library"].as<std::vector<std::string> >()) {
 				try {
 					(void) Loader::LoadExtensionLibrary(libraryName);
 				} catch (const std::exception& ex) {
@@ -328,7 +321,7 @@ int Main(void)
 
 			if ((!command || vm.count("help")) && !vm.count("version")) {
 				std::cout << "Usage:" << std::endl
-				    << "  " << argv[0] << " ";
+				    << "  " << Utility::BaseName(argv[0]) << " ";
 
 				if (cmdname.IsEmpty())
 					std::cout << "<command>";
@@ -455,20 +448,22 @@ int Main(void)
 				}
 			}
 		}
+
+		Process::InitializeSpawnHelper();
 #endif /* _WIN32 */
 
 		std::vector<std::string> args;
 		if (vm.count("arg"))
 			args = vm["arg"].as<std::vector<std::string> >();
 
-		if (args.size() < command->GetMinArguments()) {
+		if (static_cast<int>(args.size()) < command->GetMinArguments()) {
 			Log(LogCritical, "cli")
 			    << "Too few arguments. Command needs at least " << command->GetMinArguments()
 			    << " argument" << (command->GetMinArguments() != 1 ? "s" : "") << ".";
 			return EXIT_FAILURE;
 		}
 
-		if (command->GetMaxArguments() >= 0 && args.size() > command->GetMaxArguments()) {
+		if (command->GetMaxArguments() >= 0 && static_cast<int>(args.size()) > command->GetMaxArguments()) {
 			Log(LogCritical, "cli")
 			    << "Too many arguments. At most " << command->GetMaxArguments()
 			    << " argument" << (command->GetMaxArguments() != 1 ? "s" : "") << " may be specified.";
@@ -514,8 +509,20 @@ static int SetupService(bool install, int argc, char **argv)
 	String szArgs;
 	szArgs = Utility::EscapeShellArg(szPath) + " --scm";
 
-	for (int i = 0; i < argc; i++)
-		szArgs += " " + Utility::EscapeShellArg(argv[i]);
+	std::string scmUser = "NT AUTHORITY\\NetworkService";
+	std::ifstream initf(Utility::GetIcingaDataPath() + "\\etc\\icinga2\\user");
+	if (initf.good()) {
+		std::getline(initf, scmUser);
+	}
+	initf.close();
+
+	for (int i = 0; i < argc; i++) {
+		if (!strcmp(argv[i], "--scm-user") && i + 1 < argc) {
+			scmUser = argv[i + 1];
+			i++;
+		} else
+			szArgs += " " + Utility::EscapeShellArg(argv[i]);
+	}
 
 	SC_HANDLE schService = OpenService(schSCManager, "icinga2", SERVICE_ALL_ACCESS);
 
@@ -552,14 +559,14 @@ static int SetupService(bool install, int argc, char **argv)
 			NULL,
 			NULL,
 			NULL,
-			"NT AUTHORITY\\NetworkService",
+			scmUser.c_str(),
 			NULL);
 
 		if (schService == NULL) {
 			printf("CreateService failed (%d)\n", GetLastError());
 			CloseServiceHandle(schSCManager);
 			return 1;
-		}	
+		}
 	} else {
 		printf("Service isn't installed.\n");
 		CloseServiceHandle(schSCManager);
@@ -576,11 +583,21 @@ static int SetupService(bool install, int argc, char **argv)
 
 		printf("Service uninstalled successfully\n");
 	} else {
-		ChangeServiceConfig(schService, SERVICE_NO_CHANGE, SERVICE_AUTO_START,
-		    SERVICE_ERROR_NORMAL, szArgs.CStr(), NULL, NULL, NULL, NULL, NULL, NULL);
+		if (!ChangeServiceConfig(schService, SERVICE_NO_CHANGE, SERVICE_AUTO_START,
+			SERVICE_ERROR_NORMAL, szArgs.CStr(), NULL, NULL, NULL, scmUser.c_str(), NULL, NULL)) {
+			printf("ChangeServiceConfig failed (%d)\n", GetLastError());
+			CloseServiceHandle(schService);
+			CloseServiceHandle(schSCManager);
+			return 1;
+		}
 
 		SERVICE_DESCRIPTION sdDescription = { "The Icinga 2 monitoring application" };
-		ChangeServiceConfig2(schService, SERVICE_CONFIG_DESCRIPTION, &sdDescription);
+		if(!ChangeServiceConfig2(schService, SERVICE_CONFIG_DESCRIPTION, &sdDescription)) {
+			printf("ChangeServiceConfig2 failed (%d)\n", GetLastError());
+			CloseServiceHandle(schService);
+			CloseServiceHandle(schSCManager);
+			return 1;
+		}
 
 		if (!StartService(schService, 0, NULL)) {
 			printf("StartService failed (%d)\n", GetLastError());
@@ -589,7 +606,14 @@ static int SetupService(bool install, int argc, char **argv)
 			return 1;
 		}
 
-		printf("Service installed successfully\n");
+		printf("Service successfully installed for user '%s'\n", scmUser);
+
+		std::ofstream fuser(Utility::GetIcingaDataPath() + "\\etc\\icinga2\\user", std::ios::out | std::ios::trunc);
+		if (fuser)
+			fuser << scmUser;
+		else
+			printf("Could not write user to %s\\etc\\icinga2\\user", Utility::GetIcingaDataPath());
+		fuser.close();
 	}
 
 	CloseServiceHandle(schService);
@@ -640,7 +664,6 @@ VOID WINAPI ServiceMain(DWORD argc, LPSTR *argv)
 	l_SvcStatus.dwServiceSpecificExitCode = 0;
 
 	ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
-
 	l_Job = CreateJobObject(NULL, NULL);
 
 	for (;;) {
@@ -706,20 +729,22 @@ VOID WINAPI ServiceMain(DWORD argc, LPSTR *argv)
 int main(int argc, char **argv)
 {
 #ifndef _WIN32
-	rlimit rl;
-	if (getrlimit(RLIMIT_NOFILE, &rl) >= 0) {
-		rlim_t maxfds = rl.rlim_max;
+	if (!getenv("ICINGA2_KEEP_FDS")) {
+		rlimit rl;
+		if (getrlimit(RLIMIT_NOFILE, &rl) >= 0) {
+			rlim_t maxfds = rl.rlim_max;
 
-		if (maxfds == RLIM_INFINITY)
-			maxfds = 65536;
+			if (maxfds == RLIM_INFINITY)
+				maxfds = 65536;
 
-		for (rlim_t i = 3; i < maxfds; i++) {
-			int rc = close(i);
+			for (rlim_t i = 3; i < maxfds; i++) {
+				int rc = close(i);
 
 #ifdef I2_DEBUG
-			if (rc >= 0)
-				std::cerr << "Closed FD " << i << " which we inherited from our parent process." << std::endl;
+				if (rc >= 0)
+					std::cerr << "Closed FD " << i << " which we inherited from our parent process." << std::endl;
 #endif /* I2_DEBUG */
+			}
 		}
 	}
 #endif /* _WIN32 */

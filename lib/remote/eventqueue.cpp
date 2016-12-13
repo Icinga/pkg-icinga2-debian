@@ -20,11 +20,12 @@
 #include "remote/eventqueue.hpp"
 #include "remote/filterutility.hpp"
 #include "base/singleton.hpp"
+#include "base/logger.hpp"
 
 using namespace icinga;
 
-EventQueue::EventQueue(void)
-    : m_Filter(NULL)
+EventQueue::EventQueue(const String& name)
+    : m_Name(name), m_Filter(NULL)
 { }
 
 EventQueue::~EventQueue(void)
@@ -44,13 +45,19 @@ void EventQueue::ProcessEvent(const Dictionary::Ptr& event)
 	ScriptFrame frame;
 	frame.Sandboxed = true;
 
-	if (!FilterUtility::EvaluateFilter(frame, m_Filter, event, "event"))
+	try {
+		if (!FilterUtility::EvaluateFilter(frame, m_Filter, event, "event"))
+			return;
+	} catch (const std::exception& ex) {
+		Log(LogWarning, "EventQueue")
+		    << "Error occurred while evaluating event filter for queue '" << m_Name << "': " << DiagnosticInformation(ex);
 		return;
+	}
 
 	boost::mutex::scoped_lock lock(m_Mutex);
 
 	typedef std::pair<void *const, std::deque<Dictionary::Ptr> > kv_pair;
-	BOOST_FOREACH(kv_pair& kv, m_Events) {
+	for (kv_pair& kv : m_Events) {
 		kv.second.push_back(event);
 	}
 
@@ -61,8 +68,7 @@ void EventQueue::AddClient(void *client)
 {
 	boost::mutex::scoped_lock lock(m_Mutex);
 
-	typedef std::map<void *, std::deque<Dictionary::Ptr> >::iterator it_type;
-	std::pair<it_type, bool> result = m_Events.insert(std::make_pair(client, std::deque<Dictionary::Ptr>()));
+	auto result = m_Events.insert(std::make_pair(client, std::deque<Dictionary::Ptr>()));
 	ASSERT(result.second);
 }
 
@@ -99,7 +105,7 @@ Dictionary::Ptr EventQueue::WaitForEvent(void *client, double timeout)
 	boost::mutex::scoped_lock lock(m_Mutex);
 
 	for (;;) {
-		std::map<void *, std::deque<Dictionary::Ptr> >::iterator it = m_Events.find(client);
+		auto it = m_Events.find(client);
 		ASSERT(it != m_Events.end());
 
 		if (!it->second.empty()) {
@@ -121,7 +127,7 @@ std::vector<EventQueue::Ptr> EventQueue::GetQueuesForType(const String& type)
 	std::vector<EventQueue::Ptr> availQueues;
 
 	typedef std::pair<String, EventQueue::Ptr> kv_pair;
-	BOOST_FOREACH(const kv_pair& kv, queues) {
+	for (const kv_pair& kv : queues) {
 		if (kv.second->CanProcessEvent(type))
 			availQueues.push_back(kv.second);
 	}

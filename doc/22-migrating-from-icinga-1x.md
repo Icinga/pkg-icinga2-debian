@@ -153,8 +153,6 @@ are referenced as `$ARGn$` where `n` is the argument counter.
 While you could manually migrate this like (please note the new generic command arguments and default argument values!):
 
     object CheckCommand "my-ping-check" {
-      import "plugin-check-command"
-
       command = [
         PluginDir + "/check_ping", "-4"
       ]
@@ -233,7 +231,6 @@ Custom variables from Icinga 1.x are available as Icinga 2 custom attributes.
 Can be written as the following in Icinga 2:
 
     object CheckCommand "test_customvar" {
-      import "plugin-check-command"
       command = "echo "Host CV: $host.vars.CVTEST$ Service CV: $service.vars.CVTEST$\n""
     }
 
@@ -655,6 +652,34 @@ For easier identification you could add the `vars.is_vmware_master` attribute to
 host and let the dependency ignore that instead of the hardcoded host name. That's different
 to the Icinga 1.x example and a best practice hint only.
 
+
+Another way to express the same configuration would be something like:
+
+    object Host "vmware-master" {
+      import "linux-server-template"
+      groups += [ "vmware" ]
+      address = "192.168.1.10"
+    }
+
+    object Host "vmware-vm1" {
+      import "linux-server-template"
+      groups += [ "vmware" ]
+      address = "192.168.27.1"
+      vars.parents = [ "vmware-master" ]
+    }
+
+    object Host "vmware-vm2" {
+      import "linux-server-template"
+      groups += [ "vmware" ]
+      address = "192.168.28.1"
+      vars.parents = [ "vmware-master" ]
+    }
+
+    apply Dependency "host-to-parent-" for (parent in host.vars.parents) to Host {
+      parent_host_name = parent
+    }
+
+This example allows finer grained host-to-host dependency, as well as multiple dependency support.
 
 #### <a id="manual-config-migration-hints-distributed-setup"></a> Manual Config Migration Hints for Distributed Setups
 
@@ -1112,8 +1137,6 @@ The following external commands are not supported:
     ENABLE_SERVICE_FRESHNESS_CHECKS
     READ_STATE_INFORMATION
     SAVE_STATE_INFORMATION
-    SCHEDULE_AND_PROPAGATE_HOST_DOWNTIME
-    SCHEDULE_AND_PROPAGATE_TRIGGERED_HOST_DOWNTIME
     SET_HOST_NOTIFICATION_NUMBER
     SET_SVC_NOTIFICATION_NUMBER
     START_ACCEPTING_PASSIVE_HOST_CHECKS
@@ -1145,7 +1168,7 @@ Icinga 2 does not make a difference between `output` (first line) and
 provided separately.
 
 There is no output length restriction as known from Icinga 1.x using an
-[8KB static buffer](http://docs.icinga.org/latest/en/pluginapi.html#outputlengthrestrictions).
+[8KB static buffer](http://docs.icinga.com/latest/en/pluginapi.html#outputlengthrestrictions).
 
 The `StatusDataWriter`, `IdoMysqlConnection` and `LivestatusListener` types
 split the raw output into `output` (first line) and `long_output` (remaining
@@ -1299,7 +1322,7 @@ All state and type filter use long names OR'd with a pipe together
     notification_options w,u,c,r,f,s
 
     states = [ Warning, Unknown, Critical ]
-    filters = [ Problem, Recovery, FlappingStart, FlappingEnd, DowntimeStart, DowntimeEnd, DowntimeRemoved ]
+    types = [ Problem, Recovery, FlappingStart, FlappingEnd, DowntimeStart, DowntimeEnd, DowntimeRemoved ]
 
 Icinga 2 adds more fine-grained type filters for acknowledgements, downtime,
 and flapping type (start, end, ...).

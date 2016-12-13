@@ -69,13 +69,25 @@ public:
 		: m_Data(data)
 	{ }
 
+	inline String(std::string&& data)
+		: m_Data(data)
+	{ }
+
 	inline String(String::SizeType n, char c)
 		: m_Data(n, c)
 	{ }
 
-	inline String(const String& other)
-		: m_Data(other.m_Data)
+	String(const String& other)
+		: m_Data(other)
 	{ }
+
+	String(String&& other)
+		: m_Data(std::move(other.m_Data))
+	{ }
+
+#ifndef _MSC_VER
+	String(Value&& other);
+#endif /* _MSC_VER */
 
 	inline ~String(void)
 	{ }
@@ -85,11 +97,19 @@ public:
 		: m_Data(begin, end)
 	{ }
 
-	inline String& operator=(const String& rhs)
+	String& operator=(const String& rhs)
 	{
 		m_Data = rhs.m_Data;
 		return *this;
 	}
+
+	String& operator=(String&& rhs)
+	{
+		m_Data = std::move(rhs.m_Data);
+		return *this;
+	}
+
+	String& operator=(Value&& rhs);
 
 	inline String& operator=(const std::string& rhs)
 	{
@@ -327,7 +347,7 @@ private:
 
 inline std::ostream& operator<<(std::ostream& stream, const String& str)
 {
-	stream << static_cast<std::string>(str);
+	stream << str.GetData();
 	return stream;
 }
 
@@ -341,104 +361,123 @@ inline std::istream& operator>>(std::istream& stream, String& str)
 
 inline String operator+(const String& lhs, const String& rhs)
 {
-	return static_cast<std::string>(lhs)+static_cast<std::string>(rhs);
+	return lhs.GetData() + rhs.GetData();
 }
 
 inline String operator+(const String& lhs, const char *rhs)
 {
-	return static_cast<std::string>(lhs)+rhs;
+	return lhs.GetData() + rhs;
 }
 
 inline String operator+(const char *lhs, const String& rhs)
 {
-	return lhs + static_cast<std::string>(rhs);
+	return lhs + rhs.GetData();
 }
 
 inline bool operator==(const String& lhs, const String& rhs)
 {
-	return static_cast<std::string>(lhs) == static_cast<std::string>(rhs);
+	return lhs.GetData() == rhs.GetData();
 }
 
 inline bool operator==(const String& lhs, const char *rhs)
 {
-	return static_cast<std::string>(lhs) == rhs;
+	return lhs.GetData() == rhs;
 }
 
 inline bool operator==(const char *lhs, const String& rhs)
 {
-	return lhs == static_cast<std::string>(rhs);
+	return lhs == rhs.GetData();
 }
 
 inline bool operator<(const String& lhs, const char *rhs)
 {
-	return static_cast<std::string>(lhs) < rhs;
+	return lhs.GetData() < rhs;
 }
 
 inline bool operator<(const char *lhs, const String& rhs)
 {
-	return lhs < static_cast<std::string>(rhs);
+	return lhs < rhs.GetData();
 }
 
 inline bool operator>(const String& lhs, const String& rhs)
 {
-	return static_cast<std::string>(lhs) > static_cast<std::string>(rhs);
+	return lhs.GetData() > rhs.GetData();
 }
 
 inline bool operator>(const String& lhs, const char *rhs)
 {
-	return static_cast<std::string>(lhs) > rhs;
+	return lhs.GetData() > rhs;
 }
 
 inline bool operator>(const char *lhs, const String& rhs)
 {
-	return lhs > static_cast<std::string>(rhs);
+	return lhs > rhs.GetData();
 }
 
 inline bool operator<=(const String& lhs, const String& rhs)
 {
-	return static_cast<std::string>(lhs) <= static_cast<std::string>(rhs);
+	return lhs.GetData() <= rhs.GetData();
 }
 
 inline bool operator<=(const String& lhs, const char *rhs)
 {
-	return static_cast<std::string>(lhs) <= rhs;
+	return lhs.GetData() <= rhs;
 }
 
 inline bool operator<=(const char *lhs, const String& rhs)
 {
-	return lhs <= static_cast<std::string>(rhs);
+	return lhs <= rhs.GetData();
 }
 
 inline bool operator>=(const String& lhs, const String& rhs)
 {
-	return static_cast<std::string>(lhs) >= static_cast<std::string>(rhs);
+	return lhs.GetData() >= rhs.GetData();
 }
 
 inline bool operator>=(const String& lhs, const char *rhs)
 {
-	return static_cast<std::string>(lhs) >= rhs;
+	return lhs.GetData() >= rhs;
 }
 
 inline bool operator>=(const char *lhs, const String& rhs)
 {
-	return lhs >= static_cast<std::string>(rhs);
+	return lhs >= rhs.GetData();
 }
 
 inline bool operator!=(const String& lhs, const String& rhs)
 {
-	return static_cast<std::string>(lhs) != static_cast<std::string>(rhs);
+	return lhs.GetData() != rhs.GetData();
 }
 
 inline bool operator!=(const String& lhs, const char *rhs)
 {
-	return static_cast<std::string>(lhs) != rhs;
+	return lhs.GetData() != rhs;
 }
 
 inline bool operator!=(const char *lhs, const String& rhs)
 {
-	return lhs != static_cast<std::string>(rhs);
+	return lhs != rhs.GetData();
 }
 
+inline String::Iterator begin(String& x)
+{
+	return x.Begin();
+}
+
+inline String::ConstIterator begin(const String& x)
+{
+	return x.Begin();
+}
+
+inline String::Iterator end(String& x)
+{
+	return x.End();
+}
+
+inline String::ConstIterator end(const String& x)
+{
+	return x.End();
+}
 inline String::Iterator range_begin(String& x)
 {
 	return x.Begin();

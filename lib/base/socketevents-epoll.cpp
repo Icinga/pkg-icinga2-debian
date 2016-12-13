@@ -21,7 +21,6 @@
 #include "base/exception.hpp"
 #include "base/logger.hpp"
 #include <boost/thread/once.hpp>
-#include <boost/foreach.hpp>
 #include <map>
 #ifdef __linux__
 #	include <sys/epoll.h>
@@ -121,7 +120,7 @@ void SocketEventEngineEpoll::ThreadProc(int tid)
 			}
 		}
 
-		BOOST_FOREACH(const EventDescription& event, events) {
+		for (const EventDescription& event : events) {
 			try {
 				event.Descriptor.EventInterface->OnEvent(event.REvents);
 			} catch (const std::exception& ex) {
@@ -194,7 +193,7 @@ void SocketEventEngineEpoll::ChangeEvents(SocketEvents *se, int events)
 	{
 		boost::mutex::scoped_lock lock(m_EventMutex[tid]);
 
-		std::map<SOCKET, SocketEventDescriptor>::iterator it = m_Sockets[tid].find(se->m_FD);
+		auto it = m_Sockets[tid].find(se->m_FD);
 
 		if (it == m_Sockets[tid].end())
 			return;

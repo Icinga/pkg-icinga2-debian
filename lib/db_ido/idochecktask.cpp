@@ -29,11 +29,10 @@
 #include "base/utility.hpp"
 #include "base/configtype.hpp"
 #include "base/convert.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
-REGISTER_SCRIPTFUNCTION_NS_DEPRECATED(Internal, IdoCheck, &IdoCheckTask::ScriptFunc);
+REGISTER_SCRIPTFUNCTION_NS(Internal, IdoCheck, &IdoCheckTask::ScriptFunc);
 
 void IdoCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult::Ptr& cr,
     const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)
