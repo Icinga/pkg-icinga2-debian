@@ -18,10 +18,7 @@
  ******************************************************************************/
 
 #include "remote/base64.hpp"
-#include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
-
-#include <iostream>
+#include <BoostTestTargetConfig.h>
 
 using namespace icinga;
 
@@ -56,7 +53,7 @@ BOOST_AUTO_TEST_CASE(base64)
 
 	// 1024 chars
 
-	BOOST_FOREACH(const String str, clearText) {
+	for (const String& str : clearText) {
 		String enc = Base64::Encode(str);
 		String dec = Base64::Decode(enc);
 		BOOST_CHECK(str == dec);

@@ -17,11 +17,10 @@
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.             *
  ******************************************************************************/
 
+#ifndef _WIN32
 #include "base/sysloglogger.hpp"
 #include "base/configtype.hpp"
 #include "base/statsfunction.hpp"
-
-#ifndef _WIN32
 #include "base/sysloglogger.tcpp"
 
 using namespace icinga;
@@ -34,7 +33,7 @@ void SyslogLogger::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const SyslogLogger::Ptr& sysloglogger, ConfigType::GetObjectsByType<SyslogLogger>()) {
+	for (const SyslogLogger::Ptr& sysloglogger : ConfigType::GetObjectsByType<SyslogLogger>()) {
 		nodes->Set(sysloglogger->GetName(), 1); //add more stats
 	}
 

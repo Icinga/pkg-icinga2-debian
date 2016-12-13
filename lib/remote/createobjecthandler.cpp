@@ -22,6 +22,7 @@
 #include "remote/httputility.hpp"
 #include "remote/filterutility.hpp"
 #include "remote/apiaction.hpp"
+#include "remote/zone.hpp"
 #include "base/configtype.hpp"
 #include <boost/algorithm/string.hpp>
 #include <set>
@@ -51,8 +52,25 @@ bool CreateObjectHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& r
 	Array::Ptr templates = params->Get("templates");
 	Dictionary::Ptr attrs = params->Get("attrs");
 
+	/* Put created objects into the local zone if not explicitly defined.
+	 * This allows additional zone members to sync the
+	 * configuration at some later point.
+	 */
+	Zone::Ptr localZone = Zone::GetLocalZone();
+	String localZoneName;
+
+	if (localZone) {
+		localZoneName = localZone->GetName();
+
+		if (!attrs) {
+			attrs = new Dictionary();
+			attrs->Set("zone", localZoneName);
+		} else if (!attrs->Contains("zone")) {
+			attrs->Set("zone", localZoneName);
+		}
+	}
+
 	Dictionary::Ptr result1 = new Dictionary();
-	int code;
 	String status;
 	Array::Ptr errors = new Array();
 

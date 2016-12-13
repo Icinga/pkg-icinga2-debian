@@ -163,8 +163,6 @@ The special case here is that whenever Icinga 2 needs the value for such a custo
 the function and uses whatever value the function returns:
 
     object CheckCommand "random-value" {
-      import "plugin-check-command"
-
       command = [ PluginDir + "/check_dummy", "0", "$text$" ]
 
       vars.text = {{ Math.random() * 100 }}
@@ -229,8 +227,6 @@ are used in command definitions to figure out which IP address a check should be
 run against:
 
     object CheckCommand "my-ping" {
-      import "plugin-check-command"
-
       command = [ PluginDir + "/check_ping", "-H", "$ping_address$" ]
 
       arguments = {
@@ -438,7 +434,7 @@ Before you start using the apply rules keep the following in mind:
 * Define the best match.
     * A set of unique [custom attributes](3-monitoring-basics.md#custom-attributes) for these hosts/services?
     * Or [group](3-monitoring-basics.md#groups) memberships, e.g. a host being a member of a hostgroup, applying services to it?
-    * A generic pattern [match](17-language-reference.md#function-calls) on the host/service name?
+    * A generic pattern [match](18-library-reference.md#global-functions-match) on the host/service name?
     * [Multiple expressions combined](3-monitoring-basics.md#using-apply-expressions) with `&&` or `||` [operators](17-language-reference.md#expression-operators)
 * All expressions must return a boolean value (an empty string is equal to `false` e.g.)
 
@@ -485,7 +481,7 @@ you want to be able to add more than one assign/ignore where expression which ma
 a specific condition. To achieve this you can use the logical `and` and `or` operators.
 
 
-Match all `*mysql*` patterns in the host name and (`&&`) custom attribute `prod_mysql_db`
+[Match](18-library-reference.md#global-functions-match) all `*mysql*` patterns in the host name and (`&&`) custom attribute `prod_mysql_db`
 matches the `db-*` pattern. All hosts with the custom attribute `test_server` set to `true`
 should be ignored, or any host name ending with `*internal` pattern.
 
@@ -498,7 +494,7 @@ should be ignored, or any host name ending with `*internal` pattern.
     }
 
 Similar example for advanced notification apply rule filters: If the service
-attribute `notes` contains the `has gold support 24x7` string `AND` one of the
+attribute `notes` [matches](18-library-reference.md#global-functions-match) the `has gold support 24x7` string `AND` one of the
 two condition passes, either the `customer` host custom attribute is set to `customer-xy`
 `OR` the host custom attribute `always_notify` is set to `true`.
 
@@ -655,8 +651,8 @@ Icinga 2 evaluates the `apply for` rule for all objects with the custom attribut
 `assign/ignore where` expressions. You can access the loop variable
 in these expressions, e.g. for ignoring certain values.
 In this example we'd ignore the `bgp` identifier and avoid generating an unwanted service.
-We could extend the configuration by also matching the `oid` value on certain regex/wildcard
-patterns for example.
+We could extend the configuration by also matching the `oid` value on certain
+[regex](18-library-reference.md#global-functions-regex)/[wildcard match](18-library-reference.md#global-functions-match) patterns for example.
 
 > **Note**
 >
@@ -734,7 +730,7 @@ argument parameters already (for example `iftraffic_units`), you could also add 
 After `vars` is fully populated, all object attributes can be set calculated from
 provided host attributes. For strings, you can use string concatention with the `+` operator.
 
-You can also specifiy the display_name, check command, interval, notes, notes_url, action_url, etc.
+You can also specify the display_name, check command, interval, notes, notes_url, action_url, etc.
 attributes that way. Attribute strings can be [concatenated](17-language-reference.md#expression-operators),
 for example for adding a more detailed service `display_name`.
 
@@ -794,7 +790,7 @@ The other way around you can override specific custom attributes inherited from 
 
 
 
-This example makes use of the [check_iftraffic](https://exchange.icinga.org/exchange/iftraffic) plugin.
+This example makes use of the [check_iftraffic](https://exchange.icinga.com/exchange/iftraffic) plugin.
 The `CheckCommand` definition can be found in the
 [contributed plugin check commands](10-icinga-template-library.md#plugin-contrib-command-iftraffic)
 -- make sure to include them in your [icinga2 configuration file](4-configuring-icinga-2.md#icinga2-conf).
@@ -971,9 +967,9 @@ to a group based on their attributes:
     }
 
 In this example all hosts with the `vars` attribute `mssql_port`
-will be added as members to the host group `mssql`. However, all `\*internal`
-hosts or with the `test_server` attribute set to `true` are not added to this
-group.
+will be added as members to the host group `mssql`. However, all
+hosts [matching](18-library-reference.md#global-functions-match) the string `\*internal`
+or with the `test_server` attribute set to `true` are **not** added to this group.
 
 Details on the `assign where` syntax can be found in the
 [Language Reference](17-language-reference.md#apply).
@@ -1238,9 +1234,6 @@ using the `check_command` attribute.
 
 #### <a id="command-plugin-integration"></a> Integrate the Plugin with a CheckCommand Definition
 
-[CheckCommand](9-object-types.md#objecttype-checkcommand) objects require the [ITL template](10-icinga-template-library.md#itl-plugin-check-command)
-`plugin-check-command` to support native plugin based check methods.
-
 Unless you have done so already, download your check plugin and put it
 into the [PluginDir](4-configuring-icinga-2.md#constants-conf) directory. The following example uses the
 `check_mysql` plugin contained in the Monitoring Plugins package.
@@ -1299,8 +1292,6 @@ can also be inherited from a parent template using additive inheritance (`+=`).
     # vim /etc/icinga2/conf.d/commands.conf
 
     object CheckCommand "my-mysql" {
-      import "plugin-check-command"
-
       command = [ PluginDir + "/check_mysql" ] //constants.conf -> const PluginDir
 
       arguments = {
@@ -1426,8 +1417,6 @@ at command execution. Or making arguments optional -- only set if the
 macro value can be resolved by Icinga 2.
 
     object CheckCommand "check_http" {
-      import "plugin-check-command"
-
       command = [ PluginDir + "/check_http" ]
 
       arguments = {
@@ -1490,8 +1479,6 @@ This is useful for example for hiding sensitive information on the command line 
 when passing credentials to database checks:
 
     object CheckCommand "mysql-health" {
-      import "plugin-check-command"
-
       command = [
         PluginDir + "/check_mysql"
       ]
@@ -1520,9 +1507,6 @@ interfaces (email, XMPP, IRC, Twitter, etc.).
 [NotificationCommand](9-object-types.md#objecttype-notificationcommand) objects are referenced by
 [Notification](9-object-types.md#objecttype-notification) objects using the `command` attribute.
 
-`NotificationCommand` objects require the [ITL template](10-icinga-template-library.md#itl-plugin-notification-command)
-`plugin-notification-command` to support native plugin-based notifications.
-
 > **Note**
 >
 > Make sure that the [notification](11-cli-commands.md#enable-features) feature is enabled
@@ -1536,8 +1520,6 @@ If you want to specify default values for some of the custom attribute definitio
 you can add a `vars` dictionary as shown for the `CheckCommand` object.
 
     object NotificationCommand "mail-service-notification" {
-      import "plugin-notification-command"
-
       command = [ SysconfDir + "/icinga2/scripts/mail-notification.sh" ]
 
       env = {
@@ -1618,9 +1600,6 @@ Common use case scenarios are a failing HTTP check requiring an immediate
 restart via event command, or if an application is locked and requires
 a restart upon detection.
 
-`EventCommand` objects require the ITL template `plugin-event-command`
-to support native plugin based checks.
-
 #### <a id="event-command-restart-service-daemon"></a> Use Event Commands to Restart Service Daemon
 
 The following example will trigger a restart of the `httpd` daemon
@@ -1647,8 +1626,6 @@ which can be used for all event commands triggered using ssh:
 
     /* pass event commands through ssh */
     object EventCommand "event_by_ssh" {
-      import "plugin-event-command"
-
       command = [ PluginDir + "/check_by_ssh" ]
 
       arguments = {
@@ -1921,8 +1898,8 @@ for the agent daemon responding to your requests, and make all other services
 querying that daemon depend on that health check.
 
 The following configuration defines two nrpe based service checks `nrpe-load`
-and `nrpe-disk` applied to the `nrpe-server`. The health check is defined as
-`nrpe-health` service.
+and `nrpe-disk` applied to the host `nrpe-server` [matched](18-library-reference.md#global-functions-match)
+by its name. The health check is defined as `nrpe-health` service.
 
     apply Service "nrpe-health" {
       import "generic-service"

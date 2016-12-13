@@ -31,7 +31,6 @@
 #include "base/convert.hpp"
 #include "base/utility.hpp"
 #include "base/context.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -193,16 +192,22 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 		if (!children.empty())
 			OnReachabilityChanged(this, cr, children, origin);
 	} else {
-		if (old_attempt + 1 >= GetMaxCheckAttempts()) {
+		/* OK -> NOT-OK change, first SOFT state. Reset attempt counter. */
+		if (IsStateOK(old_state)) {
+			SetStateType(StateTypeSoft);
+			attempt = 1;
+		}
+
+		/* SOFT state change, increase attempt counter. */
+		if (old_stateType == StateTypeSoft && !IsStateOK(old_state)) {
+			SetStateType(StateTypeSoft);
+			attempt = old_attempt + 1;
+		}
+
+		/* HARD state change (e.g. previously 2/3 and this next attempt). Reset attempt counter. */
+		if (attempt >= GetMaxCheckAttempts()) {
 			SetStateType(StateTypeHard);
-		} else if (old_stateType == StateTypeSoft && !IsStateOK(old_state)) {
-			SetStateType(StateTypeSoft);
-			attempt = old_attempt + 1; // NOT-OK -> NOT-OK counter
-		} else if (IsStateOK(old_state)) {
-			SetStateType(StateTypeSoft);
-			attempt = 1; // OK -> NOT-OK transition, reset the counter
-		} else {
-			attempt = old_attempt;
+			attempt = 1;
 		}
 
 		if (!IsStateOK(cr->GetState())) {
@@ -240,7 +245,7 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 		}
 
 		/* reschedule direct parents */
-		BOOST_FOREACH(const Checkable::Ptr& parent, GetParents()) {
+		for (const Checkable::Ptr& parent : GetParents()) {
 			if (parent.get() == this)
 				continue;
 
@@ -290,8 +295,6 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 
 	if (is_volatile && IsStateOK(old_state) && IsStateOK(new_state))
 		send_notification = false; /* Don't send notifications for volatile OK -> OK changes. */
-
-	SetLastInDowntime(in_downtime);
 
 	olock.Unlock();
 
@@ -365,7 +368,8 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 		ExecuteEventHandler();
 
 	/* Flapping start/end notifications */
-	if (!was_flapping && is_flapping) {
+	if (send_notification && !was_flapping && is_flapping) {
+		/* FlappingStart notifications happen on state changes, not in downtimes */
 		if (!IsPaused())
 			OnNotificationsRequested(this, NotificationFlappingStart, cr, "", "", MessageOrigin::Ptr());
 
@@ -373,7 +377,8 @@ void Checkable::ProcessCheckResult(const CheckResult::Ptr& cr, const MessageOrig
 			<< "Flapping: Checkable " << GetName() << " started flapping (" << GetFlappingThreshold() << "% < " << GetFlappingCurrent() << "%).";
 
 		NotifyFlapping(origin);
-	} else if (was_flapping && !is_flapping) {
+	} else if (!in_downtime && was_flapping && !is_flapping) {
+		/* FlappingEnd notifications are independent from state changes, must not happen in downtine */
 		if (!IsPaused())
 			OnNotificationsRequested(this, NotificationFlappingEnd, cr, "", "", MessageOrigin::Ptr());
 
@@ -473,7 +478,7 @@ void Checkable::ExecuteCheck(void)
 			   a check result from the remote instance. The check will be re-scheduled
 			   using the proper check interval once we've received a check result. */
 			SetNextCheck(Utility::GetTime() + GetCheckCommand()->GetTimeout() + 30);
-		} else if (Application::GetInstance()->GetStartTime() < Utility::GetTime() - 300) {
+		} else if (!endpoint->GetSyncing() && Application::GetInstance()->GetStartTime() < Utility::GetTime() - 300) {
 			/* fail to perform check on unconnected endpoint */
 			cr->SetState(ServiceUnknown);
 

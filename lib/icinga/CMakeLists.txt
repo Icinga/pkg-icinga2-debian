@@ -54,7 +54,7 @@ set(icinga_SOURCES
 )
 
 if(ICINGA2_UNITY_BUILD)
-    mkunity_target(icinga icinga_SOURCES)
+    mkunity_target(icinga icinga icinga_SOURCES)
 endif()
 
 add_library(icinga SHARED ${icinga_SOURCES})
@@ -66,6 +66,7 @@ set_target_properties (
   INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
   DEFINE_SYMBOL I2_ICINGA_BUILD
   FOLDER Lib
+  VERSION ${SPEC_VERSION}
 )
 
 install(

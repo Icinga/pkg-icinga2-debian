@@ -29,7 +29,6 @@
 #include "base/exception.hpp"
 #include "base/initialize.hpp"
 #include "base/scriptglobal.hpp"
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 
@@ -185,7 +184,7 @@ std::set<User::Ptr> Notification::GetUsers(void) const
 	if (users) {
 		ObjectLock olock(users);
 
-		BOOST_FOREACH(const String& name, users) {
+		for (const String& name : users) {
 			User::Ptr user = User::GetByName(name);
 
 			if (!user)
@@ -207,7 +206,7 @@ std::set<UserGroup::Ptr> Notification::GetUserGroups(void) const
 	if (groups) {
 		ObjectLock olock(groups);
 
-		BOOST_FOREACH(const String& name, groups) {
+		for (const String& name : groups) {
 			UserGroup::Ptr ug = UserGroup::GetByName(name);
 
 			if (!ug)
@@ -381,15 +380,15 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 	std::set<User::Ptr> users = GetUsers();
 	std::copy(users.begin(), users.end(), std::inserter(allUsers, allUsers.begin()));
 
-	BOOST_FOREACH(const UserGroup::Ptr& ug, GetUserGroups()) {
+	for (const UserGroup::Ptr& ug : GetUserGroups()) {
 		std::set<User::Ptr> members = ug->GetMembers();
 		std::copy(members.begin(), members.end(), std::inserter(allUsers, allUsers.begin()));
 	}
 
 	std::set<User::Ptr> allNotifiedUsers;
-	Array::Ptr notifiedUsers = GetNotifiedUsers();
+	Array::Ptr notifiedProblemUsers = GetNotifiedProblemUsers();
 
-	BOOST_FOREACH(const User::Ptr& user, allUsers) {
+	for (const User::Ptr& user : allUsers) {
 		String userName = user->GetName();
 
 		if (!user->GetEnableNotifications()) {
@@ -406,9 +405,9 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 
 		/* on recovery, check if user was notified before */
 		if (type == NotificationRecovery) {
-			if (!notifiedUsers->Contains(userName)) {
+			if (!notifiedProblemUsers->Contains(userName)) {
 				Log(LogNotice, "Notification")
-				    << "We did not notify user '" << userName << "' before. Not sending recovery notification.";
+				    << "We did not notify user '" << userName << "' for a problem before. Not sending recovery notification.";
 				continue;
 			}
 		}
@@ -423,13 +422,13 @@ void Notification::BeginExecuteNotification(NotificationType type, const CheckRe
 		allNotifiedUsers.insert(user);
 
 		/* store all notified users for later recovery checks */
-		if (!notifiedUsers->Contains(userName))
-			notifiedUsers->Add(userName);
+		if (type == NotificationProblem && !notifiedProblemUsers->Contains(userName))
+			notifiedProblemUsers->Add(userName);
 	}
 
 	/* if this was a recovery notification, reset all notified users */
 	if (type == NotificationRecovery)
-		notifiedUsers->Clear();
+		notifiedProblemUsers->Clear();
 
 	/* used in db_ido for notification history */
 	Service::OnNotificationSentToAllUsers(this, checkable, allNotifiedUsers, type, cr, author, text, MessageOrigin::Ptr());
@@ -566,7 +565,7 @@ String Notification::NotificationFilterToString(int filter, const std::map<Strin
 	std::vector<String> sFilters;
 
 	typedef std::pair<String, int> kv_pair;
-	BOOST_FOREACH(const kv_pair& kv, filterMap) {
+	for (const kv_pair& kv : filterMap) {
 		if (filter & kv.second)
 			sFilters.push_back(kv.first);
 	}
@@ -653,7 +652,7 @@ void Notification::ValidateStates(const Array::Ptr& value, const ValidationUtils
 		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("states"), "State filter is invalid."));
 
 	if (!GetServiceName().IsEmpty() && (filter == -1 || (filter & ~(StateFilterOK | StateFilterWarning | StateFilterCritical | StateFilterUnknown)) != 0))
-		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("types"), "State filter is invalid."));
+		BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of("states"), "State filter is invalid."));
 }
 
 void Notification::ValidateTypes(const Array::Ptr& value, const ValidationUtils& utils)

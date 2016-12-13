@@ -59,6 +59,7 @@ public:
 	virtual int GetMinArguments(void) const;
 	virtual int GetMaxArguments(void) const;
 	virtual bool IsHidden(void) const;
+	virtual bool IsDeprecated(void) const;
 	virtual void InitParameters(boost::program_options::options_description& visibleDesc,
 	    boost::program_options::options_description& hiddenDesc) const;
 	virtual ImpersonationLevel GetImpersonationLevel(void) const;
@@ -88,15 +89,11 @@ private:
 };
 
 #define REGISTER_CLICOMMAND(name, klass) \
-	namespace { namespace UNIQUE_NAME(cli) { \
-		void RegisterCommand(void) \
-		{ \
-			std::vector<String> vname; \
-			boost::algorithm::split(vname, name, boost::is_any_of("/")); \
-			CLICommand::Register(vname, new klass()); \
-		} \
-		INITIALIZE_ONCE(RegisterCommand); \
-	} }
+	INITIALIZE_ONCE([]() { \
+		std::vector<String> vname; \
+		boost::algorithm::split(vname, name, boost::is_any_of("/")); \
+		CLICommand::Register(vname, new klass()); \
+	})
 
 }
 

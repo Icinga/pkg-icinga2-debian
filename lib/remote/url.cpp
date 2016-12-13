@@ -23,7 +23,6 @@
 #include "remote/url.hpp"
 #include "remote/url-characters.hpp"
 #include <boost/tokenizer.hpp>
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -147,7 +146,7 @@ const std::map<String, std::vector<String> >& Url::GetQuery(void) const
 
 String Url::GetQueryElement(const String& name) const
 {
-	std::map<String, std::vector<String> >::const_iterator it = m_Query.find(name);
+	auto it = m_Query.find(name);
 
 	if (it == m_Query.end())
 		return String();
@@ -157,7 +156,7 @@ String Url::GetQueryElement(const String& name) const
 
 const std::vector<String>& Url::GetQueryElements(const String& name) const
 {
-	std::map<String, std::vector<String> >::const_iterator it = m_Query.find(name);
+	auto it = m_Query.find(name);
 
 	if (it == m_Query.end()) {
 		static std::vector<String> emptyVector;
@@ -209,7 +208,7 @@ void Url::SetQuery(const std::map<String, std::vector<String> >& query)
 
 void Url::AddQueryElement(const String& name, const String& value)
 {
-	std::map<String, std::vector<String> >::iterator it = m_Query.find(name);
+	auto it = m_Query.find(name);
 	if (it == m_Query.end()) {
 		m_Query[name] = std::vector<String>();
 		m_Query[name].push_back(value);
@@ -241,7 +240,7 @@ String Url::Format(bool print_credentials) const
 	if (m_Path.empty())
 		url += "/";
 	else {
-		BOOST_FOREACH (const String& segment, m_Path) {
+		for (const String& segment : m_Path) {
 			url += "/";
 			url += Utility::EscapeString(segment, ACPATHSEGMENT_ENCODE, false);
 		}
@@ -251,24 +250,33 @@ String Url::Format(bool print_credentials) const
 	if (!m_Query.empty()) {
 		typedef std::pair<String, std::vector<String> > kv_pair;
 
-		BOOST_FOREACH (const kv_pair& kv, m_Query) {
+		for (const kv_pair& kv : m_Query) {
 			String key = Utility::EscapeString(kv.first, ACQUERY_ENCODE, false);
 			if (param.IsEmpty())
 				param = "?";
 			else
 				param += "&";
 
+			// Just one (or one empty) value
+			if (kv.second.size() == 1) {
+				param += key;
+				param += kv.second[0].IsEmpty() ?
+				    String() : "=" + Utility::EscapeString(kv.second[0], ACQUERY_ENCODE, false);
+				continue;
+			}
+
+			// Array
 			String temp;
-			BOOST_FOREACH (const String s, kv.second) {
+			for (const String s : kv.second) {
 				if (!temp.IsEmpty())
 					temp += "&";
 
 				temp += key;
-
 				if (kv.second.size() > 1)
 					temp += "[]";
 
-				temp += "=" + Utility::EscapeString(s, ACQUERY_ENCODE, false);
+				if (!s.IsEmpty())
+					temp += "=" + Utility::EscapeString(s, ACQUERY_ENCODE, false);
 			}
 			param += temp;
 		}
@@ -344,7 +352,7 @@ bool Url::ParsePath(const String& path)
 	boost::char_separator<char> sep("/");
 	boost::tokenizer<boost::char_separator<char> > tokens(pathStr, sep);
 
-	BOOST_FOREACH(const String& token, tokens) {
+	for (const String& token : tokens) {
 		if (token.IsEmpty())
 			continue;
 
@@ -366,7 +374,7 @@ bool Url::ParseQuery(const String& query)
 	boost::char_separator<char> sep("&");
 	boost::tokenizer<boost::char_separator<char> > tokens(queryStr, sep);
 
-	BOOST_FOREACH(const String& token, tokens) {
+	for (const String& token : tokens) {
 		size_t pHelper = token.Find("=");
 
 		if (pHelper == 0)
@@ -376,7 +384,7 @@ bool Url::ParseQuery(const String& query)
 		String key = token.SubStr(0, pHelper);
 		String value = Empty;
 
-		if (pHelper != token.GetLength() - 1)
+		if (pHelper != String::NPos && pHelper != token.GetLength() - 1)
 			value = token.SubStr(pHelper+1);
 
 		if (!ValidateToken(value, ACQUERY))
@@ -396,7 +404,7 @@ bool Url::ParseQuery(const String& query)
 
 		key = Utility::UnescapeString(key);
 
-		std::map<String, std::vector<String> >::iterator it = m_Query.find(key);
+		auto it = m_Query.find(key);
 
 		if (it == m_Query.end()) {
 			m_Query[key] = std::vector<String>();
@@ -418,8 +426,8 @@ bool Url::ParseFragment(const String& fragment)
 
 bool Url::ValidateToken(const String& token, const String& symbols)
 {
-	BOOST_FOREACH (const char c, token.CStr()) {
-		if (symbols.FindFirstOf(c) == String::NPos)
+	for (const char ch : token) {
+		if (symbols.FindFirstOf(ch) == String::NPos)
 			return false;
 	}
 
