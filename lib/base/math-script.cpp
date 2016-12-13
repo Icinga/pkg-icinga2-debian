@@ -23,8 +23,6 @@
 #include "base/scriptframe.hpp"
 #include "base/initialize.hpp"
 #include <boost/math/special_functions/round.hpp>
-#include <boost/math/special_functions/fpclassify.hpp>
-#include <boost/foreach.hpp>
 #include <cmath>
 
 using namespace icinga;
@@ -84,7 +82,7 @@ static Value MathMax(const std::vector<Value>& args)
 	bool first = true;
 	Value result = -INFINITY;
 
-	BOOST_FOREACH(const Value& arg, args) {
+	for (const Value& arg : args) {
 		if (first || arg > result) {
 			first = false;
 			result = arg;
@@ -99,7 +97,7 @@ static Value MathMin(const std::vector<Value>& args)
 	bool first = true;
 	Value result = INFINITY;
 
-	BOOST_FOREACH(const Value& arg, args) {
+	for (const Value& arg : args) {
 		if (first || arg < result) {
 			first = false;
 			result = arg;
@@ -159,8 +157,7 @@ static double MathSign(double x)
 		return 0;
 }
 
-static void InitializeMathObj(void)
-{
+INITIALIZE_ONCE([]() {
 	Dictionary::Ptr mathObj = new Dictionary();
 
 	/* Constants */
@@ -197,7 +194,4 @@ static void InitializeMathObj(void)
 	mathObj->Set("sign", new Function("Math#sign", WrapFunction(MathSign), true));
 
 	ScriptGlobal::Set("Math", mathObj);
-}
-
-INITIALIZE_ONCE(InitializeMathObj);
-
+});

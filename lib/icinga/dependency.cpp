@@ -22,7 +22,6 @@
 #include "icinga/service.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 
@@ -87,15 +86,10 @@ void Dependency::OnAllConfigLoaded(void)
 	Host::Ptr childHost = Host::GetByName(GetChildHostName());
 
 	if (childHost) {
-		if (GetChildServiceName().IsEmpty()) {
-			Log(LogDebug, "Dependency")
-			    << "Dependency '" << GetName() << "' child host '" << GetChildHostName() << ".";
+		if (GetChildServiceName().IsEmpty())
 			m_Child = childHost;
-		} else {
-			Log(LogDebug, "Dependency")
-			    << "Dependency '" << GetName() << "' child host '" << GetChildHostName() << "' service '" << GetChildServiceName() << "' .";
+		else
 			m_Child = childHost->GetServiceByShortName(GetChildServiceName());
-		}
 	}
 	
 	if (!m_Child)
@@ -106,15 +100,10 @@ void Dependency::OnAllConfigLoaded(void)
 	Host::Ptr parentHost = Host::GetByName(GetParentHostName());
 
 	if (parentHost) {
-		if (GetParentServiceName().IsEmpty()) {
-			Log(LogDebug, "Dependency")
-			    << "Dependency '" << GetName() << "' parent host '" << GetParentHostName() << ".";
+		if (GetParentServiceName().IsEmpty())
 			m_Parent = parentHost;
-		} else {
-			Log(LogDebug, "Dependency")
-			    << "Dependency '" << GetName() << "' parent host '" << GetParentHostName() << "' service '" << GetParentServiceName() << "' .";
+		else
 			m_Parent = parentHost->GetServiceByShortName(GetParentServiceName());
-		}
 	}
 	
 	if (!m_Parent)

@@ -2,6 +2,23 @@
 
 #export DH_VERBOSE=1
 
+DEB_HOST_ARCH = $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+# disable unity builds for arches with low memory
+ifneq ($(findstring $(DEB_HOST_ARCH), armhf),)
+	UNITY_BUILD = -DICINGA2_UNITY_BUILD=Off
+endif
+
+ifneq ($(findstring $(DEB_HOST_ARCH), mips),)
+	UNITY_BUILD = -DICINGA2_UNITY_BUILD=Off
+endif
+
+ifneq ($(findstring $(DEB_HOST_ARCH), mipsel),)
+	UNITY_BUILD = -DICINGA2_UNITY_BUILD=Off
+endif
+
+
+
 %:
 	dh $@
 
@@ -26,7 +43,8 @@ override_dh_auto_configure:
 		-DICINGA2_COMMAND_GROUP=www-data \
 		-DICINGA2_GIT_VERSION_INFO=false \
 		-DICINGA2_PLUGINDIR=/usr/lib/nagios/plugins \
-		-DICINGA2_WITH_STUDIO=false
+		-DICINGA2_WITH_STUDIO=false \
+		$(UNITY_BUILD)
 
 override_dh_auto_install:
 	dh_auto_install

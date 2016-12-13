@@ -174,7 +174,7 @@ Dictionary::Ptr ApiActions::DelayNotification(const ConfigObject::Ptr& object,
 	if (!params->Contains("timestamp"))
 		return ApiActions::CreateResult(403, "A timestamp is required to delay notifications");
 
-	BOOST_FOREACH(const Notification::Ptr& notification, checkable->GetNotifications()) {
+	for (const Notification::Ptr& notification : checkable->GetNotifications()) {
 		notification->SetNextNotification(HttpUtility::GetLastParameter(params, "timestamp"));
 	}
 
@@ -275,7 +275,7 @@ Dictionary::Ptr ApiActions::RemoveComment(const ConfigObject::Ptr& object,
 	if (checkable) {
 		std::set<Comment::Ptr> comments = checkable->GetComments();
 
-		BOOST_FOREACH(const Comment::Ptr& comment, comments) {
+		for (const Comment::Ptr& comment : comments) {
 			Comment::RemoveComment(comment->GetName());
 		}
 
@@ -315,19 +315,65 @@ Dictionary::Ptr ApiActions::ScheduleDowntime(const ConfigObject::Ptr& object,
 	if (!fixed && !params->Contains("duration"))
 		return ApiActions::CreateResult(404, "Option 'duration' is required for flexible downtime");
 
-	String downtimeName = Downtime::AddDowntime(checkable,
-	    HttpUtility::GetLastParameter(params, "author"),
-	    HttpUtility::GetLastParameter(params, "comment"),
-	    HttpUtility::GetLastParameter(params, "start_time"),
-	    HttpUtility::GetLastParameter(params, "end_time"), fixed,
-	    HttpUtility::GetLastParameter(params, "trigger_name"),
-	    HttpUtility::GetLastParameter(params, "duration"));
+	double duration = 0.0;
+	if (params->Contains("duration"))
+		duration = HttpUtility::GetLastParameter(params, "duration");
+
+	String triggerName;
+	if (params->Contains("trigger_name"))
+		triggerName = HttpUtility::GetLastParameter(params, "trigger_name");
+
+	String author = HttpUtility::GetLastParameter(params, "author");
+	String comment = HttpUtility::GetLastParameter(params, "comment");
+	double startTime = HttpUtility::GetLastParameter(params, "start_time");
+	double endTime = HttpUtility::GetLastParameter(params, "end_time");
+
+	String downtimeName = Downtime::AddDowntime(checkable, author, comment, startTime, endTime,
+	    fixed, triggerName, duration);
 
 	Downtime::Ptr downtime = Downtime::GetByName(downtimeName);
 
 	Dictionary::Ptr additional = new Dictionary();
 	additional->Set("name", downtimeName);
 	additional->Set("legacy_id", downtime->GetLegacyId());
+
+	/* Schedule downtime for all child objects. */
+	int childOptions = 0;
+	if (params->Contains("child_options"))
+		childOptions = HttpUtility::GetLastParameter(params, "child_options");
+
+	if (childOptions > 0) {
+		/* '1' schedules child downtimes triggered by the parent downtime.
+		 * '2' schedules non-triggered downtimes for all children.
+		 */
+		if (childOptions == 1)
+			triggerName = downtimeName;
+
+		Array::Ptr childDowntimes = new Array();
+
+		Log(LogCritical, "ApiActions")
+		    << "Processing child options " << childOptions << " for downtime " << downtimeName;
+
+		for (const Checkable::Ptr& child : checkable->GetAllChildren()) {
+			Log(LogCritical, "ApiActions")
+			   << "Scheduling downtime for child object " << child->GetName();
+
+			String childDowntimeName = Downtime::AddDowntime(child, author, comment, startTime, endTime,
+			    fixed, triggerName, duration);
+
+			Log(LogCritical, "ApiActions")
+			    << "Add child downtime '" << childDowntimeName << "'.";
+
+			Downtime::Ptr childDowntime = Downtime::GetByName(childDowntimeName);
+
+			Dictionary::Ptr additionalChild = new Dictionary();
+			additionalChild->Set("name", childDowntimeName);
+			additionalChild->Set("legacy_id", childDowntime->GetLegacyId());
+			childDowntimes->Add(additionalChild);
+		}
+
+		additional->Set("child_downtimes", childDowntimes);
+	}
 
 	return ApiActions::CreateResult(200, "Successfully scheduled downtime '" +
 	     downtimeName + "' for object '" + checkable->GetName() + "'.", additional);
@@ -341,7 +387,7 @@ Dictionary::Ptr ApiActions::RemoveDowntime(const ConfigObject::Ptr& object,
 	if (checkable) {
 		std::set<Downtime::Ptr> downtimes = checkable->GetDowntimes();
 
-		BOOST_FOREACH(const Downtime::Ptr& downtime, downtimes) {
+		for (const Downtime::Ptr& downtime : downtimes) {
 			Downtime::RemoveDowntime(downtime->GetName(), true);
 		}
 

@@ -28,11 +28,10 @@
 #include "base/utility.hpp"
 #include "base/process.hpp"
 #include "base/convert.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
-REGISTER_SCRIPTFUNCTION_NS_DEPRECATED(Internal, PluginEvent, &PluginEventTask::ScriptFunc);
+REGISTER_SCRIPTFUNCTION_NS(Internal, PluginEvent, &PluginEventTask::ScriptFunc);
 
 void PluginEventTask::ScriptFunc(const Checkable::Ptr& checkable,
     const Dictionary::Ptr& resolvedMacros, bool useResolvedMacros)

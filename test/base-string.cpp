@@ -18,8 +18,7 @@
  ******************************************************************************/
 
 #include "base/string.hpp"
-#include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
+#include <BoostTestTargetConfig.h>
 
 using namespace icinga;
 
@@ -106,7 +105,7 @@ BOOST_AUTO_TEST_CASE(index)
 	s[0] = 'x';
 	BOOST_CHECK(s == "xello");
 
-	BOOST_FOREACH(char& ch, s) {
+	for (char& ch : s) {
 		ch = 'y';
 	}
 	BOOST_CHECK(s == "yyyyy");

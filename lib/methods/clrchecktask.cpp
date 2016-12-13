@@ -29,7 +29,6 @@
 #include "base/process.hpp"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/foreach.hpp>
 #include <boost/thread/once.hpp>
 #include <objbase.h>
 #include <mscoree.h>
@@ -39,7 +38,7 @@
 
 using namespace icinga;
 
-REGISTER_SCRIPTFUNCTION_NS_DEPRECATED(Internal, ClrCheck,  &ClrCheckTask::ScriptFunc);
+REGISTER_SCRIPTFUNCTION_NS(Internal, ClrCheck,  &ClrCheckTask::ScriptFunc);
 
 static boost::once_flag l_OnceFlag = BOOST_ONCE_INIT;
 
@@ -91,7 +90,7 @@ static variant_t InvokeClrMethod(const variant_t& vtObject, const String& method
 	CoCreateInstance(clsid, NULL, CLSCTX_ALL, __uuidof(mscorlib::IDictionary), (void **)&pHashtable);
 
 	ObjectLock olock(args);
-	BOOST_FOREACH(const Dictionary::Pair& kv, args) {
+	for (const Dictionary::Pair& kv : args) {
 		String value = kv.second;
 		pHashtable->Add(kv.first.CStr(), value.CStr());
 	}
@@ -168,7 +167,7 @@ void ClrCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult
 
 	if (env) {
 		ObjectLock olock(env);
-		BOOST_FOREACH(const Dictionary::Pair& kv, env) {
+		for (const Dictionary::Pair& kv : env) {
 			String name = kv.second;
 
 			Value value = MacroProcessor::ResolveMacros(name, resolvers, checkable->GetLastCheckResult(),
@@ -183,7 +182,7 @@ void ClrCheckTask::ScriptFunc(const Checkable::Ptr& checkable, const CheckResult
 	{
 		boost::mutex::scoped_lock lock(l_ObjectsMutex);
 
-		std::map<Checkable::Ptr, variant_t>::iterator it = l_Objects.find(checkable);
+		auto it = l_Objects.find(checkable);
 
 		if (it != l_Objects.end()) {
 			vtObject = it->second;

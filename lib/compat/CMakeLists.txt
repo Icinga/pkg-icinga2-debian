@@ -27,7 +27,7 @@ set(compat_SOURCES
 )
 
 if(ICINGA2_UNITY_BUILD)
-    mkunity_target(compat compat_SOURCES)
+    mkunity_target(compat compat compat_SOURCES)
 endif()
 
 add_library(compat SHARED ${compat_SOURCES})
@@ -39,6 +39,7 @@ set_target_properties (
   INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
   DEFINE_SYMBOL I2_COMPAT_BUILD
   FOLDER Components
+  VERSION ${SPEC_VERSION}
 )
 
 install_if_not_exists(

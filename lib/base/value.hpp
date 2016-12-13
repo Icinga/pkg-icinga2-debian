@@ -91,13 +91,26 @@ public:
 		: m_Value(value)
 	{ }
 
+	inline Value(String&& value)
+		: m_Value(value)
+	{ }
+
 	inline Value(const char *value)
 		: m_Value(String(value))
 	{ }
 
-	inline Value(const Value& other)
+	Value(const Value& other)
 		: m_Value(other.m_Value)
 	{ }
+
+	Value(Value&& other)
+	{
+#if BOOST_VERSION >= 105400
+		m_Value = std::move(other.m_Value);
+#else /* BOOST_VERSION */
+		m_Value.swap(other.m_Value);
+#endif /* BOOST_VERSION */
+	}
 
 	inline Value(Object *value)
 	{
@@ -121,7 +134,22 @@ public:
 	operator double(void) const;
 	operator String(void) const;
 
-	Value& operator=(const Value& other);
+	Value& operator=(const Value& other)
+	{
+		m_Value = other.m_Value;
+		return *this;
+	}
+
+	Value& operator=(Value&& other)
+	{
+#if BOOST_VERSION >= 105400
+		m_Value = std::move(other.m_Value);
+#else /* BOOST_VERSION */
+		m_Value.swap(other.m_Value);
+#endif /* BOOST_VERSION */
+
+		return *this;
+	}
 
 	bool operator==(bool rhs) const;
 	bool operator!=(bool rhs) const;
@@ -228,7 +256,7 @@ public:
 		if (!IsObject())
 			return false;
 
-		return (dynamic_pointer_cast<T>(boost::get<Object::Ptr>(m_Value)) != NULL);
+		return (dynamic_cast<T *>(boost::get<Object::Ptr>(m_Value).get()) != NULL);
 	}
 
 	/**
@@ -236,9 +264,14 @@ public:
 	*
 	* @returns The type.
 	*/
-	ValueType GetType(void) const
+	inline ValueType GetType(void) const
 	{
 		return static_cast<ValueType>(m_Value.which());
+	}
+
+	inline void Swap(Value& other)
+	{
+		m_Value.swap(other.m_Value);
 	}
 
 	String GetTypeName(void) const;
@@ -247,14 +280,14 @@ public:
 	
 	Value Clone(void) const;
 
-private:
-	boost::variant<boost::blank, double, bool, String, Object::Ptr> m_Value;
-
 	template<typename T>
 	const T& Get(void) const
 	{
 		return boost::get<T>(m_Value);
 	}
+
+private:
+	boost::variant<boost::blank, double, bool, String, Object::Ptr> m_Value;
 };
 
 extern I2_BASE_API Value Empty;

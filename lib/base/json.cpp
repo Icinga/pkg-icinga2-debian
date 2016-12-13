@@ -23,7 +23,6 @@
 #include "base/array.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
-#include <boost/foreach.hpp>
 #include <boost/exception_ptr.hpp>
 #include <yajl/yajl_version.h>
 #include <yajl/yajl_gen.h>
@@ -45,7 +44,7 @@ static void EncodeDictionary(yajl_gen handle, const Dictionary::Ptr& dict)
 	yajl_gen_map_open(handle);
 
 	ObjectLock olock(dict);
-	BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+	for (const Dictionary::Pair& kv : dict) {
 		yajl_gen_string(handle, reinterpret_cast<const unsigned char *>(kv.first.CStr()), kv.first.GetLength());
 		Encode(handle, kv.second);
 	}
@@ -58,7 +57,7 @@ static void EncodeArray(yajl_gen handle, const Array::Ptr& arr)
 	yajl_gen_array_open(handle);
 
 	ObjectLock olock(arr);
-	BOOST_FOREACH(const Value& value, arr) {
+	for (const Value& value : arr) {
 		Encode(handle, value);
 	}
 
@@ -67,11 +66,9 @@ static void EncodeArray(yajl_gen handle, const Array::Ptr& arr)
 
 static void Encode(yajl_gen handle, const Value& value)
 {
-	String str;
-
 	switch (value.GetType()) {
 		case ValueNumber:
-			if (yajl_gen_double(handle, static_cast<double>(value)) == yajl_gen_invalid_number)
+			if (yajl_gen_double(handle, value.Get<double>()) == yajl_gen_invalid_number)
 				yajl_gen_double(handle, 0);
 
 			break;
@@ -80,8 +77,7 @@ static void Encode(yajl_gen handle, const Value& value)
 
 			break;
 		case ValueString:
-			str = value;
-			yajl_gen_string(handle, reinterpret_cast<const unsigned char *>(str.CStr()), str.GetLength());
+			yajl_gen_string(handle, reinterpret_cast<const unsigned char *>(value.Get<String>().CStr()), value.Get<String>().GetLength());
 
 			break;
 		case ValueObject:

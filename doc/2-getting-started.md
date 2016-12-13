@@ -12,8 +12,8 @@ and distribution you are running.
 
   Distribution            | Repository
   ------------------------|---------------------------
-  Debian                  | [debmon](https://debmon.org/packages/debmon-jessie/icinga2), [Icinga Repository](http://packages.icinga.org/debian/)
-  Ubuntu                  | [Icinga PPA](https://launchpad.net/~formorer/+archive/ubuntu/icinga), [Icinga Repository](http://packages.icinga.org/ubuntu/)
+  Debian                  | [Icinga Repository](http://packages.icinga.org/debian/), [debmon](https://debmon.org/packages/debmon-jessie/icinga2)
+  Ubuntu                  | [Icinga Repository](http://packages.icinga.org/ubuntu/), [Icinga PPA](https://launchpad.net/~formorer/+archive/ubuntu/icinga)
   RHEL/CentOS             | [Icinga Repository](http://packages.icinga.org/epel/)
   openSUSE                | [Icinga Repository](http://packages.icinga.org/openSUSE/), [Server Monitoring Repository](https://build.opensuse.org/package/show/server:monitoring/icinga2)
   SLES                    | [Icinga Repository](http://packages.icinga.org/SUSE/)
@@ -52,17 +52,17 @@ RHEL/CentOS 5:
 
     rpm -i http://packages.icinga.org/epel/5/release/noarch/icinga-rpm-release-5-1.el5.centos.noarch.rpm
 
+Fedora 25:
+
+    dnf install https://packages.icinga.org/fedora/25/release/noarch/icinga-rpm-release-25-1.fc25.noarch.rpm
+
+Fedora 24:
+
+    dnf install https://packages.icinga.org/fedora/24/release/noarch/icinga-rpm-release-24-1.fc24.noarch.rpm
+
 Fedora 23:
 
     dnf install https://packages.icinga.org/fedora/23/release/noarch/icinga-rpm-release-23-1.fc23.noarch.rpm
-
-Fedora 22:
-
-    dnf install https://packages.icinga.org/fedora/22/release/noarch/icinga-rpm-release-22-1.fc22.noarch.rpm
-
-Fedora 21:
-
-    yum install http://packages.icinga.org/fedora/21/release/noarch/icinga-rpm-release-21-1.fc21.noarch.rpm
 
 SLES 11:
 
@@ -140,7 +140,7 @@ You can verify that by calling `icinga2 feature list`
 enabled and disabled.
 
     # icinga2 feature list
-    Disabled features: api command compatlog debuglog graphite icingastatus ido-mysql ido-pgsql livestatus notification perfdata statusdata syslog
+    Disabled features: api command compatlog debuglog gelf graphite icingastatus ido-mysql ido-pgsql influxdb livestatus opentsdb perfdata statusdata syslog
     Enabled features: checker mainlog notification
 
 
@@ -148,19 +148,21 @@ enabled and disabled.
 
 By default Icinga 2 uses the following files and directories:
 
-  Path                                | Description
-  ------------------------------------|------------------------------------
-  /etc/icinga2                        | Contains Icinga 2 configuration files.
-  /etc/init.d/icinga2                 | The Icinga 2 init script.
-  /usr/sbin/icinga2                   | The Icinga 2 binary.
-  /usr/share/doc/icinga2              | Documentation files that come with Icinga 2.
-  /usr/share/icinga2/include          | The Icinga Template Library and plugin command configuration.
-  /var/run/icinga2                    | PID file.
-  /var/run/icinga2/cmd                | Command pipe and Livestatus socket.
-  /var/cache/icinga2                  | status.dat/objects.cache, icinga2.debug files
-  /var/spool/icinga2                  | Used for performance data spool files.
-  /var/lib/icinga2                    | Icinga 2 state file, cluster log, local CA and configuration files.
-  /var/log/icinga2                    | Log file location and compat/ directory for the CompatLogger feature.
+  Path                                		| Description
+  ----------------------------------------------|------------------------------------
+  /etc/icinga2                        		| Contains Icinga 2 configuration files.
+  /usr/lib/systemd/system/icinga2.service 	| The Icinga 2 Systemd service file on systems using Systemd.
+  /etc/init.d/icinga2                 		| The Icinga 2 init script on systems using SysVinit.
+  /usr/sbin/icinga2                   		| Shell wrapper for the Icinga 2 binary.
+  /usr/lib\*/icinga2				| Libraries and the Icinga 2 binary (use `find /usr -type f -name icinga2` to locate the binary path).
+  /usr/share/doc/icinga2              		| Documentation files that come with Icinga 2.
+  /usr/share/icinga2/include          		| The Icinga Template Library and plugin command configuration.
+  /var/run/icinga2                    		| PID file.
+  /var/run/icinga2/cmd                		| Command pipe and Livestatus socket.
+  /var/cache/icinga2                  		| status.dat/objects.cache, icinga2.debug files
+  /var/spool/icinga2                  		| Used for performance data spool files.
+  /var/lib/icinga2                    		| Icinga 2 state file, cluster log, local CA and configuration files (cluster, api).
+  /var/log/icinga2                    		| Log file location and compat/ directory for the CompatLogger feature.
 
 FreeBSD uses slightly different paths:
 
@@ -170,14 +172,15 @@ By default Icinga 2 uses the following files and directories:
   ------------------------------------|------------------------------------
   /usr/local/etc/icinga2              | Contains Icinga 2 configuration files.
   /usr/local/etc/rc.d/icinga2         | The Icinga 2 init script.
-  /usr/local/sbin/icinga2             | The Icinga 2 binary.
+  /usr/local/sbin/icinga2             | Shell wrapper for the Icinga 2 binary.
+  /usr/local/lib/icinga2              | Libraries and the Icinga 2 binary.
   /usr/local/share/doc/icinga2        | Documentation files that come with Icinga 2.
   /usr/local/share/icinga2/include    | The Icinga Template Library and plugin command configuration.
   /var/run/icinga2                    | PID file.
   /var/run/icinga2/cmd                | Command pipe and Livestatus socket.
   /var/cache/icinga2                  | status.dat/objects.cache, icinga2.debug files
   /var/spool/icinga2                  | Used for performance data spool files.
-  /var/lib/icinga2                    | Icinga 2 state file, cluster log, local CA and configuration files.
+  /var/lib/icinga2                    | Icinga 2 state file, cluster log, local CA and configuration files (cluster, api).
   /var/log/icinga2                    | Log file location and compat/ directory for the CompatLogger feature.
 
 ## <a id="setting-up-check-plugins"></a> Setting up Check Plugins

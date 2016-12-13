@@ -25,7 +25,6 @@
 #include "base/configwriter.hpp"
 #include "base/convert.hpp"
 #include "base/exception.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -58,6 +57,19 @@ void Array::Set(unsigned int index, const Value& value)
 }
 
 /**
+ * Sets a value in the array.
+ *
+ * @param index The index.
+ * @param value The value.
+ */
+void Array::Set(unsigned int index, Value&& value)
+{
+	ObjectLock olock(this);
+
+	m_Data.at(index).Swap(value);
+}
+
+/**
  * Adds a value to the array.
  *
  * @param value The value.
@@ -67,6 +79,18 @@ void Array::Add(const Value& value)
 	ObjectLock olock(this);
 
 	m_Data.push_back(value);
+}
+
+/**
+ * Adds a value to the array.
+ *
+ * @param value The value.
+ */
+void Array::Add(Value&& value)
+{
+	ObjectLock olock(this);
+
+	m_Data.push_back(std::move(value));
 }
 
 /**
@@ -185,7 +209,7 @@ Object::Ptr Array::Clone(void) const
 	Array::Ptr arr = new Array();
 	
 	ObjectLock olock(this);
-	BOOST_FOREACH(const Value& val, m_Data) {
+	for (const Value& val : m_Data) {
 		arr->Add(val.Clone());
 	}
 	
@@ -229,7 +253,7 @@ Value Array::GetFieldByName(const String& field, bool sandboxed, const DebugInfo
 
 	ObjectLock olock(this);
 
-	if (index < 0 || index >= GetLength())
+	if (index < 0 || static_cast<size_t>(index) >= GetLength())
 		BOOST_THROW_EXCEPTION(ScriptError("Array index '" + Convert::ToString(index) + "' is out of bounds.", debugInfo));
 
 	return Get(index);
@@ -240,7 +264,12 @@ void Array::SetFieldByName(const String& field, const Value& value, const DebugI
 	ObjectLock olock(this);
 
 	int index = Convert::ToLong(field);
-	if (index >= GetLength())
+
+	if (index < 0)
+		BOOST_THROW_EXCEPTION(ScriptError("Array index '" + Convert::ToString(index) + "' is out of bounds.", debugInfo));
+
+	if (static_cast<size_t>(index) >= GetLength())
 		Resize(index + 1);
+
 	Set(index, value);
 }

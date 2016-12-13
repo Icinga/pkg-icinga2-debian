@@ -23,7 +23,6 @@
 #include "base/application.hpp"
 #include "base/objectlock.hpp"
 #include "base/json.hpp"
-#include <boost/foreach.hpp>
 #include <iostream>
 #include <fstream>
 
@@ -83,6 +82,11 @@ String BlackAndWhitelistCommand::GetShortDescription(void) const
 		description += "s";
 
 	return description;
+}
+
+bool BlackAndWhitelistCommand::IsDeprecated(void) const
+{
+	return true;
 }
 
 void BlackAndWhitelistCommand::InitParameters(boost::program_options::options_description& visibleDesc,

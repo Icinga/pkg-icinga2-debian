@@ -38,7 +38,7 @@ class I2_REMOTE_API EventQueue : public Object
 public:
 	DECLARE_PTR_TYPEDEFS(EventQueue);
 
-	EventQueue(void);
+	EventQueue(const String& name);
 	~EventQueue(void);
 
 	bool CanProcessEvent(const String& type) const;
@@ -59,12 +59,13 @@ public:
 	static void Unregister(const String& name);
 
 private:
+	String m_Name;
+
 	mutable boost::mutex m_Mutex;
 	boost::condition_variable m_CV;
 
 	std::set<String> m_Types;
 	Expression *m_Filter;
-	double m_Ttl;
 
 	std::map<void *, std::deque<Dictionary::Ptr> > m_Events;
 };

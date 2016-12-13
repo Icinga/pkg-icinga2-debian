@@ -47,12 +47,11 @@ public:
 	virtual int Run(const boost::program_options::variables_map& vm, const std::vector<std::string>& ap) const override;
 
 	static int RunScriptConsole(ScriptFrame& scriptFrame, const String& addr = String(),
-	    const String& session = String(), const String& commandOnce = String());
+	    const String& session = String(), const String& commandOnce = String(), bool syntaxOnly = false);
 
 private:
 	mutable boost::mutex m_Mutex;
 	mutable boost::condition_variable m_CV;
-	mutable bool m_CommandReady;
 
 	static void ExecuteScriptCompletionHandler(boost::mutex& mutex, boost::condition_variable& cv,
 	    bool& ready, boost::exception_ptr eptr, const Value& result, Value& resultOut,
