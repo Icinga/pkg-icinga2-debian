@@ -28,7 +28,6 @@
 #include "base/utility.hpp"
 #include "base/debug.hpp"
 #include "base/json.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -56,7 +55,7 @@ void Host::OnAllConfigLoaded(void)
 
 		ObjectLock olock(groups);
 
-		BOOST_FOREACH(const String& name, groups) {
+		for (const String& name : groups) {
 			HostGroup::Ptr hg = HostGroup::GetByName(name);
 
 			if (hg)
@@ -67,16 +66,16 @@ void Host::OnAllConfigLoaded(void)
 
 void Host::CreateChildObjects(const Type::Ptr& childType)
 {
-	if (childType->GetName() == "ScheduledDowntime")
+	if (childType == ScheduledDowntime::TypeInstance)
 		ScheduledDowntime::EvaluateApplyRules(this);
 
-	if (childType->GetName() == "Notification")
+	if (childType == Notification::TypeInstance)
 		Notification::EvaluateApplyRules(this);
 
-	if (childType->GetName() == "Dependency")
+	if (childType == Dependency::TypeInstance)
 		Dependency::EvaluateApplyRules(this);
 
-	if (childType->GetName() == "Service")
+	if (childType == Service::TypeInstance)
 		Service::EvaluateApplyRules(this);
 }
 
@@ -89,7 +88,7 @@ void Host::Stop(bool runtimeRemoved)
 	if (groups) {
 		ObjectLock olock(groups);
 
-		BOOST_FOREACH(const String& name, groups) {
+		for (const String& name : groups) {
 			HostGroup::Ptr hg = HostGroup::GetByName(name);
 
 			if (hg)
@@ -107,7 +106,7 @@ std::vector<Service::Ptr> Host::GetServices(void) const
 	std::vector<Service::Ptr> services;
 	services.reserve(m_Services.size());
 	typedef std::pair<String, Service::Ptr> ServicePair;
-	BOOST_FOREACH(const ServicePair& kv, m_Services) {
+	for (const ServicePair& kv : m_Services) {
 		services.push_back(kv.second);
 	}
 
@@ -139,7 +138,7 @@ Service::Ptr Host::GetServiceByShortName(const Value& name)
 		{
 			boost::mutex::scoped_lock lock(m_ServicesMutex);
 
-			std::map<String, Service::Ptr>::const_iterator it = m_Services.find(name);
+			auto it = m_Services.find(name);
 
 			if (it != m_Services.end())
 				return it->second;
@@ -274,7 +273,7 @@ bool Host::ResolveMacro(const String& macro, const CheckResult::Ptr&, Value *res
 			else if (macro == "num_services_critical")
 				filter = ServiceCritical;
 
-			BOOST_FOREACH(const Service::Ptr& service, GetServices()) {
+			for (const Service::Ptr& service : GetServices()) {
 				if (filter != -1 && service->GetState() != filter)
 					continue;
 

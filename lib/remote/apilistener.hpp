@@ -55,8 +55,6 @@ public:
 	DECLARE_OBJECT(ApiListener);
 	DECLARE_OBJECTNAME(ApiListener);
 
-	static void StaticInitialize(void);
-	
 	static boost::signals2::signal<void(bool)> OnMasterChanged;
 
 	ApiListener(void);
@@ -106,6 +104,7 @@ protected:
 	virtual void OnConfigLoaded(void) override;
 	virtual void OnAllConfigLoaded(void) override;
 	virtual void Start(bool runtimeCreated) override;
+	virtual void Stop(bool runtimeDeleted) override;
 
 	virtual void ValidateTlsProtocolmin(const String& value, const ValidationUtils& utils) override;
 

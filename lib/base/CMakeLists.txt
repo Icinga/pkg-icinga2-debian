@@ -44,7 +44,7 @@ set(base_SOURCES
 set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/application-version.cpp PROPERTY EXCLUDE_UNITY_BUILD TRUE)
 
 if(ICINGA2_UNITY_BUILD)
-    mkunity_target(base base_SOURCES)
+    mkunity_target(base base base_SOURCES)
 endif()
 
 add_library(base SHARED ${base_SOURCES})
@@ -77,6 +77,7 @@ set_target_properties (
   INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
   DEFINE_SYMBOL I2_BASE_BUILD
   FOLDER Lib
+  VERSION ${SPEC_VERSION}
 )
 
 install(CODE "file(MAKE_DIRECTORY \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_LOCALSTATEDIR}/cache/icinga2\")")

@@ -71,7 +71,7 @@ String ConfigObjectUtility::CreateObjectConfig(const Type::Ptr& type, const Stri
 		attrs->CopyTo(allAttrs);
 
 		ObjectLock olock(attrs);
-		BOOST_FOREACH(const Dictionary::Pair& kv, attrs) {
+		for (const Dictionary::Pair& kv : attrs) {
 			int fid = type->GetFieldId(kv.first.SubStr(0, kv.first.FindFirstOf(".")));
 
 			if (fid < 0)
@@ -136,14 +136,14 @@ bool ConfigObjectUtility::CreateObject(const Type::Ptr& type, const String& full
 
 		if (!ConfigItem::CommitItems(ascope.GetContext(), upq, newItems) || !ConfigItem::ActivateItems(upq, newItems, true)) {
 			if (errors) {
-				if (unlink(path.CStr()) < 0) {
+				if (unlink(path.CStr()) < 0 && errno != ENOENT) {
 					BOOST_THROW_EXCEPTION(posix_error()
 					    << boost::errinfo_api_function("unlink")
 					    << boost::errinfo_errno(errno)
 					    << boost::errinfo_file_name(path));
 				}
 
-				BOOST_FOREACH(const boost::exception_ptr& ex, upq.GetExceptions()) {
+				for (const boost::exception_ptr& ex : upq.GetExceptions()) {
 					errors->Add(DiagnosticInformation(ex));
 				}
 			}
@@ -155,7 +155,7 @@ bool ConfigObjectUtility::CreateObject(const Type::Ptr& type, const String& full
 	} catch (const std::exception& ex) {
 		delete expr;
 
-		if (unlink(path.CStr()) < 0) {
+		if (unlink(path.CStr()) < 0 && errno != ENOENT) {
 			BOOST_THROW_EXCEPTION(posix_error()
 			    << boost::errinfo_api_function("unlink")
 			    << boost::errinfo_errno(errno)
@@ -183,7 +183,7 @@ bool ConfigObjectUtility::DeleteObjectHelper(const ConfigObject::Ptr& object, bo
 		return false;
 	}
 
-	BOOST_FOREACH(const Object::Ptr& pobj, parents) {
+	for (const Object::Ptr& pobj : parents) {
 		ConfigObject::Ptr parentObj = dynamic_pointer_cast<ConfigObject>(pobj);
 
 		if (!parentObj)
@@ -217,7 +217,7 @@ bool ConfigObjectUtility::DeleteObjectHelper(const ConfigObject::Ptr& object, bo
 	String path = GetObjectConfigPath(object->GetReflectionType(), object->GetName());
 
 	if (Utility::PathExists(path)) {
-		if (unlink(path.CStr()) < 0) {
+		if (unlink(path.CStr()) < 0 && errno != ENOENT) {
 			BOOST_THROW_EXCEPTION(posix_error()
 			    << boost::errinfo_api_function("unlink")
 			    << boost::errinfo_errno(errno)

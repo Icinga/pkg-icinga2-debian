@@ -20,7 +20,7 @@
 #include "base/loader.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
-#include <boost/foreach.hpp>
+#include "base/application.hpp"
 
 using namespace icinga;
 
@@ -35,9 +35,9 @@ void Loader::LoadExtensionLibrary(const String& library)
 #if defined(_WIN32)
 	path = library + ".dll";
 #elif defined(__APPLE__)
-	path = "lib" + library + ".dylib";
+	path = "lib" + library + "." + Application::GetAppSpecVersion() + ".dylib";
 #else /* __APPLE__ */
-	path = "lib" + library + ".so";
+	path = "lib" + library + ".so." + Application::GetAppSpecVersion();
 #endif /* _WIN32 */
 
 	Log(LogNotice, "Loader")

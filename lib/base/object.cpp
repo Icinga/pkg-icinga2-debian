@@ -25,7 +25,6 @@
 #include "base/timer.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
-#include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace icinga;
@@ -108,6 +107,22 @@ bool Object::HasOwnField(const String& field) const
 		return false;
 
 	return type->GetFieldId(field) != -1;
+}
+
+bool Object::GetOwnField(const String& field, Value *result) const
+{
+	Type::Ptr type = GetReflectionType();
+
+	if (!type)
+		return false;
+
+	int tid = type->GetFieldId(field);
+
+	if (tid == -1)
+		return false;
+
+	*result = GetField(tid);
+	return true;
 }
 
 Value Object::GetFieldByName(const String& field, bool sandboxed, const DebugInfo& debugInfo) const
@@ -227,7 +242,7 @@ static void TypeInfoTimerHandler(void)
 	boost::mutex::scoped_lock lock(l_ObjectCountLock);
 
 	typedef std::map<String, int>::value_type kv_pair;
-	BOOST_FOREACH(kv_pair& kv, l_ObjectCounts) {
+	for (kv_pair& kv : l_ObjectCounts) {
 		if (kv.second == 0)
 			continue;
 
@@ -238,14 +253,11 @@ static void TypeInfoTimerHandler(void)
 	}
 }
 
-static void StartTypeInfoTimer(void)
-{
+INITIALIZE_ONCE([]() {
 	l_ObjectCountTimer = new Timer();
 	l_ObjectCountTimer->SetInterval(10);
 	l_ObjectCountTimer->OnTimerExpired.connect(boost::bind(TypeInfoTimerHandler));
 	l_ObjectCountTimer->Start();
-}
-
-INITIALIZE_ONCE(StartTypeInfoTimer);
+});
 #endif /* I2_LEAK_DEBUG */
 

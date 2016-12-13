@@ -79,10 +79,13 @@ public:
 
 	static Arguments PrepareCommand(const Value& command);
 
-	static void StaticInitialize(void);
 	static void ThreadInitialize(void);
 
 	static String PrettyPrintArguments(const Arguments& arguments);
+
+#ifndef _WIN32
+	static void InitializeSpawnHelper(void);
+#endif /* _WIN32 */
 
 private:
 	Arguments m_Arguments;

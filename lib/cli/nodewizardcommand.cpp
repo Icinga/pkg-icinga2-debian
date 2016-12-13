@@ -28,7 +28,6 @@
 #include "base/tlsutility.hpp"
 #include "base/scriptglobal.hpp"
 #include "base/exception.hpp"
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -122,7 +121,7 @@ int NodeWizardCommand::Run(const boost::program_options::variables_map& vm,
 
 		/* CN */
 		std::cout << ConsoleColorTag(Console_Bold)
-		    << "Please specifiy the common name (CN)"
+		    << "Please specify the common name (CN)"
 		    << ConsoleColorTag(Console_Normal)
 		    << " [" << Utility::GetFQDN() << "]: ";
 
@@ -464,7 +463,7 @@ wizard_ticket:
 
 		/* CN */
 		std::cout << ConsoleColorTag(Console_Bold)
-		    << "Please specifiy the common name" << ConsoleColorTag(Console_Normal)
+		    << "Please specify the common name" << ConsoleColorTag(Console_Normal)
 		    << " (CN) [" << Utility::GetFQDN() << "]: ";
 
 		std::getline(std::cin, answer);

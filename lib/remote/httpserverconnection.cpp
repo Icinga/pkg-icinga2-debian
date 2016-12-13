@@ -37,7 +37,7 @@ static boost::once_flag l_HttpServerConnectionOnceFlag = BOOST_ONCE_INIT;
 static Timer::Ptr l_HttpServerConnectionTimeoutTimer;
 
 HttpServerConnection::HttpServerConnection(const String& identity, bool authenticated, const TlsStream::Ptr& stream)
-	: m_Stream(stream), m_CurrentRequest(stream), m_Seen(Utility::GetTime()), m_PendingRequests(0)
+	: m_Stream(stream), m_Seen(Utility::GetTime()), m_CurrentRequest(stream), m_PendingRequests(0)
 {
 	boost::call_once(l_HttpServerConnectionOnceFlag, &HttpServerConnection::StaticInitialize);
 
@@ -239,7 +239,7 @@ void HttpServerConnection::TimeoutTimerHandler(void)
 {
 	ApiListener::Ptr listener = ApiListener::GetInstance();
 
-	BOOST_FOREACH(const HttpServerConnection::Ptr& client, listener->GetHttpClients()) {
+	for (const HttpServerConnection::Ptr& client : listener->GetHttpClients()) {
 		client->CheckLiveness();
 	}
 }

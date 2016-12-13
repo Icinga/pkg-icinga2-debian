@@ -24,7 +24,6 @@
 #include "base/convert.hpp"
 #include "base/utility.hpp"
 #include "base/objectlock.hpp"
-#include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace icinga;
@@ -93,12 +92,6 @@ std::istream& icinga::operator>>(std::istream& stream, Value& value)
 	stream >> tstr;
 	value = tstr;
 	return stream;
-}
-
-Value& Value::operator=(const Value& other)
-{
-	m_Value = other.m_Value;
-	return *this;
 }
 
 bool Value::operator==(bool rhs) const
@@ -297,10 +290,10 @@ Value icinga::operator-(const Value& lhs, const Value& rhs)
 		Array::Ptr right = rhs;
 
 		ObjectLock olock(left);
-		BOOST_FOREACH(const Value& lv, left) {
+		for (const Value& lv : left) {
 			bool found = false;
 			ObjectLock xlock(right);
-			BOOST_FOREACH(const Value& rv, right) {
+			for (const Value& rv : right) {
 				if (lv == rv) {
 					found = true;
 					break;
