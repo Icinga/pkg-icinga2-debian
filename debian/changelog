@@ -1,4 +1,4 @@
-icinga2 (2.6.0-1~ppa1~yakkety2) yakkety; urgency=medium
+icinga2 (2.6.0-1~ppa1~xenial2) xenial; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
