@@ -32,7 +32,7 @@ set(cli_SOURCES
 )
 
 if(ICINGA2_UNITY_BUILD)
-    mkunity_target(cli cli_SOURCES)
+    mkunity_target(cli cli cli_SOURCES)
 endif()
 
 add_library(cli SHARED ${cli_SOURCES})
@@ -54,6 +54,7 @@ set_target_properties (
   INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
   DEFINE_SYMBOL I2_CLI_BUILD
   FOLDER Lib
+  VERSION ${SPEC_VERSION}
 )
 
 install(

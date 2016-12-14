@@ -131,13 +131,11 @@ BOOL ParseArguments(CONST INT ac, WCHAR **av, po::variables_map& vm, printInfoSt
 	}
 
 	if (vm.count("fmt-countertype")) {
-		if (vm["fmt-countertype"].as<std::wstring>().compare(L"double"))
-			printInfo.dwRequestedType = PDH_FMT_DOUBLE;
-		else if (vm["fmt-countertype"].as<std::wstring>().compare(L"int64"))
+		if (!vm["fmt-countertype"].as<std::wstring>().compare(L"int64"))
 			printInfo.dwRequestedType = PDH_FMT_LARGE;
-		else if (vm["fmt-countertype"].as<std::wstring>().compare(L"long"))
+		else if (!vm["fmt-countertype"].as<std::wstring>().compare(L"long"))
 			printInfo.dwRequestedType = PDH_FMT_LONG;
-		else {
+		else if (vm["fmt-countertype"].as<std::wstring>().compare(L"double")) {
 			std::wcout << "Unknown value type " << vm["fmt-countertype"].as<std::wstring>() << '\n';
 			return FALSE;
 		}
@@ -341,10 +339,13 @@ BOOL QueryPerfData(printInfoStruct& pI)
 	{
 	case (PDH_FMT_LONG):
 		pI.dValue = pDisplayValues[0].FmtValue.longValue;
-	case (PDH_FMT_LARGE) :
+		break;
+	case (PDH_FMT_LARGE):
 		pI.dValue = pDisplayValues[0].FmtValue.largeValue;
+		break;
 	default:
 		pI.dValue = pDisplayValues[0].FmtValue.doubleValue;
+		break;
 	}
 
 	delete[]pDisplayValues;
@@ -360,9 +361,8 @@ die:
 INT PrintOutput(CONST po::variables_map& vm, printInfoStruct& pi)
 {
 	std::wstringstream wssPerfData;
-	wssPerfData << "perfmon=" << pi.dValue << ';'
-		<< pi.tWarn.pString() << ';' << pi.tCrit.pString() << ";; "
-		<< '"' << pi.wsFullPath << "\"=" << pi.dValue;
+	wssPerfData << "\"" << pi.wsFullPath << "\"=" << pi.dValue << ';'
+		<< pi.tWarn.pString() << ';' << pi.tCrit.pString() << ";;";
 
 	if (pi.tCrit.rend(pi.dValue)) {
 		std::wcout << "PERFMON CRITICAL \"" << pi.wsFullPath << "\" = "

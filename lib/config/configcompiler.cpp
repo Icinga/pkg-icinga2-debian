@@ -25,7 +25,6 @@
 #include "base/context.hpp"
 #include "base/exception.hpp"
 #include <fstream>
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -144,7 +143,7 @@ Expression *ConfigCompiler::HandleInclude(const String& relativeBase, const Stri
 	String includePath = upath;
 
 	if (search) {
-		BOOST_FOREACH(const String& dir, m_IncludeSearchDirs) {
+		for (const String& dir : m_IncludeSearchDirs) {
 			String spath = dir + "/" + path;
 
 			if (Utility::PathExists(spath)) {
@@ -316,7 +315,7 @@ void ConfigCompiler::AddIncludeSearchDir(const String& dir)
 std::vector<ZoneFragment> ConfigCompiler::GetZoneDirs(const String& zone)
 {
 	boost::mutex::scoped_lock lock(m_ZoneDirsMutex);
-	std::map<String, std::vector<ZoneFragment> >::const_iterator it = m_ZoneDirs.find(zone);
+	auto it = m_ZoneDirs.find(zone);
 	if (it == m_ZoneDirs.end())
 		return std::vector<ZoneFragment>();
 	else
@@ -341,7 +340,7 @@ bool ConfigCompiler::HasZoneConfigAuthority(const String& zoneName)
 
 	if (!empty) {
 		std::vector<String> paths;
-		BOOST_FOREACH(const ZoneFragment& zf, zoneDirs) {
+		for (const ZoneFragment& zf : zoneDirs) {
 			paths.push_back(zf.Path);
 		}
 

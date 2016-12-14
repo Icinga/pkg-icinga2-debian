@@ -22,7 +22,6 @@
 #include "base/debug.hpp"
 #include "base/primitivetype.hpp"
 #include "base/configwriter.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -38,7 +37,7 @@ Value Dictionary::Get(const String& key) const
 {
 	ObjectLock olock(this);
 
-	std::map<String, Value>::const_iterator it = m_Data.find(key);
+	auto it = m_Data.find(key);
 
 	if (it == m_Data.end())
 		return Empty;
@@ -57,7 +56,7 @@ bool Dictionary::Get(const String& key, Value *result) const
 {
 	ObjectLock olock(this);
 
-	std::map<String, Value>::const_iterator it = m_Data.find(key);
+	auto it = m_Data.find(key);
 
 	if (it == m_Data.end())
 		return false;
@@ -79,6 +78,18 @@ void Dictionary::Set(const String& key, const Value& value)
 	m_Data[key] = value;
 }
 
+/**
+ * Sets a value in the dictionary.
+ *
+ * @param key The key.
+ * @param value The value.
+ */
+void Dictionary::Set(const String& key, Value&& value)
+{
+	ObjectLock olock(this);
+
+	m_Data[key] = std::move(value);
+}
 
 /**
  * Returns the number of elements in the dictionary.
@@ -137,7 +148,7 @@ void Dictionary::CopyTo(const Dictionary::Ptr& dest) const
 {
 	ObjectLock olock(this);
 
-	BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
+	for (const Dictionary::Pair& kv : m_Data) {
 		dest->Set(kv.first, kv.second);
 	}
 }
@@ -165,7 +176,7 @@ Object::Ptr Dictionary::Clone(void) const
 	Dictionary::Ptr dict = new Dictionary();
 
 	ObjectLock olock(this);
-	BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
+	for (const Dictionary::Pair& kv : m_Data) {
 		dict->Set(kv.first, kv.second.Clone());
 	}
 
@@ -184,7 +195,7 @@ std::vector<String> Dictionary::GetKeys(void) const
 
 	std::vector<String> keys;
 
-	BOOST_FOREACH(const Dictionary::Pair& kv, m_Data) {
+	for (const Dictionary::Pair& kv : m_Data) {
 		keys.push_back(kv.first);
 	}
 
@@ -198,7 +209,7 @@ String Dictionary::ToString(void) const
 	return msgbuf.str();
 }
 
-Value Dictionary::GetFieldByName(const String& field, bool sandboxed, const DebugInfo& debugInfo) const
+Value Dictionary::GetFieldByName(const String& field, bool, const DebugInfo& debugInfo) const
 {
 	Value value;
 
@@ -208,7 +219,7 @@ Value Dictionary::GetFieldByName(const String& field, bool sandboxed, const Debu
 		return GetPrototypeField(const_cast<Dictionary *>(this), field, false, debugInfo);
 }
 
-void Dictionary::SetFieldByName(const String& field, const Value& value, const DebugInfo& debugInfo)
+void Dictionary::SetFieldByName(const String& field, const Value& value, const DebugInfo&)
 {
 	Set(field, value);
 }
@@ -216,4 +227,9 @@ void Dictionary::SetFieldByName(const String& field, const Value& value, const D
 bool Dictionary::HasOwnField(const String& field) const
 {
 	return Contains(field);
+}
+
+bool Dictionary::GetOwnField(const String& field, Value *result) const
+{
+	return Get(field, result);
 }

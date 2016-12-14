@@ -28,7 +28,6 @@
 #include "base/exception.hpp"
 #include "base/scriptglobal.hpp"
 #include "base/loader.hpp"
-#include <boost/foreach.hpp>
 #include <boost/exception_ptr.hpp>
 #include <boost/exception/errinfo_nested_exception.hpp>
 
@@ -122,8 +121,8 @@ ExpressionResult VariableExpression::DoEvaluate(ScriptFrame& frame, DebugHint *d
 
 	if (frame.Locals && frame.Locals->Get(m_Variable, &value))
 		return value;
-	else if (frame.Self.IsObject() && frame.Locals != static_cast<Object::Ptr>(frame.Self) && static_cast<Object::Ptr>(frame.Self)->HasOwnField(m_Variable))
-		return VMOps::GetField(frame.Self, m_Variable, frame.Sandboxed, m_DebugInfo);
+	else if (frame.Self.IsObject() && frame.Locals != frame.Self.Get<Object::Ptr>() && frame.Self.Get<Object::Ptr>()->GetOwnField(m_Variable, &value))
+		return value;
 	else if (VMOps::FindVarImport(frame, m_Variable, &value, m_DebugInfo))
 		return value;
 	else
@@ -139,7 +138,7 @@ bool VariableExpression::GetReference(ScriptFrame& frame, bool init_dict, Value 
 
 		if (dhint)
 			*dhint = NULL;
-	} else if (frame.Self.IsObject() && frame.Locals != static_cast<Object::Ptr>(frame.Self) && static_cast<Object::Ptr>(frame.Self)->HasOwnField(m_Variable)) {
+	} else if (frame.Self.IsObject() && frame.Locals != frame.Self.Get<Object::Ptr>() && frame.Self.Get<Object::Ptr>()->HasOwnField(m_Variable)) {
 		*parent = frame.Self;
 
 		if (dhint && *dhint)
@@ -429,7 +428,7 @@ ExpressionResult FunctionCallExpression::DoEvaluate(ScriptFrame& frame, DebugHin
 
 	if (vfunc.IsObjectType<Type>()) {
 		std::vector<Value> arguments;
-		BOOST_FOREACH(Expression *arg, m_Args) {
+		for (Expression *arg : m_Args) {
 			ExpressionResult argres = arg->Evaluate(frame);
 			CHECK_RESULT(argres);
 
@@ -448,7 +447,7 @@ ExpressionResult FunctionCallExpression::DoEvaluate(ScriptFrame& frame, DebugHin
 		BOOST_THROW_EXCEPTION(ScriptError("Function is not marked as safe for sandbox mode.", m_DebugInfo));
 
 	std::vector<Value> arguments;
-	BOOST_FOREACH(Expression *arg, m_Args) {
+	for (Expression *arg : m_Args) {
 		ExpressionResult argres = arg->Evaluate(frame);
 		CHECK_RESULT(argres);
 
@@ -461,8 +460,9 @@ ExpressionResult FunctionCallExpression::DoEvaluate(ScriptFrame& frame, DebugHin
 ExpressionResult ArrayExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
 {
 	Array::Ptr result = new Array();
+	result->Reserve(m_Expressions.size());
 
-	BOOST_FOREACH(Expression *aexpr, m_Expressions) {
+	for (Expression *aexpr : m_Expressions) {
 		ExpressionResult element = aexpr->Evaluate(frame);
 		CHECK_RESULT(element);
 
@@ -484,8 +484,8 @@ ExpressionResult DictExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint
 	Value result;
 
 	try {
-		BOOST_FOREACH(Expression *aexpr, m_Expressions) {
-			ExpressionResult element = aexpr->Evaluate(frame, dhint);
+		for (Expression *aexpr : m_Expressions) {
+			ExpressionResult element = aexpr->Evaluate(frame, m_Inline ? dhint : NULL);
 			CHECK_RESULT(element);
 			result = element.GetValue();
 		}
@@ -686,7 +686,7 @@ void icinga::BindToScope(Expression *& expr, ScopeSpecifier scopeSpec)
 	DictExpression *dexpr = dynamic_cast<DictExpression *>(expr);
 
 	if (dexpr) {
-		BOOST_FOREACH(Expression *& expr, dexpr->m_Expressions)
+		for (Expression *& expr : dexpr->m_Expressions)
 			BindToScope(expr, scopeSpec);
 
 		return;
@@ -708,9 +708,8 @@ void icinga::BindToScope(Expression *& expr, ScopeSpecifier scopeSpec)
 	}
 
 	LiteralExpression *lexpr = dynamic_cast<LiteralExpression *>(expr);
-	ScriptFrame frame;
 
-	if (lexpr && lexpr->Evaluate(frame).GetValue().IsString()) {
+	if (lexpr && lexpr->GetValue().IsString()) {
 		Expression *scope = new GetScopeExpression(scopeSpec);
 		expr = new IndexerExpression(scope, lexpr, lexpr->GetDebugInfo());
 	}
@@ -762,6 +761,26 @@ ExpressionResult ImportExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhi
 	return Empty;
 }
 
+ExpressionResult ImportDefaultTemplatesExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
+{
+	if (frame.Sandboxed)
+		BOOST_THROW_EXCEPTION(ScriptError("Imports are not allowed in sandbox mode.", m_DebugInfo));
+
+	String type = VMOps::GetField(frame.Self, "type", frame.Sandboxed, m_DebugInfo);
+
+	for (const ConfigItem::Ptr& item : ConfigItem::GetDefaultTemplates(type)) {
+		Dictionary::Ptr scope = item->GetScope();
+
+		if (scope)
+			scope->CopyTo(frame.Locals);
+
+		ExpressionResult result = item->GetExpression()->Evaluate(frame, dhint);
+		CHECK_RESULT(result);
+	}
+
+	return Empty;
+}
+
 ExpressionResult FunctionExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const
 {
 	return VMOps::NewFunction(frame, m_Name, m_Args, m_ClosedVars, m_Expression);
@@ -794,7 +813,7 @@ ExpressionResult ObjectExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhi
 	}
 
 	return VMOps::NewObject(frame, m_Abstract, m_Type, name, m_Filter, m_Zone,
-	    m_Package, m_IgnoreOnError, m_ClosedVars, m_Expression, m_DebugInfo);
+	    m_Package, m_DefaultTmpl, m_IgnoreOnError, m_ClosedVars, m_Expression, m_DebugInfo);
 }
 
 ExpressionResult ForExpression::DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const

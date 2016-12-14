@@ -33,7 +33,6 @@
 #include "base/exception.hpp"
 #include "base/convert.hpp"
 #include "base/objectlock.hpp"
-#include <boost/foreach.hpp>
 #include <boost/smart_ptr/make_shared.hpp>
 #include <map>
 #include <vector>
@@ -49,7 +48,7 @@ public:
 		Array::Ptr imports = ScriptFrame::GetImports();
 
 		ObjectLock olock(imports);
-		BOOST_FOREACH(const Value& import, imports) {
+		for (const Value& import : imports) {
 			Object::Ptr obj = import;
 			if (obj->HasOwnField(name)) {
 				*result = import;
@@ -103,8 +102,6 @@ public:
 
 	static inline Value FunctionCall(ScriptFrame& frame, const Value& self, const Function::Ptr& func, const std::vector<Value>& arguments)
 	{
-		ScriptFrame vframe;
-		
 		if (!self.IsEmpty() || self.IsString())
 			return func->Invoke(self, arguments);
 		else
@@ -130,7 +127,7 @@ public:
 	}
 
 	static inline Value NewObject(ScriptFrame& frame, bool abstract, const String& type, const String& name, const boost::shared_ptr<Expression>& filter,
-		const String& zone, const String& package, bool ignoreOnError, std::map<String, Expression *> *closedVars, const boost::shared_ptr<Expression>& expression, const DebugInfo& debugInfo = DebugInfo())
+		const String& zone, const String& package, bool defaultTmpl, bool ignoreOnError, std::map<String, Expression *> *closedVars, const boost::shared_ptr<Expression>& expression, const DebugInfo& debugInfo = DebugInfo())
 	{
 		ConfigItemBuilder::Ptr item = new ConfigItemBuilder(debugInfo);
 
@@ -158,12 +155,16 @@ public:
 		item->SetType(type);
 		item->SetName(name);
 
+		if (!abstract)
+			item->AddExpression(new ImportDefaultTemplatesExpression());
+
 		item->AddExpression(new OwnedExpression(expression));
 		item->SetAbstract(abstract);
 		item->SetScope(EvaluateClosedVars(frame, closedVars));
 		item->SetZone(zone);
 		item->SetPackage(package);
 		item->SetFilter(filter);
+		item->SetDefaultTemplate(defaultTmpl);
 		item->SetIgnoreOnError(ignoreOnError);
 		item->Compile()->Register();
 
@@ -192,12 +193,12 @@ public:
 
 			{
 				ObjectLock olock(dict);
-				BOOST_FOREACH(const Dictionary::Pair& kv, dict) {
+				for (const Dictionary::Pair& kv : dict) {
 					keys.push_back(kv.first);
 				}
 			}
 
-			BOOST_FOREACH(const String& key, keys) {
+			for (const String& key : keys) {
 				frame.Locals->Set(fkvar, key);
 				frame.Locals->Set(fvvar, dict->Get(key));
 				ExpressionResult res = expression->Evaluate(frame);
@@ -256,7 +257,7 @@ private:
 			locals = new Dictionary();
 
 			typedef std::pair<String, Expression *> ClosedVar;
-			BOOST_FOREACH(const ClosedVar& cvar, *closedVars) {
+			for (const ClosedVar& cvar : *closedVars) {
 				locals->Set(cvar.first, cvar.second->Evaluate(frame));
 			}
 		}

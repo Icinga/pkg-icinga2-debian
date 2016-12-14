@@ -26,23 +26,18 @@
 #include "base/exception.hpp"
 #include "base/application.hpp"
 
-#define REGISTER_CONFIG_FRAGMENT(id, name, fragment) \
-	namespace { \
-		void RegisterConfigFragment(void) \
-		{ \
-			icinga::Expression *expression = icinga::ConfigCompiler::CompileText(name, fragment); \
-			VERIFY(expression); \
-			try { \
-				icinga::ScriptFrame frame; \
-				expression->Evaluate(frame); \
-			} catch (const std::exception& ex) { \
-				std::cerr << icinga::DiagnosticInformation(ex) << std::endl; \
-				icinga::Application::Exit(1); \
-			} \
-			delete expression; \
+#define REGISTER_CONFIG_FRAGMENT(name, fragment) \
+	INITIALIZE_ONCE_WITH_PRIORITY([]() { \
+		icinga::Expression *expression = icinga::ConfigCompiler::CompileText(name, fragment); \
+		VERIFY(expression); \
+		try { \
+			icinga::ScriptFrame frame; \
+			expression->Evaluate(frame); \
+		} catch (const std::exception& ex) { \
+			std::cerr << icinga::DiagnosticInformation(ex) << std::endl; \
+			icinga::Application::Exit(1); \
 		} \
-		\
-		INITIALIZE_ONCE_WITH_PRIORITY(RegisterConfigFragment, 5); \
-	}
+		delete expression; \
+	}, 5)
 
 #endif /* CONFIGFRAGMENT_H */
