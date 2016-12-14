@@ -21,7 +21,6 @@
 #include "cli/nodeutility.hpp"
 #include "base/logger.hpp"
 #include "base/application.hpp"
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <iostream>
@@ -55,6 +54,11 @@ void NodeSetCommand::InitParameters(boost::program_options::options_description&
 int NodeSetCommand::GetMinArguments(void) const
 {
 	return 1;
+}
+
+bool NodeSetCommand::IsDeprecated(void) const
+{
+	return true;
 }
 
 /**

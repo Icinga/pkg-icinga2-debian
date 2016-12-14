@@ -42,7 +42,6 @@
 #include "base/tlsutility.hpp"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp>
@@ -57,7 +56,7 @@ void InfluxdbWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr&)
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const InfluxdbWriter::Ptr& influxdbwriter, ConfigType::GetObjectsByType<InfluxdbWriter>()) {
+	for (const InfluxdbWriter::Ptr& influxdbwriter : ConfigType::GetObjectsByType<InfluxdbWriter>()) {
 		nodes->Set(influxdbwriter->GetName(), 1); //add more stats
 	}
 
@@ -148,8 +147,7 @@ void InfluxdbWriter::CheckResultHandler(const Checkable::Ptr& checkable, const C
 	Dictionary::Ptr tags = tmpl->Get("tags");
 	if (tags) {
 		ObjectLock olock(tags);
-retry:
-		BOOST_FOREACH(const Dictionary::Pair& pair, tags) {
+		for (const Dictionary::Pair& pair : tags) {
 			// Prevent missing macros from warning; will return an empty value
 			// which will be filtered out in SendMetric()
 			String missing_macro;
@@ -173,61 +171,63 @@ String InfluxdbWriter::FormatBoolean(const bool val)
 void InfluxdbWriter::SendPerfdata(const Dictionary::Ptr& tmpl, const Checkable::Ptr& checkable, const CheckResult::Ptr& cr, double ts)
 {
 	Array::Ptr perfdata = cr->GetPerformanceData();
+	if (perfdata) {
+		ObjectLock olock(perfdata);
+		for (const Value& val : perfdata) {
+			PerfdataValue::Ptr pdv;
 
-	if (!perfdata)
-		return;
-
-	ObjectLock olock(perfdata);
-	BOOST_FOREACH(const Value& val, perfdata) {
-		PerfdataValue::Ptr pdv;
-
-		if (val.IsObjectType<PerfdataValue>())
-			pdv = val;
-		else {
-			try {
-				pdv = PerfdataValue::Parse(val);
-			} catch (const std::exception&) {
-				Log(LogWarning, "InfluxdbWriter")
-				    << "Ignoring invalid perfdata value: " << val;
-				continue;
+			if (val.IsObjectType<PerfdataValue>())
+				pdv = val;
+			else {
+				try {
+					pdv = PerfdataValue::Parse(val);
+				} catch (const std::exception&) {
+					Log(LogWarning, "InfluxdbWriter")
+					    << "Ignoring invalid perfdata value: " << val;
+					continue;
+				}
 			}
+
+			Dictionary::Ptr fields = new Dictionary();
+			fields->Set(String("value"), pdv->GetValue());
+
+			if (GetEnableSendThresholds()) {
+				if (pdv->GetCrit())
+					fields->Set(String("crit"), pdv->GetCrit());
+				if (pdv->GetWarn())
+					fields->Set(String("warn"), pdv->GetWarn());
+				if (pdv->GetMin())
+					fields->Set(String("min"), pdv->GetMin());
+				if (pdv->GetMax())
+					fields->Set(String("max"), pdv->GetMax());
+			}
+
+			SendMetric(tmpl, pdv->GetLabel(), fields, ts);
 		}
+	}
+
+	if (GetEnableSendMetadata()) {
+		Host::Ptr host;
+		Service::Ptr service;
+		boost::tie(host, service) = GetHostService(checkable);
 
 		Dictionary::Ptr fields = new Dictionary();
-		fields->Set(String("value"), pdv->GetValue());
 
-		if (GetEnableSendThresholds()) {
-			if (pdv->GetCrit())
-				fields->Set(String("crit"), pdv->GetCrit());
-			if (pdv->GetWarn())
-				fields->Set(String("warn"), pdv->GetWarn());
-			if (pdv->GetMin())
-				fields->Set(String("min"), pdv->GetMin());
-			if (pdv->GetMax())
-				fields->Set(String("max"), pdv->GetMax());
-		}
+		if (service)
+			fields->Set(String("state"), FormatInteger(service->GetState()));
+		else
+			fields->Set(String("state"), FormatInteger(host->GetState()));
 
-		if (GetEnableSendMetadata()) {
-			Host::Ptr host;
-			Service::Ptr service;
-			boost::tie(host, service) = GetHostService(checkable);
+		fields->Set(String("current_attempt"), FormatInteger(checkable->GetCheckAttempt()));
+		fields->Set(String("max_check_attempts"), FormatInteger(checkable->GetMaxCheckAttempts()));
+		fields->Set(String("state_type"), FormatInteger(checkable->GetStateType()));
+		fields->Set(String("reachable"), FormatBoolean(checkable->IsReachable()));
+		fields->Set(String("downtime_depth"), FormatInteger(checkable->GetDowntimeDepth()));
+		fields->Set(String("acknowledgement"), FormatInteger(checkable->GetAcknowledgement()));
+		fields->Set(String("latency"), cr->CalculateLatency());
+		fields->Set(String("execution_time"), cr->CalculateExecutionTime());
 
-			if (service)
-				fields->Set(String("state"), FormatInteger(service->GetState()));
-			else
-				fields->Set(String("state"), FormatInteger(host->GetState()));
-
-			fields->Set(String("current_attempt"), FormatInteger(checkable->GetCheckAttempt()));
-			fields->Set(String("max_check_attempts"), FormatInteger(checkable->GetMaxCheckAttempts()));
-			fields->Set(String("state_type"), FormatInteger(checkable->GetStateType()));
-			fields->Set(String("reachable"), FormatBoolean(checkable->IsReachable()));
-			fields->Set(String("downtime_depth"), FormatInteger(checkable->GetDowntimeDepth()));
-			fields->Set(String("acknowledgement"), FormatInteger(checkable->GetAcknowledgement()));
-			fields->Set(String("latency"), cr->CalculateLatency());
-			fields->Set(String("execution_time"), cr->CalculateExecutionTime());
-		}
-
-		SendMetric(tmpl, pdv->GetLabel(), fields, ts);
+		SendMetric(tmpl, String(), fields, ts);
 	}
 }
 
@@ -288,7 +288,7 @@ void InfluxdbWriter::SendMetric(const Dictionary::Ptr& tmpl, const String& label
 	Dictionary::Ptr tags = tmpl->Get("tags");
 	if (tags) {
 		ObjectLock olock(tags);
-		BOOST_FOREACH(const Dictionary::Pair& pair, tags) {
+		for (const Dictionary::Pair& pair : tags) {
 			// Empty macro expansion, no tag
 			if (!pair.second.IsEmpty()) {
 				msgbuf << "," << EscapeKey(pair.first) << "=" << EscapeKey(pair.second);
@@ -296,11 +296,15 @@ void InfluxdbWriter::SendMetric(const Dictionary::Ptr& tmpl, const String& label
 		}
 	}
 
-	msgbuf << ",metric=" << EscapeKey(label) << " ";
+	// Label is may be empty in the case of metadata
+	if (!label.IsEmpty())
+		msgbuf << ",metric=" << EscapeKey(label);
+
+	msgbuf << " ";
 
 	bool first = true;
 	ObjectLock fieldLock(fields);
-	BOOST_FOREACH(const Dictionary::Pair& pair, fields) {
+	for (const Dictionary::Pair& pair : fields) {
 		if (first)
 			first = false;
 		else
@@ -318,7 +322,7 @@ void InfluxdbWriter::SendMetric(const Dictionary::Ptr& tmpl, const String& label
 	m_DataBuffer->Add(String(msgbuf.str()));
 
 	// Flush if we've buffered too much to prevent excessive memory use
-	if (m_DataBuffer->GetLength() >= GetFlushThreshold()) {
+	if (static_cast<int>(m_DataBuffer->GetLength()) >= GetFlushThreshold()) {
 		Log(LogDebug, "InfluxdbWriter")
 		    << "Data buffer overflow writing " << m_DataBuffer->GetLength() << " data points";
 		Flush();
@@ -412,7 +416,7 @@ void InfluxdbWriter::ValidateHostTemplate(const Dictionary::Ptr& value, const Va
 	Dictionary::Ptr tags = value->Get("tags");
 	if (tags) {
 		ObjectLock olock(tags);
-		BOOST_FOREACH(const Dictionary::Pair& pair, tags) {
+		for (const Dictionary::Pair& pair : tags) {
 			if (!MacroProcessor::ValidateMacroString(pair.second))
 				BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of<String>("host_template")("tags")(pair.first), "Closing $ not found in macro format string '" + pair.second));
 		}
@@ -430,7 +434,7 @@ void InfluxdbWriter::ValidateServiceTemplate(const Dictionary::Ptr& value, const
 	Dictionary::Ptr tags = value->Get("tags");
 	if (tags) {
 		ObjectLock olock(tags);
-		BOOST_FOREACH(const Dictionary::Pair& pair, tags) {
+		for (const Dictionary::Pair& pair : tags) {
 			if (!MacroProcessor::ValidateMacroString(pair.second))
 				BOOST_THROW_EXCEPTION(ValidationError(this, boost::assign::list_of<String>("service_template")("tags")(pair.first), "Closing $ not found in macro format string '" + pair.second));
 		}

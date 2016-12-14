@@ -28,7 +28,6 @@
 #include "base/exception.hpp"
 #include "base/scriptframe.hpp"
 #include "base/convert.hpp"
-#include <boost/foreach.hpp>
 #include <boost/thread/future.hpp>
 #include <map>
 
@@ -42,37 +41,29 @@ public:
 		: m_Hints(hints)
 	{ }
 
+	DebugHint(Dictionary::Ptr&& hints)
+	    : m_Hints(std::move(hints))
+	{ }
+
 	inline void AddMessage(const String& message, const DebugInfo& di)
 	{
-		Array::Ptr amsg = new Array();
-
-		{
-			ObjectLock olock(amsg);
-
-			amsg->Reserve(6);
-			amsg->Add(message);
-			amsg->Add(di.Path);
-			amsg->Add(di.FirstLine);
-			amsg->Add(di.FirstColumn);
-			amsg->Add(di.LastLine);
-			amsg->Add(di.LastColumn);
-		}
-
-		GetMessages()->Add(amsg);
+		GetMessages()->Add(new Array({ message, di.Path, di.FirstLine, di.FirstColumn, di.LastLine, di.LastColumn }));
 	}
 
 	inline DebugHint GetChild(const String& name)
 	{
-		Dictionary::Ptr children = GetChildren();
+		const Dictionary::Ptr& children = GetChildren();
 
 		Value vchild;
+		Dictionary::Ptr child;
 
 		if (!children->Get(name, &vchild)) {
-			vchild = new Dictionary();
-			children->Set(name, vchild);
-		}
+			child = new Dictionary();
+			children->Set(name, child);
+		} else
+			child = vchild;
 
-		return DebugHint(vchild);
+		return DebugHint(child);
 	}
 
 	Dictionary::Ptr ToDictionary(void) const
@@ -82,35 +73,45 @@ public:
 
 private:
 	Dictionary::Ptr m_Hints;
+	Array::Ptr m_Messages;
+	Dictionary::Ptr m_Children;
 
-	Array::Ptr GetMessages(void)
+	const Array::Ptr& GetMessages(void)
 	{
+		if (m_Messages)
+			return m_Messages;
+
 		if (!m_Hints)
 			m_Hints = new Dictionary();
 
 		Value vmessages;
 
 		if (!m_Hints->Get("messages", &vmessages)) {
-			vmessages = new Array();
-			m_Hints->Set("messages", vmessages);
-		}
+			m_Messages = new Array();
+			m_Hints->Set("messages", m_Messages);
+		} else
+			m_Messages = vmessages;
 
-		return vmessages;
+		return m_Messages;
 	}
 
-	Dictionary::Ptr GetChildren(void)
+	const Dictionary::Ptr& GetChildren(void)
 	{
+		if (m_Children)
+			return m_Children;
+
 		if (!m_Hints)
 			m_Hints = new Dictionary();
 
 		Value vchildren;
 
 		if (!m_Hints->Get("properties", &vchildren)) {
-			vchildren = new Dictionary();
-			m_Hints->Set("properties", vchildren);
-		}
+			m_Children = new Dictionary();
+			m_Hints->Set("properties", m_Children);
+		} else
+			m_Children = vchildren;
 
-		return vchildren;
+		return m_Children;
 	}
 };
 
@@ -158,12 +159,12 @@ public:
 	    : m_Value(value), m_Code(code)
 	{ }
 
-	operator Value(void) const
+	operator const Value&(void) const
 	{
 		return m_Value;
 	}
 
-	Value GetValue(void) const
+	const Value& GetValue(void) const
 	{
 		return m_Value;
 	}
@@ -239,6 +240,11 @@ class I2_CONFIG_API LiteralExpression : public Expression
 {
 public:
 	LiteralExpression(const Value& value = Value());
+
+	const Value& GetValue(void) const
+	{
+		return m_Value;
+	}
 
 protected:
 	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const override;
@@ -574,7 +580,7 @@ public:
 	{
 		delete m_FName;
 
-		BOOST_FOREACH(Expression *expr, m_Args)
+		for (Expression *expr : m_Args)
 			delete expr;
 	}
 
@@ -595,7 +601,7 @@ public:
 
 	~ArrayExpression(void)
 	{
-		BOOST_FOREACH(Expression *expr, m_Expressions)
+		for (Expression *expr : m_Expressions)
 			delete expr;
 	}
 
@@ -615,7 +621,7 @@ public:
 
 	~DictExpression(void)
 	{
-		BOOST_FOREACH(Expression *expr, m_Expressions)
+		for (Expression *expr : m_Expressions)
 			delete expr;
 	}
 
@@ -794,19 +800,30 @@ private:
 	Expression *m_Name;
 };
 
+class I2_CONFIG_API ImportDefaultTemplatesExpression : public DebuggableExpression
+{
+public:
+	ImportDefaultTemplatesExpression(const DebugInfo& debugInfo = DebugInfo())
+		: DebuggableExpression(debugInfo)
+	{ }
+
+protected:
+	virtual ExpressionResult DoEvaluate(ScriptFrame& frame, DebugHint *dhint) const override;
+};
+
 class I2_CONFIG_API FunctionExpression : public DebuggableExpression
 {
 public:
 	FunctionExpression(const String& name, const std::vector<String>& args,
 	    std::map<String, Expression *> *closedVars, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
-		: DebuggableExpression(debugInfo), m_Args(args), m_Name(name), m_ClosedVars(closedVars), m_Expression(expression)
+		: DebuggableExpression(debugInfo), m_Name(name), m_Args(args), m_ClosedVars(closedVars), m_Expression(expression)
 	{ }
 
 	~FunctionExpression(void)
 	{
 		if (m_ClosedVars) {
 			typedef std::pair<String, Expression *> kv_pair;
-			BOOST_FOREACH(const kv_pair& kv, *m_ClosedVars) {
+			for (const kv_pair& kv : *m_ClosedVars) {
 				delete kv.second;
 			}
 		}
@@ -843,7 +860,7 @@ public:
 
 		if (m_ClosedVars) {
 			typedef std::pair<String, Expression *> kv_pair;
-			BOOST_FOREACH(const kv_pair& kv, *m_ClosedVars) {
+			for (const kv_pair& kv : *m_ClosedVars) {
 				delete kv.second;
 			}
 		}
@@ -873,9 +890,9 @@ class I2_CONFIG_API ObjectExpression : public DebuggableExpression
 public:
 	ObjectExpression(bool abstract, const String& type, Expression *name, Expression *filter,
 	    const String& zone, const String& package, std::map<String, Expression *> *closedVars,
-	    bool ignoreOnError, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
+	    bool defaultTmpl, bool ignoreOnError, Expression *expression, const DebugInfo& debugInfo = DebugInfo())
 		: DebuggableExpression(debugInfo), m_Abstract(abstract), m_Type(type),
-		  m_Name(name), m_Filter(filter), m_Zone(zone), m_Package(package),
+		  m_Name(name), m_Filter(filter), m_Zone(zone), m_Package(package), m_DefaultTmpl(defaultTmpl),
 		  m_IgnoreOnError(ignoreOnError), m_ClosedVars(closedVars), m_Expression(expression)
 	{ }
 
@@ -885,7 +902,7 @@ public:
 
 		if (m_ClosedVars) {
 			typedef std::pair<String, Expression *> kv_pair;
-			BOOST_FOREACH(const kv_pair& kv, *m_ClosedVars) {
+			for (const kv_pair& kv : *m_ClosedVars) {
 				delete kv.second;
 			}
 		}
@@ -903,6 +920,7 @@ private:
 	boost::shared_ptr<Expression> m_Filter;
 	String m_Zone;
 	String m_Package;
+	bool m_DefaultTmpl;
 	bool m_IgnoreOnError;
 	std::map<String, Expression *> *m_ClosedVars;
 	boost::shared_ptr<Expression> m_Expression;

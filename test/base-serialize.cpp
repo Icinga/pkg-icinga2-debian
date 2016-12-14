@@ -23,8 +23,7 @@
 #include "base/serializer.hpp"
 #include "base/array.hpp"
 #include "base/dictionary.hpp"
-#include <boost/test/unit_test.hpp>
-#include <boost/foreach.hpp>
+#include <BoostTestTargetConfig.h>
 #include <boost/tuple/tuple.hpp>
 
 using namespace icinga;

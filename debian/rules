@@ -4,9 +4,19 @@
 
 DEB_HOST_ARCH = $(shell dpkg-architecture -qDEB_HOST_ARCH)
 
+# disable unity builds for arches with low memory
 ifneq ($(findstring $(DEB_HOST_ARCH), armhf),)
 	UNITY_BUILD = -DICINGA2_UNITY_BUILD=Off
 endif
+
+ifneq ($(findstring $(DEB_HOST_ARCH), mips),)
+	UNITY_BUILD = -DICINGA2_UNITY_BUILD=Off
+endif
+
+ifneq ($(findstring $(DEB_HOST_ARCH), mipsel),)
+	UNITY_BUILD = -DICINGA2_UNITY_BUILD=Off
+endif
+
 
 %:
 	dh $@ --with bash_completion

@@ -27,10 +27,8 @@
 #include "base/utility.hpp"
 #include "base/convert.hpp"
 #include "base/logger.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
-
 
 REGISTER_DBTYPE(Endpoint, "endpoint", DbObjectTypeEndpoint, "endpoint_object_id", EndpointDbObject);
 

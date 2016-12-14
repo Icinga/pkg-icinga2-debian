@@ -70,17 +70,19 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/COPYING.Exceptions" ICINGA2_LICENSE_ADDIT
 set(ICINGA2_LICENSE "${ICINGA2_LICENSE_GPL}\n\n---\n\n${ICINGA2_LICENSE_ADDITIONS}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt" ${ICINGA2_LICENSE})
 
+file(STRINGS icinga2.spec SPEC_VERSION REGEX "^Version:")
+string(LENGTH "${SPEC_VERSION}" SPEC_VERSION_LENGTH)
+math(EXPR SPEC_VERSION_LENGTH "${SPEC_VERSION_LENGTH} - 9")
+string(SUBSTRING ${SPEC_VERSION} 9 ${SPEC_VERSION_LENGTH} SPEC_VERSION)
+
+configure_file(icinga-spec-version.h.cmake icinga-spec-version.h)
+
 include(GetGitRevisionDescription)
 git_describe(GIT_VERSION --tags)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/icinga-version.h.force)
   configure_file(icinga-version.h.force ${CMAKE_CURRENT_BINARY_DIR}/icinga-version.h COPYONLY)
 else()
   if(NOT ICINGA2_GIT_VERSION_INFO OR GIT_VERSION MATCHES "-NOTFOUND$")
-    file(STRINGS icinga2.spec SPEC_VERSION REGEX "^Version:")
-    string(LENGTH "${SPEC_VERSION}" SPEC_VERSION_LENGTH)
-    math(EXPR SPEC_VERSION_LENGTH "${SPEC_VERSION_LENGTH} - 9")
-    string(SUBSTRING ${SPEC_VERSION} 9 ${SPEC_VERSION_LENGTH} SPEC_VERSION)
-
     file(STRINGS icinga2.spec SPEC_REVISION REGEX "^%define revision ")
     string(LENGTH "${SPEC_REVISION}" SPEC_REVISION_LENGTH)
     math(EXPR SPEC_REVISION_LENGTH "${SPEC_REVISION_LENGTH} - 17")
@@ -99,7 +101,8 @@ endif()
 
 if(NOT DEFINED LOGROTATE_HAS_SU)
   set(LOGROTATE_HAS_SU OFF)
-  execute_process(COMMAND "/usr/sbin/logrotate" ERROR_VARIABLE LOGROTATE_OUTPUT)
+  find_program(LOGROTATE_BINARY logrotate)
+  execute_process(COMMAND ${LOGROTATE_BINARY} ERROR_VARIABLE LOGROTATE_OUTPUT)
   if(LOGROTATE_OUTPUT)
     string(REGEX REPLACE "^logrotate ([0-9.]*).*" "\\1" LOGROTATE_VERSION
       ${LOGROTATE_OUTPUT})
@@ -140,12 +143,7 @@ include_directories(
   ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/lib
 )
 
-#set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-
-if(APPLE)
-  set(CMAKE_INSTALL_NAME_DIR "@executable_path/..")
-  set(CMAKE_MACOSX_RPATH 0)
-endif(APPLE)
+set(CMAKE_MACOSX_RPATH 1)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Qunused-arguments -g")
@@ -177,11 +175,19 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
   endif()
 endif()
 
+include(CheckCXXCompilerFlag)
+
 if(ICINGA2_LTO_BUILD)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto -fno-fat-lto-objects")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto -fno-fat-lto-objects")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -flto")
+  check_cxx_compiler_flag("-flto" CXX_FLAG_LTO)
+
+  if(NOT CXX_FLAG_LTO)
+    message(WARNING "Compiler does not support LTO, falling back to non-LTO build")
+  else()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -flto")
+  endif()
 endif()
 
 include(CheckCCompilerFlag)
@@ -191,6 +197,13 @@ check_c_compiler_flag(-fvisibility-inlines-hidden HAVE_VISIBILITY_INLINES_HIDDEN
 if(HAVE_VISIBILITY_INLINES_HIDDEN)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fvisibility-inlines-hidden")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility-inlines-hidden")
+endif()
+
+check_c_compiler_flag(-fvisibility=hidden HAVE_VISIBILITY_HIDDEN)
+
+if(HAVE_VISIBILITY_HIDDEN)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fvisibility=hidden")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 endif()
 
 if(MSVC)
@@ -207,9 +220,8 @@ include(CheckIncludeFileCXX)
 
 check_symbol_exists(__COUNTER__ "" HAVE_COUNTER_MACRO)
 
-if(NOT HAVE_COUNTER_MACRO AND ICINGA2_UNITY_BUILD)
-  message(STATUS "Your C/C++ compiler does not support the __COUNTER__ macro. Disabling unity build.")
-  set(ICINGA2_UNITY_BUILD FALSE)
+if(NOT HAVE_COUNTER_MACRO)
+message(FATAL_ERROR "Your C/C++ compiler does not support the __COUNTER__ macro.")
 endif()
 
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DI2_DEBUG")
@@ -227,42 +239,21 @@ if(HAVE_LIBEXECINFO)
   set(HAVE_BACKTRACE_SYMBOLS TRUE)
 endif()
 
-set(_ICINGA2_CXX11 OFF)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  exec_program(${CMAKE_CXX_COMPILER}
+    ARGS -dumpversion
+    OUTPUT_VARIABLE _ICINGA2_COMPILER_VERSION
+  )
 
-if(UNIX)
-  include(CheckCXXCompilerFlag)
-  check_cxx_compiler_flag("-std=c++11" CXX_FLAG_CXX11)
-
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    exec_program(${CMAKE_CXX_COMPILER}
-      ARGS -dumpversion
-      OUTPUT_VARIABLE _ICINGA2_COMPILER_VERSION
-    )
-
-    if("${_ICINGA2_COMPILER_VERSION}" VERSION_LESS "4.7.0")
-      message(STATUS "Your version of GCC is too old for building Icinga 2 in C++11 mode.")
-      set(CXX_FLAG_CXX11 OFF)
-    endif()
-  endif()
-
-  if(CXX_FLAG_CXX11)
-    set(_ICINGA2_CXX11 ON)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-  endif()
-
-  check_cxx_compiler_flag("-Wno-inconsistent-missing-override" CXX_FLAG_NO_OVERRIDE_WARNING)
-  if(CXX_FLAG_NO_OVERRIDE_WARNING)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-inconsistent-missing-override")
+  if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_LESS "4.6.0")
+    message(FATAL_ERROR "Your version of GCC (${CMAKE_CXX_COMPILER_VERSION}) is too old for building Icinga 2 (GCC >= 4.6.0 is required).")
   endif()
 endif()
 
 if(NOT MSVC)
-  set(CXX_FEATURE_OVERRIDE OFF)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 
-  if(_ICINGA2_CXX11)
-    include(CheckCXXSourceCompiles)
-    check_cxx_source_compiles("class Base { public: virtual void test(void) { } }; class Derived : public Base { virtual void test(void) override { } }; int main(){}" CXX_FEATURE_OVERRIDE)
-  endif()
+  check_cxx_source_compiles("class Base { public: virtual void test(void) { } }; class Derived : public Base { virtual void test(void) override { } }; int main(){}" CXX_FEATURE_OVERRIDE)
 
   if(NOT CXX_FEATURE_OVERRIDE)
     add_definitions("-Doverride=")
@@ -290,6 +281,7 @@ add_subdirectory(itl)
 add_subdirectory(doc)
 add_subdirectory(agent)
 add_subdirectory(plugins)
+add_subdirectory(choco)
 
 if(MSVC)
   add_subdirectory(icinga-installer)
@@ -324,11 +316,11 @@ include(InstallRequiredSystemLibraries)
 
 if(WIN32)
   if(CMAKE_VS_PLATFORM_NAME STREQUAL "x64")
-    set(NSCP_URL "https://github.com/mickem/nscp/releases/download/0.4.4.19/NSCP-0.4.4.19-x64.msi")
-    set(NSCP_SHA256 "36c487777e9488cbf7a15db3a87f63ff6d6af46398d6f36b25734041e3e13900")
+    set(NSCP_URL "https://github.com/mickem/nscp/releases/download/0.5.0.62/NSCP-0.5.0.62-x64.msi")
+    set(NSCP_SHA256 "1854de86ad4fda3391f273de0f9985b702c014bdec01b26ad28a1343177f537f")
   else()
-    set(NSCP_URL "https://github.com/mickem/nscp/releases/download/0.4.4.19/NSCP-0.4.4.19-Win32.msi")
-    set(NSCP_SHA256 "f05bc00712966901531d5a9354c57e95c34eb65b4748cf3ebc305ccc8fa29cce")
+    set(NSCP_URL "https://github.com/mickem/nscp/releases/download/0.5.0.62/NSCP-0.5.0.62-Win32.msi")
+    set(NSCP_SHA256 "2186b60d588fa0811344ce709332f9c63670019c62ae92eae49698bf76205a95")
   endif()
 
   set(NSCP_SHA256SUM "")

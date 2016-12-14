@@ -38,7 +38,6 @@
 #include "base/dictionary.hpp"
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/tuple/tuple.hpp>
-#include <boost/foreach.hpp>
 #include <boost/bind.hpp>
 
 using namespace icinga;
@@ -93,7 +92,7 @@ void Table::AddColumn(const String& name, const Column& column)
 {
 	std::pair<String, Column> item = std::make_pair(name, column);
 
-	std::pair<std::map<String, Column>::iterator, bool> ret = m_Columns.insert(item);
+	auto ret = m_Columns.insert(item);
 
 	if (!ret.second)
 		ret.first->second = column;
@@ -107,7 +106,7 @@ Column Table::GetColumn(const String& name) const
 	if (dname.Find(prefix) == 0)
 		dname = dname.SubStr(prefix.GetLength());
 
-	std::map<String, Column>::const_iterator it = m_Columns.find(dname);
+	auto it = m_Columns.find(dname);
 
 	if (it == m_Columns.end())
 		BOOST_THROW_EXCEPTION(std::invalid_argument("Column '" + dname + "' does not exist in table '" + GetName() + "'."));
@@ -119,9 +118,8 @@ std::vector<String> Table::GetColumnNames(void) const
 {
 	std::vector<String> names;
 
-	String name;
-	BOOST_FOREACH(boost::tie(name, boost::tuples::ignore), m_Columns) {
-		names.push_back(name);
+	for (const auto& kv : m_Columns) {
+		names.push_back(kv.first);
 	}
 
 	return names;
@@ -138,7 +136,7 @@ std::vector<LivestatusRowValue> Table::FilterRows(const Filter::Ptr& filter, int
 
 bool Table::FilteredAddRow(std::vector<LivestatusRowValue>& rs, const Filter::Ptr& filter, int limit, const Value& row, LivestatusGroupByType groupByType, const Object::Ptr& groupByObject)
 {
-	if (limit != -1 && rs.size() == limit)
+	if (limit != -1 && static_cast<int>(rs.size()) == limit)
 		return false;
 
 	if (!filter || filter->Apply(this, row)) {

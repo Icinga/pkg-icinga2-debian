@@ -29,7 +29,6 @@
 #include "base/utility.hpp"
 #include "base/logger.hpp"
 #include "base/exception.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
@@ -39,8 +38,8 @@ Timer::Ptr DbConnection::m_ProgramStatusTimer;
 boost::once_flag DbConnection::m_OnceFlag = BOOST_ONCE_INIT;
 
 DbConnection::DbConnection(void)
-	: m_QueryStats(15 * 60), m_PendingQueries(0), m_PendingQueriesTimestamp(0),
-	  m_IDCacheValid(false), m_ActiveChangedHandler(false)
+	: m_IDCacheValid(false), m_QueryStats(15 * 60), m_PendingQueries(0),
+	  m_PendingQueriesTimestamp(0), m_ActiveChangedHandler(false)
 { }
 
 void DbConnection::OnConfigLoaded(void)
@@ -255,7 +254,7 @@ void DbConnection::CleanUpHandler(void)
 		{ "downtimehistory", "entry_time" },
 		{ "eventhandlers", "start_time" },
 		{ "externalcommands", "entry_time" },
-		{ "flappinghistory" "event_time" },
+		{ "flappinghistory", "event_time" },
 		{ "hostchecks", "start_time" },
 		{ "logentries", "logentry_time" },
 		{ "notifications", "start_time" },
@@ -311,9 +310,7 @@ String DbConnection::GetConfigHash(const DbType::Ptr& type, const DbReference& o
 	if (!objid.IsValid())
 		return String();
 
-	std::map<std::pair<DbType::Ptr, DbReference>, String>::const_iterator it;
-
-	it = m_ConfigHashes.find(std::make_pair(type, objid));
+	auto it = m_ConfigHashes.find(std::make_pair(type, objid));
 
 	if (it == m_ConfigHashes.end())
 		return String();
@@ -331,9 +328,7 @@ void DbConnection::SetObjectID(const DbObject::Ptr& dbobj, const DbReference& db
 
 DbReference DbConnection::GetObjectID(const DbObject::Ptr& dbobj) const
 {
-	std::map<DbObject::Ptr, DbReference>::const_iterator it;
-
-	it = m_ObjectIDs.find(dbobj);
+	auto it = m_ObjectIDs.find(dbobj);
 
 	if (it == m_ObjectIDs.end())
 		return DbReference();
@@ -367,9 +362,7 @@ DbReference DbConnection::GetInsertID(const DbType::Ptr& type, const DbReference
 	if (!objid.IsValid())
 		return DbReference();
 
-	std::map<std::pair<DbType::Ptr, DbReference>, DbReference>::const_iterator it;
-
-	it = m_InsertIDs.find(std::make_pair(type, objid));
+	auto it = m_InsertIDs.find(std::make_pair(type, objid));
 
 	if (it == m_InsertIDs.end())
 		return DbReference();
@@ -467,13 +460,13 @@ void DbConnection::UpdateObject(const ConfigObject::Ptr& object)
 
 void DbConnection::UpdateAllObjects(void)
 {
-	BOOST_FOREACH(const Type::Ptr& type, Type::GetAllTypes()) {
+	for (const Type::Ptr& type : Type::GetAllTypes()) {
 		ConfigType *dtype = dynamic_cast<ConfigType *>(type.get());
 
 		if (!dtype)
 			continue;
 
-		BOOST_FOREACH(const ConfigObject::Ptr& object, dtype->GetObjects()) {
+		for (const ConfigObject::Ptr& object : dtype->GetObjects()) {
 			UpdateObject(object);
 		}
 	}
@@ -481,7 +474,7 @@ void DbConnection::UpdateAllObjects(void)
 
 void DbConnection::PrepareDatabase(void)
 {
-	BOOST_FOREACH(const DbType::Ptr& type, DbType::GetAllTypes()) {
+	for (const DbType::Ptr& type : DbType::GetAllTypes()) {
 		FillIDCache(type);
 	}
 }

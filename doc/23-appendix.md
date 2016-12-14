@@ -2,7 +2,7 @@
 
 ## <a id="external-commands-list-detail"></a> External Commands List
 
-Additional details can be found in the [Icinga 1.x Documentation](http://docs.icinga.org/latest/en/extcommands2.html)
+Additional details can be found in the [Icinga 1.x Documentation](http://docs.icinga.com/latest/en/extcommands2.html)
 
   Command name                              | Parameters                        | Description
   ------------------------------------------|-----------------------------------|--------------------------
@@ -47,6 +47,8 @@ Additional details can be found in the [Icinga 1.x Documentation](http://docs.ic
   PROCESS_FILE                              | ;&lt;file_name&gt;;&lt;delete&gt; (2)  | -
   SCHEDULE_SVC_DOWNTIME                     | ;&lt;host_name&gt;;&lt;service_name&gt;;&lt;start_time&gt;;&lt;end_time&gt;;&lt;fixed&gt;;&lt;trigger_id&gt;;&lt;duration&gt;;&lt;author&gt;;&lt;comment&gt; (9)  | -
   DEL_SVC_DOWNTIME                          | ;&lt;downtime_id&gt; (1)   | -
+  SCHEDULE_AND_PROPAGATE_HOST_DOWNTIME      | ;&lt;host_name&gt;;&lt;start_time&gt;;&lt;end_time&gt;;&lt;fixed&gt;;&lt;trigger_id&gt;;&lt;duration&gt;;&lt;author&gt;;&lt;comment&gt; (8)  | -
+  SCHEDULE_AND_PROPAGATE_TRIGGERED_HOST_DOWNTIME | ;&lt;host_name&gt;;&lt;start_time&gt;;&lt;end_time&gt;;&lt;fixed&gt;;&lt;trigger_id&gt;;&lt;duration&gt;;&lt;author&gt;;&lt;comment&gt; (8)  | -
   SCHEDULE_HOST_DOWNTIME                    | ;&lt;host_name&gt;;&lt;start_time&gt;;&lt;end_time&gt;;&lt;fixed&gt;;&lt;trigger_id&gt;;&lt;duration&gt;;&lt;author&gt;;&lt;comment&gt; (8)  | -
   DEL_HOST_DOWNTIME                         | ;&lt;downtime_id&gt; (1)  | -
   DEL_DOWNTIME_BY_HOST_NAME                 | ;&lt;host_name&gt;[;&lt;service_name;&gt;[;&lt;start_time;&gt;[;&lt;comment_text;&gt;]]] (1)  | -
@@ -150,7 +152,7 @@ is set as additional custom variable in `objects.cache`.
 ### <a id="schema-db-ido"></a> DB IDO Schema
 
 There is a detailed documentation for the Icinga IDOUtils 1.x
-database schema available on [http://docs.icinga.org/latest/en/db_model.html]
+database schema available on [http://docs.icinga.com/latest/en/db_model.html]
 
 #### <a id="schema-db-ido-extensions"></a> DB IDO Schema Extensions
 

@@ -8,11 +8,8 @@ the [Monitoring Plugins project](https://www.monitoring-plugins.org).
 
 ### <a id="service-monitoring-plugins"></a> Plugins
 
-All existing Nagios or Icinga 1.x plugins work with Icinga 2. Here's a
-list of popular community sites which host check plugins:
-
-* [Icinga Exchange](https://exchange.icinga.org)
-* [Icinga Wiki](https://wiki.icinga.org)
+All existing Nagios or Icinga 1.x plugins work with Icinga 2. Community
+plugins can be found for example on [Icinga Exchange](https://exchange.icinga.com).
 
 The recommended way of setting up these plugins is to copy them to a common directory
 and create a new global constant, e.g. `CustomPluginDir` in your [constants.conf](4-configuring-icinga-2.md#constants-conf)
@@ -58,7 +55,6 @@ into your host and service objects.
 
 Please make sure to follow these conventions when adding a new command object definition:
 
-* Always import the `plugin-check-command` template.
 * Use [command arguments](3-monitoring-basics.md#command-arguments) whenever possible. The `command` attribute
 must be an array in `[ ... ]` for shell escaping.
 * Define a unique `prefix` for the command's specific arguments. That way you can safely
@@ -69,8 +65,6 @@ set them on host/service level and you'll always know which command they control
 This is an example for a custom `my-snmp-int` check command:
 
     object CheckCommand "my-snmp-int" {
-      import "plugin-check-command"
-
       command = [ CustomPluginDir + "/check_snmp_int.pl" ]
 
       arguments = {
@@ -99,7 +93,7 @@ For further information on your monitoring configuration read the
 [Monitoring Basics](3-monitoring-basics.md#monitoring-basics) chapter.
 
 If you have created your own `CheckCommand` definition, please kindly
-[send it upstream](https://wiki.icinga.org/display/community/Contribute+Icinga+2+ITL+Plugin+Check+Command+Definitions).
+[send it upstream](https://www.icinga.com/community/get-involved/).
 
 ### <a id="service-monitoring-plugin-api"></a> Plugin API
 
@@ -165,7 +159,7 @@ with plugin execution and output formatting too, for example
 > Ensure to test your plugin properly with special cases before putting it
 > into production!
 
-Once you've finished your plugin please upload/sync it to [Icinga Exchange](https://exchange.icinga.org/new).
+Once you've finished your plugin please upload/sync it to [Icinga Exchange](https://exchange.icinga.com/new).
 Thanks in advance!
 
 ## <a id="service-monitoring-overview"></a> Service Monitoring Overview

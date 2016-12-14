@@ -1,20 +1,33 @@
-icinga2 (2.5.4-1~debmon70+3) debmon-wheezy; urgency=medium
-
-  * [d7399de] Fix deps
-
- -- Alexander Wirt <formorer@debian.org>  Wed, 07 Sep 2016 15:34:10 +0200
-
-icinga2 (2.5.4-1~debmon70+2) debmon-wheezy; urgency=medium
-
-  * [014226b] Disable unity builds for arm
-
- -- Alexander Wirt <formorer@debian.org>  Wed, 07 Sep 2016 15:27:49 +0200
-
-icinga2 (2.5.4-1~debmon70+1) debmon-wheezy; urgency=medium
+icinga2 (2.6.0-1~debmon70+1) debmon-wheezy; urgency=medium
 
   * Rebuild for debmon-wheezy.
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 19 May 2016 13:56:16 +0200
+
+icinga2 (2.6.0-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [4e44b28] New upstream version 2.6.0
+    - Fix unittests (Closes: #838358)
+
+  [ Gunnar Beutner ]
+  * [de73edf] Add support for versioned private libraries
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 13 Dec 2016 13:11:05 +0100
+
+icinga2 (2.5.4-3) unstable; urgency=medium
+
+  * [e09f7d4] Link against libmysqlclient (Closes: #825079)
+
+ -- Alexander Wirt <formorer@debian.org>  Sat, 26 Nov 2016 17:00:09 +0100
+
+icinga2 (2.5.4-2) unstable; urgency=medium
+
+  * [f749f15] Disable unity builds for arm
+  * [33face7] Disable unity builds for mips and mipsel 
+    (Closes: #836589)
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 09 Sep 2016 08:59:57 +0200
 
 icinga2 (2.5.4-1) unstable; urgency=medium
 

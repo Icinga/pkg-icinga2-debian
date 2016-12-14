@@ -25,7 +25,6 @@
 #include <map>
 #include <boost/thread/mutex.hpp>
 #include <boost/signals2.hpp>
-#include <boost/foreach.hpp>
 
 namespace icinga
 {
@@ -80,9 +79,7 @@ public:
 			items = m_Items;
 		}
 
-		typedef typename std::pair<String, T> ItemMapPair;
-
-		BOOST_FOREACH(const ItemMapPair& kv, items) {
+		for (const auto& kv : items) {
 			OnUnregistered(kv.first);
 		}
 
@@ -96,8 +93,7 @@ public:
 	{
 		boost::mutex::scoped_lock lock(m_Mutex);
 
-		typename ItemMap::const_iterator it;
-		it = m_Items.find(name);
+		auto it = m_Items.find(name);
 
 		if (it == m_Items.end())
 			return T();
