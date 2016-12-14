@@ -1,3 +1,11 @@
+icinga2 (2.6.0-1~debmon70+1) debmon-wheezy; urgency=medium
+
+  * [e4994c2] wheezy: Disable icinga2-studio
+  * [bf08c69] wheezy: Fix mysqlclient-dev dependency
+  * Rebuild for debmon-wheezy.
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Wed, 14 Dec 2016 10:13:38 +0100
+
 icinga2 (2.6.0-1) unstable; urgency=medium
 
   [ Alexander Wirt ]
