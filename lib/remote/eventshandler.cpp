@@ -24,7 +24,6 @@
 #include "config/expression.hpp"
 #include "base/objectlock.hpp"
 #include "base/json.hpp"
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/replace.hpp>
 
 using namespace icinga;
@@ -53,7 +52,7 @@ bool EventsHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& request
 
 	{
 		ObjectLock olock(types);
-		BOOST_FOREACH(const String& type, types) {
+		for (const String& type : types) {
 			FilterUtility::CheckPermission(user, "events/" + type);
 		}
 	}
@@ -76,7 +75,7 @@ bool EventsHandler::HandleRequest(const ApiUser::Ptr& user, HttpRequest& request
 	EventQueue::Ptr queue = EventQueue::GetByName(queueName);
 
 	if (!queue) {
-		queue = new EventQueue();
+		queue = new EventQueue(queueName);
 		EventQueue::Register(queueName, queue);
 	}
 

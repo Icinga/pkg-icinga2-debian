@@ -33,6 +33,7 @@
 #include "base/scriptglobal.hpp"
 #include "base/initialize.hpp"
 #include "base/statsfunction.hpp"
+#include "base/loader.hpp"
 
 using namespace icinga;
 
@@ -43,6 +44,8 @@ INITIALIZE_ONCE(&IcingaApplication::StaticInitialize);
 
 void IcingaApplication::StaticInitialize(void)
 {
+	Loader::LoadExtensionLibrary("methods");
+
 	String node_name = Utility::GetFQDN();
 
 	if (node_name.IsEmpty()) {
@@ -66,7 +69,7 @@ void IcingaApplication::StatsFunc(const Dictionary::Ptr& status, const Array::Pt
 {
 	Dictionary::Ptr nodes = new Dictionary();
 
-	BOOST_FOREACH(const IcingaApplication::Ptr& icingaapplication, ConfigType::GetObjectsByType<IcingaApplication>()) {
+	for (const IcingaApplication::Ptr& icingaapplication : ConfigType::GetObjectsByType<IcingaApplication>()) {
 		Dictionary::Ptr stats = new Dictionary();
 		stats->Set("node_name", icingaapplication->GetNodeName());
 		stats->Set("enable_notifications", icingaapplication->GetEnableNotifications());

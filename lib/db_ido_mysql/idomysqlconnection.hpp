@@ -64,7 +64,7 @@ protected:
 	virtual void ActivateObject(const DbObject::Ptr& dbobj) override;
 	virtual void DeactivateObject(const DbObject::Ptr& dbobj) override;
 	virtual void ExecuteQuery(const DbQuery& query) override;
-	virtual void ExecuteMultipleQueries(const std::vector<DbQuery>& queries);
+	virtual void ExecuteMultipleQueries(const std::vector<DbQuery>& queries) override;
 	virtual void CleanUpExecuteQuery(const String& table, const String& time_key, double time_value) override;
 	virtual void FillIDCache(const DbType::Ptr& type) override;
 	virtual void NewTransaction(void) override;
@@ -76,7 +76,7 @@ private:
 
 	MYSQL m_Connection;
 	int m_AffectedRows;
-	int m_MaxPacketSize;
+	unsigned int m_MaxPacketSize;
 
 	std::vector<IdoAsyncQuery> m_AsyncQueries;
 

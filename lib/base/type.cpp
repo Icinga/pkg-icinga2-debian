@@ -20,21 +20,17 @@
 #include "base/type.hpp"
 #include "base/scriptglobal.hpp"
 #include "base/objectlock.hpp"
-#include <boost/foreach.hpp>
 
 using namespace icinga;
 
 Type::Ptr Type::TypeInstance;
 
-static void RegisterTypeType(void)
-{
+INITIALIZE_ONCE_WITH_PRIORITY([]() {
 	Type::Ptr type = new TypeType();
 	type->SetPrototype(TypeType::GetPrototype());
 	Type::TypeInstance = type;
 	Type::Register(type);
-}
-
-INITIALIZE_ONCE_WITH_PRIORITY(RegisterTypeType, 20);
+}, 20);
 
 String Type::ToString(void) const
 {
@@ -72,11 +68,10 @@ std::vector<Type::Ptr> Type::GetAllTypes(void)
 	if (typesNS) {
 		ObjectLock olock(typesNS);
 
-		BOOST_FOREACH(const Dictionary::Pair& kv, typesNS) {
+		for (const Dictionary::Pair& kv : typesNS) {
 			if (kv.second.IsObjectType<Type>())
 				types.push_back(kv.second);
-	}
-
+		}
 	}
 
 	return types;

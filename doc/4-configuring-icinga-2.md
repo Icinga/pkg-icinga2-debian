@@ -65,7 +65,7 @@ nodes? Or any specific local configuration (e.g. health checks)?
 TODO
 
 If you happen to have further questions, do not hesitate to join the
-[community support channels](https://support.icinga.org)
+[community support channels](https://www.icinga.com/community/get-involved/)
 and ask community members for their experience and best practices.
 
 ## <a id="configuring-icinga2-overview"></a> Configuration Overview
@@ -523,7 +523,7 @@ implicitely use the `icingaadmins` UserGroup defined in [users.conf](4-configuri
 More details on defining notifications and their additional attributes such as
 filters can be read in [this chapter](3-monitoring-basics.md#notifications).
 
-### <a id="commands-conf"></a> commands.conf
+#### <a id="commands-conf"></a> commands.conf
 
 This is the place where your own command configuration can be defined. By default
 only the notification commands used by the notification templates defined in [templates.conf](4-configuring-icinga-2.md#templates-conf).
@@ -531,7 +531,7 @@ only the notification commands used by the notification templates defined in [te
 You can freely customize these notification commands, and adapt them for your needs.
 Read more on that topic [here](3-monitoring-basics.md#notification-commands).
 
-### <a id="groups-conf"></a> groups.conf
+#### <a id="groups-conf"></a> groups.conf
 
 The example host defined in [hosts.conf](hosts-conf) already has the
 custom attribute `os` set to `Linux` and is therefore automatically
@@ -553,7 +553,7 @@ to previously seen [apply rules](3-monitoring-basics.md#using-apply).
     }
 
 Service groups can be grouped together by similar pattern matches.
-The [match() function](17-language-reference.md#function-calls) expects a wildcard match string
+The [match function](18-library-reference.md#global-functions-match) expects a wildcard match string
 and the attribute string to match with.
 
     object ServiceGroup "ping" {

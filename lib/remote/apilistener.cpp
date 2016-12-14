@@ -164,6 +164,14 @@ void ApiListener::Start(bool runtimeCreated)
 	OnMasterChanged(true);
 }
 
+void ApiListener::Stop(bool runtimeDeleted)
+{
+	ObjectImpl<ApiListener>::Stop(runtimeDeleted);
+
+	boost::mutex::scoped_lock lock(m_LogLock);
+	CloseLogFile();
+}
+
 ApiListener::Ptr ApiListener::GetInstance(void)
 {
 	return m_Instance;
@@ -183,7 +191,7 @@ Endpoint::Ptr ApiListener::GetMaster(void) const
 
 	std::vector<String> names;
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints())
+	for (const Endpoint::Ptr& endpoint : zone->GetEndpoints())
 		if (endpoint->GetConnected() || endpoint->GetName() == GetIdentity())
 			names.push_back(endpoint->GetName());
 
@@ -503,10 +511,10 @@ void ApiListener::ApiTimerHandler(void)
 	Utility::Glob(GetApiDir() + "log/*", boost::bind(&ApiListener::LogGlobHandler, boost::ref(files), _1), GlobFile);
 	std::sort(files.begin(), files.end());
 
-	BOOST_FOREACH(int ts, files) {
+	for (int ts : files) {
 		bool need = false;
 
-		BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
+		for (const Endpoint::Ptr& endpoint : ConfigType::GetObjectsByType<Endpoint>()) {
 			if (endpoint == GetLocalEndpoint())
 				continue;
 
@@ -527,7 +535,7 @@ void ApiListener::ApiTimerHandler(void)
 		}
 	}
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>()) {
+	for (const Endpoint::Ptr& endpoint : ConfigType::GetObjectsByType<Endpoint>()) {
 		if (!endpoint->GetConnected())
 			continue;
 
@@ -546,12 +554,12 @@ void ApiListener::ApiTimerHandler(void)
 
 		double maxTs = 0;
 
-		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+		for (const JsonRpcConnection::Ptr& client : endpoint->GetClients()) {
 			if (client->GetTimestamp() > maxTs)
 				maxTs = client->GetTimestamp();
 		}
 
-		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+		for (const JsonRpcConnection::Ptr& client : endpoint->GetClients()) {
 			if (client->GetTimestamp() != maxTs)
 				client->Disconnect();
 			else
@@ -569,7 +577,7 @@ void ApiListener::ApiReconnectTimerHandler(void)
 {
 	Zone::Ptr my_zone = Zone::GetLocalZone();
 
-	BOOST_FOREACH(const Zone::Ptr& zone, ConfigType::GetObjectsByType<Zone>()) {
+	for (const Zone::Ptr& zone : ConfigType::GetObjectsByType<Zone>()) {
 		/* don't connect to global zones */
 		if (zone->GetGlobal())
 			continue;
@@ -582,7 +590,7 @@ void ApiListener::ApiReconnectTimerHandler(void)
 			continue;
 		}
 
-		BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
+		for (const Endpoint::Ptr& endpoint : zone->GetEndpoints()) {
 			/* don't connect to ourselves */
 			if (endpoint == GetLocalEndpoint()) {
 				Log(LogDebug, "ApiListener")
@@ -626,7 +634,7 @@ void ApiListener::ApiReconnectTimerHandler(void)
 		    << "Current zone master: " << master->GetName();
 
 	std::vector<String> names;
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, ConfigType::GetObjectsByType<Endpoint>())
+	for (const Endpoint::Ptr& endpoint : ConfigType::GetObjectsByType<Endpoint>())
 		if (endpoint->GetConnected())
 			names.push_back(endpoint->GetName() + " (" + Convert::ToString(endpoint->GetClients().size()) + ")");
 
@@ -681,16 +689,16 @@ void ApiListener::SyncSendMessage(const Endpoint::Ptr& endpoint, const Dictionar
 
 	if (!endpoint->GetSyncing()) {
 		Log(LogNotice, "ApiListener")
-		    << "Sending message to '" << endpoint->GetName() << "'";
+		    << "Sending message '" << message->Get("method") << "' to '" << endpoint->GetName() << "'";
 
 		double maxTs = 0;
 
-		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+		for (const JsonRpcConnection::Ptr& client : endpoint->GetClients()) {
 			if (client->GetTimestamp() > maxTs)
 				maxTs = client->GetTimestamp();
 		}
 
-		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients()) {
+		for (const JsonRpcConnection::Ptr& client : endpoint->GetClients()) {
 			if (client->GetTimestamp() != maxTs)
 				continue;
 
@@ -705,9 +713,13 @@ bool ApiListener::RelayMessageOne(const Zone::Ptr& targetZone, const MessageOrig
 
 	Zone::Ptr myZone = Zone::GetLocalZone();
 
-	/* only relay the message to a) the same zone, b) the parent zone and c) direct child zones */
-	if (targetZone != myZone && targetZone != myZone->GetParent() && targetZone->GetParent() != myZone)
+	/* only relay the message to a) the same zone, b) the parent zone and c) direct child zones. Exception is a global zone. */
+	if (!targetZone->GetGlobal() &&
+	    targetZone != myZone &&
+	    targetZone != myZone->GetParent() &&
+	    targetZone->GetParent() != myZone) {
 		return true;
+	}
 
 	Endpoint::Ptr myEndpoint = GetLocalEndpoint();
 
@@ -715,7 +727,23 @@ bool ApiListener::RelayMessageOne(const Zone::Ptr& targetZone, const MessageOrig
 
 	bool relayed = false, log_needed = false, log_done = false;
 
-	BOOST_FOREACH(const Endpoint::Ptr& endpoint, targetZone->GetEndpoints()) {
+	std::set<Endpoint::Ptr> targetEndpoints;
+
+	if (targetZone->GetGlobal()) {
+		targetEndpoints = myZone->GetEndpoints();
+
+		for (const Zone::Ptr& zone : ConfigType::GetObjectsByType<Zone>()) {
+			/* Fetch immediate child zone members */
+			if (zone->GetParent() == myZone) {
+				std::set<Endpoint::Ptr> endpoints = zone->GetEndpoints();
+				targetEndpoints.insert(endpoints.begin(), endpoints.end());
+			}
+		}
+	} else {
+		targetEndpoints = targetZone->GetEndpoints();
+	}
+
+	for (const Endpoint::Ptr& endpoint : targetEndpoints) {
 		/* don't relay messages to ourselves */
 		if (endpoint == GetLocalEndpoint())
 			continue;
@@ -764,7 +792,7 @@ bool ApiListener::RelayMessageOne(const Zone::Ptr& targetZone, const MessageOrig
 	if (!skippedEndpoints.empty()) {
 		double ts = message->Get("ts");
 
-		BOOST_FOREACH(const Endpoint::Ptr& endpoint, skippedEndpoints)
+		for (const Endpoint::Ptr& endpoint : skippedEndpoints)
 			endpoint->SetLocalLogPosition(ts);
 	}
 
@@ -799,7 +827,7 @@ void ApiListener::SyncRelayMessage(const MessageOrigin::Ptr& origin,
 
 	bool need_log = !RelayMessageOne(target_zone, origin, message, master);
 
-	BOOST_FOREACH(const Zone::Ptr& zone, target_zone->GetAllParents()) {
+	for (const Zone::Ptr& zone : target_zone->GetAllParents()) {
 		if (!RelayMessageOne(zone, origin, message, master))
 			need_log = true;
 	}
@@ -919,7 +947,7 @@ void ApiListener::ReplayLog(const JsonRpcConnection::Ptr& client)
 		Utility::Glob(GetApiDir() + "log/*", boost::bind(&ApiListener::LogGlobHandler, boost::ref(files), _1), GlobFile);
 		std::sort(files.begin(), files.end());
 
-		BOOST_FOREACH(int ts, files) {
+		for (int ts : files) {
 			String path = GetApiDir() + "log/" + Convert::ToString(ts);
 
 			if (ts < peer_ts)
@@ -1031,7 +1059,7 @@ void ApiListener::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr& per
 	stats = listener->GetStatus();
 
 	ObjectLock olock(stats.second);
-	BOOST_FOREACH(const Dictionary::Pair& kv, stats.second)
+	for (const Dictionary::Pair& kv : stats.second)
 		perfdata->Add("'api_" + kv.first + "'=" + Convert::ToString(kv.second));
 
 	status->Set("api", stats.first);
@@ -1053,7 +1081,7 @@ std::pair<Dictionary::Ptr, Dictionary::Ptr> ApiListener::GetStatus(void)
 
 	Dictionary::Ptr connectedZones = new Dictionary();
 
-	BOOST_FOREACH(const Zone::Ptr& zone, ConfigType::GetObjectsByType<Zone>()) {
+	for (const Zone::Ptr& zone : ConfigType::GetObjectsByType<Zone>()) {
 		/* only check endpoints in a) the same zone b) our parent zone c) immediate child zones */
 		if (my_zone != zone && my_zone != zone->GetParent() && zone != my_zone->GetParent()) {
 			Log(LogDebug, "ApiListener")
@@ -1067,7 +1095,7 @@ std::pair<Dictionary::Ptr, Dictionary::Ptr> ApiListener::GetStatus(void)
 
 		Array::Ptr zoneEndpoints = new Array();
 
-		BOOST_FOREACH(const Endpoint::Ptr& endpoint, zone->GetEndpoints()) {
+		for (const Endpoint::Ptr& endpoint : zone->GetEndpoints()) {
 			zoneEndpoints->Add(endpoint->GetName());
 
 			if (endpoint->GetName() == GetIdentity())

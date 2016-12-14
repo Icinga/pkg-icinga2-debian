@@ -1,3 +1,41 @@
+icinga2 (2.6.0-1) unstable; urgency=medium
+
+  [ Alexander Wirt ]
+  * [4e44b28] New upstream version 2.6.0
+    - Fix unittests (Closes: #838358)
+
+  [ Gunnar Beutner ]
+  * [de73edf] Add support for versioned private libraries
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 13 Dec 2016 13:11:05 +0100
+
+icinga2 (2.5.4-3) unstable; urgency=medium
+
+  * [e09f7d4] Link against libmysqlclient (Closes: #825079)
+
+ -- Alexander Wirt <formorer@debian.org>  Sat, 26 Nov 2016 17:00:09 +0100
+
+icinga2 (2.5.4-2) unstable; urgency=medium
+
+  * [f749f15] Disable unity builds for arm
+  * [33face7] Disable unity builds for mips and mipsel 
+    (Closes: #836589)
+
+ -- Alexander Wirt <formorer@debian.org>  Fri, 09 Sep 2016 08:59:57 +0200
+
+icinga2 (2.5.4-1) unstable; urgency=medium
+
+  * [7cf17d9] Recommend specific icinga-doc version
+  * [d2c5d89] New upstream version 2.5.4
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 31 Aug 2016 10:31:34 +0200
+
+icinga2 (2.5.3-1) unstable; urgency=medium
+
+  * [6cd83c4] Imported Upstream version 2.5.3
+
+ -- Alexander Wirt <formorer@debian.org>  Thu, 25 Aug 2016 13:11:20 +0200
+
 icinga2 (2.5.1-1) unstable; urgency=medium
 
   [ Markus Frosch ]

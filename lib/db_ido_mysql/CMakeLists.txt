@@ -25,7 +25,7 @@ if(MYSQL_FOUND)
   )
 
   if(ICINGA2_UNITY_BUILD)
-      mkunity_target(db_ido_mysql db_ido_mysql_SOURCES)
+      mkunity_target(db_ido_mysql db_ido_mysql db_ido_mysql_SOURCES)
   endif()
 
   add_library(db_ido_mysql SHARED ${db_ido_mysql_SOURCES})
@@ -38,6 +38,7 @@ if(MYSQL_FOUND)
     INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}/icinga2
     DEFINE_SYMBOL I2_DB_IDO_MYSQL_BUILD
     FOLDER Components
+    VERSION ${SPEC_VERSION}
   )
 
   install_if_not_exists(

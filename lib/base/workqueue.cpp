@@ -24,7 +24,6 @@
 #include "base/application.hpp"
 #include "base/exception.hpp"
 #include <boost/bind.hpp>
-#include <boost/foreach.hpp>
 #include <boost/thread/tss.hpp>
 
 using namespace icinga;
@@ -34,7 +33,7 @@ boost::thread_specific_ptr<WorkQueue *> l_ThreadWorkQueue;
 
 WorkQueue::WorkQueue(size_t maxItems, int threadCount)
 	: m_ID(m_NextID++), m_ThreadCount(threadCount), m_Spawned(false), m_MaxItems(maxItems), m_Stopped(false),
-	  m_Processing(0)
+	  m_Processing(0), m_NextTaskID(0)
 {
 	m_StatusTimer = new Timer();
 	m_StatusTimer->SetInterval(10);
@@ -65,7 +64,7 @@ String WorkQueue::GetName(void) const
  * allowInterleaved is true in which case the new task might be run
  * immediately if it's being enqueued from within the WorkQueue thread.
  */
-void WorkQueue::Enqueue(const boost::function<void (void)>& function, WorkQueuePriority priority,
+void WorkQueue::Enqueue(boost::function<void (void)>&& function, WorkQueuePriority priority,
     bool allowInterleaved)
 {
 	bool wq_thread = IsWorkerThread();
@@ -94,7 +93,7 @@ void WorkQueue::Enqueue(const boost::function<void (void)>& function, WorkQueueP
 			m_CVFull.wait(lock);
 	}
 
-	m_Tasks.push(Task(function, priority, ++m_NextTaskID));
+	m_Tasks.emplace(std::move(function), priority, ++m_NextTaskID);
 
 	m_CVEmpty.notify_one();
 }
@@ -173,7 +172,7 @@ void WorkQueue::ReportExceptions(const String& facility) const
 {
 	std::vector<boost::exception_ptr> exceptions = GetExceptions();
 
-	BOOST_FOREACH(const boost::exception_ptr& eptr, exceptions) {
+	for (const auto& eptr : exceptions) {
 		Log(LogCritical, facility)
 		    << DiagnosticInformation(eptr);
 	}
