@@ -1,3 +1,10 @@
+icinga2 (2.6.0-2) UNRELEASED; urgency=medium
+
+  * [e0f34e4] Add patch 41_ido_mysql57 - for compatibility with MySQL 5.7
+  * [6512d11] Remove obsolete patch 30_use_libmysql (empty)
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Fri, 16 Dec 2016 14:39:01 +0100
+
 icinga2 (2.6.0-1) unstable; urgency=medium
 
   [ Alexander Wirt ]
