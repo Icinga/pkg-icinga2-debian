@@ -66,6 +66,7 @@ Provides: python-icinga2
 Depends:
     adduser,
     lsb-release,
+    lsb-base,
     ${misc:Depends}
 Recommends: logrotate
 Description: host and network monitoring system - common files
