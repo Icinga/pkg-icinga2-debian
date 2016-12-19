@@ -8,9 +8,6 @@ DEB_HOST_ARCH = $(shell dpkg-architecture -qDEB_HOST_ARCH)
 ifneq ($(findstring $(DEB_HOST_ARCH), armhf),)
 	UNITY_BUILD = -DICINGA2_UNITY_BUILD=Off
 endif
-ifneq ($(findstring $(DEB_HOST_ARCH), arm64),)
-	export DEB_LDFLAGS_MAINT_APPEND = -fuse-ld=gold
-endif
 
 ifneq ($(findstring $(DEB_HOST_ARCH), mips),)
 	UNITY_BUILD = -DICINGA2_UNITY_BUILD=Off
