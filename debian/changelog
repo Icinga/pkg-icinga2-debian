@@ -1,8 +1,20 @@
-icinga2 (2.6.0-1~debmon8+1) debmon-jessie; urgency=medium
+icinga2 (2.6.0-2~debmon8+1) debmon-jessie; urgency=medium
 
   * Rebuild for debmon-jessie.
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 19 May 2016 14:17:01 +0200
+
+icinga2 (2.6.0-2) unstable; urgency=medium
+
+  * [e0f34e4] Add patch 41_ido_mysql57 - for compatibility with MySQL 5.7
+  * [6512d11] Remove obsolete patch 30_use_libmysql (empty)
+  * [16e341b] Recommend default-mysql-{server,client}
+  * [749f1fa] Adding missing dependency on lsb-base
+  * [4ed1e10] Update initscript to ignore SIGPIPE in daemon
+  * [5c10b76] Add patch 42_mips_boost_bind_workaround
+  * [86a23e5] makeshlibs: no scripts, we don't export shared libraries
+
+ -- Markus Frosch <lazyfrosch@debian.org>  Mon, 19 Dec 2016 16:13:45 +0100
 
 icinga2 (2.6.0-1) unstable; urgency=medium
 
@@ -28,7 +40,6 @@ icinga2 (2.5.4-2) unstable; urgency=medium
     (Closes: #836589)
 
  -- Alexander Wirt <formorer@debian.org>  Fri, 09 Sep 2016 08:59:57 +0200
->>>>>>> master
 
 icinga2 (2.5.4-1) unstable; urgency=medium
 
