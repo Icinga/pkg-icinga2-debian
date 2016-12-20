@@ -1,3 +1,10 @@
+icinga2 (2.6.0-21~debmon70+1) debmon-wheezy; urgency=medium
+
+  * Rebuild for wheezy
+    - adjust mysql deps for wheezy
+
+ -- Alexander Wirt <formorer@debian.org>  Tue, 20 Dec 2016 08:55:13 +0100
+
 icinga2 (2.6.0-2) unstable; urgency=medium
 
   * [e0f34e4] Add patch 41_ido_mysql57 - for compatibility with MySQL 5.7
