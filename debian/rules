@@ -76,4 +76,8 @@ override_dh_installinit:
 override_dh_strip:
 	dh_strip --dbg-package=icinga2-dbg
 
+# we don't build shared libraries
+override_dh_makeshlibs:
+	dh_makeshlibs --no-scripts
+
 # vi: noexpandtab ts=4 sw=4 :
