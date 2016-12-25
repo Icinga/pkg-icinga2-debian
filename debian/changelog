@@ -1,4 +1,4 @@
-icinga2 (2.6.0-21~debmon70+1) debmon-wheezy; urgency=medium
+icinga2 (2.6.0-2~debmon70+1) debmon-wheezy; urgency=medium
 
   * Rebuild for wheezy
     - adjust mysql deps for wheezy
