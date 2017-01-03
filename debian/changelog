@@ -1,4 +1,4 @@
-icinga2 (2.6.0-2~ppa1~trusty2) trusty; urgency=medium
+icinga2 (2.6.0-2~ppa2~yakkety2) trusty; urgency=medium
 
   * Reenable systemd
 
