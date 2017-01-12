@@ -26,6 +26,11 @@ STARTUP_LOG="/var/log/icinga2/startup.log"
 PIDFILE=/var/run/icinga2/$NAME.pid
 SCRIPTNAME=/etc/init.d/$NAME
 
+# Block/ignore SIGPIPE inside Icinga2
+# Workaround for a known bug in 2.6.0
+# see https://dev.icinga.com/issues/13567#note-19
+trap '' 13 # SIGPIPE
+
 # Exit if the package is not installed
 [ -x "$DAEMON" ] || exit 0
 
