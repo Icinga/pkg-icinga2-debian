@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
+ * Copyright (C) 2012-2017 Icinga Development Team (https://www.icinga.com/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -249,13 +249,14 @@ static void ProcessHandler(void)
 	}
 
 	for (;;) {
+		size_t length;
+
 		struct msghdr msg;
 		memset(&msg, 0, sizeof(msg));
 
-		char mbuf[4096];
 		struct iovec io;
-		io.iov_base = mbuf;
-		io.iov_len = sizeof(mbuf);
+		io.iov_base = &length;
+		io.iov_len = sizeof(length);
 
 		msg.msg_iov = &io;
 		msg.msg_iovlen = 1;
@@ -273,7 +274,30 @@ static void ProcessHandler(void)
 			break;
 		}
 
-		String jrequest = String(mbuf, mbuf + rc);
+		char *mbuf = new char[length];
+
+		size_t count = 0;
+		while (count < length) {
+			rc = recv(l_ProcessControlFD, mbuf + count, length - count, 0);
+
+			if (rc <= 0) {
+				if (rc < 0 && (errno == EINTR || errno == EAGAIN))
+					continue;
+
+				delete [] mbuf;
+
+				_exit(0);
+			}
+
+			count += rc;
+
+			if (rc == 0)
+				break;
+		}
+
+		String jrequest = String(mbuf, mbuf + count);
+
+		delete [] mbuf;
 
 		Dictionary::Ptr request = JsonDecode(jrequest);
 
@@ -350,6 +374,7 @@ static pid_t ProcessSpawn(const std::vector<String>& arguments, const Dictionary
 	request->Set("extraEnvironment", extraEnvironment);
 
 	String jrequest = JsonEncode(request);
+	size_t length = jrequest.GetLength();
 
 	boost::mutex::scoped_lock lock(l_ProcessControlMutex);
 
@@ -357,8 +382,8 @@ static pid_t ProcessSpawn(const std::vector<String>& arguments, const Dictionary
 	memset(&msg, 0, sizeof(msg));
 
 	struct iovec io;
-	io.iov_base = const_cast<char *>(jrequest.CStr());
-	io.iov_len = jrequest.GetLength();
+	io.iov_base = &length;
+	io.iov_len = sizeof(length);
 
 	msg.msg_iov = &io;
 	msg.msg_iovlen = 1;
@@ -376,8 +401,12 @@ static pid_t ProcessSpawn(const std::vector<String>& arguments, const Dictionary
 
 	msg.msg_controllen = cmsg->cmsg_len;
 
+send_message:
 	while (sendmsg(l_ProcessControlFD, &msg, 0) < 0)
 		StartSpawnProcessHelper();
+
+	if (send(l_ProcessControlFD, jrequest.CStr(), jrequest.GetLength(), 0) < 0)
+		goto send_message;
 
 	char buf[4096];
 
@@ -400,11 +429,16 @@ static int ProcessKill(pid_t pid, int signum)
 	request->Set("signum", signum);
 
 	String jrequest = JsonEncode(request);
+	size_t length = jrequest.GetLength();
 
 	boost::mutex::scoped_lock lock(l_ProcessControlMutex);
 
-	while (send(l_ProcessControlFD, jrequest.CStr(), jrequest.GetLength(), 0) < 0)
+send_message:
+	while (send(l_ProcessControlFD, &length, sizeof(length), 0) < 0)
 		StartSpawnProcessHelper();
+
+	if (send(l_ProcessControlFD, jrequest.CStr(), jrequest.GetLength(), 0) < 0)
+		goto send_message;
 
 	char buf[4096];
 
@@ -426,11 +460,16 @@ static int ProcessWaitPID(pid_t pid, int *status)
 	request->Set("pid", pid);
 
 	String jrequest = JsonEncode(request);
+	size_t length = jrequest.GetLength();
 
 	boost::mutex::scoped_lock lock(l_ProcessControlMutex);
 
-	while (send(l_ProcessControlFD, jrequest.CStr(), jrequest.GetLength(), 0) < 0)
+send_message:
+	while (send(l_ProcessControlFD, &length, sizeof(length), 0) < 0)
 		StartSpawnProcessHelper();
+
+	if (send(l_ProcessControlFD, jrequest.CStr(), jrequest.GetLength(), 0) < 0)
+		goto send_message;
 
 	char buf[4096];
 
@@ -711,7 +750,7 @@ static BOOL CreatePipeOverlapped(HANDLE *outReadPipe, HANDLE *outWritePipe,
 
 	*outReadPipe = CreateNamedPipe(pipeName, PIPE_ACCESS_INBOUND | readMode,
 	    PIPE_TYPE_BYTE | PIPE_WAIT, 1, size, size, 60 * 1000, securityAttributes);
-	
+
 	if (*outReadPipe == INVALID_HANDLE_VALUE)
 		return FALSE;
 

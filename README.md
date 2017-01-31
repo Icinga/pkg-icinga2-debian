@@ -1,6 +1,8 @@
+[![Build Status](https://travis-ci.org/Icinga/icinga2.svg?branch=master)](https://travis-ci.org/Icinga/icinga2)
+
 # Icinga 2
 
-![Icinga Logo](https://www.icinga.org/wp-content/uploads/2014/06/icinga_logo.png)
+![Icinga Logo](https://www.icinga.com/wp-content/uploads/2014/06/icinga_logo.png)
 
 #### Table of Contents
 
@@ -29,7 +31,7 @@ and inside the [documentation](doc/1-about.md).
 
 Icinga 2 and the Icinga 2 documentation are licensed under the terms of the GNU
 General Public License Version 2, you will find a copy of this license in the
-LICENSE file included in the source package.
+COPYING file included in the source package.
 
 ## Installation
 
@@ -59,10 +61,12 @@ There are many ways to contribute to Icinga -- whether it be sending patches,
 testing, reporting bugs, or reviewing and updating the documentation. Every
 contribution is appreciated!
 
-Read the [contributing section](https://www.icinga.com/community/get-involved/) and
-get familiar with the code.
+Please read the [contributing section](https://www.icinga.com/community/get-involved/)
+first. Then you should have a look at the [roadmap](https://github.com/Icinga/icinga2/milestones)
+and remaining [open issues](https://github.com/Icinga/icinga2/issues).
 
-Pull requests on [GitHub](https://github.com/Icinga/icinga2) are preferred.
+Pick issues you want to help resolve, fork the [repository on GitHub](https://github.com/Icinga/icinga2)
+and send a pull request with your changes. Thanks for your contribution!
 
 ### Testing
 
@@ -70,7 +74,7 @@ Basic unit test coverage is provided by running `make test` during package build
 Read the [INSTALL.md](INSTALL.md) file for more information about development builds.
 
 Snapshot packages from the laster development branch are available inside the
-[package repository](http://packages.icinga.org).
+[package repository](http://packages.icinga.com).
 
 You can help test-drive the latest Icinga 2 snapshot packages inside the
 [Icinga 2 Vagrant boxes](https://github.com/icinga/icinga-vagrant).
