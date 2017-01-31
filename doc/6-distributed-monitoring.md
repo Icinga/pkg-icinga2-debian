@@ -155,7 +155,7 @@ additional security:
 * SSL certificates are mandatory for communication between nodes. The CLI commands
 help you create those certs automatically.
 * Child zones only receive updates (check results, commands, etc.) for their configured objects.
-* Zones cannot interfere with other zones and influence each other. Each checkabke host or service object is assigned to **one zone** only.
+* Zones cannot interfere with other zones and influence each other. Each checkable host or service object is assigned to **one zone** only.
 * All nodes in a zone trust each other.
 * [Config sync](6-distributed-monitoring.md#distributed-monitoring-top-down-config-sync) and [remote command endpoint execution](6-distributed-monitoring.md#distributed-monitoring-top-down-command-endpoint) is disabled by default.
 
@@ -413,7 +413,7 @@ the [configuration modes](6-distributed-monitoring.md#distributed-monitoring-con
 
 ### <a id="distributed-monitoring-setup-client-windows"></a> Client/Satellite Windows Setup
 
-Download the MSI-Installer package from [http://packages.icinga.org/windows/](http://packages.icinga.org/windows/).
+Download the MSI-Installer package from [http://packages.icinga.com/windows/](http://packages.icinga.com/windows/).
 
 Requirements:
 

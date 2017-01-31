@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
+ * Copyright (C) 2012-2017 Icinga Development Team (https://www.icinga.com/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -636,7 +636,7 @@ bool IdoPgsqlConnection::FieldToEscapedString(const String& key, const Value& va
 	} else if (DbValue::IsTimestamp(value)) {
 		long ts = rawvalue;
 		std::ostringstream msgbuf;
-		msgbuf << "TO_TIMESTAMP(" << ts << ")";
+		msgbuf << "TO_TIMESTAMP(" << ts << ") AT TIME ZONE 'UTC'";
 		*result = Value(msgbuf.str());
 	} else if (DbValue::IsTimestampNow(value)) {
 		*result = "NOW()";
