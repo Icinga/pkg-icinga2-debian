@@ -1,6 +1,6 @@
 /******************************************************************************
  * Icinga 2                                                                   *
- * Copyright (C) 2012-2016 Icinga Development Team (https://www.icinga.org/)  *
+ * Copyright (C) 2012-2017 Icinga Development Team (https://www.icinga.com/)  *
  *                                                                            *
  * This program is free software; you can redistribute it and/or              *
  * modify it under the terms of the GNU General Public License                *
@@ -512,7 +512,8 @@ Value MacroProcessor::ResolveArguments(const Value& command, const Dictionary::P
 						} catch (const std::exception& ex) {
 							/* tried to convert a string */
 							Log(LogWarning, "PluginUtility")
-							    << "Error evaluating set_if value '" << set_if_resolved << "': " << ex.what();
+							    << "Error evaluating set_if value '" << set_if_resolved
+							    << "' used in argument '" << arg.Key << "': " << ex.what();
 							continue;
 						}
 					}
@@ -550,7 +551,8 @@ Value MacroProcessor::ResolveArguments(const Value& command, const Dictionary::P
 		for (const CommandArgument& arg : args) {
 
 			if (arg.AValue.IsObjectType<Dictionary>()) {
-				Log(LogWarning, "PluginUtility", "Tried to use dictionary in argument");
+				Log(LogWarning, "PluginUtility")
+				    << "Tried to use dictionary in argument '" << arg.Key << "'.";
 				continue;
 			} else if (arg.AValue.IsObjectType<Array>()) {
 				bool first = true;
