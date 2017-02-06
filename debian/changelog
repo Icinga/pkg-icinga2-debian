@@ -1,8 +1,8 @@
-icinga2 (2.6.1-1~ppa1~precise2) UNRELEASED; urgency=medium
+icinga2 (2.6.1-1~ppa1~precise2) precise; urgency=medium
 
   * don't use makeshlibs.
 
- -- Alexander Wirt <alexander.wirt@credativ.de>  Mon, 06 Feb 2017 23:20:20 +0100
+ -- Alexander Wirt <alexander.wirt@credativ.de>  Mon, 06 Feb 2017 23:21:04 +0100
 
 icinga2 (2.6.1-1~ppa1~precise1) precise; urgency=medium
 
