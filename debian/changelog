@@ -1,3 +1,10 @@
+icinga2 (2.6.2-1~exp1) experimental; urgency=medium
+
+  * [16eb968] Depend on network.target and fix typo in service deps
+  * [7eee479] New upstream version 2.6.2
+
+ -- Alexander Wirt <alexander.wirt@credativ.de>  Mon, 13 Feb 2017 20:50:38 +0100
+
 icinga2 (2.6.1-1~exp1) experimental; urgency=medium
 
   * [8cc068c] New upstream version 2.6.1
