@@ -2,7 +2,7 @@ icinga2 (2.6.2-1~debmon70+1) debmon-wheezy; urgency=medium
 
   * Rebuild for debmon-wheezy.
 
- -- Markus Frosch <lazyfrosch@debian.org>  Tue, 31 Jan 2017 18:01:16 +0100
+ -- Alexander Wirt <alexander.wirt@credativ.de>  Mon, 13 Feb 2017 22:26:27 +0100
 
 icinga2 (2.6.2-1~exp1) experimental; urgency=medium
 
