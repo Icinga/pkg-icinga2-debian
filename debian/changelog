@@ -1,8 +1,14 @@
-icinga2 (2.6.2-1~ppa1~trusty1) trusty; urgency=medium
+icinga2 (2.6.3-1~ppa1~trusty1) trusty; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
- -- Alexander Wirt <alexander.wirt@credativ.de>  Mon, 13 Feb 2017 22:58:22 +0100
+ -- Alexander Wirt <formorer@debian.org>  Thu, 30 Mar 2017 00:40:19 +0200
+
+icinga2 (2.6.3-1) experimental; urgency=medium
+
+  * [83b389e] New upstream version 2.6.3
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 29 Mar 2017 23:45:01 +0200
 
 icinga2 (2.6.2-1~exp1) experimental; urgency=medium
 
