@@ -53,12 +53,39 @@ is removed (may happen before or after the actual end time!).
 
 ### <a id="scheduling-downtime"></a> Scheduling a downtime
 
-This can either happen through a web interface or by sending an [external command](14-features.md#external-commands)
-to the external command pipe provided by the `ExternalCommandListener` configuration.
+You can schedule a downtime either by using the Icinga 2 API action
+[schedule-downtime](12-icinga2-api.md#icinga2-api-actions-schedule-downtime) or
+by sending an [external command](14-features.md#external-commands).
 
-Fixed downtimes require a start and end time (a duration will be ignored).
-Flexible downtimes need a start and end time for the time span, and a duration
-independent from that time span.
+
+#### <a id="fixed-downtime"></a> Fixed Downtime
+
+If the host/service changes into a NOT-OK state between the start and
+end time window, the downtime will be marked as `in effect` and
+increases the downtime depth counter.
+
+```
+   |       |         |
+start      |        end
+       trigger time
+```
+
+#### <a id="flexible-downtime"></a> Flexible Downtime
+
+A flexible downtime defines a time window where the downtime may be
+triggered from a host/service NOT-OK state change. It will then last
+until the specified time duration is reached. That way it can happen
+that the downtime end time is already gone, but the downtime ends
+at `trigger time + duration`.
+
+
+```
+   |       |         |
+start      |        end               actual end time
+           |--------------duration--------|
+       trigger time
+```
+
 
 ### <a id="triggered-downtimes"></a> Triggered Downtimes
 
@@ -100,21 +127,39 @@ add useful information for others on repeating incidents (for example
 "last time syslog at 100% cpu on 17.10.2013 due to stale nfs mount") which
 is primarily accessible using web interfaces.
 
-Adding and deleting comment actions are possible through the external command pipe
-provided with the `ExternalCommandListener` configuration. The caller must
-pass the comment id in case of manipulating an existing comment.
-
+You can add a comment either by using the Icinga 2 API action
+[add-comment](12-icinga2-api.md#icinga2-api-actions-add-comment) or
+by sending an [external command](14-features.md#external-commands).
 
 ## <a id="acknowledgements"></a> Acknowledgements
 
-If a problem is alerted and notified, you may signal the other notification
-recipients that you are aware of the problem and will handle it.
+If a problem persists and notifications have been sent, you can
+acknowledge the problem. That way other users will get
+a notification that you're aware of the issue and probably are
+already working on a fix.
 
-By sending an acknowledgement to Icinga 2 (using the external command pipe
-provided with `ExternalCommandListener` configuration) all future notifications
-are suppressed, a new comment is added with the provided description and
-a notification with the type `NotificationFilterAcknowledgement` is sent
-to all notified users.
+Note: Acknowledgements also add a new [comment](8-advanced-topics.md#comments-intro)
+which contains the author and text fields.
+
+You can send an acknowledgement either by using the Icinga 2 API action
+[acknowledge-problem](12-icinga2-api.md#icinga2-api-actions-acknowledge-problem) or
+by sending an [external command](14-features.md#external-commands).
+
+
+### <a id="sticky-acknowledgements"></a> Sticky Acknowledgements
+
+The acknowledgement is removed if a state change occurs or if the host/service
+recovers (OK/Up state).
+
+If you acknowlege a problem once you've received a `Critical` notification,
+the acknowledgement will be removed if there is a state transition to `Warning`.
+```
+OK -> WARNING -> CRITICAL -> WARNING -> OK
+```
+
+If you prefer to keep the acknowledgement until the problem is resolved (`OK`
+recovery) you need to enable the `sticky` parameter.
+
 
 ### <a id="expiring-acknowledgements"></a> Expiring Acknowledgements
 
@@ -298,6 +343,88 @@ and adds the excluded time period names as an array.
       }
     }
 
+## <a id="advanced-use-of-apply-rules"></a> Advanced Use of Apply Rules
+
+[Apply rules](3-monitoring-basics.md#using-apply) can be used to create a rule set which is
+entirely based on host objects and their attributes.
+In addition to that [apply for and custom attribute override](3-monitoring-basics.md#using-apply-for)
+extend the possibilities.
+
+The following example defines a dictionary on the host object which contains
+configuration attributes for multiple web servers. This then used to add three checks:
+
+* A `ping4` check using the local IP `address` of the web server.
+* A `tcp` check querying the TCP port where the HTTP service is running on.
+* If the `url` key is defined, the third apply for rule will create service objects using the `http` CheckCommand.
+In addition to that you can optionally define the `ssl` attribute which enables HTTPS checks.
+
+Host definition:
+
+    object Host "webserver01" {
+      import "generic-host"
+      address = "192.168.56.200"
+      vars.os = "Linux"
+
+      vars.webserver = {
+        instance["status"] = {
+          address = "192.168.56.201"
+          port = "80"
+          url = "/status"
+        }
+        instance["tomcat"] = {
+          address = "192.168.56.202"
+          port = "8080"
+        }
+        instance["icingaweb2"] = {
+          address = "192.168.56.210"
+          port = "443"
+          url = "/icingaweb2"
+          ssl = true
+        }
+      }
+    }
+
+Service apply for definitions:
+
+    apply Service "webserver_ping" for (instance => config in host.vars.webserver.instance) {
+      display_name = "webserver_" + instance
+      check_command = "ping4"
+
+      vars.ping_address = config.address
+
+      assign where host.vars.webserver.instance
+    }
+
+    apply Service "webserver_port" for (instance => config in host.vars.webserver.instance) {
+      display_name = "webserver_" + instance + "_" + config.port
+      check_command = "tcp"
+
+      vars.tcp_address = config.address
+      vars.tcp_port = config.port
+
+      assign where host.vars.webserver.instance
+    }
+
+    apply Service "webserver_url" for (instance => config in host.vars.webserver.instance) {
+      display_name = "webserver_" + instance + "_" + config.url
+      check_command = "http"
+
+      vars.http_address = config.address
+      vars.http_port = config.port
+      vars.http_uri = config.url
+
+      if (config.ssl) {
+        vars.http_ssl = config.ssl
+      }
+
+      assign where config.url != ""
+    }
+
+The variables defined in the host dictionary are not using the typical custom attribute
+prefix recommended for CheckCommand parameters. Instead they are re-used for multiple
+service checks in this example.
+In addition to defining check parameters this way, you can also enrich the `display_name`
+attribute with more details. This will be shown in in Icinga Web 2 for example.
 
 ## <a id="use-functions-object-config"></a> Use Functions in Object Configuration
 
