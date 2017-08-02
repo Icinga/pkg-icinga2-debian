@@ -48,6 +48,7 @@
 #	include <sys/types.h>
 #	include <pwd.h>
 #	include <grp.h>
+#	include <errno.h>
 #endif /* _WIN32 */
 
 #ifdef _WIN32
@@ -502,6 +503,16 @@ static bool GlobHelper(const String& pathSpec, int type, std::vector<String>& fi
 }
 #endif /* _WIN32 */
 
+#ifndef _WIN32
+static int GlobErrorHandler(const char *epath, int eerrno)
+{
+	if (eerrno == ENOTDIR)
+		return 0;
+
+	return eerrno;
+}
+#endif /* _WIN32 */
+
 /**
  * Calls the specified callback for each file matching the path specification.
  *
@@ -556,7 +567,7 @@ bool Utility::Glob(const String& pathSpec, const boost::function<void (const Str
 #else /* _WIN32 */
 	glob_t gr;
 
-	int rc = glob(pathSpec.CStr(), GLOB_ERR | GLOB_NOSORT, NULL, &gr);
+	int rc = glob(pathSpec.CStr(), GLOB_NOSORT, GlobErrorHandler, &gr);
 
 	if (rc < 0) {
 		if (rc == GLOB_NOMATCH)
@@ -1556,7 +1567,7 @@ static bool ReleaseHelper(String *platformName, String *platformVersion)
 	}
 
 	/* You are using a distribution which supports LSB. */
-	FILE *fp = popen("lsb_release -s -i 2>&1", "r");
+	FILE *fp = popen("type lsb_release >/dev/null 2>&1 && lsb_release -s -i 2>&1", "r");
 
 	if (fp != NULL) {
 		std::ostringstream msgbuf;
@@ -1570,7 +1581,7 @@ static bool ReleaseHelper(String *platformName, String *platformVersion)
 		}
 	}
 
-	fp = popen("lsb_release -s -r 2>&1", "r");
+	fp = popen("type lsb_release >/dev/null 2>&1 && lsb_release -s -r 2>&1", "r");
 
 	if (fp != NULL) {
 		std::ostringstream msgbuf;
@@ -1585,7 +1596,7 @@ static bool ReleaseHelper(String *platformName, String *platformVersion)
 	}
 
 	/* OS X */
-	fp = popen("sw_vers -productName 2>&1", "r");
+	fp = popen("type sw_vers >/dev/null 2>&1 && sw_vers -productName 2>&1", "r");
 
 	if (fp != NULL) {
 		std::ostringstream msgbuf;
@@ -1602,7 +1613,7 @@ static bool ReleaseHelper(String *platformName, String *platformVersion)
 		}
 	}
 
-	fp = popen("sw_vers -productVersion 2>&1", "r");
+	fp = popen("type sw_vers >/dev/null 2>&1 && sw_vers -productVersion 2>&1", "r");
 
 	if (fp != NULL) {
 		std::ostringstream msgbuf;

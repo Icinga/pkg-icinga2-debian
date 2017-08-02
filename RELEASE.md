@@ -1,10 +1,8 @@
 # Release Workflow
 
-Print this document.
-
 Specify the release version.
 
-    VERSION=2.6.3
+    VERSION=2.7.0
 
 ## Issues
 
@@ -30,12 +28,12 @@ Update the version number in the following file:
 
 Example:
 
+    wget -O icinga2.spec https://raw.githubusercontent.com/Icinga/icinga-packaging/rpm/snapshot/icinga2/icinga2.spec
     gsed -i "s/Version: .*/Version: $VERSION/g" icinga2.spec
 
 ## Changelog
 
-Update the [ChangeLog](ChangeLog), [doc/1-about.md](doc/1-about.md) files. Also generate HTML
-for the wordpress release announcement.
+Update the [CHANGELOG.md](CHANGELOG.md) file.
 
 ## Git Tag
 
@@ -63,16 +61,16 @@ Push the tag.
 For major releases: Create a new "support" branch:
 
     $ git checkout master
-    $ git checkout -b support/2.6
-    $ git push -u origin support/2.6
+    $ git checkout -b support/2.7
+    $ git push -u origin support/2.7
 
 For minor releases: Push the support branch, cherry-pick the release commit
 into master and merge the support branch:
 
-    $ git push -u origin support/2.6
+    $ git push -u origin support/2.7
     $ git checkout master
-    $ git cherry-pick support/2.6
-    $ git merge --strategy=ours support/2.6
+    $ git cherry-pick support/2.7
+    $ git merge --strategy=ours support/2.7
     $ git push origin master
 
 # External Dependencies
@@ -88,7 +86,7 @@ into master and merge the support branch:
 
 * Test DB IDO with MySQL and PostgreSQL.
 * Provision the vagrant boxes and test the release packages.
-* Test the [setup wizard](http://packages.icinga.com/windows/) inside a Windows VM.
+* Test the [setup wizard](https://packages.icinga.com/windows/) inside a Windows VM.
 
 * Start a new docker container and install/run icinga2.
 
@@ -96,7 +94,7 @@ Example for CentOS7:
 
     $ docker run -ti centos:latest bash
 
-    # yum -y install http://packages.icinga.com/epel/7/release/noarch/icinga-rpm-release-7-1.el7.centos.noarch.rpm
+    # yum -y install https://packages.icinga.com/epel/7/release/noarch/icinga-rpm-release-7-2.el7.centos.noarch.rpm
     # yum -y install icinga2
     # icinga2 daemon -C
 
@@ -119,7 +117,7 @@ Create the nupkg package:
 
 Install the created icinga2 package locally:
 
-    choco install icinga2 -version 2.6.3 -fdv "%cd%" -source "'%cd%;https://chocolatey.org/api/v2/'"
+    choco install icinga2 -version 2.7.0 -fdv "%cd%" -source "'%cd%;https://chocolatey.org/api/v2/'"
 
 Upload the package to [chocolatey](https://chocolatey.org/packages/upload).
 
@@ -132,11 +130,10 @@ and pull the current support branch.
 
 * Create a new blog post on www.icinga.com/blog
 * Send announcement mail to icinga-announce@lists.icinga.org
-* Social media: [Twitter](https://twitter.com/icinga), [Facebook](https://www.facebook.com/icinga), [G+](http://plus.google.com/+icinga), [Xing](https://www.xing.com/communities/groups/icinga-da4b-1060043), [LinkedIn](https://www.linkedin.com/groups/Icinga-1921830/about)
+* Social media: [Twitter](https://twitter.com/icinga), [Facebook](https://www.facebook.com/icinga), [G+](https://plus.google.com/+icinga), [Xing](https://www.xing.com/communities/groups/icinga-da4b-1060043), [LinkedIn](https://www.linkedin.com/groups/Icinga-1921830/about)
 * Update IRC channel topic
 
 # After the release
 
-* Add new minor version
-* Close the released version
-* Update Redmine filters for the next major/minor version
+* Add new minor version on [GitHub](https://github.com/Icinga/icinga2/milestones).
+* Close the released version on [GitHub](https://github.com/Icinga/icinga2/milestones).

@@ -50,10 +50,24 @@ void ExternalCommandListener::Start(bool runtimeCreated)
 {
 	ObjectImpl<ExternalCommandListener>::Start(runtimeCreated);
 
+	Log(LogInformation, "ExternalCommandListener")
+	    << "'" << GetName() << "' started.";
+
 #ifndef _WIN32
 	m_CommandThread = boost::thread(boost::bind(&ExternalCommandListener::CommandPipeThread, this, GetCommandPath()));
 	m_CommandThread.detach();
 #endif /* _WIN32 */
+}
+
+/**
+ * Stops the component.
+ */
+void ExternalCommandListener::Stop(bool runtimeRemoved)
+{
+	Log(LogInformation, "ExternalCommandListener")
+	    << "'" << GetName() << "' stopped.";
+
+	ObjectImpl<ExternalCommandListener>::Stop(runtimeRemoved);
 }
 
 #ifndef _WIN32
@@ -144,7 +158,9 @@ void ExternalCommandListener::CommandPipeThread(const String& commandPath)
 					ExternalCommandProcessor::Execute(command);
 				} catch (const std::exception& ex) {
 					Log(LogWarning, "ExternalCommandListener")
-					    << "External command failed: " << DiagnosticInformation(ex);
+					    << "External command failed: " << DiagnosticInformation(ex, false);
+					Log(LogNotice, "ExternalCommandListener")
+					    << "External command failed: " << DiagnosticInformation(ex, true);
 				}
 			}
 		}
