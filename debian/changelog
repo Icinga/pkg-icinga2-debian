@@ -1,8 +1,19 @@
-icinga2 (2.6.3-1~debmon8+1) debmon-jessie; urgency=medium
+icinga2 (2.7.0-1~debmon8+1) debmon-jessie; urgency=medium
 
   * Rebuild for debmon-jessie.
 
  -- Alexander Wirt <formorer@debian.org>  Thu, 30 Mar 2017 00:09:55 +0200
+
+icinga2 (2.7.0-1) unstable; urgency=medium
+
+  * [3f2f6e0] New upstream version 2.7.0
+  * [8861bd7] Improve systemd unit file
+  * [f25990d] fix linebreak
+  * [98b7e3f] Update debhelper dependency (Closes: #854349)
+  * [8c35696] Update swedish translation (Closes: #855364)
+  * [6f58b41] Install nsca_api plugin
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 02 Aug 2017 22:24:35 +0200
 
 icinga2 (2.6.3-1) experimental; urgency=medium
 

@@ -19,8 +19,8 @@
 
 #include "livestatus/livestatuslistener.hpp"
 #include "livestatus/livestatuslistener.tcpp"
-#include "icinga/perfdatavalue.hpp"
 #include "base/utility.hpp"
+#include "base/perfdatavalue.hpp"
 #include "base/objectlock.hpp"
 #include "base/configtype.hpp"
 #include "base/logger.hpp"
@@ -65,6 +65,9 @@ void LivestatusListener::StatsFunc(const Dictionary::Ptr& status, const Array::P
 void LivestatusListener::Start(bool runtimeCreated)
 {
 	ObjectImpl<LivestatusListener>::Start(runtimeCreated);
+
+	Log(LogInformation, "LivestatusListener")
+	    << "'" << GetName() << "' started.";
 
 	if (GetSocketType() == "tcp") {
 		TcpSocket::Ptr socket = new TcpSocket();
@@ -122,6 +125,9 @@ void LivestatusListener::Start(bool runtimeCreated)
 void LivestatusListener::Stop(bool runtimeRemoved)
 {
 	ObjectImpl<LivestatusListener>::Stop(runtimeRemoved);
+
+	Log(LogInformation, "LivestatusListener")
+	    << "'" << GetName() << "' stopped.";
 
 	m_Listener->Close();
 

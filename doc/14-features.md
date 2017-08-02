@@ -1,11 +1,11 @@
-# <a id="icinga2-features"></a> Icinga 2 Features
+# Icinga 2 Features <a id="icinga2-features"></a>
 
-## <a id="logging"></a> Logging
+## Logging <a id="logging"></a>
 
 Icinga 2 supports three different types of logging:
 
 * File logging
-* Syslog (on *NIX-based operating systems)
+* Syslog (on Linux/UNIX)
 * Console logging (`STDOUT` on tty)
 
 You can enable additional loggers using the `icinga2 feature enable`
@@ -25,18 +25,18 @@ Packages will install a configuration file for logrotate on supported
 platforms. This configuration ensures that the `icinga2.log`, `error.log` and
 `debug.log` files are rotated on a daily basis.
 
-## <a id="db-ido"></a> DB IDO
+## DB IDO <a id="db-ido"></a>
 
 The IDO (Icinga Data Output) modules for Icinga 2 take care of exporting all
 configuration and status information into a database. The IDO database is used
-by a number of projects including Icinga Web 1.x and 2.
+by Icinga Web 2.
 
-Details on the installation can be found in the [Configuring DB IDO](2-getting-started.md#configuring-db-ido-mysql)
+Details on the installation can be found in the [Configuring DB IDO](02-getting-started.md#configuring-db-ido-mysql)
 chapter. Details on the configuration can be found in the
-[IdoMysqlConnection](9-object-types.md#objecttype-idomysqlconnection) and
-[IdoPgsqlConnection](9-object-types.md#objecttype-idopgsqlconnection)
+[IdoMysqlConnection](09-object-types.md#objecttype-idomysqlconnection) and
+[IdoPgsqlConnection](09-object-types.md#objecttype-idopgsqlconnection)
 object configuration documentation.
-The DB IDO feature supports [High Availability](6-distributed-monitoring.md#distributed-monitoring-high-availability-db-ido) in
+The DB IDO feature supports [High Availability](06-distributed-monitoring.md#distributed-monitoring-high-availability-db-ido) in
 the Icinga 2 cluster.
 
 The following example query checks the health of the current Icinga 2 instance
@@ -47,7 +47,7 @@ the query returns an empty result.
 
 > **Tip**
 >
-> Use [check plugins](5-service-monitoring.md#service-monitoring-plugins) to monitor the backend.
+> Use [check plugins](05-service-monitoring.md#service-monitoring-plugins) to monitor the backend.
 
 Replace the `default` string with your instance name if different.
 
@@ -81,7 +81,7 @@ Example for PostgreSQL:
 A detailed list on the available table attributes can be found in the [DB IDO Schema documentation](23-appendix.md#schema-db-ido).
 
 
-## <a id="external-commands"></a> External Commands
+## External Commands <a id="external-commands"></a>
 
 Icinga 2 provides an external command pipe for processing commands
 triggering specific actions (for example rescheduling a service check
@@ -109,9 +109,9 @@ a forced service check:
 A list of currently supported external commands can be found [here](23-appendix.md#external-commands-list-detail).
 
 Detailed information on the commands and their required parameters can be found
-on the [Icinga 1.x documentation](http://docs.icinga.com/latest/en/extcommands2.html).
+on the [Icinga 1.x documentation](https://docs.icinga.com/latest/en/extcommands2.html).
 
-## <a id="performance-data"></a> Performance Data
+## Performance Data <a id="performance-data"></a>
 
 When a host or service check is executed plugins should provide so-called
 `performance data`. Next to that additional check performance data
@@ -125,12 +125,12 @@ reporting and trending.
 Well-known addons processing Icinga performance data are [PNP4Nagios](13-addons.md#addons-graphing-pnp),
 [Graphite](13-addons.md#addons-graphing-graphite) or [OpenTSDB](14-features.md#opentsdb-writer).
 
-### <a id="writing-performance-data-files"></a> Writing Performance Data Files
+### Writing Performance Data Files <a id="writing-performance-data-files"></a>
 
 PNP4Nagios and Graphios use performance data collector daemons to fetch
 the current performance files for their backend updates.
 
-Therefore the Icinga 2 [PerfdataWriter](9-object-types.md#objecttype-perfdatawriter)
+Therefore the Icinga 2 [PerfdataWriter](09-object-types.md#objecttype-perfdatawriter)
 feature allows you to define the output template format for host and services helped
 with Icinga 2 runtime vars.
 
@@ -148,7 +148,7 @@ the `/var/spool/icinga2/perfdata/` directory as `host-perfdata.<timestamp>` and
 External collectors need to parse the rotated performance data files and then
 remove the processed files.
 
-### <a id="graphite-carbon-cache-writer"></a> Graphite Carbon Cache Writer
+### Graphite Carbon Cache Writer <a id="graphite-carbon-cache-writer"></a>
 
 While there are some [Graphite](13-addons.md#addons-graphing-graphite)
 collector scripts and daemons like Graphios available for Icinga 1.x it's more
@@ -160,16 +160,16 @@ You can enable the feature using
 
     # icinga2 feature enable graphite
 
-By default the [GraphiteWriter](9-object-types.md#objecttype-graphitewriter) feature
+By default the [GraphiteWriter](09-object-types.md#objecttype-graphitewriter) feature
 expects the Graphite Carbon Cache to listen at `127.0.0.1` on TCP port `2003`.
 
-#### <a id="graphite-carbon-cache-writer-schema"></a> Current Graphite Schema
+#### Current Graphite Schema <a id="graphite-carbon-cache-writer-schema"></a>
 
 The current naming schema is defined as follows. The official Icinga Web 2 Graphite
 module will use that schema too.
 
 The default prefix for hosts and services is configured using
-[runtime macros](3-monitoring-basics.md#runtime-macros)like this:
+[runtime macros](03-monitoring-basics.md#runtime-macros)like this:
 
     icinga2.$host.name$.host.$host.check_command$
     icinga2.$host.name$.services.$service.name$.$service.check_command$
@@ -249,7 +249,11 @@ Cache.
     pattern = ^icinga2\.
     retentions = 1m:2d,5m:10d,30m:90d,360m:4y
 
-#### <a id="graphite-carbon-cache-writer-schema-legacy"></a> Graphite Schema < 2.4
+#### Graphite Schema < 2.4 <a id="graphite-carbon-cache-writer-schema-legacy"></a>
+
+> **Note**
+>
+> This legacy mode will be removed in 2.8.
 
 In order to restore the old legacy schema, you'll need to adopt the `GraphiteWriter`
 configuration:
@@ -270,9 +274,9 @@ The old legacy naming schema is
 You can customize the metric prefix name by using the `host_name_template` and
 `service_name_template` configuration attributes.
 
-The example below uses [runtime macros](3-monitoring-basics.md#runtime-macros) and a
+The example below uses [runtime macros](03-monitoring-basics.md#runtime-macros) and a
 [global constant](17-language-reference.md#constants) named `GraphiteEnv`. The constant name
-is freely definable and should be put in the [constants.conf](4-configuring-icinga-2.md#constants-conf) file.
+is freely definable and should be put in the [constants.conf](04-configuring-icinga-2.md#constants-conf) file.
 
     const GraphiteEnv = "icinga.env1"
 
@@ -318,7 +322,7 @@ Cache. Please make sure that the order is correct because the first match wins.
     pattern = ^icinga\.
     retentions = 1m:2d,5m:10d,30m:90d,360m:4y
 
-### <a id="influxdb-writer"></a> InfluxDB Writer
+### InfluxDB Writer <a id="influxdb-writer"></a>
 
 Once there are new metrics available, Icinga 2 will directly write them to the
 defined InfluxDB HTTP API.
@@ -327,20 +331,22 @@ You can enable the feature using
 
     # icinga2 feature enable influxdb
 
-By default the [InfluxdbWriter](9-object-types.md#objecttype-influxdbwriter) feature
+By default the [InfluxdbWriter](09-object-types.md#objecttype-influxdbwriter) feature
 expects the InfluxDB daemon to listen at `127.0.0.1` on port `8086`.
 
-More configuration details can be found [here](9-object-types.md#objecttype-influxdbwriter).
+More configuration details can be found [here](09-object-types.md#objecttype-influxdbwriter).
 
-### <a id="gelfwriter"></a> GELF Writer
+### Graylog Integration <a id="graylog-integration"></a>
 
-The `Graylog Extended Log Format` (short: [GELF](http://www.graylog2.org/resources/gelf))
+#### GELF Writer <a id="gelfwriter"></a>
+
+The `Graylog Extended Log Format` (short: [GELF](http://docs.graylog.org/en/latest/pages/gelf.html))
 can be used to send application logs directly to a TCP socket.
 
-While it has been specified by the [graylog2](http://www.graylog2.org/) project as their
-[input resource standard](http://www.graylog2.org/resources/gelf), other tools such as
-[Logstash](http://www.logstash.net) also support `GELF` as
-[input type](http://logstash.net/docs/latest/inputs/gelf).
+While it has been specified by the [Graylog](https://www.graylog.org) project as their
+[input resource standard](http://docs.graylog.org/en/latest/pages/sending_data.html), other tools such as
+[Logstash](https://www.elastic.co/products/logstash) also support `GELF` as
+[input type](https://www.elastic.co/guide/en/logstash/current/plugins-inputs-gelf.html).
 
 You can enable the feature using
 
@@ -354,7 +360,16 @@ Currently these events are processed:
 * State changes
 * Notifications
 
-### <a id="opentsdb-writer"></a> OpenTSDB Writer
+### Elastic Stack Integration <a id="elastic-stack-integration"></a>
+
+[Icingabeat](https://github.com/icinga/icingabeat) is an Elastic Beat that fetches data
+from the Icinga 2 API and sends it either directly to Elasticsearch or Logstash.
+
+More integrations in development:
+* [Logstash output](https://github.com/Icinga/logstash-output-icinga) for the Icinga 2 API.
+* [Logstash Grok Pattern](https://github.com/Icinga/logstash-grok-pattern) for Icinga 2 logs.
+
+### OpenTSDB Writer <a id="opentsdb-writer"></a>
 
 While there are some OpenTSDB collector scripts and daemons like tcollector available for
 Icinga 1.x it's more reasonable to directly process the check and plugin performance
@@ -419,16 +434,16 @@ with the following tags
 > in your opentsdb.conf configuration file.
 
 
-## <a id="setting-up-livestatus"></a> Livestatus
+## Livestatus <a id="setting-up-livestatus"></a>
 
-The [MK Livestatus](http://mathias-kettner.de/checkmk_livestatus.html) project
+The [MK Livestatus](https://mathias-kettner.de/checkmk_livestatus.html) project
 implements a query protocol that lets users query their Icinga instance for
 status information. It can also be used to send commands.
 
 > **Tip**
 >
 > Only install the Livestatus feature if your web interface or addon requires
-> you to do so (for example, [Icinga Web 2](2-getting-started.md#setting-up-icingaweb2)).
+> you to do so (for example, [Icinga Web 2](02-getting-started.md#setting-up-icingaweb2)).
 > Icinga Classic UI 1.x and Icinga Web 1.x do not use Livestatus as backend.
 
 The Livestatus component that is distributed as part of Icinga 2 is a
@@ -444,13 +459,13 @@ You can enable Livestatus using icinga2 feature enable:
 
 After that you will have to restart Icinga 2:
 
+RHEL/CentOS 7/Fedora, SLES 12, Debian Jessie/Stretch, Ubuntu Xenial:
+
+    # systemctl restart icinga2
+
 Debian/Ubuntu, RHEL/CentOS 6 and SUSE:
 
     # service icinga2 restart
-
-RHEL/CentOS 7 and Fedora:
-
-    # systemctl restart icinga2
 
 By default the Livestatus socket is available in `/var/run/icinga2/cmd/livestatus`.
 
@@ -472,17 +487,17 @@ are expected to be in `/var/log/icinga2/compat`. A different path can be set usi
     # icinga2 feature enable compatlog
 
 
-### <a id="livestatus-sockets"></a> Livestatus Sockets
+### Livestatus Sockets <a id="livestatus-sockets"></a>
 
 Other to the Icinga 1.x Addon, Icinga 2 supports two socket types
 
 * Unix socket (default)
 * TCP socket
 
-Details on the configuration can be found in the [LivestatusListener](9-object-types.md#objecttype-livestatuslistener)
+Details on the configuration can be found in the [LivestatusListener](09-object-types.md#objecttype-livestatuslistener)
 object configuration.
 
-### <a id="livestatus-get-queries"></a> Livestatus GET Queries
+### Livestatus GET Queries <a id="livestatus-get-queries"></a>
 
 > **Note**
 >
@@ -510,14 +525,14 @@ Example using the tcp socket listening on port `6558`:
     (cat servicegroups; sleep 1) | netcat 127.0.0.1 6558
 
 
-### <a id="livestatus-command-queries"></a> Livestatus COMMAND Queries
+### Livestatus COMMAND Queries <a id="livestatus-command-queries"></a>
 
 A list of available external commands and their parameters can be found [here](23-appendix.md#external-commands-list-detail)
 
     $ echo -e 'COMMAND <externalcommandstring>' | netcat 127.0.0.1 6558
 
 
-### <a id="livestatus-filters"></a> Livestatus Filters
+### Livestatus Filters <a id="livestatus-filters"></a>
 
 and, or, negate
 
@@ -533,7 +548,7 @@ and, or, negate
    >=       |          | Greater than or equal
 
 
-### <a id="livestatus-stats"></a> Livestatus Stats
+### Livestatus Stats <a id="livestatus-stats"></a>
 
 Schema: "Stats: aggregatefunction aggregateattribute"
 
@@ -565,7 +580,7 @@ Example:
     OutputFormat: json
     ResponseHeader: fixed16
 
-### <a id="livestatus-output"></a> Livestatus Output
+### Livestatus Output <a id="livestatus-output"></a>
 
 * CSV
 
@@ -581,7 +596,7 @@ Separators can be set using ASCII codes like:
 
 Default separators.
 
-### <a id="livestatus-error-codes"></a> Livestatus Error Codes
+### Livestatus Error Codes <a id="livestatus-error-codes"></a>
 
   Code      | Description
   ----------|--------------
@@ -589,7 +604,7 @@ Default separators.
   404       | Table does not exist
   452       | Exception on query
 
-### <a id="livestatus-tables"></a> Livestatus Tables
+### Livestatus Tables <a id="livestatus-tables"></a>
 
   Table         | Join      |Description
   --------------|-----------|----------------------------
@@ -605,8 +620,8 @@ Default separators.
   downtimes     | services  | status attributes
   timeperiods   | &nbsp;    | name and is inside flag
   endpoints     | &nbsp;    | config and status attributes
-  log           | services, hosts, contacts, commands | parses [compatlog](9-object-types.md#objecttype-compatlogger) and shows log attributes
-  statehist     | hosts, services | parses [compatlog](9-object-types.md#objecttype-compatlogger) and aggregates state change attributes
+  log           | services, hosts, contacts, commands | parses [compatlog](09-object-types.md#objecttype-compatlogger) and shows log attributes
+  statehist     | hosts, services | parses [compatlog](09-object-types.md#objecttype-compatlogger) and aggregates state change attributes
   hostsbygroup  | hostgroups | host attributes grouped by hostgroup and its attributes
   servicesbygroup | servicegroups | service attributes grouped by servicegroup and its attributes
   servicesbyhostgroup  | hostgroups | service attributes grouped by hostgroup and its attributes
@@ -616,7 +631,7 @@ The `commands` table is populated with `CheckCommand`, `EventCommand` and `Notif
 A detailed list on the available table attributes can be found in the [Livestatus Schema documentation](23-appendix.md#schema-livestatus).
 
 
-## <a id="status-data"></a> Status Data Files
+## Status Data Files <a id="status-data"></a>
 
 Icinga 1.x writes object configuration data and status data in a cyclic
 interval to its `objects.cache` and `status.dat` files. Icinga 2 provides
@@ -633,7 +648,7 @@ Icinga 1.x Classic UI requires this data set as part of its backend.
 > you can safely disable this feature.
 
 
-## <a id="compat-logging"></a> Compat Log Files
+## Compat Log Files <a id="compat-logging"></a>
 
 The Icinga 1.x log format is considered being the `Compat Log`
 in Icinga 2 provided with the `CompatLogger` object.
@@ -680,7 +695,7 @@ existing log parsers.
     [1382115731] SERVICE ALERT: localhost;ping6;CRITICAL;SOFT;2;critical test
 
 
-## <a id="check-result-files"></a> Check Result Files
+## Check Result Files <a id="check-result-files"></a>
 
 Icinga 1.x writes its check result files to a temporary spool directory
 where they are processed in a regular interval.

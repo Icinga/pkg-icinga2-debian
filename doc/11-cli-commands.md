@@ -1,9 +1,9 @@
-# <a id="cli-commands"></a> Icinga 2 CLI Commands
+# Icinga 2 CLI Commands <a id="cli-commands"></a>
 
 Icinga 2 comes with a number of CLI commands which support bash autocompletion.
 
 These CLI commands will allow you to use certain functionality
-provided by and around the Icinga 2 daemon.
+provided by and around Icinga 2.
 
 Each CLI command provides its own help and usage information, so please
 make sure to always run them with the `--help` parameter.
@@ -80,17 +80,17 @@ options.
     Icinga home page: <https://www.icinga.com/>
 
 
-## <a id="cli-commands-autocompletion"></a> Icinga 2 CLI Bash Autocompletion
+## Icinga 2 CLI Bash Autocompletion <a id="cli-commands-autocompletion"></a>
 
 Bash Auto-Completion (pressing `<TAB>`) is provided only for the corresponding context.
 
-While `--config` will suggest and auto-complete files and directories on disk,
-`feature enable` will only suggest disabled features. Try it yourself.
+While `--config` suggests and auto-completes files and directories on disk,
+`feature enable` only suggests disabled features.
 
 RPM and Debian packages install the bash completion files into
 `/etc/bash_completion.d/icinga2`.
 
-You will need to install the `bash-completion` package if not already installed.
+You need to install the `bash-completion` package if not already installed.
 
 RHEL/CentOS/Fedora:
 
@@ -111,23 +111,25 @@ into your current session and test it:
     # source /etc/bash-completion.d/icinga2
 
 
-## <a id="cli-commands-global-options"></a> Icinga 2 CLI Global Options
+## Icinga 2 CLI Global Options <a id="cli-commands-global-options"></a>
 
 ### Application Type
 
 By default the `icinga2` binary loads the `icinga` library. A different application type
 can be specified with the `--app` command-line option.
+Note: This is not needed by the average Icinga user, only developers.
 
 ### Libraries
 
 Instead of loading libraries using the [`library` config directive](17-language-reference.md#library)
 you can also use the `--library` command-line option.
+Note: This is not needed by the average Icinga user, only developers.
 
 ### Constants
 
 [Global constants](17-language-reference.md#constants) can be set using the `--define` command-line option.
 
-### <a id="config-include-path"></a> Config Include Path
+### Config Include Path <a id="config-include-path"></a>
 
 When including files you can specify that the include search path should be
 checked. You can do this by putting your configuration file name in angle
@@ -135,21 +137,21 @@ brackets like this:
 
     include <test.conf>
 
-This would cause Icinga 2 to search its include path for the configuration file
-`test.conf`. By default the installation path for the Icinga Template Library
+This causes Icinga 2 to search its include path for the configuration file
+`test.conf`. By default the installation path for the [Icinga Template Library](10-icinga-template-library.md#icinga-template-library)
 is the only search directory.
 
 Using the `--include` command-line option additional search directories can be
 added.
 
 
-## <a id="cli-command-console"></a> CLI command: Console
+## CLI command: Console <a id="cli-command-console"></a>
 
-The CLI command `console` can be used to evaluate Icinga 2 config expressions, e.g. to test
-[functions](17-language-reference.md#functions).
+The CLI command `console` can be used to debug and evaluate Icinga 2 config expressions,
+e.g. to test [functions](17-language-reference.md#functions) in your local sandbox.
 
     $ icinga2 console
-    Icinga 2 (version: v2.4.0)
+    Icinga 2 (version: v2.6.0)
     <1> => function test(name) {
     <1> ..   log("Hello " + name)
     <1> .. }
@@ -159,6 +161,7 @@ The CLI command `console` can be used to evaluate Icinga 2 config expressions, e
     null
     <3> =>
 
+Further usage examples can be found in the [library reference](18-library-reference.md#library-reference) chapter.
 
 On operating systems without the `libedit` library installed there is no
 support for line-editing or a command history. However you can
@@ -166,18 +169,23 @@ use the `rlwrap` program if you require those features:
 
     $ rlwrap icinga2 console
 
-The `console` can be used to connect to a running Icinga 2 instance using
+The debug console can be used to connect to a running Icinga 2 instance using
 the [REST API](12-icinga2-api.md#icinga2-api). [API permissions](12-icinga2-api.md#icinga2-api-permissions)
 are required for executing config expressions and auto-completion.
 
 > **Note**
-> The console does not currently support SSL certificate verification.
+>
+> The debug console does not currently support SSL certificate verification.
+>
+> Runtime modifications are not validated and might cause the Icinga 2
+> daemon to crash or behave in an unexpected way. Use these runtime changes
+> at your own risk and rather *inspect and debug objects read-only*.
 
 You can specify the API URL using the `--connect` parameter.
 
 Although the password can be specified there process arguments on UNIX platforms are
 usually visible to other users (e.g. through `ps`). In order to securely specify the
-user credentials the console supports two environment variables:
+user credentials the debug console supports two environment variables:
 
   Environment variable | Description
   ---------------------|-------------
@@ -245,10 +253,10 @@ Here's an example that retrieves the command that was used by Icinga to check th
         "3000,80%"
     ]
 
-## <a id="cli-command-daemon"></a> CLI command: Daemon
+## CLI command: Daemon <a id="cli-command-daemon"></a>
 
 The CLI command `daemon` provides the functionality to start/stop Icinga 2.
-Furthermore it provides the [configuration validation](11-cli-commands.md#config-validation).
+Furthermore it allows to run the [configuration validation](11-cli-commands.md#config-validation).
 
     # icinga2 daemon --help
     icinga2 - The Icinga 2 network monitoring daemon (version: v2.6.0)
@@ -286,7 +294,7 @@ Furthermore it provides the [configuration validation](11-cli-commands.md#config
 
 ### Config Files
 
-Using the `--config` option you can specify one or more configuration files.
+You can specify one or more configuration files with the `--config` option.
 Configuration files are processed in the order they're specified on the command-line.
 
 When no configuration file is specified and the `--no-config` is not used
@@ -295,11 +303,11 @@ Icinga 2 automatically falls back to using the configuration file
 
 ### Config Validation
 
-The `--validate` option can be used to check if your configuration files
+The `--validate` option can be used to check if configuration files
 contain errors. If any errors are found, the exit status is 1, otherwise 0
 is returned. More details in the [configuration validation](11-cli-commands.md#config-validation) chapter.
 
-## <a id="cli-command-feature"></a> CLI command: Feature
+## CLI command: Feature <a id="cli-command-feature"></a>
 
 The `feature enable` and `feature disable` commands can be used to enable and disable features:
 
@@ -318,7 +326,7 @@ The `feature list` command shows which features are currently enabled:
     Enabled features: api checker command graphite ido-mysql mainlog notification
 
 
-## <a id="cli-command-node"></a> CLI command: Node
+## CLI command: Node <a id="cli-command-node"></a>
 
 > **Warning**
 >
@@ -329,7 +337,7 @@ The `feature list` command shows which features are currently enabled:
 > Make sure to follow the release announcements on the [Icinga website](https://www.icinga.com).
 
 Provides the functionality to install and manage master and client
-nodes in a [distributed monitoring](6-distributed-monitoring.md#distributed-monitoring) scenario.
+nodes in a [distributed monitoring](06-distributed-monitoring.md#distributed-monitoring) scenario.
 
     # icinga2 node --help
     icinga2 - The Icinga 2 network monitoring daemon (version: v2.6.0)
@@ -371,11 +379,17 @@ nodes in a [distributed monitoring](6-distributed-monitoring.md#distributed-moni
 
 
 
-## <a id="cli-command-object"></a> CLI command: Object
+## CLI command: Object <a id="cli-command-object"></a>
 
 The `object` CLI command can be used to list all configuration objects and their
-attributes. The command also shows where each of the attributes was modified.
+attributes. The command also shows where each of the attributes was modified and as such
+provides debug information for further configuration problem analysis.
 That way you can also identify which objects have been created from your [apply rules](17-language-reference.md#apply).
+
+Runtime modifications via the [REST API](12-icinga2-api.md#icinga2-api-config-objects)
+are not immediately updated. Furthermore there is a known issue with
+[group assign expressions](17-language-reference.md#group-assign) which are not reflected in the host object output.
+You need to restart Icinga 2 in order to update the `icinga2.debug` cache file.
 
 More information can be found in the [troubleshooting](15-troubleshooting.md#list-configuration-objects) section.
 
@@ -405,7 +419,7 @@ More information can be found in the [troubleshooting](15-troubleshooting.md#lis
     Report bugs at <https://github.com/Icinga/icinga2>
     Icinga home page: <https://www.icinga.com/>
 
-## <a id="cli-command-pki"></a> CLI command: Pki
+## CLI command: Pki <a id="cli-command-pki"></a>
 
 Provides the CLI commands to
 
@@ -417,7 +431,7 @@ Provides the CLI commands to
 * generate a new ticket for the client setup
 
 This functionality is used by the [node setup/wizard](11-cli-commands.md#cli-command-node) CLI commands.
-You will need them in the [distributed monitoring chapter](6-distributed-monitoring.md#distributed-monitoring).
+You will need them in the [distributed monitoring chapter](06-distributed-monitoring.md#distributed-monitoring).
 
     # icinga2 pki --help
     icinga2 - The Icinga 2 network monitoring daemon (version: v2.6.0)
@@ -450,7 +464,7 @@ You will need them in the [distributed monitoring chapter](6-distributed-monitor
     Report bugs at <https://github.com/Icinga/icinga2>
     Icinga home page: <https://www.icinga.com/>
 
-## <a id="cli-command-repository"></a> CLI command: Repository
+## CLI command: Repository <a id="cli-command-repository"></a>
 
 > **Warning**
 >
@@ -462,7 +476,7 @@ You will need them in the [distributed monitoring chapter](6-distributed-monitor
 This command is experimental and not finished as public CLI command. Parts of its functionality
 are used in the [node update-config](11-cli-commands.md#cli-command-node) cli command.
 
-## <a id="cli-command-troubleshoot"></a> CLI command: Troubleshoot
+## CLI command: Troubleshoot <a id="cli-command-troubleshoot"></a>
 
 Collects basic information like version, paths, log files and crash reports for troubleshooting
 purposes and prints them to a file or the console. See [troubleshooting](15-troubleshooting.md#troubleshooting-information-required).
@@ -504,7 +518,7 @@ This is only a tool to collect information to help others help you, it will not 
     Report bugs at <https://github.com/Icinga/icinga2>
     Icinga home page: <https://www.icinga.com/>
 
-## <a id="cli-command-variable"></a> CLI command: Variable
+## CLI command: Variable <a id="cli-command-variable"></a>
 
 Lists all configured variables (constants) in a similar fashion like [object list](11-cli-commands.md#cli-command-object).
 
@@ -535,7 +549,7 @@ Lists all configured variables (constants) in a similar fashion like [object lis
     Report bugs at <https://github.com/Icinga/icinga2>
     Icinga home page: <https://www.icinga.com/>
 
-## <a id="enable-features"></a> Enabling/Disabling Features
+## Enabling/Disabling Features <a id="enable-features"></a>
 
 Icinga 2 provides configuration files for some commonly used features. These
 are installed in the `/etc/icinga2/features-available` directory and can be
@@ -571,7 +585,7 @@ after enabling or disabling features.
 
 
 
-## <a id="config-validation"></a> Configuration Validation
+## Configuration Validation <a id="config-validation"></a>
 
 Once you've edited the configuration files make sure to tell Icinga 2 to validate
 the configuration changes. Icinga 2 will log any configuration error including
@@ -589,14 +603,10 @@ Validate the configuration with the init script option `checkconfig`:
 
     # /etc/init.d/icinga2 checkconfig
 
-> **Note**
->
-> Using [systemd](2-getting-started.md#systemd-service) you need to manually validate the configuration using
-> the CLI command below.
+**Note**: Using [systemd](02-getting-started.md#systemd-service) you need to manually validate the configuration using
+the CLI command below.
 
-Or manually passing the `-C` argument:
-
-    # /usr/sbin/icinga2 daemon -c /etc/icinga2/icinga2.conf -C
+    # icinga2 daemon -C
 
     [2014-05-22 17:07:25 +0200] critical/ConfigItem: Location:
     /etc/icinga2/conf.d/tests/5872.conf(5): }
@@ -609,13 +619,6 @@ Or manually passing the `-C` argument:
     Config error: 'apply' is missing 'assign'
     [2014-05-22 17:07:25 +0200] critical/ConfigItem: 1 errors, 0 warnings.
     Icinga 2 detected configuration errors.
-
-> **Tip**
->
-> Icinga 2 will automatically detect the default path for `icinga2.conf`
-> in `SysconfDir + /icinga2/icinga2.conf` and you can safely omit this parameter.
->
-> `# icinga2 daemon -C`
 
 If you encounter errors during configuration validation, please make sure
 to read the [troubleshooting](15-troubleshooting.md#troubleshooting) chapter.
@@ -653,7 +656,7 @@ Example filtered by `Service` objects with the name `ping*`:
 
 
 
-## <a id="config-change-reload"></a> Reload on Configuration Changes
+## Reload on Configuration Changes <a id="config-change-reload"></a>
 
 Every time you have changed your configuration you should first tell Icinga 2
 to [validate](11-cli-commands.md#config-validation). If there are no validation errors, you can

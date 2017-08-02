@@ -1,24 +1,24 @@
-# <a id="getting-started"></a> Getting Started
+# Getting Started <a id="getting-started"></a>
 
-This tutorial is a step-by-step introduction to installing [Icinga 2](2-getting-started.md#setting-up-icinga2)
-and [Icinga Web 2](2-getting-started.md#setting-up-icingaweb2).
+This tutorial is a step-by-step introduction to installing [Icinga 2](02-getting-started.md#setting-up-icinga2)
+and [Icinga Web 2](02-getting-started.md#setting-up-icingaweb2).
 It assumes that you are familiar with the operating system you're using to install Icinga 2.
 
-## <a id="setting-up-icinga2"></a> Setting up Icinga 2
+## Setting up Icinga 2 <a id="setting-up-icinga2"></a>
 
-First off you will have to install Icinga 2. The preferred way of doing this
+First off you have to install Icinga 2. The preferred way of doing this
 is to use the official package repositories depending on which operating system
 and distribution you are running.
 
   Distribution            | Repository
   ------------------------|---------------------------
-  Debian                  | [Icinga Repository](http://packages.icinga.com/debian/), [debmon](https://debmon.org/packages/debmon-jessie/icinga2)
-  Ubuntu                  | [Icinga Repository](http://packages.icinga.com/ubuntu/), [Icinga PPA](https://launchpad.net/~formorer/+archive/ubuntu/icinga)
-  RHEL/CentOS             | [Icinga Repository](http://packages.icinga.com/epel/)
-  openSUSE                | [Icinga Repository](http://packages.icinga.com/openSUSE/), [Server Monitoring Repository](https://build.opensuse.org/package/show/server:monitoring/icinga2)
-  SLES                    | [Icinga Repository](http://packages.icinga.com/SUSE/)
-  Gentoo                  | [Upstream](http://packages.gentoo.org/package/net-analyzer/icinga2)
-  FreeBSD                 | [Upstream](http://www.freshports.org/net-mgmt/icinga2)
+  Debian                  | [Icinga Repository](https://packages.icinga.com/debian/)
+  Ubuntu                  | [Icinga Repository](https://packages.icinga.com/ubuntu/)
+  RHEL/CentOS             | [Icinga Repository](https://packages.icinga.com/epel/)
+  openSUSE                | [Icinga Repository](https://packages.icinga.com/openSUSE/)
+  SLES                    | [Icinga Repository](https://packages.icinga.com/SUSE/)
+  Gentoo                  | [Upstream](https://packages.gentoo.org/package/net-analyzer/icinga2)
+  FreeBSD                 | [Upstream](https://www.freshports.org/net-mgmt/icinga2)
   OpenBSD                 | [Upstream](http://ports.su/net/icinga/core2,-main)
   ArchLinux               | [Upstream](https://aur.archlinux.org/packages/icinga2)
   AlpineLinux             | [Upstream](https://pkgs.alpinelinux.org/package/edge/community/x86_64/icinga2)
@@ -26,21 +26,21 @@ and distribution you are running.
 Packages for distributions other than the ones listed above may also be
 available. Please contact your distribution packagers.
 
-### <a id="package-repositories"></a> Package Repositories
+### Package Repositories <a id="package-repositories"></a>
 
 You need to add the Icinga repository to your package management configuration.
 Below is a list with examples for the various distributions.
 
 Debian:
 
-    # wget -O - http://packages.icinga.com/icinga.key | apt-key add -
-    # echo 'deb http://packages.icinga.com/debian icinga-jessie main' >/etc/apt/sources.list.d/icinga.list
+    # wget -O - https://packages.icinga.com/icinga.key | apt-key add -
+    # echo 'deb https://packages.icinga.com/debian icinga-stretch main' >/etc/apt/sources.list.d/icinga.list
     # apt-get update
 
 Ubuntu:
 
-    # wget -O - http://packages.icinga.com/icinga.key | apt-key add -
-    # echo 'deb http://packages.icinga.com/ubuntu icinga-xenial main' >/etc/apt/sources.list.d/icinga.list
+    # wget -O - https://packages.icinga.com/icinga.key | apt-key add -
+    # echo 'deb https://packages.icinga.com/ubuntu icinga-xenial main' >/etc/apt/sources.list.d/icinga.list
     # apt-get update
 
 RHEL/CentOS 7:
@@ -51,10 +51,6 @@ RHEL/CentOS 6:
 
     yum install https://packages.icinga.com/epel/6/release/noarch/icinga-rpm-release-6-1.el6.noarch.rpm
 
-RHEL/CentOS 5:
-
-    rpm -i http://packages.icinga.com/epel/5/release/noarch/icinga-rpm-release-5-1.el5.centos.noarch.rpm
-
 Fedora 25:
 
     dnf install https://packages.icinga.com/fedora/25/release/noarch/icinga-rpm-release-25-1.fc25.noarch.rpm
@@ -63,49 +59,45 @@ Fedora 24:
 
     dnf install https://packages.icinga.com/fedora/24/release/noarch/icinga-rpm-release-24-1.fc24.noarch.rpm
 
-Fedora 23:
-
-    dnf install https://packages.icinga.com/fedora/23/release/noarch/icinga-rpm-release-23-1.fc23.noarch.rpm
-
 SLES 11:
 
-    # zypper ar http://packages.icinga.com/SUSE/ICINGA-release-11.repo
+    # zypper ar https://packages.icinga.com/SUSE/ICINGA-release-11.repo
     # zypper ref
 
 SLES 12:
 
-    # zypper ar http://packages.icinga.com/SUSE/ICINGA-release.repo
+    # zypper ar https://packages.icinga.com/SUSE/ICINGA-release.repo
     # zypper ref
 
 openSUSE:
 
-    # zypper ar http://packages.icinga.com/openSUSE/ICINGA-release.repo
+    # zypper ar https://packages.icinga.com/openSUSE/ICINGA-release.repo
     # zypper ref
 
 
-#### <a id="package-repositories-rhel-epel"></a> RHEL/CentOS EPEL Repository
+#### RHEL/CentOS EPEL Repository <a id="package-repositories-rhel-epel"></a>
 
 The packages for RHEL/CentOS depend on other packages which are distributed
-as part of the [EPEL repository](http://fedoraproject.org/wiki/EPEL).
+as part of the [EPEL repository](https://fedoraproject.org/wiki/EPEL).
 
-CentOS 7/6/5:
+CentOS 7/6:
 
     yum install epel-release
 
 If you are using RHEL you need enable the `optional` repository and then install
-the [EPEL rpm package](http://fedoraproject.org/wiki/EPEL#How_can_I_use_these_extra_packages.3F).
+the [EPEL rpm package](https://fedoraproject.org/wiki/EPEL#How_can_I_use_these_extra_packages.3F).
 
-#### <a id="package-repositories-sles-security"></a> SLES Security Repository
+#### SLES Security Repository <a id="package-repositories-sles-security"></a>
 
 The packages for SLES 11 depend on the `openssl1` package which is distributed
 as part of the [SLES 11 Security Module](https://www.suse.com/communities/conversations/introducing-the-suse-linux-enterprise-11-security-module/).
 
-#### <a id="package-sles-sdk"></a> SLES 12 SDK
+#### SLES 12 SDK <a id="package-sles-sdk"></a>
 
-Icinga 2 requires the `libboost_chrono1_54_0` package from the `SLES 12 SDK` repository. Refer to the SUSE Enterprise 
+Icinga 2 requires the `libboost_chrono1_54_0` package from the `SLES 12 SDK` repository. Refer to the SUSE Enterprise
 Linux documentation for further information.
 
-### <a id="installing-icinga2"></a> Installing Icinga 2
+### Installing Icinga 2 <a id="installing-icinga2"></a>
 
 You can install Icinga 2 by using your distribution's package manager
 to install the `icinga2` package.
@@ -114,7 +106,7 @@ Debian/Ubuntu:
 
     # apt-get install icinga2
 
-RHEL/CentOS 5/6:
+RHEL/CentOS 6:
 
     # yum install icinga2
     # chkconfig icinga2 on
@@ -134,7 +126,7 @@ FreeBSD:
 
     # pkg install icinga2
 
-### <a id="installation-enabled-features"></a> Enabled Features during Installation
+### Enabled Features during Installation <a id="installation-enabled-features"></a>
 
 The default installation will enable three features required for a basic
 Icinga 2 installation:
@@ -152,7 +144,7 @@ enabled and disabled.
     Enabled features: checker mainlog notification
 
 
-### <a id="installation-paths"></a> Installation Paths
+### Installation Paths <a id="installation-paths"></a>
 
 By default Icinga 2 uses the following files and directories:
 
@@ -191,14 +183,14 @@ By default Icinga 2 uses the following files and directories:
   /var/lib/icinga2                    | Icinga 2 state file, cluster log, local CA and configuration files (cluster, api).
   /var/log/icinga2                    | Log file location and compat/ directory for the CompatLogger feature.
 
-## <a id="setting-up-check-plugins"></a> Setting up Check Plugins
+## Setting up Check Plugins <a id="setting-up-check-plugins"></a>
 
 Without plugins Icinga 2 does not know how to check external services. The
 [Monitoring Plugins Project](https://www.monitoring-plugins.org/) provides
 an extensive set of plugins which can be used with Icinga 2 to check whether
 services are working properly.
 
-These plugins are required to make the [example configuration](4-configuring-icinga-2.md#configuring-icinga2-overview)
+These plugins are required to make the [example configuration](04-configuring-icinga-2.md#configuring-icinga2-overview)
 work out-of-the-box.
 
 For your convenience here is a list of package names for some of the more
@@ -206,27 +198,27 @@ popular operating systems/distributions:
 
 OS/Distribution        | Package Name       | Repository                | Installation Path
 -----------------------|--------------------|---------------------------|----------------------------
-RHEL/CentOS            | nagios-plugins-all | [EPEL](http://fedoraproject.org/wiki/EPEL) | /usr/lib/nagios/plugins or /usr/lib64/nagios/plugins
+RHEL/CentOS            | nagios-plugins-all | [EPEL](https://fedoraproject.org/wiki/EPEL) | /usr/lib/nagios/plugins or /usr/lib64/nagios/plugins
 SLES/OpenSUSE          | monitoring-plugins | [server:monitoring](https://build.opensuse.org/project/repositories/server:monitoring) | /usr/lib/nagios/plugins
-Debian/Ubuntu          | nagios-plugins     | -                         | /usr/lib/nagios/plugins
+Debian/Ubuntu          | monitoring-plugins | -                         | /usr/lib/nagios/plugins
 FreeBSD                | monitoring-plugins | -                         | /usr/local/libexec/nagios
-OS X                   | nagios-plugins     | [MacPorts](http://www.macports.org), [Homebrew](http://brew.sh) | /opt/local/libexec or /usr/local/sbin
+OS X                   | nagios-plugins     | [MacPorts](https://www.macports.org), [Homebrew](https://brew.sh) | /opt/local/libexec or /usr/local/sbin
 
 The recommended way of installing these standard plugins is to use your
 distribution's package manager.
 
 Debian/Ubuntu:
 
-    # apt-get install nagios-plugins
+    # apt-get install monitoring-plugins
 
 RHEL/CentOS:
 
     # yum install nagios-plugins-all
 
 The packages for RHEL/CentOS depend on other packages which are distributed
-as part of the [EPEL repository](http://fedoraproject.org/wiki/EPEL). Please
+as part of the [EPEL repository](https://fedoraproject.org/wiki/EPEL). Please
 make sure to enable this repository by following
-[these instructions](http://fedoraproject.org/wiki/EPEL#How_can_I_use_these_extra_packages.3F).
+[these instructions](https://fedoraproject.org/wiki/EPEL#How_can_I_use_these_extra_packages.3F).
 
 Fedora:
 
@@ -245,18 +237,18 @@ FreeBSD:
     # pkg install monitoring-plugins
 
 Depending on which directory your plugins are installed into you may need to
-update the global `PluginDir` constant in your [Icinga 2 configuration](4-configuring-icinga-2.md#constants-conf).
+update the global `PluginDir` constant in your [Icinga 2 configuration](04-configuring-icinga-2.md#constants-conf).
 This constant is used by the check command definitions contained in the Icinga Template Library
 to determine where to find the plugin binaries.
 
 > **Note**
 >
-> Please refer to the [service monitoring](5-service-monitoring.md#service-monitoring-plugins) chapter for details about how to integrate
+> Please refer to the [service monitoring](05-service-monitoring.md#service-monitoring-plugins) chapter for details about how to integrate
 > additional check plugins into your Icinga 2 setup.
 
-## <a id="running-icinga2"></a> Running Icinga 2
+## Running Icinga 2 <a id="running-icinga2"></a>
 
-### <a id="init-script"></a> Init Script
+### Init Script <a id="init-script"></a>
 
 Icinga 2's init script is installed in `/etc/init.d/icinga2` (`/usr/local/etc/rc.d/icinga2` on FreeBSD) by default:
 
@@ -278,7 +270,7 @@ By default the Icinga 2 daemon is running as `icinga` user and group
 using the init script. Using Debian packages the user and group are set to
 `nagios` for historical reasons.
 
-### <a id="systemd-service"></a> systemd Service
+### systemd Service <a id="systemd-service"></a>
 
 Some distributions (e.g. Fedora, openSUSE and RHEL/CentOS 7) use systemd. The
 Icinga 2 packages automatically install the necessary systemd unit files.
@@ -334,7 +326,7 @@ On FreeBSD you need to enable icinga2 in your rc.conf
 
     # service icinga2 restart
 
-## <a id="configuration-syntax-highlighting"></a> Configuration Syntax Highlighting
+## Configuration Syntax Highlighting <a id="configuration-syntax-highlighting"></a>
 
 Icinga 2 ships configuration examples for syntax highlighting using the `vim` and `nano` editors.
 The RHEL and SUSE package `icinga2-common` installs these files into `/usr/share/doc/icinga2-common-[x.x.x]/syntax`
@@ -342,7 +334,7 @@ The RHEL and SUSE package `icinga2-common` installs these files into `/usr/share
 On Debian systems the `icinga2-common` package provides only the Nano configuration file (`/usr/share/nano/icinga2.nanorc`);
 to obtain the Vim configuration, please install the extra package `vim-icinga2`. The files are located in `/usr/share/vim/addons`.
 
-### <a id="configuration-syntax-highlighting-vim"></a> Configuration Syntax Highlighting using Vim
+### Configuration Syntax Highlighting using Vim <a id="configuration-syntax-highlighting-vim"></a>
 
 Install the package `vim-icinga2` with your distribution's package manager.
 
@@ -373,7 +365,7 @@ Test it:
 ![Vim with syntax highlighting](images/getting-started/vim-syntax.png "Vim with Icinga 2 syntax highlighting")
 
 
-### <a id="configuration-syntax-highlighting-nano"></a> Configuration Syntax Highlighting using Nano
+### Configuration Syntax Highlighting using Nano <a id="configuration-syntax-highlighting-nano"></a>
 
 Install the package `nano-icinga2` with your distribution's package manager.
 
@@ -406,7 +398,7 @@ Test it:
 
 ![Nano with syntax highlighting](images/getting-started/nano-syntax.png "Nano with Icinga 2 syntax highlighting")
 
-## <a id="setting-up-icingaweb2"></a> Setting up Icinga Web 2
+## Setting up Icinga Web 2 <a id="setting-up-icingaweb2"></a>
 
 Icinga 2 can be used with Icinga Web 2 and a number of other web interfaces.
 This chapter explains how to set up Icinga Web 2.
@@ -414,21 +406,25 @@ This chapter explains how to set up Icinga Web 2.
 The DB IDO (Database Icinga Data Output) modules for Icinga 2 take care of
 exporting all configuration and status information into a database. The IDO
 database is used by a number of projects including
-[Icinga Web 2](2-getting-started.md#setting-up-icingaweb2), Icinga Reporting
+[Icinga Web 2](02-getting-started.md#setting-up-icingaweb2), Icinga Reporting
 or Icinga Web 1.x.
 
 There is a separate module for each database backend. At present support for
 both MySQL and PostgreSQL is implemented.
 
-### <a id="configuring-db-ido-mysql"></a> Configuring DB IDO MySQL
+Please choose whether to install [MySQL](02-getting-started.md#configuring-db-ido-mysql) or
+[PostgreSQL](02-getting-started.md#configuring-db-ido-postgresql).
 
-#### <a id="installing-database-mysql-server"></a> Installing MySQL database server
+### Configuring DB IDO MySQL <a id="configuring-db-ido-mysql"></a>
+
+#### Installing MySQL database server <a id="installing-database-mysql-server"></a>
 
 Debian/Ubuntu:
 
     # apt-get install mysql-server mysql-client
+    # mysql_secure_installation
 
-RHEL/CentOS 5/6:
+RHEL/CentOS 6:
 
     # yum install mysql-server mysql
     # chkconfig mysqld on
@@ -455,7 +451,7 @@ FreeBSD:
     # service mysql-server restart
     # mysql_secure_installation
 
-#### <a id="installing-database-mysql-modules"></a> Installing the IDO modules for MySQL
+#### Installing the IDO modules for MySQL <a id="installing-database-mysql-modules"></a>
 
 The next step is to install the `icinga2-ido-mysql` package using your
 distribution's package manager.
@@ -483,7 +479,7 @@ and located at /usr/local/share/icinga2-ido-mysql/schema/mysql.sql
 > default. You can skip the automated setup and install/upgrade the
 > database manually if you prefer that.
 
-#### <a id="setting-up-mysql-db"></a> Setting up the MySQL database
+#### Setting up the MySQL database <a id="setting-up-mysql-db"></a>
 
 Set up a MySQL database for Icinga 2:
 
@@ -501,14 +497,14 @@ following command:
     # mysql -u root -p icinga < /usr/share/icinga2-ido-mysql/schema/mysql.sql
 
 
-#### <a id="enabling-ido-mysql"></a> Enabling the IDO MySQL module
+#### Enabling the IDO MySQL module <a id="enabling-ido-mysql"></a>
 
 The package provides a new configuration file that is installed in
 `/etc/icinga2/features-available/ido-mysql.conf`. You will need to
 update the database credentials in this file.
 
 All available attributes are explained in the
-[IdoMysqlConnection object](9-object-types.md#objecttype-idomysqlconnection)
+[IdoMysqlConnection object](09-object-types.md#objecttype-idomysqlconnection)
 chapter.
 
 You can enable the `ido-mysql` feature configuration file using
@@ -520,27 +516,30 @@ You can enable the `ido-mysql` feature configuration file using
 
 After enabling the ido-mysql feature you have to restart Icinga 2:
 
-Debian/Ubuntu, RHEL/CentOS 6 and SUSE:
-
-    # service icinga2 restart
-
-RHEL/CentOS 7 and Fedora:
+RHEL/CentOS 7/Fedora, SLES 12, Debian Jessie/Stretch, Ubuntu Xenial:
 
     # systemctl restart icinga2
+
+Debian/Ubuntu, RHEL/CentOS 6 and SUSE 11:
+
+    # service icinga2 restart
 
 FreeBSD:
 
     # service icinga2 restart
 
-### <a id="configuring-db-ido-postgresql"></a> Configuring DB IDO PostgreSQL
 
-#### <a id="installing-database-postgresql-server"></a> Installing PostgreSQL database server
+Continue with the [webserver setup](02-getting-started.md#icinga2-user-interface-webserver).
+
+### Configuring DB IDO PostgreSQL <a id="configuring-db-ido-postgresql"></a>
+
+#### Installing PostgreSQL database server <a id="installing-database-postgresql-server"></a>
 
 Debian/Ubuntu:
 
     # apt-get install postgresql
 
-RHEL/CentOS 5/6:
+RHEL/CentOS 6:
 
     # yum install postgresql-server postgresql
     # chkconfig postgresql on
@@ -565,7 +564,7 @@ FreeBSD:
     # sysrc postgresql_enable=yes
     # service postgresql start
 
-#### <a id="installing-database-postgresql-modules"></a> Installing the IDO modules for PostgreSQL
+#### Installing the IDO modules for PostgreSQL <a id="installing-database-postgresql-modules"></a>
 
 The next step is to install the `icinga2-ido-pgsql` package using your
 distribution's package manager.
@@ -636,14 +635,14 @@ schema using the following command:
 ![importing the Icinga 2 IDO schema](images/getting-started/postgr-import-ido.png "Importing the Icinga 2 IDO schema on Debian Jessie")
 
 
-#### <a id="enabling-ido-postgresql"></a> Enabling the IDO PostgreSQL module
+#### Enabling the IDO PostgreSQL module <a id="enabling-ido-postgresql"></a>
 
 The package provides a new configuration file that is installed in
 `/etc/icinga2/features-available/ido-pgsql.conf`. You will need to update
 the database credentials in this file.
 
 All available attributes are explained in the
-[IdoPgsqlConnection object](9-object-types.md#objecttype-idopgsqlconnection)
+[IdoPgsqlConnection object](09-object-types.md#objecttype-idopgsqlconnection)
 chapter.
 
 You can enable the `ido-pgsql` feature configuration file using
@@ -655,16 +654,21 @@ You can enable the `ido-pgsql` feature configuration file using
 
 After enabling the ido-pgsql feature you have to restart Icinga 2:
 
+RHEL/CentOS 7/Fedora, SLES 12, Debian Jessie/Stretch, Ubuntu Xenial:
+
+    # systemctl restart icinga2
+
 Debian/Ubuntu, RHEL/CentOS 6, SUSE and FreeBSD:
 
     # service icinga2 restart
 
-RHEL/CentOS 7 and Fedora:
+FreeBSD:
 
-    # systemctl restart icinga2
+    # service icinga2 restart
 
+Continue with the [webserver setup](02-getting-started.md#icinga2-user-interface-webserver).
 
-### <a id="icinga2-user-interface-webserver"></a> Webserver
+### Webserver <a id="icinga2-user-interface-webserver"></a>
 
 Debian/Ubuntu:
 
@@ -676,7 +680,7 @@ RHEL/CentOS 6:
     # chkconfig httpd on
     # service httpd start
 
-RHEL/CentOS 7/Fedora:
+RHEL/CentOS 7, Fedora:
 
     # yum install httpd
     # systemctl enable httpd
@@ -700,7 +704,7 @@ FreeBSD (nginx, but you could also use the apache24 package):
     # service php-fpm start
     # service nginx start
 
-### <a id="icinga2-user-interface-firewall-rules"></a> Firewall Rules
+### Firewall Rules <a id="icinga2-user-interface-firewall-rules"></a>
 
 Example:
 
@@ -716,68 +720,57 @@ FreeBSD:
 Please consult the [FreeBSD Handbook](https://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/firewalls.html) how to configure one of FreeBSD's firewalls.
 
 
-### <a id="setting-up-external-command-pipe"></a> Setting Up External Command Pipe
+### Setting Up Icinga 2 REST API <a id="setting-up-rest-api"></a>
 
-Web interfaces and other Icinga addons are able to send commands to
-Icinga 2 through the external command pipe.
+Icinga Web 2 and other web interfaces require the [REST API](12-icinga2-api.md#icinga2-api-setup)
+to send actions (reschedule check, etc.) and query object details.
 
-You can enable the External Command Pipe using the CLI:
+You can run the CLI command `icinga2 api setup` to enable the
+`api` [feature](11-cli-commands.md#enable-features) and set up
+certificates as well as a new API user `root` with an auto-generated password in the
+`/etc/icinga2/conf.d/api-users.conf` configuration file:
 
-    # icinga2 feature enable command
+    # icinga2 api setup
 
-After that you will have to restart Icinga 2:
+Edit the `api-users.conf` file and add a new ApiUser object. Specify the [permissions](12-icinga2-api.md#icinga2-api-permissions)
+attribute with minimal permissions required by Icinga Web 2.
+
+    # vim /etc/icinga2/conf.d/api-users.conf
+
+    object ApiUser "icingaweb2" {
+      password = "Wijsn8Z9eRs5E25d"
+      permissions = [ "status/query", "actions/*", "objects/modify/*", "objects/query/*" ]
+    }
+
+Make sure to restart Icinga 2 to activate the configuration.
+
+RHEL/CentOS 7/Fedora, SLES 12, Debian Jessie/Stretch, Ubuntu Xenial:
+
+    # systemctl restart icinga2
 
 Debian/Ubuntu, RHEL/CentOS 6 and SUSE:
 
     # service icinga2 restart
 
-RHEL/CentOS 7 and Fedora:
-
-    # systemctl restart icinga2
-
 FreeBSD:
 
     # service icinga2 restart
 
-By default the command pipe file is owned by the group `icingacmd` with
-read/write permissions. Add your webserver's user to the group `icingacmd` to
-enable sending commands to Icinga 2 through your web interface:
-
-    # usermod -a -G icingacmd www-data
-
-FreeBSD:
-On FreeBSD the rw directory is owned by the group `www`. You do not need to add the
-user `icinga` to the group `www`.
-
-Debian packages use `nagios` as the default user and group name. Therefore
-change `icingacmd` to `nagios`.
-
-The webserver's user is different between distributions so you might have to
-change `www-data` to `wwwrun`, `www`, or `apache`.
-
-Change `www-data` to the user you're using to run queries.
-
-You can verify that the user has been successfully added to the `icingacmd`
-group using the `id` command:
-
-    $ id <your-webserver-user>
-
-![id command on CentOS 7](images/getting-started/id-apache-centos7.png "Confirm that the webserver's user
-(here: `apache` on a CentOS 7 system) is a member of the group `icingacmd`.")
-
-### <a id="installing-icingaweb2"></a> Installing Icinga Web 2
+### Installing Icinga Web 2 <a id="installing-icingaweb2"></a>
 
 Please consult the [installation documentation](https://github.com/Icinga/icingaweb2/blob/master/doc/02-Installation.md)
 for further instructions on how to install Icinga Web 2.
 
+The Icinga 2 API can be defined as [command transport](https://github.com/Icinga/icingaweb2/blob/master/modules/monitoring/doc/commandtransports.md)
+in Icinga Web 2 >= 2.4.
 
-## <a id="install-addons"></a> Addons
+## Addons <a id="install-addons"></a>
 
 A number of additional features are available in the form of addons. A list of
 popular addons is available in the
 [Addons and Plugins](13-addons.md#addons) chapter.
 
-## <a id="install-backup"></a> Backup
+## Backup <a id="install-backup"></a>
 
 Ensure to include the following in your backups:
 
