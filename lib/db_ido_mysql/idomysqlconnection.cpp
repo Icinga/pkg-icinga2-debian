@@ -19,13 +19,13 @@
 
 #include "db_ido_mysql/idomysqlconnection.hpp"
 #include "db_ido_mysql/idomysqlconnection.tcpp"
-#include "icinga/perfdatavalue.hpp"
 #include "db_ido/dbtype.hpp"
 #include "db_ido/dbvalue.hpp"
 #include "base/logger.hpp"
 #include "base/objectlock.hpp"
 #include "base/convert.hpp"
 #include "base/utility.hpp"
+#include "base/perfdatavalue.hpp"
 #include "base/application.hpp"
 #include "base/configtype.hpp"
 #include "base/exception.hpp"
@@ -53,13 +53,15 @@ void IdoMysqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::P
 	Dictionary::Ptr nodes = new Dictionary();
 
 	for (const IdoMysqlConnection::Ptr& idomysqlconnection : ConfigType::GetObjectsByType<IdoMysqlConnection>()) {
-		size_t items = idomysqlconnection->m_QueryQueue.GetLength();
+		size_t queryQueueItems = idomysqlconnection->m_QueryQueue.GetLength();
+		double queryQueueItemRate = idomysqlconnection->m_QueryQueue.GetTaskCount(60) / 60.0;
 
 		Dictionary::Ptr stats = new Dictionary();
 		stats->Set("version", idomysqlconnection->GetSchemaVersion());
 		stats->Set("instance_name", idomysqlconnection->GetInstanceName());
 		stats->Set("connected", idomysqlconnection->GetConnected());
-		stats->Set("query_queue_items", items);
+		stats->Set("query_queue_items", queryQueueItems);
+		stats->Set("query_queue_item_rate", queryQueueItemRate);
 
 		nodes->Set(idomysqlconnection->GetName(), stats);
 
@@ -67,7 +69,8 @@ void IdoMysqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::P
 		perfdata->Add(new PerfdataValue("idomysqlconnection_" + idomysqlconnection->GetName() + "_queries_1min", idomysqlconnection->GetQueryCount(60)));
 		perfdata->Add(new PerfdataValue("idomysqlconnection_" + idomysqlconnection->GetName() + "_queries_5mins", idomysqlconnection->GetQueryCount(5 * 60)));
 		perfdata->Add(new PerfdataValue("idomysqlconnection_" + idomysqlconnection->GetName() + "_queries_15mins", idomysqlconnection->GetQueryCount(15 * 60)));
-		perfdata->Add(new PerfdataValue("idomysqlconnection_" + idomysqlconnection->GetName() + "_query_queue_items", items));
+		perfdata->Add(new PerfdataValue("idomysqlconnection_" + idomysqlconnection->GetName() + "_query_queue_items", queryQueueItems));
+		perfdata->Add(new PerfdataValue("idomysqlconnection_" + idomysqlconnection->GetName() + "_query_queue_item_rate", queryQueueItemRate));
 	}
 
 	status->Set("idomysqlconnection", nodes);
@@ -76,6 +79,9 @@ void IdoMysqlConnection::StatsFunc(const Dictionary::Ptr& status, const Array::P
 void IdoMysqlConnection::Resume(void)
 {
 	DbConnection::Resume();
+
+	Log(LogInformation, "IdoMysqlConnection")
+	    << "'" << GetName() << "' resumed.";
 
 	SetConnected(false);
 
@@ -97,6 +103,9 @@ void IdoMysqlConnection::Resume(void)
 
 void IdoMysqlConnection::Pause(void)
 {
+	Log(LogInformation, "IdoMysqlConnection")
+	    << "'" << GetName() << "' paused.";
+
 	m_ReconnectTimer.reset();
 
 	DbConnection::Pause();
@@ -242,7 +251,7 @@ void IdoMysqlConnection::Reconnect(void)
 	/* connection */
 	if (!mysql_init(&m_Connection)) {
 		Log(LogCritical, "IdoMysqlConnection")
-		    << "mysql_init() failed: \"" << mysql_error(&m_Connection) << "\"";
+		    << "mysql_init() failed: out of memory";
 
 		BOOST_THROW_EXCEPTION(std::bad_alloc());
 	}
@@ -282,7 +291,7 @@ void IdoMysqlConnection::Reconnect(void)
 
 		Log(LogCritical, "IdoMysqlConnection", "Schema does not provide any valid version! Verify your schema installation.");
 
-		Application::Exit(EXIT_FAILURE);
+		BOOST_THROW_EXCEPTION(std::runtime_error("Invalid schema."));
 	}
 
 	DiscardRows(result);
@@ -297,9 +306,10 @@ void IdoMysqlConnection::Reconnect(void)
 
 		Log(LogCritical, "IdoMysqlConnection")
 		    << "Schema version '" << version << "' does not match the required version '"
-		    << IDO_COMPAT_SCHEMA_VERSION << "' (or newer)! Please check the upgrade documentation.";
+		    << IDO_COMPAT_SCHEMA_VERSION << "' (or newer)! Please check the upgrade documentation at "
+		    << "https://docs.icinga.com/icinga2/latest/doc/module/icinga2/chapter/upgrading-icinga-2#upgrading-mysql-db";
 
-		Application::Exit(EXIT_FAILURE);
+		BOOST_THROW_EXCEPTION(std::runtime_error("Schema version mismatch."));
 	}
 
 	String instanceName = GetInstanceName();

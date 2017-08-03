@@ -1,22 +1,22 @@
-# <a id="selinux"></a> SELinux
+# SELinux <a id="selinux"></a>
 
-## <a id="selinux-introduction"></a> Introduction
+## Introduction <a id="selinux-introduction"></a>
 
-SELinux is a mandatory access control (MAC) system on Linux which adds a fine granular permission system for access to all resources on the system such as files, devices, networks and inter-process communication.
+SELinux is a mandatory access control (MAC) system on Linux which adds a fine-grained permission system for access to all system resources such as files, devices, networks and inter-process communication.
 
-The most important questions are answered briefly in the [FAQ of the SELinux Project](http://selinuxproject.org/page/FAQ). For more details on SELinux and how to actually use and administrate it on your systems have a look at [Red Hat Enterprise Linux 7 - SELinux User's and Administrator's Guide](https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/7/html/SELinux_Users_and_Administrators_Guide/index.html). For an simplified (and funny) introduction download the [SELinux Coloring Book](https://github.com/mairin/selinux-coloring-book).
+The most important questions are answered briefly in the [FAQ of the SELinux Project](https://selinuxproject.org/page/FAQ). For more details on SELinux and how to actually use and administrate it on your system have a look at [Red Hat Enterprise Linux 7 - SELinux User's and Administrator's Guide](https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/7/html/SELinux_Users_and_Administrators_Guide/index.html). For a simplified (and funny) introduction download the [SELinux Coloring Book](https://github.com/mairin/selinux-coloring-book).
 
-This documentation will use a similar format like the SELinux User's and Administrator's Guide.
+This documentation will use a format similar to the SELinux User's and Administrator's Guide.
 
-### <a id="selinux-policy"></a> Policy
+### Policy <a id="selinux-policy"></a>
 
-Icinga 2 is providing its own SELinux Policy. At the moment it is not upstreamed to the reference policy because it is under development. Target of the development is a policy package for Red Hat Enterprise Linux 7 and its derivates running the targeted policy which confines Icinga2 with all features and all checks executed. All other distributions will require some tweaks.
+Icinga 2 provides its own SELinux policy. Development target is a policy package for Red Hat Enterprise Linux 7 and derivatives running the targeted policy which confines Icinga 2 with all features and all checks executed. All other distributions will require some tweaks.
 
-### <a id="selinux-policy-installation"></a> Installation
+### Installation <a id="selinux-policy-installation"></a>
 
-There are two ways to install the SELinux Policy for Icinga 2 on Enterprise Linux 7. Installing it from the provided package which is the preferred option and manual installation if you need some fixes not released yet or for development.
+There are two ways of installing the SELinux Policy for Icinga 2 on Enterprise Linux 7. The preferred way is to install the package. The other option involves installing the SELinux policy manually which might be necessary if you need some fixes which haven't made their way into a release yet.
 
-The policy package will run the daemon in a permissive domain so nothing will be denied also if the system runs in enforcing mode, so please make sure to run the system in this mode.
+If the system runs in enforcing mode and you encounter problems you can set Icinga 2's domain to permissive mode.
 
     # sestatus
     SELinux status:                 enabled
@@ -31,31 +31,29 @@ The policy package will run the daemon in a permissive domain so nothing will be
 
 You can change the configured mode by editing `/etc/selinux/config` and the current mode by executing `setenforce 0`.
 
-#### <a id="selinux-policy-installation-package"></a> Package installation
+#### Package installation <a id="selinux-policy-installation-package"></a>
 
-The packages are provided with release version 2.4 onwards.
-
-Simply add the selinux subpackage to your installation.
+Simply add the `icinga2-selinux` package to your installation.
 
     # yum install icinga2-selinux
 
-After that restart Icinga 2 and verify it running in its own domain `icinga2_t`.
+Ensure that the `icinga2` process is running in its own `icinga2_t` domain after installing the policy package:
 
     # systemctl restart icinga2.service
     # ps -eZ | grep icinga2
     system_u:system_r:icinga2_t:s0   2825 ?        00:00:00 icinga2
 
-#### <a id="selinux-policy-installation-manual"></a> Manual installation
+#### Manual installation <a id="selinux-policy-installation-manual"></a>
 
 This section describes the installation to support development and testing. It assumes that Icinga 2 is already installed from packages and running on the system.
 
-As a prerequisite install the `git`, `selinux-policy-devel` and `audit` package. Enable and start the audit daemon afterwards.
+As a prerequisite install the `git`, `selinux-policy-devel` and `audit` packages. Enable and start the audit daemon afterwards:
 
     # yum install git selinux-policy-devel audit
     # systemctl enable auditd.service
     # systemctl start auditd.service
 
-After that clone the icinga2 git repository.
+After that clone the icinga2 git repository:
 
     # git clone https://github.com/icinga/icinga2
 
@@ -70,15 +68,15 @@ After that restart Icinga 2 and verify it running in its own domain `icinga2_t`.
     # ps -eZ | grep icinga2
     system_u:system_r:icinga2_t:s0   2825 ?        00:00:00 icinga2
 
-### <a id="selinux-policy-general"></a> General
+### General <a id="selinux-policy-general"></a>
 
 When the SELinux policy package for Icinga 2 is installed, the Icinga 2 daemon (icinga2) runs in its own domain `icinga2_t` and is separated from other confined services.
 
-Files have to be labeled correctly for allowing icinga2 access to it. For example it writes to its own log files labeled `icinga2_log_t`. Also the API port is labeled `icinga_port_t` and icinga2 is allowed to manage it. Furthermore icinga2 can open high ports and unix sockets to connect to databases and features like graphite. It executes the nagios plugins and transitions to their context if those are labeled for example `nagios_services_plugin_exec_t` or `nagios_system_plugin_exec_t`.
+Files have to be labeled correctly in order for Icinga 2 to be able to access them. For example the Icinga 2 log files have to have the `icinga2_log_t` label. Also the API port is labeled with `icinga_port_t`. Furthermore Icinga 2 can open high ports and UNIX sockets to connect to databases and features like Graphite. It executes the Nagios plugins and transitions to their context if those are labeled for example `nagios_services_plugin_exec_t` or `nagios_system_plugin_exec_t`.
 
-Additional the Apache webserver is allowed to connect to the Command pipe of Icinga 2 to allow web interfaces sending commands to icinga2. This will perhaps change later on while investigating Icinga Web 2 for SELinux!
+Additionally the Apache web server is allowed to connect to Icinga 2's command pipe in order to allow web interfaces to send commands to icinga2. This will perhaps change later on while investigating Icinga Web 2 for SELinux!
 
-### <a id="selinux-policy-types"></a> Types
+### Types <a id="selinux-policy-types"></a>
 
 The command pipe is labeled `icinga2_command_t` and other services can request access to it by using the interface `icinga2_send_commands`.
 
@@ -100,7 +98,7 @@ If one of those plugin domains causes problems you can set it to permissive by e
 
 The policy provides a role `icinga2adm_r` for confining an user which enables an administrative user managing only Icinga 2 on the system. This user will also execute the plugins in their domain instead of the users one, so you can verify their execution with the same restrictions like they have when executed by icinga2.
 
-### <a id="selinux-policy-booleans"></a> Booleans
+### Booleans <a id="selinux-policy-booleans"></a>
 
 SELinux is based on the least level of access required for a service to run. Using booleans you can grant more access in a defined way. The Icinga 2 policy package provides the following booleans.
 
@@ -108,13 +106,27 @@ SELinux is based on the least level of access required for a service to run. Usi
 
 Having this boolean enabled allows icinga2 to connect to all ports. This can be neccesary if you use features which connect to unconfined services.
 
-### <a id="selinux-policy-examples"></a> Configuration Examples
+**httpd_can_write_icinga2_command** 
 
-#### <a id="selinux-policy-examples-plugin"></a> Confining a plugin
+Having this boolean enabled allows httpd to write to the command pipe of icinga2. This is enabled by default, if not needed you can disable it for more security.
+
+**httpd_can_connect_icinga2_api** 
+
+Having this boolean enabled allows httpd to connect to the API of icinga2 (Ports labeled icinga2_port_t). This is enabled by default, if not needed you can disable it for more security.
+
+### Configuration Examples <a id="selinux-policy-examples"></a>
+
+#### Run the icinga2 service permissive <a id="selinux-policy-examples-permissive"></a>
+
+If problems occur while running the system in enforcing mode and those problems are only caused by the policy of the icinga2 domain, you can set this domain to permissive instead of the complete system. This can be done by executing `semanage permissive -a icinga2_t`.
+
+Make sure to report the bugs in the policy afterwards.
+
+#### Confining a plugin <a id="selinux-policy-examples-plugin"></a>
 
 Download and install a plugin, for example check_mysql_health.
 
-    # wget http://labs.consol.de/download/shinken-nagios-plugins/check_mysql_health-2.1.9.2.tar.gz
+    # wget https://labs.consol.de/download/shinken-nagios-plugins/check_mysql_health-2.1.9.2.tar.gz
     # tar xvzf check_mysql_health-2.1.9.2.tar.gz
     # cd check_mysql_health-2.1.9.2/
     # ./configure --libexecdir /usr/lib64/nagios/plugins
@@ -134,13 +146,13 @@ In this case the plugin is monitoring a service, so it should be labeled `nagios
 
 The plugin still runs fine but if someone changes the script to do weird stuff it will fail to do so.
 
-#### <a id="selinux-policy-examples-connectall"></a> Allow icinga to connect to all ports.
+#### Allow icinga to connect to all ports. <a id="selinux-policy-examples-connectall"></a>
 
 You are running graphite on a different port than `2003` and want `icinga2` to connect to it.
 
 Change the port value for the graphite feature according to your graphite installation before enabling it.
 
-    # cat /etc/icinga2/features-enabled/graphite.conf 
+    # cat /etc/icinga2/features-enabled/graphite.conf
     /**
      * The GraphiteWriter type writes check result metrics and
      * performance data to a graphite tcp socket.
@@ -162,7 +174,7 @@ Before you restart the icinga2 service allow it to connect to all ports by enabl
 
 If you restart the daemon now it will successfully connect to graphite.
 
-#### <a id="selinux-policy-examples-user"></a> Confining a user
+#### Confining a user <a id="selinux-policy-examples-user"></a>
 
 If you want to have an administrative account capable of only managing icinga2 and not the complete system, you can restrict the privileges by confining
 this user. This is completly optional!
@@ -213,11 +225,11 @@ Now try the commands again without providing the role and type and they will wor
     $ sudo systemctl reload httpd.service
     Failed to issue method call: Access denied
 
-## <a id="selinux-bugreports"></a> Bugreports
+## Bugreports <a id="selinux-bugreports"></a>
 
 If you experience any problems while running in enforcing mode try to reproduce it in permissive mode. If the problem persists it is not related to SELinux because in permissive mode SELinux will not deny anything.
 
-For now Icinga 2 is running in a permissive domain and adds also some rules for other necessary services so no problems should occure at all. But you can help to enhance the policy by testing Icinga 2 running confined by SELinux.
+After some feedback Icinga 2 is now running in a enforced domain, but still adds also some rules for other necessary services so no problems should occure at all. But you can help to enhance the policy by testing Icinga 2 running confined by SELinux.
 
 Please add the following information to [bug reports](https://www.icinga.com/community/get-involved/):
 

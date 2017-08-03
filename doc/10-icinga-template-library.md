@@ -1,4 +1,4 @@
-# <a id="icinga-template-library"></a> Icinga Template Library
+# Icinga Template Library <a id="icinga-template-library"></a>
 
 The Icinga Template Library (ITL) implements standard templates and object
 definitions for commonly used services.
@@ -7,7 +7,7 @@ By default the ITL is included in the `icinga2.conf` configuration file:
 
     include <itl>
 
-## <a id="itl-generic-templates"></a> Generic Templates
+## Generic Templates <a id="itl-generic-templates"></a>
 
 These templates are imported by the provided example configuration.
 
@@ -16,62 +16,62 @@ These templates are imported by the provided example configuration.
 > These templates are built into the binaries. By convention
 > all command and timeperiod objects should import these templates.
 
-### <a id="itl-plugin-check-command"></a> plugin-check-command
+### plugin-check-command <a id="itl-plugin-check-command"></a>
 
 Command template for check plugins executed by Icinga 2.
 
 The `plugin-check-command` command does not support any vars.
 
-By default this template is automatically imported into all CheckCommand definitions.
+By default this template is automatically imported into all [CheckCommand](09-object-types.md#objecttype-checkcommand) definitions.
 
-### <a id="itl-plugin-notification-command"></a> plugin-notification-command
+### plugin-notification-command <a id="itl-plugin-notification-command"></a>
 
 Command template for notification scripts executed by Icinga 2.
 
 The `plugin-notification-command` command does not support any vars.
 
-By default this template is automatically imported into all CheckCommand definitions.
+By default this template is automatically imported into all [NotificationCommand](09-object-types.md#objecttype-notificationcommand) definitions.
 
-### <a id="itl-plugin-event-command"></a> plugin-event-command
+### plugin-event-command <a id="itl-plugin-event-command"></a>
 
 Command template for event handler scripts executed by Icinga 2.
 
 The `plugin-event-command` command does not support any vars.
 
-By default this template is automatically imported into all CheckCommand definitions.
+By default this template is automatically imported into all [EventCommand](09-object-types.md#objecttype-eventcommand) definitions.
 
-### <a id="itl-legacy-timeperiod"></a> legacy-timeperiod
+### legacy-timeperiod <a id="itl-legacy-timeperiod"></a>
 
-Timeperiod template for [Timeperiod objects](9-object-types.md#objecttype-timeperiod).
+Timeperiod template for [Timeperiod objects](09-object-types.md#objecttype-timeperiod).
 
 The `legacy-timeperiod` timeperiod does not support any vars.
 
-By default this template is automatically imported into all CheckCommand definitions.
+By default this template is automatically imported into all [TimePeriod](09-object-types.md#objecttype-timeperiod) definitions.
 
-## <a id="itl-check-commands"></a> Check Commands
+## Check Commands <a id="itl-check-commands"></a>
 
 These check commands are embedded into Icinga 2 and do not require any external
 plugin scripts.
 
-### <a id="itl-icinga"></a> icinga
+### icinga <a id="itl-icinga"></a>
 
 Check command for the built-in `icinga` check. This check returns performance
 data for the current Icinga instance.
 
 The `icinga` check command does not support any vars.
 
-### <a id="itl-icinga-cluster"></a> cluster
+### cluster <a id="itl-icinga-cluster"></a>
 
 Check command for the built-in `cluster` check. This check returns performance
 data for the current Icinga instance and connected endpoints.
 
 The `cluster` check command does not support any vars.
 
-### <a id="itl-icinga-cluster-zone"></a> cluster-zone
+### cluster-zone <a id="itl-icinga-cluster-zone"></a>
 
 Check command for the built-in `cluster-zone` check.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                 | Description
 ---------------------|---------------
@@ -79,18 +79,18 @@ cluster_zone         | **Required.** The zone name.
 cluster_lag_warning  | **Optional.** Warning threshold for log lag in seconds. Applies if the log lag is greater than the threshold.
 cluster_lag_critical | **Optional.** Critical threshold for log lag in seconds. Applies if the log lag is greater than the threshold.
 
-### <a id="itl-icinga-ido"></a> ido
+### ido <a id="itl-icinga-ido"></a>
 
 Check command for the built-in `ido` check.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name         | Description
 -------------|---------------
 ido_type     | **Required.** The type of the IDO connection object. Can be either "IdoMysqlConnection" or "IdoPgsqlConnection".
 ido_name     | **Required.** The name of the IDO connection object.
 
-### <a id="itl-random"></a> random
+### random <a id="itl-random"></a>
 
 Check command for the built-in `random` check. This check returns random states
 and adds the check source to the check output.
@@ -98,16 +98,16 @@ and adds the check source to the check output.
 For test and demo purposes only. The `random` check command does not support
 any vars.
 
-### <a id="itl-exception"></a> exception
+### exception <a id="itl-exception"></a>
 
 Check command for the built-in `exception` check. This check throws an exception.
 
 For test and demo purposes only. The `exception` check command does not support
 any vars.
 
-# <a id="plugin-check-commands"></a> Plugin Check Commands
+# Plugin Check Commands <a id="plugin-check-commands"></a>
 
-## <a id="plugin-check-commands-monitoring-plugins"></a> Plugin Check Commands for Monitoring Plugins
+## Plugin Check Commands for Monitoring Plugins <a id="plugin-check-commands-monitoring-plugins"></a>
 
 The Plugin Check Commands provides example configuration for plugin check commands
 provided by the [Monitoring Plugins](https://www.monitoring-plugins.org) project.
@@ -124,12 +124,12 @@ which contains the path of the plugins from the Monitoring Plugins project.
 definitions please kindly send a patch upstream. This should include an update
 for the ITL CheckCommand itself and this documentation section.
 
-### <a id="plugin-check-command-apt"></a> apt
+### apt <a id="plugin-check-command-apt"></a>
 
 The plugin [apt](https://www.monitoring-plugins.org/doc/index.html) checks for software updates on systems that use
 package management systems based on the apt-get(8) command found in Debian based systems.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -140,14 +140,15 @@ apt_include             | **Optional.** Include only packages matching REGEXP. C
 apt_exclude             | **Optional.** Exclude packages matching REGEXP from the list of packages that would otherwise be included. Can be specified multiple times.
 apt_critical            | **Optional.** If the full package information of any of the upgradable packages match this REGEXP, the plugin will return CRITICAL status. Can be specified multiple times.
 apt_timeout             | **Optional.** Seconds before plugin times out (default: 10).
+apt_only_critical       | **Optional.** Only warn about critical upgrades.
 
 
-### <a id="plugin-check-command-breeze"></a> breeze
+### breeze <a id="plugin-check-command-breeze"></a>
 
 The [check_breeze](https://www.monitoring-plugins.org/doc/man/check_breeze.html) plugin reports the signal
 strength of a Breezecom wireless equipment.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name             | Description
 -----------------|---------------------------------
@@ -157,12 +158,12 @@ breeze_warning   | **Required.** Percentage strength below which a WARNING statu
 breeze_critical  | **Required.** Percentage strength below which a WARNING status will result. Defaults to 20.
 
 
-### <a id="plugin-check-command-by-ssh"></a> by_ssh
+### by_ssh <a id="plugin-check-command-by-ssh"></a>
 
 The [check_by_ssh](https://www.monitoring-plugins.org/doc/man/check_by_ssh.html) plugin uses SSH to execute
 commands on a remote host.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -181,12 +182,12 @@ by_ssh_ipv4     | **Optional.** Use IPv4 connection. Defaults to false.
 by_ssh_ipv6     | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-clamd"></a> clamd
+### clamd <a id="plugin-check-command-clamd"></a>
 
 The [check_clamd](https://www.monitoring-plugins.org/doc/man/check_clamd.html) plugin tests CLAMD
 connections with the specified host (or unix socket).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name               | Description
 -------------------|--------------
@@ -212,12 +213,12 @@ clamd_ipv4           | **Optional.** Use IPv4 connection. Defaults to false.
 clamd_ipv6           | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-dhcp"></a> dhcp
+### dhcp <a id="plugin-check-command-dhcp"></a>
 
 The [check_dhcp](https://www.monitoring-plugins.org/doc/man/check_dhcp.html) plugin
 tests the availability of DHCP servers on a network.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -229,12 +230,12 @@ dhcp_mac        | **Optional.** The MAC address to use in the DHCP request.
 dhcp_unicast    | **Optional.** Whether to use unicast requests. Defaults to false.
 
 
-### <a id="plugin-check-command-dig"></a> dig
+### dig <a id="plugin-check-command-dig"></a>
 
 The [check_dig](https://www.monitoring-plugins.org/doc/man/check_dig.html) plugin
 test the DNS service on the specified host using dig.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                 | Description
 ---------------------|--------------
@@ -252,13 +253,13 @@ dig_ipv4             | **Optional.** Force dig to only use IPv4 query transport.
 dig_ipv6             | **Optional.** Force dig to only use IPv6 query transport. Defaults to false.
 
 
-### <a id="plugin-check-command-disk"></a> disk
+### disk <a id="plugin-check-command-disk"></a>
 
 The [check_disk](https://www.monitoring-plugins.org/doc/man/check_disk.html) plugin
 checks the amount of used disk space on a mounted file system and generates an alert
 if free space is less than one of the threshold values.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            	| Description
 --------------------|------------------------
@@ -287,14 +288,14 @@ disk\_ignore\_eregi\_path | **Optional.** Regular expression to ignore selected 
 disk\_ignore\_ereg\_path  | **Optional.** Regular expression to ignore selected path or partition. Multiple regular expression strings must be defined as array.
 disk\_timeout             | **Optional.** Seconds before connection times out (default: 10).
 disk\_units               | **Optional.** Choose bytes, kB, MB, GB, TB (default: MB).
-disk\_exclude\_type       | **Optional.** Ignore all filesystems of indicated type. Multiple regular expression strings must be defined as array.
+disk\_exclude\_type       | **Optional.** Ignore all filesystems of indicated type. Multiple regular expression strings must be defined as array. Defaults to "none", "tmpfs", "sysfs", "proc", "devtmpfs", "devfs", "mtmfs", "tracefs", "cgroup", "fuse.gvfsd-fuse", "fuse.gvfs-fuse-daemon", "fdescfs".
 
-### <a id="plugin-check-command-disk-smb"></a> disk_smb
+### disk_smb <a id="plugin-check-command-disk-smb"></a>
 
 The [check_disk_smb](https://www.monitoring-plugins.org/doc/man/check_disk_smb.html) plugin
 uses the `smbclient` binary to check SMB shares.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            	| Description
 ------------------------|------------------------
@@ -308,34 +309,35 @@ disk_smb_wused      	| **Optional.** The used space warning threshold. Defaults 
 disk_smb_cused      	| **Optional.** The used space critical threshold. Defaults to "95%". If the percent sign is omitted, use optional disk units.
 disk_smb_port		| **Optional.** Connection port, e.g. `139` or `445`. Defaults to `smbclient` default if omitted.
 
-### <a id="plugin-check-command-dns"></a> dns
+### dns <a id="plugin-check-command-dns"></a>
 
 The [check_dns](https://www.monitoring-plugins.org/doc/man/check_dns.html) plugin
 uses the nslookup program to obtain the IP address for the given host/domain query.
 An optional DNS server to use may be specified. If no DNS server is specified, the
 default server(s) specified in `/etc/resolv.conf` will be used.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                 | Description
 ---------------------|--------------
 dns_lookup           | **Optional.** The hostname or IP to query the DNS for. Defaults to "$host_name$".
 dns_server           | **Optional.** The DNS server to query. Defaults to the server configured in the OS.
-dns_expected_answer  | **Optional.** The answer to look for. A hostname must end with a dot. **Deprecated in 2.3.**
+dns_query_type       | **Optional.** The DNS record query type where TYPE =(A, AAAA, SRV, TXT, MX, ANY). The default query type is 'A' (IPv4 host entry)
 dns_expected_answers | **Optional.** The answer(s) to look for. A hostname must end with a dot. Multiple answers must be defined as array.
 dns_authoritative    | **Optional.** Expect the server to send an authoritative answer.
+dns_accept_cname     | **Optional.** Accept cname responses as a valid result to a query.
 dns_wtime            | **Optional.** Return warning if elapsed time exceeds value.
 dns_ctime            | **Optional.** Return critical if elapsed time exceeds value.
 dns_timeout          | **Optional.** Seconds before connection times out. Defaults to 10.
 
 
-### <a id="plugin-check-command-dummy"></a> dummy
+### dummy <a id="plugin-check-command-dummy"></a>
 
 The [check_dummy](https://www.monitoring-plugins.org/doc/man/check_dummy.html) plugin
 will simply return the state corresponding to the numeric value of the `dummy_state`
 argument with optional text.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -343,12 +345,12 @@ dummy_state     | **Optional.** The state. Can be one of 0 (ok), 1 (warning), 2 
 dummy_text      | **Optional.** Plugin output. Defaults to "Check was successful.".
 
 
-### <a id="plugin-check-command-file-age"></a> file_age
+### file_age <a id="plugin-check-command-file-age"></a>
 
 The [check_file_age](https://www.monitoring-plugins.org/doc/man/check_file_age.html) plugin
 checks a file's size and modification time to make sure it's not empty and that it's sufficiently recent.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                   | Description
 -----------------------|--------------------------------------------------------------------------------------------------------
@@ -360,12 +362,12 @@ file_age_critical_size | **Optional.** File must be at least this many bytes lon
 file_age_ignoremissing | **Optional.** Return OK if the file does not exist. Defaults to false.
 
 
-### <a id="plugin-check-command-flexlm"></a> flexlm
+### flexlm <a id="plugin-check-command-flexlm"></a>
 
 The [check_flexlm](https://www.monitoring-plugins.org/doc/man/check_flexlm.html) plugin
 checks available flexlm license managers. Requires the `lmstat` command.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name               | Description
 -------------------|----------------------------------------------------------
@@ -373,7 +375,7 @@ flexlm_licensefile | **Required.** Name of license file (usually license.dat).
 flexlm_timeout     | **Optional.** Plugin time out in seconds. Defaults to 15.
 
 
-### <a id="plugin-check-command-fping4"></a> fping4
+### fping4 <a id="plugin-check-command-fping4"></a>
 
 The [check_fping](https://www.monitoring-plugins.org/doc/man/check_fping.html) plugin
 uses the `fping` command to ping the specified host for a fast check. Note that it is
@@ -381,7 +383,7 @@ necessary to set the suid flag on fping.
 
 This CheckCommand expects an IPv4 address.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -398,7 +400,7 @@ fping_source_ip | **Optional.** The name or ip address of the source ip.
 fping_source_interface | **Optional.** The source interface name.
 
 
-### <a id="plugin-check-command-fping6"></a> fping6
+### fping6 <a id="plugin-check-command-fping6"></a>
 
 The [check_fping](https://www.monitoring-plugins.org/doc/man/check_fping.html) plugin
 will use the `fping` command to ping the specified host for a fast check. Note that it is
@@ -406,7 +408,7 @@ necessary to set the suid flag on fping.
 
 This CheckCommand expects an IPv6 address.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -423,12 +425,12 @@ fping_source_ip | **Optional.** The name or ip address of the source ip.
 fping_source_interface | **Optional.** The source interface name.
 
 
-### <a id="plugin-check-command-ftp"></a> ftp
+### ftp <a id="plugin-check-command-ftp"></a>
 
 The [check_ftp](https://www.monitoring-plugins.org/doc/man/check_ftp.html) plugin
 tests FTP connections with the specified host (or unix socket).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name               | Description
 -------------------|--------------
@@ -454,7 +456,7 @@ ftp_ipv4           | **Optional.** Use IPv4 connection. Defaults to false.
 ftp_ipv6           | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-game"></a> game
+### game <a id="plugin-check-command-game"></a>
 
 The [check_game](https://www.monitoring-plugins.org/doc/man/check_game.html) plugin
 tests game server connections with the specified host.
@@ -462,7 +464,7 @@ This plugin uses the 'qstat' command, the popular game server status query tool.
 If you don't have the package installed, you will need to [download](http://www.activesw.com/people/steve/qstat.html)
 or install the package `quakestat` before you can use this plugin.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name               | Description
 -------------------|-------------------
@@ -477,13 +479,13 @@ game_gametime      | **Optional.** Field number in raw qstat output that contain
 game_hostname      | **Optional.** Name of the host running the game.
 
 
-### <a id="plugin-check-command-hostalive"></a> hostalive
+### hostalive <a id="plugin-check-command-hostalive"></a>
 
 Check command object for the [check_ping](https://www.monitoring-plugins.org/doc/man/check_ping.html)
 plugin with host check default values. This variant uses the host's `address` attribute
 if available and falls back to using the `address6` attribute if the `address` attribute is not set.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -496,12 +498,12 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-### <a id="plugin-check-command-hostalive4"></a> hostalive4
+### hostalive4 <a id="plugin-check-command-hostalive4"></a>
 
 Check command object for the [check_ping](https://www.monitoring-plugins.org/doc/man/check_ping.html)
 plugin with host check default values. This variant uses the host's `address` attribute.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -514,12 +516,12 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-### <a id="plugin-check-command-hostalive6"></a> hostalive6
+### hostalive6 <a id="plugin-check-command-hostalive6"></a>
 
 Check command object for the [check_ping](https://www.monitoring-plugins.org/doc/man/check_ping.html)
 plugin with host check default values. This variant uses the host's `address6` attribute.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -532,13 +534,13 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-### <a id="plugin-check-command-hpjd"></a> hpjd
+### hpjd <a id="plugin-check-command-hpjd"></a>
 
 The [check_hpjd](https://www.monitoring-plugins.org/doc/man/check_hpjd.html) plugin
 tests the state of an HP printer with a JetDirect card. Net-snmp must be installed
 on the computer running the plugin.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -547,14 +549,14 @@ hpjd_port       | **Optional.** The host's SNMP port. Defaults to 161.
 hpjd_community  | **Optional.** The SNMP community. Defaults  to "public".
 
 
-### <a id="plugin-check-command-http"></a> http
+### http <a id="plugin-check-command-http"></a>
 
 The [check_http](https://www.monitoring-plugins.org/doc/man/check_http.html) plugin
 tests the HTTP service on the specified host. It can test normal (http) and secure
 (https) servers, follow redirects, search for strings and regular expressions,
 check connection times, and report on certificate expiration times.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                             | Description
 ---------------------------------|---------------------------------
@@ -601,10 +603,11 @@ http_pagesize                    | **Optional.** Minimum page size required:Maxi
 http_timeout                     | **Optional.** Seconds before connection times out.
 http_ipv4                        | **Optional.** Use IPv4 connection. Defaults to false.
 http_ipv6                        | **Optional.** Use IPv6 connection. Defaults to false.
-http_verbose			 | **Optional.** Show details for command-line debugging. Defaults to false.
+http_link                        | **Optional.** Wrap output in HTML link. Defaults to false.
+http_verbose                     | **Optional.** Show details for command-line debugging. Defaults to false.
 
 
-### <a id="plugin-check-command-icmp"></a> icmp
+### icmp <a id="plugin-check-command-icmp"></a>
 
 The [check_icmp](https://www.monitoring-plugins.org/doc/man/check_icmp.html) plugin
 check_icmp allows for checking multiple hosts at once compared to `check_ping`.
@@ -612,7 +615,7 @@ The main difference is that check_ping executes the system's ping(1) command and
 parses its output while check_icmp talks ICMP itself. check_icmp must be installed
 setuid root.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -628,14 +631,15 @@ icmp_target_interval | **Optional.** The maximum target interval.
 icmp_hosts_alive | **Optional.** The number of hosts which have to be alive for the check to succeed.
 icmp_data_bytes | **Optional.** Payload size for each ICMP request. Defaults to 8.
 icmp_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 10 (seconds).
+icmp_ttl        | **Optional.** The TTL on outgoing packets.
 
 
-### <a id="plugin-check-command-imap"></a> imap
+### imap <a id="plugin-check-command-imap"></a>
 
 The [check_imap](https://www.monitoring-plugins.org/doc/man/check_imap.html) plugin
 tests IMAP connections with the specified host (or unix socket).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                  | Description
 ----------------------|--------------
@@ -660,7 +664,7 @@ imap_ipv4             | **Optional.** Use IPv4 connection. Defaults to false.
 imap_ipv6             | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-ldap"></a> ldap
+### ldap <a id="plugin-check-command-ldap"></a>
 
 The [check_ldap](https://www.monitoring-plugins.org/doc/man/check_ldap.html) plugin
 can be used to check LDAP servers.
@@ -668,31 +672,33 @@ can be used to check LDAP servers.
 The plugin can also be used for monitoring ldaps connections instead of the deprecated `check_ldaps`.
 This can be ensured by enabling `ldap_starttls` or `ldap_ssl`.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
-Name            | Description
-----------------|--------------
-ldap_address    | **Optional.** Host name, IP Address, or unix socket (must be an absolute path). Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
-ldap_port       | **Optional.** Port number. Defaults to 389.
-ldap_attr	| **Optional.** LDAP attribute to search for (default: "(objectclass=*)"
-ldap_base       | **Required.** LDAP base (eg. ou=myunit,o=myorg,c=at).
-ldap_bind       | **Optional.** LDAP bind DN (if required).
-ldap_pass       | **Optional.** LDAP password (if required).
-ldap_starttls   | **Optional.** Use STARTSSL mechanism introduced in protocol version 3.
-ldap_ssl        | **Optional.** Use LDAPS (LDAP v2 SSL method). This also sets the default port to 636.
-ldap_v2         | **Optional.** Use LDAP protocol version 2 (enabled by default).
-ldap_v3         | **Optional.** Use LDAP protocol version 3 (disabled by default)
-ldap_warning	| **Optional.** Response time to result in warning status (seconds).
-ldap_critical	| **Optional.** Response time to result in critical status (seconds).
-ldap_timeout	| **Optional.** Seconds before connection times out (default: 10).
-ldap_verbose	| **Optional.** Show details for command-line debugging (disabled by default)
+Name            	| Description
+------------------------|--------------
+ldap_address    	| **Optional.** Host name, IP Address, or unix socket (must be an absolute path). Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+ldap_port       	| **Optional.** Port number. Defaults to 389.
+ldap_attr		| **Optional.** LDAP attribute to search for (default: "(objectclass=*)"
+ldap_base       	| **Required.** LDAP base (eg. ou=myunit,o=myorg,c=at).
+ldap_bind       	| **Optional.** LDAP bind DN (if required).
+ldap_pass       	| **Optional.** LDAP password (if required).
+ldap_starttls   	| **Optional.** Use STARTSSL mechanism introduced in protocol version 3.
+ldap_ssl        	| **Optional.** Use LDAPS (LDAP v2 SSL method). This also sets the default port to 636.
+ldap_v2         	| **Optional.** Use LDAP protocol version 2 (enabled by default).
+ldap_v3         	| **Optional.** Use LDAP protocol version 3 (disabled by default)
+ldap_warning		| **Optional.** Response time to result in warning status (seconds).
+ldap_critical		| **Optional.** Response time to result in critical status (seconds).
+ldap_warning_entries	| **Optional.** Number of found entries to result in warning status.
+ldap_critical_entries	| **Optional.** Number of found entries to result in critical status.
+ldap_timeout		| **Optional.** Seconds before connection times out (default: 10).
+ldap_verbose		| **Optional.** Show details for command-line debugging (disabled by default)
 
-### <a id="plugin-check-command-load"></a> load
+### load <a id="plugin-check-command-load"></a>
 
 The [check_load](https://www.monitoring-plugins.org/doc/man/check_load.html) plugin
 tests the current system load average.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -704,12 +710,12 @@ load_cload5     | **Optional.** The 5-minute critical threshold. Defaults to 6.
 load_cload15    | **Optional.** The 15-minute critical threshold. Defaults to 4.
 load_percpu     | **Optional.** Divide the load averages by the number of CPUs (when possible). Defaults to false.
 
-### <a id="plugin-check-command-mailq"></a> mailq
+### mailq <a id="plugin-check-command-mailq"></a>
 
 The [check_mailq](https://www.monitoring-plugins.org/doc/man/check_mailq.html) plugin
 checks the number of messages in the mail queue (supports multiple sendmail queues, qmail).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -721,12 +727,12 @@ mailq_timeout		| **Optional.** Plugin timeout in seconds (default = 15).
 mailq_servertype	| **Optional.** [ sendmail \| qmail \| postfix \| exim \| nullmailer ] (default = autodetect).
 mailq_sudo		| **Optional.** Use sudo to execute the mailq command.
 
-### <a id="plugin-check-command-mysql"></a> mysql
+### mysql <a id="plugin-check-command-mysql"></a>
 
 The [check_mysql](https://www.monitoring-plugins.org/doc/man/check_mysql.html) plugin
 tests connections to a MySQL server.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name			| Description
 ------------------------|---------------------------------------------------------------
@@ -750,7 +756,7 @@ mysql_cadir		| **Optional.** Path to CA directory.
 mysql_ciphers		| **Optional.** List of valid SSL ciphers.
 
 
-### <a id="plugin-check-command-mysql-query"></a> mysql_query
+### mysql_query <a id="plugin-check-command-mysql-query"></a>
 
 The [check_mysql_query](https://www.monitoring-plugins.org/doc/man/check_mysql_query.html) plugin
 checks a query result against threshold levels.
@@ -759,7 +765,7 @@ The result from the query should be numeric. For extra security, create a user w
 **Note**: You must specify `mysql_query_password` with an empty string to force an empty password,
 overriding any my.cnf settings.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|---------------------------------------------------------------
@@ -775,13 +781,13 @@ mysql_query_warning     | **Optional.** Exit with WARNING status if query is out
 mysql_query_critical    | **Optional.** Exit with CRITICAL status if query is outside of the range.
 
 
-### <a id="plugin-check-command-negate"></a> negate
+### negate <a id="plugin-check-command-negate"></a>
 
 The [negate](https://www.monitoring-plugins.org/doc/man/negate.html) plugin
 negates the status of a plugin (returns OK for CRITICAL and vice-versa).
 Additional switches can be used to control which state becomes what.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name			| Description
 ------------------------|---------------------------------------------------------------
@@ -794,13 +800,13 @@ negate_substitute	| **Optional.** Substitute output text as well. Will only subs
 negate_command		| **Required.** Command to be negated.
 negate_arguments	| **Optional.** Arguments for the negated command.
 
-### <a id="plugin-check-command-nrpe"></a> nrpe
+### nrpe <a id="plugin-check-command-nrpe"></a>
 
-The `check_nrpe` plugin can be used to query an [NRPE](http://docs.icinga.com/latest/en/nrpe.html)
+The `check_nrpe` plugin can be used to query an [NRPE](https://docs.icinga.com/latest/en/nrpe.html)
 server or [NSClient++](https://www.nsclient.org). **Note**: This plugin
 is considered insecure/deprecated.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -813,14 +819,15 @@ nrpe_timeout    | **Optional.** The timeout in seconds.
 nrpe_arguments	| **Optional.** Arguments that should be passed to the command. Multiple arguments must be defined as array.
 nrpe_ipv4       | **Optional.** Use IPv4 connection. Defaults to false.
 nrpe_ipv6       | **Optional.** Use IPv6 connection. Defaults to false.
+nrpe_version_2	| **Optional.** Use this if you want to connect using NRPE v2 protocol. Defaults to false.
 
 
-### <a id="plugin-check-command-nscp"></a> nscp
+### nscp <a id="plugin-check-command-nscp"></a>
 
 The [check_nt](https://www.monitoring-plugins.org/doc/man/check_nt.html) plugin
 collects data from the [NSClient++](https://www.nsclient.org) service.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -835,14 +842,14 @@ nscp_timeout    | **Optional.** The query timeout in seconds.
 nscp_showall    | **Optional.** Use with SERVICESTATE to see working services or PROCSTATE for running processes. Defaults to false.
 
 
-### <a id="plugin-check-command-ntp-time"></a> ntp_time
+### ntp_time <a id="plugin-check-command-ntp-time"></a>
 
 The [check_ntp_time](https://www.monitoring-plugins.org/doc/man/check_ntp_time.html) plugin
 checks the clock offset between the local host and a remote NTP server.
 
 **Note**: If you want to monitor an NTP server, please use `ntp_peer`.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -857,14 +864,14 @@ ntp_ipv4        | **Optional.** Use IPv4 connection. Defaults to false.
 ntp_ipv6        | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-ntp-peer"></a> ntp_peer
+### ntp_peer <a id="plugin-check-command-ntp-peer"></a>
 
 The [check_ntp_peer](https://www.monitoring-plugins.org/doc/man/check_ntp_peer.html) plugin
 checks the health of an NTP server. It supports checking the offset with the sync peer, the
 jitter and stratum. This plugin will not check the clock offset between the local host and NTP
  server; please use `ntp_time` for that purpose.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -883,18 +890,18 @@ ntp_ipv4        | **Optional.** Use IPv4 connection. Defaults to false.
 ntp_ipv6        | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-passive"></a> passive
+### passive <a id="plugin-check-command-passive"></a>
 
 Specialised check command object for passive checks executing the `check_dummy` plugin with appropriate default values.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
 dummy_state     | **Optional.** The state. Can be one of 0 (ok), 1 (warning), 2 (critical) and 3 (unknown). Defaults to 3.
 dummy_text      | **Optional.** Plugin output. Defaults to "No Passive Check Result Received.".
 
-### <a id="plugin-check-command-pgsql"></a> pgsql
+### pgsql <a id="plugin-check-command-pgsql"></a>
 
 The [check_pgsql](https://www.monitoring-plugins.org/doc/man/check_pgsql.html) plugin
 tests a PostgreSQL DBMS to determine whether it is active and accepting queries.
@@ -902,7 +909,7 @@ If a query is specified using the `pgsql_query` attribute, it will be executed a
 connecting to the server. The result from the query has to be numeric in order
 to compare it against the query thresholds if set.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name			| Description
 ------------------------|---------------------------------------------------------------
@@ -919,7 +926,7 @@ pgsql_query		| **Optional.** SQL query to run. Only first column in first row wi
 pgsql_query_warning	| **Optional.** SQL query value to result in warning status (double).
 pgsql_query_critical	| **Optional.** SQL query value to result in critical status (double).
 
-### <a id="plugin-check-command-ping"></a> ping
+### ping <a id="plugin-check-command-ping"></a>
 
 The [check_ping](https://www.monitoring-plugins.org/doc/man/check_ping.html) plugin
 uses the ping command to probe the specified host for packet loss (percentage) and
@@ -928,7 +935,7 @@ round trip average (milliseconds).
 This command uses the host's `address` attribute if available and falls back to using
 the `address6` attribute if the `address` attribute is not set.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -941,7 +948,7 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-### <a id="plugin-check-command-ping4"></a> ping4
+### ping4 <a id="plugin-check-command-ping4"></a>
 
 The [check_ping](https://www.monitoring-plugins.org/doc/man/check_ping.html) plugin
 uses the ping command to probe the specified host for packet loss (percentage) and
@@ -950,7 +957,7 @@ round trip average (milliseconds).
 This command uses the host's `address` attribute if not explicitely specified using
 the `ping_address` attribute.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -962,7 +969,7 @@ ping_cpl        | **Optional.** The packet loss critical threshold in %. Default
 ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
-### <a id="plugin-check-command-ping6"></a> ping6
+### ping6 <a id="plugin-check-command-ping6"></a>
 
 The [check_ping](https://www.monitoring-plugins.org/doc/man/check_ping.html) plugin
 uses the ping command to probe the specified host for packet loss (percentage) and
@@ -971,7 +978,7 @@ round trip average (milliseconds).
 This command uses the host's `address6` attribute if not explicitely specified using
 the `ping_address` attribute.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -984,12 +991,12 @@ ping_packets    | **Optional.** The number of packets to send. Defaults to 5.
 ping_timeout    | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
 
 
-### <a id="plugin-check-command-pop"></a> pop
+### pop <a id="plugin-check-command-pop"></a>
 
 The [check_pop](https://www.monitoring-plugins.org/doc/man/check_pop.html) plugin
 tests POP connections with the specified host (or unix socket).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                 | Description
 ---------------------|--------------
@@ -1014,14 +1021,14 @@ pop_ipv4             | **Optional.** Use IPv4 connection. Defaults to false.
 pop_ipv6             | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-processes"></a> procs
+### procs <a id="plugin-check-command-processes"></a>
 
 The [check_procs](https://www.monitoring-plugins.org/doc/man/check_procs.html) plugin
 checks all processes and generates WARNING or CRITICAL states if the specified
 metric is outside the required threshold ranges. The metric defaults to number
 of processes. Search filters can be applied to limit the processes to check.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                 | Description
 ---------------------|--------------
@@ -1042,7 +1049,7 @@ procs_command        | **Optional.** Only scan for exact matches of COMMAND (wit
 procs_nokthreads     | **Optional.** Only scan for non kernel threads. Defaults to false.
 
 
-### <a id="plugin-check-command-radius"></a> radius
+### radius <a id="plugin-check-command-radius"></a>
 
 The [check_radius](https://www.monitoring-plugins.org/doc/man/check_radius.html) plugin
 checks a RADIUS server to see if it is accepting connections.  The server to test
@@ -1055,7 +1062,7 @@ typically be executed at regular predictable intervals. Please be sure that the
 password used does not allow access to sensitive system resources.
 
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name               | Description
 -------------------|--------------
@@ -1071,12 +1078,12 @@ radius_retries     | **Optional.** The number of times to retry a failed connect
 radius_timeout     | **Optional.** The number of seconds before connection times out (default: 10).
 
 
-### <a id="plugin-check-command-simap"></a> simap
+### simap <a id="plugin-check-command-simap"></a>
 
 The [check_simap](https://www.monitoring-plugins.org/doc/man/check_simap.html) plugin
 tests SIMAP connections with the specified host (or unix socket).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                   | Description
 -----------------------|--------------
@@ -1100,24 +1107,24 @@ simap_timeout          | **Optional.** Seconds before connection times out (defa
 simap_ipv4             | **Optional.** Use IPv4 connection. Defaults to false.
 simap_ipv6             | **Optional.** Use IPv6 connection. Defaults to false.
 
-### <a id="plugin-check-command-smart"></a> smart
+### smart <a id="plugin-check-command-smart"></a>
 
 The [check_ide_smart](https://www.monitoring-plugins.org/doc/man/check_ide_smart.html) plugin
 checks a local hard drive with the (Linux specific) SMART interface. Requires installation of `smartctl`.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
 smart_device    | **Required.** The name of a local hard drive to monitor.
 
 
-### <a id="plugin-check-command-smtp"></a> smtp
+### smtp <a id="plugin-check-command-smtp"></a>
 
 The [check_smtp](https://www.monitoring-plugins.org/doc/man/check_smtp.html) plugin
 will attempt to open an SMTP connection with the host.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                  | Description
 ----------------------|--------------
@@ -1141,14 +1148,14 @@ smtp_ipv4             | **Optional.** Use IPv4 connection. Defaults to false.
 smtp_ipv6             | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-snmp"></a> snmp
+### snmp <a id="plugin-check-command-snmp"></a>
 
 The [check_snmp](https://www.monitoring-plugins.org/doc/man/check_snmp.html) plugin
 checks the status of remote machines and obtains system information via SNMP.
 
 **Note**: This plugin uses the `snmpget` command included with the NET-SNMP package.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                | Description
 --------------------|--------------
@@ -1172,12 +1179,12 @@ snmp_rate           | **Optional.** Boolean. Enable rate calculation.
 snmp_getnext        | **Optional.** Boolean. Use SNMP GETNEXT. Defaults to false.
 snmp_timeout        | **Optional.** The command timeout in seconds. Defaults to 10 seconds.
 
-### <a id="plugin-check-command-snmpv3"></a> snmpv3
+### snmpv3 <a id="plugin-check-command-snmpv3"></a>
 
 Check command object for the [check_snmp](https://www.monitoring-plugins.org/doc/man/check_snmp.html)
 plugin, using SNMPv3 authentication and encryption options.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                 | Description
 ---------------------|--------------
@@ -1202,12 +1209,12 @@ snmpv3_rate_multiplier | **Optional.** Converts rate per second. For example, se
 snmpv3_rate          | **Optional.** Boolean. Enable rate calculation.
 snmpv3_timeout       | **Optional.** The command timeout in seconds. Defaults to 10 seconds.
 
-### <a id="plugin-check-command-snmp-uptime"></a> snmp-uptime
+### snmp-uptime <a id="plugin-check-command-snmp-uptime"></a>
 
 Check command object for the [check_snmp](https://www.monitoring-plugins.org/doc/man/check_snmp.html)
 plugin, using the uptime OID by default.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -1216,12 +1223,12 @@ snmp_oid        | **Optional.** The SNMP OID. Defaults to "1.3.6.1.2.1.1.3.0".
 snmp_community  | **Optional.** The SNMP community. Defaults to "public".
 
 
-### <a id="plugin-check-command-spop"></a> spop
+### spop <a id="plugin-check-command-spop"></a>
 
 The [check_spop](https://www.monitoring-plugins.org/doc/man/check_spop.html) plugin
 tests SPOP connections with the specified host (or unix socket).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                  | Description
 ----------------------|--------------
@@ -1246,12 +1253,12 @@ spop_ipv4             | **Optional.** Use IPv4 connection. Defaults to false.
 spop_ipv6             | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-ssh"></a> ssh
+### ssh <a id="plugin-check-command-ssh"></a>
 
 The [check_ssh](https://www.monitoring-plugins.org/doc/man/check_ssh.html) plugin
 connects to an SSH server at a specified host and port.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -1262,28 +1269,29 @@ ssh_ipv4        | **Optional.** Use IPv4 connection. Defaults to false.
 ssh_ipv6        | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-ssl"></a> ssl
+### ssl <a id="plugin-check-command-ssl"></a>
 
 Check command object for the [check_tcp](https://www.monitoring-plugins.org/doc/man/check_tcp.html) plugin,
 using ssl-related options.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                          | Description
 ------------------------------|--------------
 ssl_address                   | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
-ssl_port                      | **Required.** The port that should be checked.
+ssl_port                      | **Optional.** The port that should be checked. Defaults to 443.
 ssl_timeout                   | **Optional.** Timeout in seconds for the connect and handshake. The plugin default is 10 seconds.
-ssl_cert_valid_days_warn      | **Optional.** Warning threshold for days before the certificate will expire. When used, ssl_cert_valid_days_critical must also be set.
+ssl_cert_valid_days_warn      | **Optional.** Warning threshold for days before the certificate will expire. When used, the default for ssl_cert_valid_days_critical is 0.
 ssl_cert_valid_days_critical  | **Optional.** Critical threshold for days before the certificate will expire. When used, ssl_cert_valid_days_warn must also be set.
+ssl_sni                       | **Optional.** The `server_name` that is send to select the SSL certificate to check. Important if SNI is used. Defaults to "$ssl_address$".
 
 
-### <a id="plugin-check-command-ssmtp"></a> ssmtp
+### ssmtp <a id="plugin-check-command-ssmtp"></a>
 
 The [check_ssmtp](https://www.monitoring-plugins.org/doc/man/check_ssmtp.html) plugin
 tests SSMTP connections with the specified host (or unix socket).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                   | Description
 -----------------------|--------------
@@ -1308,12 +1316,12 @@ ssmtp_ipv4             | **Optional.** Use IPv4 connection. Defaults to false.
 ssmtp_ipv6             | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-swap"></a> swap
+### swap <a id="plugin-check-command-swap"></a>
 
 The [check_swap](https://www.monitoring-plugins.org/doc/man/check_swap.html) plugin
 checks the swap space on a local machine.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -1324,12 +1332,12 @@ swap_allswaps   | **Optional.** Conduct comparisons for all swap partitions, one
 swap_noswap     | **Optional.** Resulting state when there is no swap regardless of thresholds. Possible values are "ok", "warning", "critical", "unknown". Defaults to "critical".
 
 
-### <a id="plugin-check-command-tcp"></a> tcp
+### tcp <a id="plugin-check-command-tcp"></a>
 
 The [check_tcp](https://www.monitoring-plugins.org/doc/man/check_tcp.html) plugin
 tests TCP connections with the specified host (or unix socket).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -1355,12 +1363,12 @@ tcp_ipv4        | **Optional.** Use IPv4 connection. Defaults to false.
 tcp_ipv6        | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-udp"></a> udp
+### udp <a id="plugin-check-command-udp"></a>
 
 The [check_udp](https://www.monitoring-plugins.org/doc/man/check_udp.html) plugin
 tests UDP connections with the specified host (or unix socket).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -1373,13 +1381,13 @@ udp_ipv4        | **Optional.** Use IPv4 connection. Defaults to false.
 udp_ipv6        | **Optional.** Use IPv6 connection. Defaults to false.
 
 
-### <a id="plugin-check-command-ups"></a> ups
+### ups <a id="plugin-check-command-ups"></a>
 
 The [check_ups](https://www.monitoring-plugins.org/doc/man/check_ups.html) plugin
 tests the UPS service on the specified host. [Network UPS Tools](http://www.networkupstools.org)
  must be running for this plugin to work.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -1393,20 +1401,20 @@ ups_celsius     | **Optional.** Display the temperature in degrees Celsius inste
 ups_timeout     | **Optional.** The number of seconds before the connection times out. Defaults to 10.
 
 
-### <a id="plugin-check-command-users"></a> users
+### users <a id="plugin-check-command-users"></a>
 
 The [check_users](https://www.monitoring-plugins.org/doc/man/check_users.html) plugin
 checks the number of users currently logged in on the local system and generates an
 error if the number exceeds the thresholds specified.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
 users_wgreater  | **Optional.** The user count warning threshold. Defaults to 20.
 users_cgreater  | **Optional.** The user count critical threshold. Defaults to 50.
 
-## <a id="windows-plugins"></a> Windows Plugins for Icinga 2
+## Windows Plugins for Icinga 2 <a id="windows-plugins"></a>
 
 To allow a basic monitoring of Windows clients Icinga 2 comes with a set of Windows only plugins. While trying to mirror the functionalities of their linux cousins from the monitoring-plugins package, the differences between Windows and Linux are too big to be able use the same CheckCommands for both systems.
 
@@ -1417,7 +1425,7 @@ A check-commands-windows.conf comes with Icinga 2, it asumes that the Windows Pl
 One of the differences between the Windows plugins and their linux counterparts is that they consistently do not require thresholds to run, functioning like dummies without.
 
 
-### <a id="windows-plugins-thresholds"></a> Threshold syntax
+### Threshold syntax <a id="windows-plugins-thresholds"></a>
 
 So not specified differently the thresholds for the plugins all follow the same pattern
 
@@ -1429,22 +1437,29 @@ Threshold    | Meaning
 "![10-40]"   | Same as above, but the result is inverted.
 
 
-### <a id="windows-plugins-disk-windows"></a> disk-windows
+### disk-windows <a id="windows-plugins-disk-windows"></a>
 
 Check command object for the `check_disk.exe` plugin.
-Aggregates the free disk space of all volumes and mount points it can find, or the ones defined in `disk_win_path`. Ignores removable storage like fash drives and discs (CD, DVD etc.).
+Aggregates the disk space of all volumes and mount points it can find, or the ones defined in `disk_win_path`. Ignores removable storage like fash drives and discs (CD, DVD etc.).
+The data collection is instant and free disk space (default, see `disk_win_show_used`) is used for threshold computation.
+
+> **Note**
+>
+> Percentage based thresholds can be used by adding a '%' to the threshold
+> value.
 
 Custom attributes:
 
-Name                | Description
-:-------------------|:------------
-disk\_win\_warn     | **Optional**. The warning threshold.
-disk\_win\_crit     | **Optional**. The critical threshold.
-disk\_win\_path     | **Optional**. Check only these paths, default checks all.
-disk\_win\_unit     | **Optional**. Use this unit to display disk space, thresholds are interpreted in this unit. Defaults to "mb", possible values are: b, kb, mb, gb and tb.
-disk\_win\_exclude  | **Optional**. Exclude these drives from check.
+Name                  | Description
+:---------------------|:------------
+disk\_win\_warn       | **Optional**. The warning threshold.
+disk\_win\_crit       | **Optional**. The critical threshold.
+disk\_win\_path       | **Optional**. Check only these paths, default checks all.
+disk\_win\_unit       | **Optional**. Use this unit to display disk space, thresholds are interpreted in this unit. Defaults to "mb", possible values are: b, kb, mb, gb and tb.
+disk\_win\_exclude    | **Optional**. Exclude these drives from check.
+disk\_win\_show\_used | **Optional**. Use used instead of free space.
 
-### <a id="windows-plugins-load-windows"></a> load-windows
+### load-windows <a id="windows-plugins-load-windows"></a>
 
 Check command object for the `check_load.exe` plugin.
 This plugin collects the inverse of the performance counter `\Processor(_Total)\% Idle Time` two times, with a wait time of one second between the collection. To change this wait time use [`perfmon-windows`](10-icinga-template-library.md#windows-plugins-load-windows).
@@ -1457,10 +1472,10 @@ load\_win\_warn | **Optional**. The warning threshold.
 load\_win\_crit | **Optional**. The critical threshold.
 
 
-### <a id="windows-plugins-memory-windows"></a> memory-windows
+### memory-windows <a id="windows-plugins-memory-windows"></a>
 
 Check command object for the `check_memory.exe` plugin.
-The memory collection is instant.
+The memory collection is instant and free memory is used for threshold computation.
 
 > **Note**
 >
@@ -1477,7 +1492,7 @@ memory\_win\_crit | **Optional**. The critical threshold.
 memory\_win\_unit | **Optional**. The unit to display the received value in, thresholds are interpreted in this unit. Defaults to "mb" (megabye), possible values are: b, kb, mb, gb and tb.
 
 
-### <a id="windows-plugins-network-windows"></a> network-windows
+### network-windows <a id="windows-plugins-network-windows"></a>
 
 Check command object for the `check_network.exe` plugin.
 Collects the total Bytes inbount and outbound for all interfaces in one second, to itemise interfaces or use a different collection interval use [`perfmon-windows`](10-icinga-template-library.md#windows-plugins-load-windows).
@@ -1491,7 +1506,7 @@ network\_win\_crit  | **Optional**. The critical threshold.
 network\_no\_isatap | **Optional**. Do not print ISATAP interfaces.
 
 
-### <a id="windows-plugins-perfmon-windows"></a> perfmon-windows
+### perfmon-windows <a id="windows-plugins-perfmon-windows"></a>
 
 Check command object for the `check_perfmon.exe` plugin.
 This plugins allows to collect data from a Performance Counter. After the first data collection a second one is done after `perfmon_win_wait` milliseconds. When you know `perfmon_win_counter` only requires one set of data to provide valid data you can set `perfmon_win_wait` to `0`.
@@ -1507,9 +1522,10 @@ perfmon\_win\_crit    | **Optional**. The critical threshold.
 perfmon\_win\_counter | **Required**. The Performance Counter to use. Ex. `\Processor(_Total)\% Idle Time`.
 perfmon\_win\_wait    | **Optional**. Time in milliseconds to wait between data collection (default: 1000).
 perfmon\_win\_type    | **Optional**. Format in which to expect perfomance values. Possible are: long, int64 and double (default).
+perfmon\_win\_syntax  | **Optional**. Use this in the performance output instead of `perfmon\_win\_counter`. Exists for graphice compatibility reasons.
 
 
-### <a id="windows-plugins-ping-windows"></a> ping-windows
+### ping-windows <a id="windows-plugins-ping-windows"></a>
 
 Check command object for the `check_ping.exe` plugin.
 ping-windows should automaticly detect whether `ping_win_address` is an IPv4 or IPv6 address. If not, use ping4-windows and ping6-windows. Also note that check\_ping.exe waits at least `ping_win_timeout` milliseconds between the pings.
@@ -1525,7 +1541,7 @@ ping\_win\_packets | **Optional**. Number of packages to send. Default: 5.
 ping\_win\_timeout | **Optional**. The timeout in milliseconds. Default: 1000
 
 
-### <a id="windows-plugins-procs-windows"></a> procs-windows
+### procs-windows <a id="windows-plugins-procs-windows"></a>
 
 Check command object for `check_procs.exe` plugin.
 When useing `procs_win_user` this plugins needs adminstratice privileges to access the processes of other users, to just enumerate them no additional privileges are required.
@@ -1539,7 +1555,7 @@ procs\_win\_crit | **Optional**. The critical threshold.
 procs\_win\_user | **Optional**. Count this useres processes.
 
 
-### <a id="windows-plugins-service-windows"></a> service-windows
+### service-windows <a id="windows-plugins-service-windows"></a>
 
 Check command object for `check_service.exe` plugin.
 This checks thresholds work different since the binary decision whether a service is running or not does not allow for three states. As a default `check_service.exe` will return CRITICAL when `service_win_service` is not running, the `service_win_warn` flag changes this to WARNING.
@@ -1552,7 +1568,7 @@ service\_win\_warn    | **Optional**. Warn when service is not running.
 service\_win\_service | **Required**. The critical threshold.
 
 
-### <a id="windows-plugins-swap-windows"></a> swap-windows
+### swap-windows <a id="windows-plugins-swap-windows"></a>
 
 Check command object for `check_swap.exe` plugin.
 The data collection is instant.
@@ -1566,7 +1582,7 @@ swap\_win\_crit | **Optional**. The critical threshold.
 swap\_win\_unit | **Optional**. The unit to display the received value in, thresholds are interpreted in this unit. Defaults to "mb" (megabyte).
 
 
-### <a id="windows-plugins-update-windows"></a> update-windows
+### update-windows <a id="windows-plugins-update-windows"></a>
 
 Check command object for `check_update.exe` plugin.
 Querying Microsoft for Windows updates can take multiple seconds to minutes. An update is treated as important when it has the WSUS flag for SecurityUpdates or CriticalUpdates.
@@ -1580,12 +1596,22 @@ Custom attributes:
 
 Name                | Description
 :-------------------|:------------
-update\_win\_warn   | If set, returns warning when important updates are available
-update\_win\_crit   | If set, return critical when important updates that require a reboot are available.
-update\_win\_reboot | Set to treat 'may need update' as 'definitely needs update'
+update\_win\_warn   | **Optional**. If set, returns warning when important updates are available.
+update\_win\_crit   | **Optional**. If set, return critical when important updates that require a reboot are available.
+update\_win\_reboot | **Optional**. Set to treat 'may need update' as 'definitely needs update'. Please Note that this is true for almost every update and is therefore not recommended.
 
 
-### <a id="windows-plugins-uptime-windows"></a> uptime-windows
+In contrast to most other plugins, the values of check_update's custom attributes do not set thresholds, but just enable/disable the behaviour described in the table above.  
+It can be enabled/disabled for example by setting them to "true" or "false", "1" or "0" would also work.  
+Thresholds will always be "1".
+
+> **Note**
+>
+> If they are enabled, performance data will be shown in the webinterface.  
+> If run without the optional parameters, the plugin will output critical if any important updates are available.  
+
+
+### uptime-windows <a id="windows-plugins-uptime-windows"></a>
 
 Check command opject for `check_uptime.exe` plugin.
 Uses GetTickCount64 to get the uptime, so boot time is not included.
@@ -1599,7 +1625,7 @@ uptime\_win\_crit | **Optional**. The critical threshold.
 uptime\_win\_unit | **Optional**. The unit to display the received value in, thresholds are interpreted in this unit. Defaults to "s"(seconds), possible values are ms (milliseconds), s, m (minutes), h (hours).
 
 
-### <a id="windows-plugins-users-windows"></a> users-windows
+### users-windows <a id="windows-plugins-users-windows"></a>
 
 Check command object for `check_users.exe` plugin.
 
@@ -1611,17 +1637,71 @@ users\_win\_warn | **Optional**. The warning threshold.
 users\_win\_crit | **Optional**. The critical threshold.
 
 
-## <a id="nscp-plugin-check-commands"></a> Plugin Check Commands for NSClient++
+## Plugin Check Commands for NSClient++ <a id="nscp-plugin-check-commands"></a>
 
-Icinga 2 can use the `nscp client` command to run arbitrary NSClient++ checks.
+There are two methods available for querying NSClient++:
+
+* Query the [HTTP API](10-icinga-template-library.md#nscp-check-api) locally or remotely (requires a running NSClient++ service)
+* Run a [local CLI check](10-icinga-template-library.md#nscp-check-local) (does not require NSClient++ as a service)
+
+Both methods have their advantages and disadvantages. One thing to
+note: If you rely on performance counter delta calculations such as
+CPU utilization, please use the HTTP API instead of the CLI sample call.
+
+### nscp_api <a id="nscp-check-api"></a>
+
+`check_nscp_api` is part of the Icinga 2 plugins. This plugin is available for
+both, Windows and Linux/Unix.
+
+Verify that the ITL CheckCommand is included:
+
+    vim /etc/icinga2/icinga2.conf
+
+    include <plugins>
+
+`check_nscp_api` runs queries against the NSClient++ API. Therefore NSClient++ needs to have
+the `webserver` module enabled, configured and loaded.
+
+You can install the webserver using the following CLI commands:
+
+    ./nscp.exe web install
+    ./nscp.exe web password — –set icinga
+
+Now you can define specific [queries](https://docs.nsclient.org/reference/check/CheckHelpers.html#queries)
+and integrate them into Icinga 2.
+
+The check plugin `check_nscp_api` can be integrated with the `nscp_api` CheckCommand object:
+
+Custom attributes:
+
+Name                   | Description
+:----------------------|:----------------------
+nscp\_api\_host       | **Required**. NSCP API host address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+nscp\_api\_port       | **Optional**. NSCP API port. Defaults to `8443`.
+nscp\_api\_passwd     | **Required**. NSCP API password. Please check the NSCP documentation for setup details.
+nscp\_api\_query      | **Required**. NSCP API query endpoint. Refer to the NSCP documentation for possible values.
+nscp\_api\_arguments  | **Optional**. NSCP API arguments dictionary either as single strings or key-value pairs using `=`. Refer to the NSCP documentation.
+
+`nscp_api_arguments` can be used to pass required thresholds to the executed check. The example below
+checks the CPU utilization and specifies warning and critical thresholds.
+
+```
+check_nscp_api --host 10.0.10.148 --password icinga --query check_cpu --arguments show-all warning='load>40' critical='load>30'
+check_cpu CRITICAL: critical(5m: 48%, 1m: 36%), 5s: 0% | 'total 5m'=48%;40;30 'total 1m'=36%;40;30 'total 5s'=0%;40;30
+```
+
+
+### nscp-local <a id="nscp-check-local"></a>
+
+Icinga 2 can use the `nscp client` command to run arbitrary NSClient++ checks locally on the client.
 
 You can enable these check commands by adding the following the include directive in your
-[icinga2.conf](4-configuring-icinga-2.md#icinga2-conf) configuration file:
+[icinga2.conf](04-configuring-icinga-2.md#icinga2-conf) configuration file:
 
     include <nscp>
 
 You can also optionally specify an alternative installation directory for NSClient++ by adding
-the NscpPath constant in your [constants.conf](4-configuring-icinga-2.md#constants-conf) configuration
+the NscpPath constant in your [constants.conf](04-configuring-icinga-2.md#constants-conf) configuration
 file:
 
     const NscpPath = "C:\\Program Files (x86)\\NSClient++"
@@ -1631,11 +1711,9 @@ not be necessary to manually set this constant.
 
 Note that it is not necessary to run NSClient++ as a Windows service for these commands to work.
 
-### <a id="nscp-check-local"></a> nscp-local
+The check command object for NSClient++ is available as `nscp-local`.
 
-Check command object for NSClient++
-
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------
@@ -1647,7 +1725,7 @@ nscp_query      | **Required.** The NSClient++ query. Try `nscp client -q x` for
 nscp_arguments  | **Optional.** An array of query arguments.
 nscp_showall	| **Optional.** Shows more details in plugin output, default to false.
 
-### <a id="nscp-check-local-cpu"></a> nscp-local-cpu
+### nscp-local-cpu <a id="nscp-check-local-cpu"></a>
 
 Check command object for the `check_cpu` NSClient++ plugin.
 
@@ -1659,7 +1737,7 @@ nscp_cpu_critical   | **Optional.** Threshold for CRITICAL state in percent, def
 nscp_cpu_arguments  | **Optional.** Additional arguments.
 nscp_cpu_showall    | **Optional.** Shows more details in plugin output, default to false.
 
-### <a id="nscp-check-local-memory"></a> nscp-local-memory
+### nscp-local-memory <a id="nscp-check-local-memory"></a>
 
 Check command object for the `check_memory` NSClient++ plugin.
 
@@ -1673,25 +1751,25 @@ nscp_memory_critical  | **Optional.** Threshold for CRITICAL state in percent or
 nscp_memory_arguments | **Optional.** Additional arguments.
 nscp_memory_showall   | **Optional.** Shows more details in plugin output, default to false.
 
-### <a id="nscp-check-local-os-version"></a> nscp-local-os-version
+### nscp-local-os-version <a id="nscp-check-local-os-version"></a>
 
 Check command object for the `check_os_version` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-### <a id="nscp-check-local-pagefile"></a> nscp-local-pagefile
+### nscp-local-pagefile <a id="nscp-check-local-pagefile"></a>
 
 Check command object for the `check_pagefile` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-### <a id="nscp-check-local-process"></a> nscp-local-process
+### nscp-local-process <a id="nscp-check-local-process"></a>
 
 Check command object for the `check_process` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-### <a id="nscp-check-local-service"></a> nscp-local-service
+### nscp-local-service <a id="nscp-check-local-service"></a>
 
 Check command object for the `check_service` NSClient++ plugin.
 
@@ -1708,20 +1786,20 @@ nscp_service_ctype     | **Optional.** Dedicate type for nscp_service_critical, 
 nscp_service_arguments | **Optional.** Additional arguments.
 nscp_service_showall   | **Optional.** Shows more details in plugin output, default to true.
 
-### <a id="nscp-check-local-uptime"></a> nscp-local-uptime
+### nscp-local-uptime <a id="nscp-check-local-uptime"></a>
 
 Check command object for the `check_uptime` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 
-### <a id="nscp-check-local-version"></a> nscp-local-version
+### nscp-local-version <a id="nscp-check-local-version"></a>
 
 Check command object for the `check_version` NSClient++ plugin.
 
 This command has the same custom attributes like the `nscp-local` check command.
 In addition to that the default value for `nscp_modules` is set to `[ "CheckHelpers" ]`.
 
-### <a id="nscp-check-local-disk"></a> nscp-local-disk
+### nscp-local-disk <a id="nscp-check-local-disk"></a>
 
 Check command object for the `check_drivesize` NSClient++ plugin.
 
@@ -1735,7 +1813,7 @@ nscp_disk_arguments    | **Optional.** Additional arguments.
 nscp_disk_showall      | **Optional.** Shows more details in plugin output, default to true.
 nscp_modules           | **Optional.** An array of NSClient++ modules to load. Defaults to `[ "CheckDisk" ]`.
 
-### <a id="nscp-check-local-counter"></a> nscp-local-counter
+### nscp-local-counter <a id="nscp-check-local-counter"></a>
 
 Check command object for the `check_pdh` NSClient++ plugin.
 
@@ -1750,7 +1828,7 @@ nscp_counter_perfsyntax | **Optional.** Apply performance data label, e.g. `Tota
 
 
 
-## <a id="snmp-manubulon-plugin-check-commands"></a> Plugin Check Commands for Manubulon SNMP
+## Plugin Check Commands for Manubulon SNMP <a id="snmp-manubulon-plugin-check-commands"></a>
 
 The `SNMP Manubulon Plugin Check Commands` provide configuration for plugin check
 commands provided by the [SNMP Manubulon project](http://nagios.manubulon.com/index_snmp.html).
@@ -1762,7 +1840,7 @@ The SNMP manubulon plugin check commands assume that the global constant named `
 is set to the path where the Manubublon SNMP plugins are installed.
 
 You can enable these plugin check commands by adding the following the include directive in your
-[icinga2.conf](4-configuring-icinga-2.md#icinga2-conf) configuration file:
+[icinga2.conf](04-configuring-icinga-2.md#icinga2-conf) configuration file:
 
     include <manubulon>
 
@@ -1794,11 +1872,11 @@ You can enable these plugin check commands by adding the following the include d
   Cisco CSS               |   Yes      |   ??     |   Yes     | Yes |   No     | ??  | check_snmp_css.pl
 
 
-### <a id="plugin-check-command-snmp-load"></a> snmp-load
+### snmp-load <a id="plugin-check-command-snmp-load"></a>
 
 Check command object for the [check_snmp_load.pl](http://nagios.manubulon.com/snmp_load.html) plugin.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 
 Name                    | Description
@@ -1812,6 +1890,7 @@ snmp_v3                 | **Optional.** SNMP version to 3. Defaults to false.
 snmp_login              | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
 snmp_password           | **Required.** SNMP version 3 password. No value defined as default.
 snmp_v3_use_privpass    | **Optional.** Define to use SNMP version 3 priv password. Defaults to false.
+snmp_v3_use_authprotocol| **Optional.** Define to use SNMP version 3 authentication protocol. Defaults to false.
 snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
 snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default.
 snmp_warn               | **Optional.** The warning threshold. Change the `snmp_load_type` var to "netsl" for using 3 values.
@@ -1820,11 +1899,11 @@ snmp_load_type          | **Optional.** Load type. Defaults to "stand". Check al
 snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
-### <a id="plugin-check-command-snmp-memory"></a> snmp-memory
+### snmp-memory <a id="plugin-check-command-snmp-memory"></a>
 
 Check command object for the [check_snmp_mem.pl](http://nagios.manubulon.com/snmp_mem.html) plugin.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -1837,6 +1916,7 @@ snmp_v3                 | **Optional.** SNMP version to 3. Defaults to false.
 snmp_login              | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
 snmp_password           | **Required.** SNMP version 3 password. No value defined as default.
 snmp_v3_use_privpass    | **Optional.** Define to use SNMP version 3 priv password. Defaults to false.
+snmp_v3_use_authprotocol| **Optional.** Define to use SNMP version 3 authentication protocol. Defaults to false.
 snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
 snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default.
 snmp_warn               | **Optional.** The warning threshold.
@@ -1846,11 +1926,11 @@ snmp_is_hp              | **Optional.** Change OIDs for HP/Procurve switches. De
 snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
-### <a id="plugin-check-command-snmp-storage"></a> snmp-storage
+### snmp-storage <a id="plugin-check-command-snmp-storage"></a>
 
 Check command object for the [check_snmp_storage.pl](http://nagios.manubulon.com/snmp_storage.html) plugin.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -1863,6 +1943,7 @@ snmp_v3                 | **Optional.** SNMP version to 3. Defaults to false.
 snmp_login              | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
 snmp_password           | **Required.** SNMP version 3 password. No value defined as default.
 snmp_v3_use_privpass    | **Optional.** Define to use SNMP version 3 priv password. Defaults to false.
+snmp_v3_use_authprotocol| **Optional.** Define to use SNMP version 3 authentication protocol. Defaults to false.
 snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
 snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default.
 snmp_warn               | **Optional.** The warning threshold.
@@ -1871,11 +1952,11 @@ snmp_storage_name       | **Optional.** Storage name. Default to regex "^/$$". M
 snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
-### <a id="plugin-check-command-snmp-interface"></a> snmp-interface
+### snmp-interface <a id="plugin-check-command-snmp-interface"></a>
 
 Check command object for the [check_snmp_int.pl](http://nagios.manubulon.com/snmp_int.html) plugin.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                        | Description
 ----------------------------|--------------
@@ -1888,11 +1969,13 @@ snmp_v3                     | **Optional.** SNMP version to 3. Defaults to false
 snmp_login                  | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
 snmp_password               | **Required.** SNMP version 3 password. No value defined as default.
 snmp_v3_use_privpass        | **Optional.** Define to use SNMP version 3 priv password. Defaults to false.
+snmp_v3_use_authprotocol    | **Optional.** Define to use SNMP version 3 authentication protocol. Defaults to false.
 snmp_authprotocol           | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
 snmp_privpass               | **Required.** SNMP version 3 priv password. No value defined as default.
 snmp_warn                   | **Optional.** The warning threshold.
 snmp_crit                   | **Optional.** The critical threshold.
 snmp_interface              | **Optional.** Network interface name. Default to regex "eth0".
+snmp_interface_inverse      | **Optional.** Inverse Interface check, down is ok. Defaults to false as it is missing.
 snmp_interface_perf         | **Optional.** Check the input/ouput bandwidth of the interface. Defaults to true.
 snmp_interface_label        | **Optional.** Add label before speed in output: in=, out=, errors-out=, etc.
 snmp_interface_bits_bytes   | **Optional.** Output performance data in bits/s or Bytes/s. **Depends** on snmp_interface_kbits set to true. Defaults to true.
@@ -1904,46 +1987,51 @@ snmp_interface_errors       | **Optional.** Add error & discard to Perfparse out
 snmp_interface_noregexp     | **Optional.** Do not use regexp to match interface name in description OID. Defaults to false.
 snmp_interface_delta        | **Optional.** Delta time of perfcheck. Defaults to "300" (5 min).
 snmp_interface_warncrit_percent | **Optional.** Make the warning and critical levels in % of reported interface speed. If set, **snmp_interface_megabytes** needs to be set to false. Defaults to false.
-snmp_interface_ifname       | **Optional.** Switch from IF-MIB::ifDescr to IF-MIB::ifName when looking up the interface's name
+snmp_interface_ifname       | **Optional.** Switch from IF-MIB::ifDescr to IF-MIB::ifName when looking up the interface's name.
+snmp_interface_ifalias      | **Optional.** Switch from IF-MIB::ifDescr to IF-MIB::ifAlias when looking up the interface's name.
 snmp_perf                   | **Optional.** Enable perfdata values. Defaults to true.
 snmp_timeout                | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
 
-### <a id="plugin-check-command-snmp-process"></a> snmp-process
+### snmp-process <a id="plugin-check-command-snmp-process"></a>
 
 Check command object for the [check_snmp_process.pl](http://nagios.manubulon.com/snmp_process.html) plugin.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
-Name                    | Description
-------------------------|--------------
-snmp_address            | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
-snmp_nocrypt            | **Optional.** Define SNMP encryption. If set, **snmp_v3** needs to be set. Defaults to false.
-snmp_community          | **Optional.** The SNMP community. Defaults to "public".
-snmp_port               | **Optional.** The SNMP port connection.
-snmp_v2                 | **Optional.** SNMP version to 2c. Defaults to false.
-snmp_v3                 | **Optional.** SNMP version to 3. Defaults to false.
-snmp_login              | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
-snmp_password           | **Required.** SNMP version 3 password. No value defined as default.
-snmp_v3_use_privpass    | **Optional.** Define to use SNMP version 3 priv password. Defaults to false.
-snmp_authprotocol       | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
-snmp_privpass           | **Required.** SNMP version 3 priv password. No value defined as default..
-snmp_warn               | **Optional.** The warning threshold.
-snmp_crit               | **Optional.** The critical threshold.
-snmp_process_name       | **Optional.** Name of the process (regexp). No trailing slash!. Defaults to ".*".
-snmp_perf               | **Optional.** Enable perfdata values. Defaults to true.
-snmp_timeout            | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
-snmp_process_use_params | **Optional.** Add process parameters to process name for regexp matching. Example: "named.*-t /var/named/chroot" will only select named process with this parameter. Defaults to false.
+Name                       | Description
+---------------------------|--------------
+snmp_address               | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+snmp_nocrypt               | **Optional.** Define SNMP encryption. If set, **snmp_v3** needs to be set. Defaults to false.
+snmp_community             | **Optional.** The SNMP community. Defaults to "public".
+snmp_port                  | **Optional.** The SNMP port connection.
+snmp_v2                    | **Optional.** SNMP version to 2c. Defaults to false.
+snmp_v3                    | **Optional.** SNMP version to 3. Defaults to false.
+snmp_login                 | **Optional.** SNMP version 3 username. Defaults to "snmpuser".
+snmp_password              | **Required.** SNMP version 3 password. No value defined as default.
+snmp_v3_use_privpass       | **Optional.** Define to use SNMP version 3 priv password. Defaults to false.
+snmp_v3_use_authprotocol   | **Optional.** Define to use SNMP version 3 authentication protocol. Defaults to false.
+snmp_authprotocol          | **Optional.** SNMP version 3 authentication protocol. Defaults to "md5,des".
+snmp_privpass              | **Required.** SNMP version 3 priv password. No value defined as default..
+snmp_warn                  | **Optional.** The warning threshold.
+snmp_crit                  | **Optional.** The critical threshold.
+snmp_process_name          | **Optional.** Name of the process (regexp). No trailing slash!. Defaults to ".*".
+snmp_perf                  | **Optional.** Enable perfdata values. Defaults to true.
+snmp_timeout               | **Optional.** The command timeout in seconds. Defaults to 5 seconds.
+snmp_process_use_params    | **Optional.** Add process parameters to process name for regexp matching. Example: "named.*-t /var/named/chroot" will only select named process with this parameter. Defaults to false.
+snmp_process_mem_usage     | **Optional.** Define to check memory usage for the process. Defaults to false.
+snmp_process_mem_threshold | **Optional.** Defines the warning and critical thresholds in Mb when snmp_process_mem_usage set to true. Example "512,1024". Defaults to "0,0".
+snmp_process_cpu_usage     | **Optional.** Define to check CPU usage for the process. Defaults to false.
+snmp_process_cpu_threshold | **Optional.** Defines the warning and critical thresholds in % when snmp_process_cpu_usage set to true. If more than one CPU, value can be > 100% : 100%=1 CPU. Example "15,50". Defaults to "0,0".
 
 
-
-## <a id="plugin-contrib"></a> Contributed Plugin Check Commands
+## Contributed Plugin Check Commands <a id="plugin-contrib"></a>
 
 The contributed Plugin Check Commands provides various additional command definitions
 contributed by community members.
 
 These check commands assume that the global constant named `PluginContribDir`
 is set to the path where the user installs custom plugins and can be enabled by
-uncommenting the corresponding line in [icinga2.conf](4-configuring-icinga-2.md#icinga2-conf):
+uncommenting the corresponding line in [icinga2.conf](04-configuring-icinga-2.md#icinga2-conf):
 
 ```
 vim /etc/icinga2/icinga2.conf
@@ -1953,11 +2041,11 @@ include <plugin-contrib>
 
 This is enabled by default since Icinga 2 2.5.0.
 
-### <a id="plugin-contrib-databases"></a> Databases
+### Databases <a id="plugin-contrib-databases"></a>
 
 This category contains plugins for various database servers.
 
-#### <a id="plugin-contrib-command-db2_health"></a> db2_health
+#### db2_health <a id="plugin-contrib-command-db2_health"></a>
 
 The [check_db2_health](https://labs.consol.de/nagios/check_db2_health/) plugin
 uses the `DBD::DB2` Perl library to monitor a [DB2](https://www.ibm.com/support/knowledgecenter/SSEPGG_11.1.0/)
@@ -1965,7 +2053,7 @@ database.
 
 The Git repository is located on [GitHub](https://github.com/lausser/check_db2_health).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                             | Description
 ---------------------------------|------------------------------------------------------------------------------------------------------------------------------
@@ -1984,10 +2072,11 @@ db2_health_units              | **Optional.** This is used for a better output o
 db2_health_maxinactivity      | **Optional.** Used for the maximum amount of time a certain event has not happened.
 db2_health_mitigation         | **Optional.** Classifies the severity of an offline tablespace.
 db2_health_lookback           | **Optional.** How many days in the past db2_health check should look back to calculate exitcode.
+db2_health_report             | **Optional.** Report can be used to output only the bad news. Possible values are "short", "long", "html". Defaults to `short`.
 db2_health_env_db2_home       | **Required.** Specifies the location of the db2 client libraries as environment variable `DB2_HOME`. Defaults to "/opt/ibm/db2/V10.5".
 db2_health_env_db2_version    | **Optional.** Specifies the DB2 version as environment variable `DB2_VERSION`.
 
-#### <a id="plugin-contrib-command-mssql_health"></a> mssql_health
+#### mssql_health <a id="plugin-contrib-command-mssql_health"></a>
 
 The [check_mssql_health](https://labs.consol.de/nagios/check_mssql_health/index.html) plugin
 uses the `DBD::Sybase` Perl library based on [FreeTDS](http://www.freetds.org/) to monitor a
@@ -1995,7 +2084,7 @@ uses the `DBD::Sybase` Perl library based on [FreeTDS](http://www.freetds.org/) 
 
 The Git repository is located on [GitHub](https://github.com/lausser/check_mssql_health).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                             | Description
 ---------------------------------|------------------------------------------------------------------------------------------------------------------------------
@@ -2015,8 +2104,12 @@ mssql_health_regexp              | **Optional.** If set to true, "mssql_health_n
 mssql_health_units               | **Optional.** This is used for a better output of mode=sql and for specifying thresholds for mode=tablespace-free. Possible values are "%", "KB", "MB" and "GB".
 mssql_health_offlineok           | **Optional.** Set this to true if offline databases are perfectly ok for you. Defaults to false.
 mssql_health_commit              | **Optional.** Set this to true to turn on autocommit for the dbd::sybase module. Defaults to false.
+mssql_health_notemp              | **Optional.** Set this to true to ignore temporary databases/tablespaces. Defaults to false.
+mssql_health_nooffline           | **Optional.** Set this to true to ignore offline databases. Defaults to false.
+mssql_health_lookback            | **Optional.** The amount of time you want to look back when calculating average rates.
+mssql_health_report              | **Optional.** Report can be used to output only the bad news. Possible values are "short", "long", "html". Defaults to `short`.
 
-#### <a id="plugin-contrib-command-mysql_health"></a> mysql_health
+#### mysql_health <a id="plugin-contrib-command-mysql_health"></a>
 
 The [check_mysql_health](https://labs.consol.de/nagios/check_mysql_health/index.html) plugin
 uses the `DBD::MySQL` Perl library to monitor a
@@ -2024,7 +2117,7 @@ uses the `DBD::MySQL` Perl library to monitor a
 
 The Git repository is located on [GitHub](https://github.com/lausser/check_mysql_health).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                             | Description
 ---------------------------------|------------------------------------------------------------------------------------------------------------------------------
@@ -2065,14 +2158,14 @@ mysql_health_statefilesdir       | **Optional.** An alternate directory where th
 mysql_health_isvalidtime         | **Optional.** Signals the plugin to return OK if now is not a valid check time."
 mysql_health_timeout           	 | **Optional.** Plugin timeout. Defaults to 60s.
 
-#### <a id="plugin-contrib-command-oracle_health"></a> oracle_health
+#### oracle_health <a id="plugin-contrib-command-oracle_health"></a>
 
 The [check_oracle_health](https://labs.consol.de/nagios/check_oracle_health/index.html) plugin
 uses the `DBD::Oracle` Perl library to monitor an [Oracle](https://www.oracle.com/database/) database.
 
 The Git repository is located on [GitHub](https://github.com/lausser/check_oracle_health).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                             | Description
 ---------------------------------|------------------------------------------------------------------------------------------------------------------------------
@@ -2091,6 +2184,7 @@ oracle_health_ident              | **Optional.** If set to true, outputs instanc
 oracle_health_commit             | **Optional.** Set this to true to turn on autocommit for the dbd::oracle module. Defaults to false.
 oracle_health_noperfdata         | **Optional.** Set this to true if you want to disable perfdata. Defaults to false.
 oracle_health_timeout            | **Optional.** Plugin timeout. Defaults to 60s.
+oracle_health_report             | **Optional.** Select the plugin output format. Can be short or long. Default to long.
 
 Environment Macros:
 
@@ -2099,14 +2193,14 @@ Name                | Description
 ORACLE_HOME         | **Required.** Specifies the location of the oracle instant client libraries. Defaults to "/usr/lib/oracle/11.2/client64/lib". Can be overridden by setting "oracle_home".
 TNS_ADMIN           | **Required.** Specifies the location of the tnsnames.ora including the database connection strings. Defaults to "/etc/icinga2/plugin-configs". Can be overridden by setting "oracle_tns_admin".
 
-#### <a id="plugin-contrib-command-postgres"></a> postgres
+#### postgres <a id="plugin-contrib-command-postgres"></a>
 
 The [check_postgres](https://bucardo.org/wiki/Check_postgres) plugin
 uses the `psql` binary to monitor a [PostgreSQL](https://www.postgresql.org/about/) database.
 
 The Git repository is located on [GitHub](https://github.com/bucardo/check_postgres).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                             | Description
 ---------------------------------|------------------------------------------------------------------------------------------------------------------------------
@@ -2129,14 +2223,14 @@ postgres_unixsocket  | **Optional.** If "postgres_unixsocket" is set to true, th
 postgres_query       | **Optional.** Query for "custom_query" action.
 postgres_valtype     | **Optional.** Value type of query result for "custom_query".
 postgres_reverse     | **Optional.** If "postgres_reverse" is set, warning and critical values are reversed for "custom_query" action.
-postgres_tempdir     | **Optional.** Specify directory for temporary files. The default directory is dependent on the OS. More details [here](http://perldoc.perl.org/File/Spec.html).
+postgres_tempdir     | **Optional.** Specify directory for temporary files. The default directory is dependent on the OS. More details [here](https://perldoc.perl.org/File/Spec.html).
 
-#### <a id="plugin-contrib-command-mongodb"></a> mongodb
+#### mongodb <a id="plugin-contrib-command-mongodb"></a>
 
 The [check_mongodb.py](https://github.com/mzupan/nagios-plugin-mongodb) plugin
 uses the `pymongo` Python library to monitor a [MongoDB](https://docs.mongodb.com/manual/) instance.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                             | Description
 ---------------------------------|------------------------------------------------------------------------------------------------------------------------------
@@ -2159,12 +2253,12 @@ mongodb_querytype                | **Optional.** The query type to check [query\
 mongodb_collection               | **Optional.** Specify the collection to check
 mongodb_sampletime               | **Optional.** Time used to sample number of pages faults
 
-#### <a id="plugin-contrib-command-elasticsearch"></a> elasticsearch
+#### elasticsearch <a id="plugin-contrib-command-elasticsearch"></a>
 
 The [check_elasticsearch](https://github.com/anchor/nagios-plugin-elasticsearch) plugin
 uses the HTTP API to monitor an [Elasticsearch](https://www.elastic.co/products/elasticsearch) node.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                         | Description
 -----------------------------|-------------------------------------------------------------------------------------------------------
@@ -2175,14 +2269,14 @@ elasticsearch_port           | **Optional.** TCP port to probe.  The ElasticSear
 elasticsearch_prefix         | **Optional.** Optional prefix (e.g. 'es') for the ElasticSearch API. Defaults to ''.
 elasticsearch_yellowcritical | **Optional.** Instead of issuing a 'warning' for a yellow cluster state, issue a 'critical' alert. Defaults to false.
 
-#### <a id="plugin-contrib-command-redis"></a> redis
+#### redis <a id="plugin-contrib-command-redis"></a>
 
 The [check_redis.pl](https://github.com/willixix/naglio-plugins/blob/master/check_redis.pl) plugin
 uses the `Redis` Perl library to monitor a [Redis](https://redis.io/) instance. The plugin can
 measure response time, hitrate, memory utilization, check replication synchronization, etc. It is
 also possible to test data in a specified key and calculate averages or summaries on ranges.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                     | Description
 -------------------------|--------------------------------------------------------------------------------------------------------------
@@ -2208,18 +2302,29 @@ redis_total_memory       | **Optional.** Amount of memory on a system for memory
 redis_replication_delay  | **Optional.** Allows to set threshold on replication delay info.
 
 
-### <a id="plugin-contrib-hardware"></a> Hardware
+### Hardware <a id="plugin-contrib-hardware"></a>
 
 This category includes all plugin check commands for various hardware checks.
 
-#### <a id="plugin-contrib-command-hpasm"></a> hpasm
+#### hpasm <a id="plugin-contrib-command-hpasm"></a>
 
 The [check_hpasm](https://labs.consol.de/de/nagios/check_hpasm/index.html) plugin
 monitors the hardware health of HP Proliant Servers, provided that the `hpasm`
 (HP Advanced Server Management) software is installed. It is also able to monitor
 the system health of HP Bladesystems and storage systems.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+The plugin can run in two different ways:
+
+1. Local execution using the `hpasmcli` command line tool.
+2. Remote SNMP query which invokes the HP Insight Tools on the remote node.
+
+You can either set or omit `hpasm_hostname` custom attribute and select the corresponding node.
+
+The `hpasm_remote` attribute enables the plugin to execute remote SNMP queries if set to `true`.
+For compatibility reasons this attribute uses `true` as default value, and ensures that
+specifying the `hpasm_hostname` always enables remote checks.
+
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    	| Description
 --------------------------------|-----------------------------------------------------------------------
@@ -2240,36 +2345,76 @@ hpasm_privpassword		| **Optional.** The password for authPriv security level.
 hpasm_privprotocol		| **Optional.** The private protocol for SNMPv3 (des\|aes\|aes128\|3des\|3desde).
 hpasm_servertype		| **Optional.** The type of the server: proliant (default) or bladesystem.
 hpasm_eval-nics			| **Optional.** Check network interfaces (and groups). Try it and report me whyt you think about it. I need to build up some know how on this subject. If you get an error and think, it is not justified for your configuration, please tell me about it. (alwasy send the output of "snmpwalk -On .... 1.3.6.1.4.1.232" and a description how you setup your nics and why it is correct opposed to the plugins error message.
+hpasm_remote			| **Optional.** Run remote SNMP checks if enabled. Otherwise checks are executed locally using the `hpasmcli` binary. Defaults to `true`.
 
-### <a id="plugin-contrib-icingacli"></a> IcingaCLI
+#### adaptec-raid <a id="plugin-contrib-command-adaptec-raid"></a>
+
+The [check_adaptec_raid](https://github.com/thomas-krenn/check_adaptec_raid) plugin
+uses the `arcconf` binary to monitor Adaptec RAID controllers.
+
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
+
+Name                            | Description
+--------------------------------|-----------------------------------------------------------------------
+adaptec_controller_number       | **Required.** Controller number to monitor.
+arcconf_path                    | **Required.** Path to the `arcconf` binary, e.g. "/sbin/arcconf".
+
+#### lsi-raid <a id="plugin-contrib-command-lsi-raid"></a>
+
+The [check_lsi_raid](https://github.com/thomas-krenn/check_lsi_raid) plugin
+uses the `storcli` binary to monitor MegaRAID RAID controllers.
+
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
+
+Name                            | Description
+--------------------------------|-----------------------------------------------------------------------
+lsi_controller_number           | **Required.** Controller number to monitor.
+storcli_path                    | **Required.** Path to the `storcli` binary, e.g. "/usr/sbin/storcli".
+
+#### smart-attributes <a id="plugin-contrib-command-smart-attributes"></a>
+
+The [check_smart_attributes](https://github.com/thomas-krenn/check_smart_attributes) plugin
+uses the `smartctl` binary to monitor SMART values of SSDs and HDDs.
+
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
+
+Name                            | Description
+--------------------------------|-----------------------------------------------------------------------
+smart_attributes_config_path    | **Required.** Path to the smart attributes config file (e.g. check_smartdb.json).
+smart_attributes_device         | **Required.** Device name (e.g. /dev/sda) to monitor.
+
+
+### IcingaCLI <a id="plugin-contrib-icingacli"></a>
 
 This category includes all plugins using the icingacli provided by Icinga Web 2.
 
-#### <a id="plugin-contrib-icingacli-businessprocess"></a> Business Process
+#### Business Process <a id="plugin-contrib-icingacli-businessprocess"></a>
 
-This subcommand is provided by the [business process module](https://exchange.icinga.com/icinga/Business+Process) and executed as `icingacli-businessprocess`. The module is hosted by the Icinga project on its [project homepage](https://github.com/Icinga/icingaweb2-module-businessprocess).
+This subcommand is provided by the [business process module](https://exchange.icinga.com/icinga/Business+Process)
+and executed as `icingacli businessprocess` CLI command.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    	          | Description
 ------------------------------------------|-----------------------------------------------------------------------------------------
 icingacli_businessprocess_process         | **Required.** Business process to monitor.
 icingacli_businessprocess_config          | **Optional.** Configuration file containing your business process without file extension.
-icingacli_businessprocess_details         | **Optional.** Get details for root cause analyses. Defaults to false.
+icingacli_businessprocess_details         | **Optional.** Get details for root cause analysis. Defaults to false.
+icingacli_businessprocess_statetype       | **Optional.** Define which state type to look at, `soft` or `hard`. Overrides the default value inside the businessprocess module, if configured.
 
 
-### <a id="plugin-contrib-ipmi"></a> IPMI Devices
+### IPMI Devices <a id="plugin-contrib-ipmi"></a>
 
 This category includes all plugins for IPMI devices.
 
-#### <a id="plugin-contrib-command-ipmi-sensor"></a> ipmi-sensor
+#### ipmi-sensor <a id="plugin-contrib-command-ipmi-sensor"></a>
 
 The [check_ipmi_sensor](https://github.com/thomas-krenn/check_ipmi_sensor_v3) plugin
 uses the `ipmimonitoring` binary to monitor sensor data for IPMI devices. Please
 read the [documentation](https://www.thomas-krenn.com/en/wiki/IPMI_Sensor_Monitoring_Plugin)
 for installation and configuration details.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                             | Description
 ---------------------------------|-----------------------------------------------------------------------------------------------------
@@ -2280,18 +2425,40 @@ ipmi_password                    | **Optional.** The IPMI password.
 ipmi_privilege_level             | **Optional.** The IPMI privilege level of the IPMI user.
 ipmi_backward_compatibility_mode | **Optional.** Enable backward compatibility mode, useful for FreeIPMI 0.5.\* (this omits FreeIPMI options "--quiet-cache" and "--sdr-cache-recreate").
 ipmi_sensor_type                 | **Optional.** Limit sensors to query based on IPMI sensor type. Examples for IPMI sensor types are 'Fan', 'Temperature' and 'Voltage'.
+ipmi_sel_type                    | **Optional.** Limit SEL entries to specific types, run 'ipmi-sel -L' for a list of types. All sensors are populated to the SEL and per default all sensor types are monitored.
 ipmi_exclude_sensor_id           | **Optional.** Exclude sensor matching ipmi_sensor_id.
+ipmi_exclude_sensor              | **Optional.** Exclude sensor based on IPMI sensor type. (Comma-separated)
+ipmi_exclude_sel                 | **Optional.** Exclude SEL entries of specific sensor types. (comma-separated list).
 ipmi_sensor_id                   | **Optional.** Include sensor matching ipmi_sensor_id.
-ipmi_protocal_lan_version        | **Optional.** Change the protocol LAN version. Defaults to "LAN_2_0".
+ipmi_protocol_lan_version        | **Optional.** Change the protocol LAN version. Defaults to "LAN_2_0".
 ipmi_number_of_active_fans       | **Optional.** Number of fans that should be active. Otherwise a WARNING state is returned.
 ipmi_show_fru                    | **Optional.** Print the product serial number if it is available in the IPMI FRU data.
 ipmi_no_sel_checking             | **Optional.** Turn off system event log checking via ipmi-sel.
+ipmi_verbose                     | **Optional.** Be Verbose multi line output, also with additional details for warnings.
+ipmi_debug                       | **Optional.** Be Verbose debugging output, followed by normal multi line output.
 
-### <a id="plugins-contrib-log-management"></a> Log Management
+#### ipmi-alive <a id="plugin-contrib-command-ipmi-alive"></a>
+
+The `ipmi-alive` check commands allows you to create a ping check for the IPMI Interface.
+
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
+
+Name                             | Description
+---------------------------------|-----------------------------------------------------------------------------------------------------
+ping_address                     | **Optional.** The address of the IPMI interface. Defaults to "$address$" if the IPMI interface's `address` attribute is set, "$address6$" otherwise.
+ping_wrta                        | **Optional.** The RTA warning threshold in milliseconds. Defaults to 5000.
+ping_wpl                         | **Optional.** The packet loss warning threshold in %. Defaults to 100.
+ping_crta                        | **Optional.** The RTA critical threshold in milliseconds. Defaults to 5000.
+ping_cpl                         | **Optional.** The packet loss critical threshold in %. Defaults to 100.
+ping_packets                     | **Optional.** The number of packets to send. Defaults to 1.
+ping_timeout                     | **Optional.** The plugin timeout in seconds. Defaults to 0 (no timeout).
+
+
+### Log Management <a id="plugins-contrib-log-management"></a>
 
 This category includes all plugins for log management, for example [Logstash](https://www.elastic.co/products/logstash).
 
-#### <a id="plugins-contrib-command-logstash"></a> logstash
+#### logstash <a id="plugins-contrib-command-logstash"></a>
 
 The [logstash](https://github.com/widhalmt/check_logstash) plugin connects to
 the Node API of Logstash. This plugin requires at least Logstash version 5.0.x.
@@ -2313,16 +2480,16 @@ logstash_cpu_warn          | **Optional.** Warning threshold for cpu usage in pe
 logstash_cpu_crit          | **Optional.** Critical threshold for cpu usage in percent.
 
 
-### <a id="plugin-contrib-metrics"></a> Metrics
+### Metrics <a id="plugin-contrib-metrics"></a>
 
 This category includes all plugins for metric-based checks.
 
-#### <a id="plugin-contrib-command-graphite"></a> graphite
+#### graphite <a id="plugin-contrib-command-graphite"></a>
 
 The [check_graphite](https://github.com/obfuscurity/nagios-scripts) plugin
 uses the `rest-client` Ruby library to monitor a [Graphite](https://graphiteapp.org) instance.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                                | Description
 ------------------------------------|-----------------------------------------------------------------------------------------------------
@@ -2338,18 +2505,18 @@ graphite_message                    | **Optional.** Text message to output (defa
 graphite_zero_on_error              | **Optional.** Return 0 on a graphite 500 error.
 graphite_link_graph                 | **Optional.** Add a link in the plugin output, showing a 24h graph for this metric in graphite.
 
-### <a id="plugin-contrib-network-components"></a> Network Components
+### Network Components <a id="plugin-contrib-network-components"></a>
 
 This category includes all plugins for various network components like routers, switches and firewalls.
 
-#### <a id="plugin-contrib-command-interfacetable"></a> interfacetable
+#### interfacetable <a id="plugin-contrib-command-interfacetable"></a>
 
 The [check_interfacetable_v3t](http://www.tontonitch.com/tiki/tiki-index.php?page=Nagios+plugins+-+interfacetable_v3t) plugin
 generates a html page containing information about the monitored node and all of its interfaces.
 
 The Git repository is located on [GitHub](https://github.com/Tontonitch/interfacetable_v3t).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                                | Description
 ------------------------------------|-----------------------------------------------------------------------------------------------------
@@ -2415,12 +2582,12 @@ interfacetable_defaulttablesorting  | **Optional.** Default table sorting can be
 interfacetable_tablesplit           | **Optional.** Generate multiple interface tables, one per interface type. Defaults to false.
 interfacetable_notype               | **Optional.** Remove the interface type for each interface. Defaults to false.
 
-#### <a id="plugin-contrib-command-iftraffic"></a> iftraffic
+#### iftraffic <a id="plugin-contrib-command-iftraffic"></a>
 
 The [check_iftraffic](https://exchange.icinga.com/exchange/iftraffic) plugin
 checks the utilization of a given interface name using the SNMP protocol.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|---------------------------------------------------------
@@ -2433,12 +2600,12 @@ iftraffic_warn		| **Optional.** Percent of bandwidth usage necessary to result i
 iftraffic_crit		| **Optional.** Percent of bandwidth usage necessary to result in critical status (defaults to `98`).
 iftraffic_max_counter	| **Optional.** Maximum counter value of net devices in kilo/mega/giga/bytes.
 
-#### <a id="plugin-contrib-command-iftraffic64"></a> iftraffic64
+#### iftraffic64 <a id="plugin-contrib-command-iftraffic64"></a>
 
 The [check_iftraffic64](https://exchange.icinga.com/exchange/iftraffic64) plugin
 checks the utilization of a given interface name using the SNMP protocol.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|---------------------------------------------------------
@@ -2451,12 +2618,12 @@ iftraffic64_warn        | **Optional.** Percent of bandwidth usage necessary to 
 iftraffic64_crit        | **Optional.** Percent of bandwidth usage necessary to result in critical status (defaults to `98`).
 iftraffic64_max_counter	| **Optional.** Maximum counter value of net devices in kilo/mega/giga/bytes.
 
-#### <a id="plugin-contrib-command-interfaces"></a> interfaces
+#### interfaces <a id="plugin-contrib-command-interfaces"></a>
 
 The [check_interfaces](https://git.netways.org/plugins/check_interfaces) plugin
 uses SNMP to monitor network interfaces and their utilization.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                      | Description
 --------------------------|---------------------------------------------------------
@@ -2482,8 +2649,9 @@ interfaces_aliases        | **Optional.** Retrieves the interface description.
 interfaces_match_aliases  | **Optional.** Also match against aliases (Option --aliases automatically enabled).
 interfaces_timeout        | **Optional.** Sets the SNMP timeout (in ms).
 interfaces_sleep          | **Optional.** Sleep between every SNMP query (in ms).
+interfaces_names          | **Optional.** If set to true, use ifName instead of ifDescr.
 
-#### <a id="plugin-contrib-command-nwc_health"></a> nwc_health
+#### nwc_health <a id="plugin-contrib-command-nwc_health"></a>
 
 The [check_nwc_health](https://labs.consol.de/de/nagios/check_nwc_health/index.html) plugin
 uses SNMP to monitor network components. The plugin is able to generate interface statistics,
@@ -2497,7 +2665,7 @@ Brocade ICX6610-24-HPOE, Cisco UC Telefonzeugs, FOUNDRY-SN-AGENT-MIB, FRITZ!BOX 
 Juniper IVE, Pulse-Gateway MAG4610, Cisco IronPort AsyncOS, Foundry, etc. A complete list can be
 found in the plugin [documentation](https://labs.consol.de/nagios/check_nwc_health/index.html).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                      	| Description
 --------------------------------|---------------------------------------------------------
@@ -2526,13 +2694,13 @@ nwc_health_ifspeed		| **Optional.** Override the ifspeed oid of an interface
 nwc_health_units		| **Optional.** One of %, B, KB, MB, GB, Bit, KBi, MBi, GBi. (used for e.g. mode interface-usage)
 nwc_health_name2		| **Optional.** The secondary name of a component.
 nwc_health_role			| **Optional.** The role of this device in a hsrp group (active/standby/listen).
-nwc_health_report		| **Optional.** Can be used to shorten the output.
+nwc_health_report		| **Optional.** Can be used to shorten the output. Possible values are: 'long' (default), 'short' (to shorten if available), or 'html' (to produce some html outputs if available)
 nwc_health_lookback		| **Optional.** The amount of time you want to look back when calculating average rates. Use it for mode interface-errors or interface-usage. Without --lookback the time between two runs of check_nwc_health is the base for calculations. If you want your checkresult to be based for example on the past hour, use --lookback 3600.
 nwc_health_warning		| **Optional.** The warning threshold
 nwc_health_critical		| **Optional.** The critical threshold
 nwc_health_warningx		| **Optional.** The extended warning thresholds
 nwc_health_criticalx		| **Optional.** The extended critical thresholds
-nwc_health_mitigation		| **Optional.** The parameter allows you to change a critical error to a warning.
+nwc_health_mitigation		| **Optional.** The parameter allows you to change a critical error to a warning (1) or ok (0).
 nwc_health_selectedperfdata	| **Optional.** The parameter allows you to limit the list of performance data. It's a perl regexp. Only matching perfdata show up in the output.
 nwc_health_morphperfdata	| **Optional.** The parameter allows you to change performance data labels. It's a perl regexp and a substitution. --morphperfdata '(.*)ISATAP(.*)'='$1patasi$2'
 nwc_health_negate		| **Optional.** The parameter allows you to map exit levels, such as warning=critical.
@@ -2544,18 +2712,18 @@ nwc_health_offline		| **Optional.** The maximum number of seconds since the last
 nwc_health_multiline		| **Optional.** Multiline output
 
 
-### <a id="plugin-contrib-operating-system"></a> Operating System
+### Operating System <a id="plugin-contrib-operating-system"></a>
 
 This category contains plugins which receive details about your operating system
 or the guest system.
 
-#### <a id="plugin-contrib-command-mem"></a> mem
+#### mem <a id="plugin-contrib-command-mem"></a>
 
 The [check_mem.pl](https://github.com/justintime/nagios-plugins) plugin checks the
 memory usage on linux and unix hosts. It is able to count cache memory as free when
 compared to thresholds. More details can be found on [this blog entry]((http://sysadminsjourney.com/content/2009/06/04/new-and-improved-checkmempl-nagios-plugin).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name         | Description
 -------------|-----------------------------------------------------------------------------------------------------------------------
@@ -2565,7 +2733,7 @@ mem_cache    | **Optional.** If set to true, plugin will count cache as free mem
 mem_warning  | **Required.** Specify the warning threshold as number interpreted as percent.
 mem_critical | **Required.** Specify the critical threshold as number interpreted as percent.
 
-#### <a id="plugin-contrib-command-running_kernel"></a> running_kernel
+#### running_kernel <a id="plugin-contrib-command-running_kernel"></a>
 
 The [check_running_kernel](https://packages.debian.org/stretch/nagios-plugins-contrib) plugin
 is provided by the `nagios-plugin-contrib` package on Debian/Ubuntu.
@@ -2576,13 +2744,13 @@ Name                       | Description
 ---------------------------|-------------
 running\_kernel\_use\_sudo | Whether to run the plugin with `sudo`. Defaults to false except on Ubuntu where it defaults to true.
 
-#### <a id="plugin-contrib-command-iostats"></a> iostats
+#### iostats <a id="plugin-contrib-command-iostats"></a>
 
 The [check_iostats](https://github.com/dnsmichi/icinga-plugins/blob/master/scripts/check_iostats) plugin
 uses the `iostat` binary to monitor I/O on a Linux host. The default thresholds are rather high
 so you can use a grapher for baselining before setting your own.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name           | Description
 ---------------|-----------------------------------------------------------------------------------------------------------------------
@@ -2596,13 +2764,13 @@ iostats\_critical\_read  | **Required.** Critical threshold for KB/s reads (defa
 iostats\_critical\_write | **Required.** Critical threshold for KB/s writes (default: 25000)
 iostats\_critical\_wait  | **Required.** Critical threshold for % iowait (default: 80)
 
-#### <a id="plugin-contrib-command-iostat"></a> iostat
+#### iostat <a id="plugin-contrib-command-iostat"></a>
 
 The [check_iostat](https://github.com/dnsmichi/icinga-plugins/blob/master/scripts/check_iostat) plugin
 uses the `iostat` binary to monitor disk I/O on a Linux host. The default thresholds are rather high
 so you can use a grapher for baselining before setting your own.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name           | Description
 ---------------|-----------------------------------------------------------------------------------------------------------------------
@@ -2614,13 +2782,13 @@ iostat\_ctps   | **Required.** Critical threshold for tps (default: 200)
 iostat\_cread  | **Required.** Critical threshold for KB/s reads (default: 200)
 iostat\_cwrite | **Required.** Critical threshold for KB/s writes (default: 200)
 
-#### <a id="plugin-contrib-command-yum"></a> yum
+#### yum <a id="plugin-contrib-command-yum"></a>
 
 The [check_yum](https://github.com/calestyo/check_yum) plugin checks the YUM package
 management system for package updates.
 The plugin requires the `yum-plugin-security` package to differentiate between security and normal updates.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2634,17 +2802,17 @@ yum_disablerepo         | **Optional.** Explicitly disables a reposity when call
 yum_installroot         | **Optional.** Specifies another installation root directory (for example a chroot).
 yum_timeout             | **Optional.** Set a timeout in seconds after which the plugin will exit (defaults to 55 seconds).
 
-### <a id="plugins-contrib-storage"></a> Storage
+### Storage <a id="plugins-contrib-storage"></a>
 
 This category includes all plugins for various storage and object storage technologies.
 
-#### <a id="plugins-contrib-command-glusterfs"></a> glusterfs
+#### glusterfs <a id="plugins-contrib-command-glusterfs"></a>
 
 The [glusterfs](https://www.unixadm.org/software/nagios-stuff/checks/check_glusterfs) plugin
 is used to check the GlusterFS storage health on the server.
 The plugin requires `sudo` permissions.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                       | Description
 ---------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2657,17 +2825,17 @@ glusterfs_inode_warning    | **Optional.** Warn if inode usage is above *DISKWAR
 glusterfs_inode_critical   | **Optional.** Return a critical error if inode usage is above *DISKCRIT*. Defaults to 95 (percent).
 
 
-### <a id="plugin-contrib-virtualization"></a> Virtualization
+### Virtualization <a id="plugin-contrib-virtualization"></a>
 
 This category includes all plugins for various virtualization technologies.
 
-#### <a id="plugin-contrib-command-esxi-hardware"></a> esxi_hardware
+#### esxi_hardware <a id="plugin-contrib-command-esxi-hardware"></a>
 
-The [check_esxi_hardware.py](http://www.claudiokuenzler.com/nagios-plugins/check_esxi_hardware.php) plugin
-uses the [pywbem](http://pywbem.github.io/pywbem/) Python library to monitor the hardware of ESXi servers
+The [check_esxi_hardware.py](https://www.claudiokuenzler.com/nagios-plugins/check_esxi_hardware.php) plugin
+uses the [pywbem](https://pywbem.github.io/pywbem/) Python library to monitor the hardware of ESXi servers
 through the [VMWare API](https://www.vmware.com/support/pubs/sdk_pubs.html) and CIM service.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2685,7 +2853,7 @@ esxi_hardware_nocurrent | **Optional.** Do not collect current performance data,
 esxi_hardware_notemp    | **Optional.** Do not collect temperature performance data, when **esxi_hardware_perfdata** is set to true. Defaults to false.
 esxi_hardware_nofan     | **Optional.** Do not collect fan performance data, when **esxi_hardware_perfdata** is set to true. Defaults to false.
 
-#### <a id="plugin-contrib-vmware"></a> VMware
+#### VMware <a id="plugin-contrib-vmware"></a>
 
 Check commands for the [check_vmware_esx](https://github.com/BaldMansMojo/check_vmware_esx) plugin.
 
@@ -2693,7 +2861,7 @@ Check commands for the [check_vmware_esx](https://github.com/BaldMansMojo/check_
 
 Check command object for the `check_vmware_esx` plugin. Shows all datastore volumes info.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2726,7 +2894,7 @@ vmware_crit             | **Optional.** The critical threshold for volumes. Defa
 
 Check command object for the `check_vmware_esx` plugin. Shows all runtime info for the datacenter/Vcenter.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2749,7 +2917,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. List of vmware machines and their power state. BEWARE!! In larger environments systems can cause trouble displaying the informations needed due to the mass of data. Use **vmware_alertonly** to avoid this.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2777,7 +2945,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. List of VMware ESX hosts and their power state.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2805,7 +2973,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. List of VMware clusters and their states.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2833,7 +3001,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. All issues for the host.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2860,7 +3028,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. Overall object status (gray/green/red/yellow).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2883,7 +3051,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Vmware Tools status.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2913,7 +3081,7 @@ vmware_openvmtools	| **Optional** Prevent CRITICAL state for installed and runni
 
 Check command object for the `check_vmware_esx` plugin. Simple check to verify a successfull connection to VMware SOAP API.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2936,7 +3104,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Displays uptime of the VMware host.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2959,7 +3127,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. CPU usage in percentage.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -2984,7 +3152,7 @@ vmware_crit             | **Optional.** The critical threshold in percent. Defau
 
 Check command object for the `check_vmware_esx` plugin. Percentage of time that the virtual machine was ready, but could not get scheduled to run on the physical CPU. CPU ready time is dependent on the number of virtual machines on the host and their CPU loads. High or growing ready time can be a hint CPU bottlenecks.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3007,7 +3175,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. CPU time spent in wait state. The wait total includes time spent the CPU idle, CPU swap wait, and CPU I/O wait states. High or growing wait time can be a hint I/O bottlenecks.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3030,7 +3198,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Actively used CPU of the host, as a percentage of the total available CPU. Active CPU is approximately equal to the ratio of the used CPU to the available CPU.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3055,7 +3223,7 @@ vmware_crit             | **Optional.** The critical threshold in percent. Defau
 
 Check command object for the `check_vmware_esx` plugin. All mem info(except overall and no thresholds).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3078,7 +3246,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Average mem usage in percentage.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3103,7 +3271,7 @@ vmware_crit             | **Optional.** The critical threshold in percent. Defau
 
 Check command object for the `check_vmware_esx` plugin. Amount of machine memory used on the host. Consumed memory includes Includes memory used by the Service Console, the VMkernel vSphere services, plus the total consumed metrics for all running virtual machines in MB.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3128,7 +3296,7 @@ vmware_crit             | **Optional.** The critical threshold in percent. No va
 
 Check command object for the `check_vmware_esx` plugin. Amount of memory that is used by swap. Sum of memory swapped of all powered on VMs and vSphere services on the host in MB. In case of an error all VMs with their swap used will be displayed.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3154,7 +3322,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. Additional mem used by VM Server in MB.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3179,7 +3347,7 @@ vmware_crit             | **Optional.** The critical threshold in percent. No va
 
 Check command object for the `check_vmware_esx` plugin. The sum of all vmmemctl values in MB for all powered-on virtual machines, plus vSphere services on the host. If the balloon target value is greater than the balloon value, the VMkernel inflates the balloon, causing more virtual machine memory to be reclaimed. If the balloon target value is less than the balloon value, the VMkernel deflates the balloon, which allows the virtual machine to consume additional memory if needed (used by VM memory control driver). In case of an error all VMs with their vmmemctl values will be displayed.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3205,7 +3373,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. Shows net info.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3230,7 +3398,7 @@ vmware_isregexp         | **Optional.** Treat blacklist expression as regexp.
 
 Check command object for the `check_vmware_esx` plugin. Overall network usage in KBps(Kilobytes per Second).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3255,7 +3423,7 @@ vmware_crit             | **Optional.** The critical threshold in KBps(Kilobytes
 
 Check command object for the `check_vmware_esx` plugin. Data receive in KBps(Kilobytes per Second).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3280,7 +3448,7 @@ vmware_crit             | **Optional.** The critical threshold in KBps(Kilobytes
 
 Check command object for the `check_vmware_esx` plugin. Data send in KBps(Kilobytes per Second).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3305,7 +3473,7 @@ vmware_crit             | **Optional.** The critical threshold in KBps(Kilobytes
 
 Check command object for the `check_vmware_esx` plugin. Check all active NICs.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3330,7 +3498,7 @@ vmware_isregexp         | **Optional.** Treat blacklist expression as regexp.
 
 Check command object for the `check_vmware_esx` plugin. Shows all datastore volumes info.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3363,7 +3531,7 @@ vmware_spaceleft        | **Optional.** This has to be used in conjunction with 
 
 Check command object for the `check_vmware_esx` plugin. Shows all disk io info. Without subselect no thresholds can be given. All I/O values are aggregated from historical intervals over the past 24 hours with a 5 minute sample rate.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3386,7 +3554,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Number of aborted SCSI commands.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3411,7 +3579,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Number of SCSI bus resets.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3436,7 +3604,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Average number of kilobytes read from the disk each second.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3461,7 +3629,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) to process a SCSI read command issued from the Guest OS to the virtual machine.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3486,7 +3654,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Average number of kilobytes written to disk each second.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3511,7 +3679,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) taken to process a SCSI write command issued by the Guest OS to the virtual machine.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3536,7 +3704,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Aggregated disk I/O rate. For hosts, this metric includes the rates for all virtual machines running on the host.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3561,7 +3729,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) spent by VMkernel processing each SCSI command.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3586,7 +3754,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) to complete a SCSI command from the physical device.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3611,7 +3779,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) spent in the VMkernel queue.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3636,7 +3804,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Average amount of time (ms) taken during the collection interval to process a SCSI command issued by the guest OS to the virtual machine. The sum of kernelWriteLatency and deviceWriteLatency.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3661,7 +3829,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. List vm's with attached host mounted media like cd,dvd or floppy drives. This is important for monitoring because a virtual machine with a mount cd or dvd drive can not be moved to another host.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3688,7 +3856,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. Shows host service info.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3715,7 +3883,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. Shows runtime info: VMs, overall status, connection state, health, storagehealth, temperature and sensor are represented as one value and without thresholds.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3738,7 +3906,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Shows connection state.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3761,7 +3929,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. List of VMware machines and their status.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3788,7 +3956,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. Overall object status (gray/green/red/yellow).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3811,7 +3979,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Checks cpu/storage/memory/sensor status.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3837,7 +4005,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 
 Check command object for the `check_vmware_esx` plugin. List all available sensors(use for listing purpose only).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3863,7 +4031,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 
 Check command object for the `check_vmware_esx` plugin. This is to avoid a double alarm if you use **vmware-esx-soap-host-runtime-health** and **vmware-esx-soap-host-runtime-storagehealth**.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3889,7 +4057,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 
 Check command object for the `check_vmware_esx` plugin. Local storage status check.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3916,7 +4084,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. Lists all temperature sensors.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3943,7 +4111,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. Lists all configuration issues for the host.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3970,7 +4138,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. Shows Host storage info.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -3996,7 +4164,7 @@ vmware_isregexp         | **Optional.** Treat blacklist and whitelist expression
 
 Check command object for the `check_vmware_esx` plugin. List host bus adapters.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4023,7 +4191,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. List SCSI logical units. The listing will include: LUN, canonical name of the disc, all of displayed name which is not part of the canonical name and status.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4050,7 +4218,7 @@ vmware_multiline        | **Optional.** Multiline output in overview. This mean 
 
 Check command object for the `check_vmware_esx` plugin. List multipaths and the associated paths.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4072,13 +4240,14 @@ vmware_exclude          | **Optional.** Blacklist paths. No value defined as def
 vmware_include          | **Optional.** Whitelist paths. No value defined as default.
 vmware_isregexp         | **Optional.** Treat blacklist and whitelist expressions as regexp.
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
+vmware_standbyok        | **Optional.** For storage systems where a standby multipath is ok and not a warning. Defaults to false.
 
 
 **vmware-esx-soap-vm-cpu**
 
 Check command object for the `check_vmware_esx` plugin. Shows all CPU usage info.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4103,7 +4272,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Percentage of time that the virtual machine was ready, but could not get scheduled to run on the physical CPU.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4129,7 +4298,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. CPU time spent in wait state. The wait total includes time spent the CPU idle, CPU swap wait, and CPU I/O wait states. High or growing wait time can be a hint I/O bottlenecks.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4155,7 +4324,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Amount of actively used virtual CPU, as a percentage of total available CPU. This is the host's view of the CPU usage, not the guest operating system view. It is the average CPU utilization over all available virtual CPUs in the virtual machine.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4181,7 +4350,7 @@ vmware_crit             | **Optional.** Critical threshold in percent. Defaults 
 
 Check command object for the `check_vmware_esx` plugin. Shows all memory info, except overall.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4205,7 +4374,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Average mem usage in percentage of configured virtual machine "physical" memory.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4232,7 +4401,7 @@ vmware_crit             | **Optional.** Critical threshold in percent. Defaults 
 Check command object for the `check_vmware_esx` plugin. Amount of guest physical memory in MB consumed by the virtual machine for guest memory. Consumed memory does not include overhead memory. It includes shared memory and memory that might be reserved, but not actually used. Use this metric for charge-back purposes.<br>
 **vm consumed memory = memory granted -- memory saved**
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4258,7 +4427,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Amount of guest physical memory that is currently reclaimed from the virtual machine through ballooning. This is the amount of guest physical memory that has been allocated and pinned by the balloon driver.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4285,7 +4454,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Shows net info.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4309,7 +4478,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Overall network usage in KBps(Kilobytes per Second).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4335,7 +4504,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Receive in KBps(Kilobytes per Second).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4361,7 +4530,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Send in KBps(Kilobytes per Second).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4387,7 +4556,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. SShows all disk io info. Without subselect no thresholds can be given. All I/O values are aggregated from historical intervals over the past 24 hours with a 5 minute sample rate.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4411,7 +4580,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Average number of kilobytes read from the disk each second.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4437,7 +4606,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Average number of kilobytes written to disk each second.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4463,7 +4632,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Aggregated disk I/O rate.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4489,7 +4658,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Shows virtual machine runtime info.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4513,7 +4682,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Shows the connection state.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4537,7 +4706,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Shows virtual machine power state: poweredOn, poweredOff or suspended.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4561,7 +4730,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Overall object status (gray/green/red/yellow).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4585,7 +4754,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Console connections to virtual machine.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4611,7 +4780,7 @@ vmware_crit             | **Optional.** The critical threshold. No value defined
 
 Check command object for the `check_vmware_esx` plugin. Guest OS status. Needs VMware Tools installed and running.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4634,7 +4803,7 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 
 Check command object for the `check_vmware_esx` plugin. Guest OS status. VMware tools  status.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4659,7 +4828,7 @@ vmware_openvmtools	| **Optional** Prevent CRITICAL state for installed and runni
 
 Check command object for the `check_vmware_esx` plugin. All issues for the virtual machine.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
 ------------------------|--------------
@@ -4680,34 +4849,69 @@ vmware_authfile         | **Optional.** Use auth file instead username/password 
 vmware_multiline        | **Optional.** Multiline output in overview. This mean technically that a multiline output uses a HTML **\<br\>** for the GUI. No value defined as default.
 
 
-### <a id="plugin-contrib-web"></a> Web
+### Web <a id="plugin-contrib-web"></a>
 
 This category includes all plugins for web-based checks.
 
-#### <a id="plugin-contrib-command-webinject"></a> webinject
+#### apache_status <a id="plugin-contrib-command-apache_status"></a>
 
-The [check_webinject](https://labs.consol.de/de/nagios/check_webinject/index.html) plugin
-uses [WebInject](http://www.webinject.org/manual.html) to test web applications
-and web services in an automated fashion.
-It can be used to test individual system components that have HTTP interfaces
-(JSP, ASP, CGI, PHP, AJAX, Servlets, HTML Forms, XML/SOAP Web Services, REST, etc),
-and can be used as a test harness to create a suite of HTTP level automated functional,
-acceptance, and regression tests. A test harness allows you to run many test cases
-and collect/report your results. WebInject offers real-time results
-display and may also be used for monitoring system response times.
+The [check_apache_status.pl](https://github.com/lbetz/check_apache_status) plugin
+uses the [/server-status](https://httpd.apache.org/docs/current/mod/mod_status.html)
+HTTP endpoint to monitor status metrics for the Apache webserver.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    | Description
-------------------------|--------------
-webinject_config_file   | **Optional.** There is a configuration file named 'config.xml' that is used to store configuration settings for your project. You can use this to specify which test case files to run and to set some constants and settings to be used by WebInject.
-webinject_output        | **Optional.** This option is followed by a directory name or a prefix to prepended to the output files. This is used to specify the location for writing output files (http.log, results.html, and results.xml). If a directory name is supplied (use either an absolute or relative path and make sure to add the trailing slash), all output files are written to this directory. If the trailing slash is ommitted, it is assumed to a prefix and this will be prepended to the output files. You may also use a combination of a directory and prefix.
-webinject_no_output     | **Optional.** Suppresses all output to STDOUT except the results summary.
-webinject_timeout       | **Optional.** The value [given in seconds] will be compared to the global time elapsed to run all the tests. If the tests have all been successful, but have taken more time than the 'globaltimeout' value, a warning message is sent back to Icinga.
-webinject_report_type   | **Optional.** This setting is used to enable output formatting that is compatible for use with specific external programs. The available values you can set this to are: nagios, mrtg, external and standard.
-webinject_testcase_file | **Optional.** When you launch WebInject in console mode, you can optionally supply an argument for a testcase file to run. It will look for this file in the directory that webinject.pl resides in. If no filename is passed from the command line, it will look in config.xml for testcasefile declarations. If no files are specified, it will look for a default file named 'testcases.xml' in the current [webinject] directory. If none of these are found, the engine will stop and give you an error.
+------------------------|----------------------------------------------------------------------------------
+apache_status_address	| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, `address6` otherwise.
+apache_status_port	| **Optional.** the http port.
+apache_status_url	| **Optional.** URL to use, instead of the default (http://`apache_status_address`/server-status).
+apache_status_ssl	| **Optional.** set to use ssl connection
+apache_status_timeout	| **Optional.** timeout in seconds
+apache_status_warning	| **Optional.** Warning threshold (number of open slots, busy workers and idle workers that will cause a WARNING) like ':20,50,:50'.
+apache_status_critical	| **Optional.** Critical threshold (number of open slots, busy workers and idle workers that will cause a CRITICAL) like ':10,25,:20'.
 
-#### <a id="plugin-contrib-command-jmx4perl"></a> jmx4perl
+
+### cert <a id="plugin-check-command-ssl_cert"></a>
+
+The [check_ssl_cert](https://github.com/matteocorti/check_ssl_cert) plugin
+uses the openssl binary (and optional curl) to check a X.509 certificate.
+
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
+
+Name                      | Description
+--------------------------|--------------
+ssl_cert_address              | **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+ssl_cert_port                 | **Optional.** TCP port number (default: 443).
+ssl_cert_file                 | **Optional.** Local file path. Works only if `ssl_cert_address` is set to "localhost".
+ssl_cert_warn                 | **Optional.** Minimum number of days a certificate has to be valid.
+ssl_cert_critical             | **Optional.** Minimum number of days a certificate has to be valid to issue a critical status.
+ssl_cert_cn                   | **Optional.** Pattern to match the CN of the certificate.
+ssl_cert_altnames             | **Optional.** Matches the pattern specified in -n with alternate
+ssl_cert_issuer               | **Optional.** Pattern to match the issuer of the certificate.
+ssl_cert_org                  | **Optional.** Pattern to match the organization of the certificate.
+ssl_cert_email                | **Optional.** Pattern to match the email address contained in the certificate.
+ssl_cert_serial               | **Optional.** Pattern to match the serial number.
+ssl_cert_noauth               | **Optional.** Ignore authority warnings (expiration only)
+ssl_cert_match_host           | **Optional.** Match CN with the host name.
+ssl_cert_selfsigned           | **Optional.** Allow self-signed certificate.
+ssl_cert_sni                  | **Optional.** Sets the TLS SNI (Server Name Indication) extension.
+ssl_cert_timeout              | **Optional.** Seconds before connection times out (default: 15)
+ssl_cert_protocol             | **Optional.** Use the specific protocol {http,smtp,pop3,imap,ftp,xmpp,irc,ldap} (default: http).
+ssl_cert_clientcert           | **Optional.** Use client certificate to authenticate.
+ssl_cert_clientpass           | **Optional.** Set passphrase for client certificate.
+ssl_cert_ssllabs              | **Optional.** SSL Labs assestment
+ssl_cert_ssllabs_nocache      | **Optional.** Forces a new check by SSL Labs
+ssl_cert_rootcert             | **Optional.** Root certificate or directory to be used for certficate validation.
+ssl_cert_ignore_signature     | **Optional.** Do not check if the certificate was signed with SHA1 od MD5.
+ssl_cert_ssl_version          | **Optional.** Force specific SSL version out of {ssl2,ssl3,tls1,tls1_1,tls1_2}.
+ssl_cert_disable_ssl_versions | **Optional.** Disable specific SSL versions out of {ssl2,ssl3,tls1,tls1_1,tls1_2}. Multiple versions can be given as array.
+ssl_cert_cipher               | **Optional.** Cipher selection: force {ecdsa,rsa} authentication.
+ssl_cert_ignore_expiration    | **Optional.** Ignore expiration date.
+ssl_cert_ignore_ocsp          | **Optional.** Do not check revocation with OCSP.
+
+
+#### jmx4perl <a id="plugin-contrib-command-jmx4perl"></a>
 
 The [check_jmx4perl](http://search.cpan.org/~roland/jmx4perl/scripts/check_jmx4perl) plugin
 uses the HTTP API exposed by the [Jolokia](https://jolokia.org)
@@ -4715,7 +4919,7 @@ web application and queries Java message beans on an application server. It is
 part of the `JMX::Jmx4Perl` Perl module which includes detailed
 [documentation](http://search.cpan.org/~roland/jmx4perl/scripts/check_jmx4perl).
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                         | Description
 -----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -4754,33 +4958,29 @@ jmx4perl_config              | **Optional.** Path to configuration file.
 jmx4perl_server              | **Optional.** Symbolic name of server url to use, which needs to be configured in the configuration file.
 jmx4perl_check               | **Optional.** Name of a check configuration as defined in the configuration file, use array if you need arguments.
 
-#### <a id="plugin-contrib-command-squid"></a> squid
 
-The [check_squid](https://exchange.icinga.com/exchange/check_squid) plugin
-uses the `squidclient` binary to monitor a [Squid proxy](http://www.squid-cache.org).
+#### kdc <a id="plugin-contrib-command-kdc"></a>
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+The [check_kdc](https://exchange.nagios.org/directory/Plugins/Security/check_kdc/details) plugin
+uses the Kerberos `kinit` binary to monitor Kerberos 5 KDC by acquiring a ticket.
 
-Name                    | Description
-------------------------|----------------------------------------------------------------------------------
-squid_hostname		| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
-squid_data		| **Optional.** Data to fetch (default: Connections) available data: Connections Cache Resources Memory FileDescriptors.
-squid_port		| **Optional.** Port number (default: 3128).
-squid_user		| **Optional.** WWW user
-squid_password		| **Optional.** WWW password
-squid_warning		| **Optional.** Warning threshold. See http://nagiosplug.sourceforge.net/developer-guidelines.html#THRESHOLDFORMAT for the threshold format.
-squid_critical		| **Optional.** Critical threshold. See http://nagiosplug.sourceforge.net/developer-guidelines.html#THRESHOLDFORMAT for the threshold format.
-squid_client		| **Optional.** Path of squidclient (default: /usr/bin/squidclient).
-squid_timeout		| **Optional.** Seconds before plugin times out (default: 15).
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
+
+Name            | Description
+----------------|--------------------------------------------------------------------------
+kdc_address	| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, `address6` otherwise.
+kdc_port	| **Optional** Port on which KDC runs (default 88).
+kdc_principal	| **Required** Principal name to authenticate as (including realm).
+kdc_keytab	| **Required** Keytab file containing principal's key.
 
 
-#### <a id="plugin-contrib-command-nginx_status"></a> nginx_status
+#### nginx_status <a id="plugin-contrib-command-nginx_status"></a>
 
 The [check_nginx_status.pl](https://github.com/regilero/check_nginx_status) plugin
 uses the [/nginx_status](https://nginx.org/en/docs/http/ngx_http_stub_status_module.html)
 HTTP endpoint which provides metrics for monitoring Nginx.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name                    	| Description
 --------------------------------|----------------------------------------------------------------------------------
@@ -4799,47 +4999,13 @@ nginx_status_warn		| **Optional.** Warning threshold (number of active connectio
 nginx_status_critical		| **Optional.** Critical threshold (number of active connections, ReqPerSec or ConnPerSec that will cause a CRITICAL) like '20000,200,300'.
 
 
-#### <a id="plugin-contrib-command-apache_status"></a> apache_status
-
-The [check_apache_status.pl](https://github.com/lbetz/check_apache_status) plugin
-uses the [/server-status](https://httpd.apache.org/docs/current/mod/mod_status.html)
-HTTP endpoint to monitor status metrics for the Apache webserver.
-
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
-
-Name                    | Description
-------------------------|----------------------------------------------------------------------------------
-apache_status_address	| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, `address6` otherwise.
-apache_status_port	| **Optional.** the http port.
-apache_status_url	| **Optional.** URL to use, instead of the default (http://`apache_status_address`/server-status).
-apache_status_ssl	| **Optional.** set to use ssl connection
-apache_status_timeout	| **Optional.** timeout in seconds
-apache_status_warning	| **Optional.** Warning threshold (number of open slots, busy workers and idle workers that will cause a WARNING) like ':20,50,:50'.
-apache_status_critical	| **Optional.** Critical threshold (number of open slots, busy workers and idle workers that will cause a CRITICAL) like ':10,25,:20'.
-
-
-#### <a id="plugin-contrib-command-kdc"></a> kdc
-
-The [check_kdc](https://exchange.nagios.org/directory/Plugins/Security/check_kdc/details) plugin
-uses the Kerberos `kinit` binary to monitor Kerberos 5 KDC by acquiring a ticket.
-
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
-
-Name            | Description
-----------------|--------------------------------------------------------------------------
-kdc_address	| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, `address6` otherwise.
-kdc_port	| **Optional** Port on which KDC runs (default 88).
-kdc_principal	| **Required** Principal name to authenticate as (including realm).
-kdc_keytab	| **Required** Keytab file containing principal's key.
-
-
-#### <a id="plugin-contrib-command-rbl"></a> rbl
+#### rbl <a id="plugin-contrib-command-rbl"></a>
 
 The [check_rbl](https://github.com/matteocorti/check_rbl) plugin
 uses the `Net::DNS` Perl library to check whether your SMTP server
 is blacklisted.
 
-Custom attributes passed as [command parameters](3-monitoring-basics.md#command-passing-parameters):
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
 
 Name            | Description
 ----------------|--------------------------------------------------------------------------
@@ -4850,3 +5016,45 @@ rbl_critical	| **Optional** Number of blacklisting servers for a critical.
 tbl_timeout	| **Optional** Seconds before plugin times out (default: 15).
 
 
+#### squid <a id="plugin-contrib-command-squid"></a>
+
+The [check_squid](https://exchange.icinga.com/exchange/check_squid) plugin
+uses the `squidclient` binary to monitor a [Squid proxy](http://www.squid-cache.org).
+
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
+
+Name                    | Description
+------------------------|----------------------------------------------------------------------------------
+squid_hostname		| **Optional.** The host's address. Defaults to "$address$" if the host's `address` attribute is set, "$address6$" otherwise.
+squid_data		| **Optional.** Data to fetch (default: Connections) available data: Connections Cache Resources Memory FileDescriptors.
+squid_port		| **Optional.** Port number (default: 3128).
+squid_user		| **Optional.** WWW user
+squid_password		| **Optional.** WWW password
+squid_warning		| **Optional.** Warning threshold. See http://nagiosplug.sourceforge.net/developer-guidelines.html#THRESHOLDFORMAT for the threshold format.
+squid_critical		| **Optional.** Critical threshold. See http://nagiosplug.sourceforge.net/developer-guidelines.html#THRESHOLDFORMAT for the threshold format.
+squid_client		| **Optional.** Path of squidclient (default: /usr/bin/squidclient).
+squid_timeout		| **Optional.** Seconds before plugin times out (default: 15).
+
+
+#### webinject <a id="plugin-contrib-command-webinject"></a>
+
+The [check_webinject](https://labs.consol.de/de/nagios/check_webinject/index.html) plugin
+uses [WebInject](http://www.webinject.org/manual.html) to test web applications
+and web services in an automated fashion.
+It can be used to test individual system components that have HTTP interfaces
+(JSP, ASP, CGI, PHP, AJAX, Servlets, HTML Forms, XML/SOAP Web Services, REST, etc),
+and can be used as a test harness to create a suite of HTTP level automated functional,
+acceptance, and regression tests. A test harness allows you to run many test cases
+and collect/report your results. WebInject offers real-time results
+display and may also be used for monitoring system response times.
+
+Custom attributes passed as [command parameters](03-monitoring-basics.md#command-passing-parameters):
+
+Name                    | Description
+------------------------|--------------
+webinject_config_file   | **Optional.** There is a configuration file named 'config.xml' that is used to store configuration settings for your project. You can use this to specify which test case files to run and to set some constants and settings to be used by WebInject.
+webinject_output        | **Optional.** This option is followed by a directory name or a prefix to prepended to the output files. This is used to specify the location for writing output files (http.log, results.html, and results.xml). If a directory name is supplied (use either an absolute or relative path and make sure to add the trailing slash), all output files are written to this directory. If the trailing slash is ommitted, it is assumed to a prefix and this will be prepended to the output files. You may also use a combination of a directory and prefix.
+webinject_no_output     | **Optional.** Suppresses all output to STDOUT except the results summary.
+webinject_timeout       | **Optional.** The value [given in seconds] will be compared to the global time elapsed to run all the tests. If the tests have all been successful, but have taken more time than the 'globaltimeout' value, a warning message is sent back to Icinga.
+webinject_report_type   | **Optional.** This setting is used to enable output formatting that is compatible for use with specific external programs. The available values you can set this to are: nagios, mrtg, external and standard.
+webinject_testcase_file | **Optional.** When you launch WebInject in console mode, you can optionally supply an argument for a testcase file to run. It will look for this file in the directory that webinject.pl resides in. If no filename is passed from the command line, it will look in config.xml for testcasefile declarations. If no files are specified, it will look for a default file named 'testcases.xml' in the current [webinject] directory. If none of these are found, the engine will stop and give you an error.
