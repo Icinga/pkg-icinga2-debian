@@ -63,7 +63,7 @@ void StatusDataWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr
 /**
  * Hint: The reason why we're using "\n" rather than std::endl is because
  * std::endl also _flushes_ the output stream which severely degrades
- * performance (see http://gcc.gnu.org/onlinedocs/libstdc++/manual/bk01pt11ch25s02.html).
+ * performance (see https://stackoverflow.com/questions/213907/c-stdendl-vs-n).
  */
 
 /**
@@ -72,6 +72,9 @@ void StatusDataWriter::StatsFunc(const Dictionary::Ptr& status, const Array::Ptr
 void StatusDataWriter::Start(bool runtimeCreated)
 {
 	ObjectImpl<StatusDataWriter>::Start(runtimeCreated);
+
+	Log(LogInformation, "StatusDataWriter")
+	    << "'" << GetName() << "' started.";
 
 	m_ObjectsCacheOutdated = true;
 
@@ -83,6 +86,17 @@ void StatusDataWriter::Start(bool runtimeCreated)
 
 	ConfigObject::OnVersionChanged.connect(boost::bind(&StatusDataWriter::ObjectHandler, this));
 	ConfigObject::OnActiveChanged.connect(boost::bind(&StatusDataWriter::ObjectHandler, this));
+}
+
+/**
+ * Stops the component.
+ */
+void StatusDataWriter::Stop(bool runtimeRemoved)
+{
+	Log(LogInformation, "StatusDataWriter")
+	    << "'" << GetName() << "' stopped.";
+
+	ObjectImpl<StatusDataWriter>::Stop(runtimeRemoved);
 }
 
 void StatusDataWriter::DumpComments(std::ostream& fp, const Checkable::Ptr& checkable)

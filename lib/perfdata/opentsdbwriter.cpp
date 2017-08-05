@@ -23,13 +23,13 @@
 #include "icinga/macroprocessor.hpp"
 #include "icinga/icingaapplication.hpp"
 #include "icinga/compatutility.hpp"
-#include "icinga/perfdatavalue.hpp"
 #include "base/tcpsocket.hpp"
 #include "base/configtype.hpp"
 #include "base/objectlock.hpp"
 #include "base/logger.hpp"
 #include "base/convert.hpp"
 #include "base/utility.hpp"
+#include "base/perfdatavalue.hpp"
 #include "base/application.hpp"
 #include "base/stream.hpp"
 #include "base/networkstream.hpp"
@@ -61,6 +61,9 @@ void OpenTsdbWriter::Start(bool runtimeCreated)
 {
 	ObjectImpl<OpenTsdbWriter>::Start(runtimeCreated);
 
+	Log(LogInformation, "OpentsdbWriter")
+	    << "'" << GetName() << "' started.";
+
 	m_ReconnectTimer = new Timer();
 	m_ReconnectTimer->SetInterval(10);
 	m_ReconnectTimer->OnTimerExpired.connect(boost::bind(&OpenTsdbWriter::ReconnectTimerHandler, this));
@@ -68,6 +71,14 @@ void OpenTsdbWriter::Start(bool runtimeCreated)
 	m_ReconnectTimer->Reschedule(0);
 
 	Service::OnNewCheckResult.connect(boost::bind(&OpenTsdbWriter::CheckResultHandler, this, _1, _2));
+}
+
+void OpenTsdbWriter::Stop(bool runtimeRemoved)
+{
+	Log(LogInformation, "OpentsdbWriter")
+	    << "'" << GetName() << "' stopped.";
+
+	ObjectImpl<OpenTsdbWriter>::Stop(runtimeRemoved);
 }
 
 void OpenTsdbWriter::ReconnectTimerHandler(void)

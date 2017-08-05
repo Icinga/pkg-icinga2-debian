@@ -19,6 +19,7 @@
 
 #include "remote/httpserverconnection.hpp"
 #include "remote/httphandler.hpp"
+#include "remote/httputility.hpp"
 #include "remote/apilistener.hpp"
 #include "remote/apifunction.hpp"
 #include "remote/jsonrpc.hpp"
@@ -180,11 +181,22 @@ void HttpServerConnection::ProcessMessageAsync(HttpRequest& request)
 	} else if (!user) {
 		Log(LogWarning, "HttpServerConnection")
 		    << "Unauthorized request: " << request.RequestMethod << " " << requestUrl;
+
 		response.SetStatus(401, "Unauthorized");
-		response.AddHeader("Content-Type", "text/html");
 		response.AddHeader("WWW-Authenticate", "Basic realm=\"Icinga 2\"");
-		String msg = "<h1>Unauthorized</h1>";
-		response.WriteBody(msg.CStr(), msg.GetLength());
+
+		if (request.Headers->Get("accept") == "application/json") {
+			Dictionary::Ptr result = new Dictionary();
+
+			result->Set("error", 401);
+			result->Set("status", "Unauthorized. Please check your user credentials.");
+
+			HttpUtility::SendJsonBody(response, result);
+		} else {
+			response.AddHeader("Content-Type", "text/html");
+			String msg = "<h1>Unauthorized. Please check your user credentials.</h1>";
+			response.WriteBody(msg.CStr(), msg.GetLength());
+		}
 	} else {
 		try {
 			HttpHandler::ProcessRequest(user, request, response);
@@ -192,9 +204,20 @@ void HttpServerConnection::ProcessMessageAsync(HttpRequest& request)
 			Log(LogCritical, "HttpServerConnection")
 			    << "Unhandled exception while processing Http request: " << DiagnosticInformation(ex);
 			response.SetStatus(503, "Unhandled exception");
-			response.AddHeader("Content-Type", "text/plain");
+
 			String errorInfo = DiagnosticInformation(ex);
-			response.WriteBody(errorInfo.CStr(), errorInfo.GetLength());
+
+			if (request.Headers->Get("accept") == "application/json") {
+				Dictionary::Ptr result = new Dictionary();
+
+				result->Set("error", 503);
+				result->Set("status", errorInfo);
+
+				HttpUtility::SendJsonBody(response, result);
+			} else {
+				response.AddHeader("Content-Type", "text/plain");
+				response.WriteBody(errorInfo.CStr(), errorInfo.GetLength());
+			}
 		}
 	}
 
