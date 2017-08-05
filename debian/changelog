@@ -1,4 +1,4 @@
-icinga2 (2.7.0-1~ppa1~zesty1) zesty; urgency=medium
+icinga2 (2.7.0-1~ppa1~xenial1) xenial; urgency=medium
 
   * Rebuild for my ubuntu ppa
 
